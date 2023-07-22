@@ -144,12 +144,19 @@ async function processCanvas(
 	for (const group of Object.values(groups)) {
 		// Check if the nodes in the group form a tree structure
 		const root = group.nodes.find(
-			(node) => node.incomingEdges.length === 0
+			(node) =>
+				node.incomingEdges.filter((edge) =>
+					group.nodes.includes(edge.getSource(nodes))
+				).length === 0
 		);
 
 		if (
 			group.nodes.some(
-				(node) => node !== root && node.incomingEdges.length !== 1
+				(node) =>
+					node !== root &&
+					node.incomingEdges.filter((edge) =>
+						group.nodes.includes(edge.getSource(nodes))
+					).length !== 1
 			)
 		) {
 			throw new Error(
