@@ -12,8 +12,11 @@ export async function startCannoli(
 	console.log(`File Path: ${canvasFile.path}`);
 	console.log(`API Key: ${apiKey}`);
 
+	const configuration = new Configuration({ apiKey: apiKey });
+	delete configuration.baseOptions.headers["User-Agent"];
+
 	// Create an instance of OpenAI
-	const openai = new OpenAIApi(new Configuration({ apiKey: "Your-API-Key" }));
+	const openai = new OpenAIApi(configuration);
 
 	// Read the content of the file
 	const fileContent = await vault.read(canvasFile);
