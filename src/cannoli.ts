@@ -2,7 +2,6 @@ import { ChatCompletionRequestMessage, Configuration, OpenAIApi } from "openai";
 import { ErrorModal } from "main";
 import { Vault, TFile } from "obsidian";
 import { CanvasData } from "obsidian/canvas.d";
-import { EventEmitter } from "events";
 
 export async function startCannoli(
 	canvasFile: TFile,
@@ -44,41 +43,33 @@ export async function startCannoli(
 }
 
 async function runCannoli(nodes: Record<string, CannoliNode>) {
-	const nodeEmitter = new EventEmitter();
 	const nodeKeys = Object.keys(nodes);
 
-	// Register listeners for all nodes
+	// Change all non-globalVar type nodes to "0"
 	for (const key of nodeKeys) {
-		nodes[key].on("done", (node) => {
-			console.log(`Node ${node.id} has finished processing.`);
-			// React to the node having finished processing, such as by updating a UI or writing to a log
-			// Signal the central EventEmitter that a node has finished processing
-			nodeEmitter.emit("nodeDone", node);
-		});
-	}
-
-	// Start all nodes processing (excluding 'globalVar' nodes)
-	for (const node of Object.values(nodes)) {
-		if (node.type !== "globalVar") {
-			node.waitForDependencies(nodes);
+		if (nodes[key].type !== "globalVar") {
+			await nodes[key].changeColor("0");
 		}
 	}
 
-	// Listener for the central EventEmitter
-	nodeEmitter.on("nodeDone", (node) => {
-		// Check if all nodes are done (excluding 'globalVar' nodes)
+	// Create nodeCompleted callback, which will be called when a node is completed, and checks if all nodes are complete
+	const nodeCompleted = () => {
+		// Check if all nodes are complete
+		if (nodeKeys.every((key) => nodes[key].status === "complete")) {
+			console.log("All nodes complete");
+			return;
+		}
+	};
+
+	// Attempt to process all nodes with no incoming edges and at least one outgoing edge
+	for (const key of nodeKeys) {
 		if (
-			nodeKeys.every(
-				(key) =>
-					nodes[key].type === "globalVar" ||
-					nodes[key].status === "executed" ||
-					nodes[key].status === "rejected"
-			)
+			nodes[key].incomingEdges.length === 0 &&
+			nodes[key].outgoingEdges.length > 0
 		) {
-			console.log("All nodes have finished processing.");
-			// Do something after all nodes have finished, if necessary
+			await nodes[key].attemptProcess(nodeCompleted);
 		}
-	});
+	}
 }
 
 // Top-level function to process and validate the canvas data
@@ -270,7 +261,8 @@ async function processNodes(
 			incomingEdges,
 			vault,
 			canvasFile,
-			openai
+			openai,
+			nodes
 		);
 		nodes[node.id] = node;
 	}
@@ -281,14 +273,76 @@ async function processNodes(
 // Function to process edges
 function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
 	const edges: Record<string, CannoliEdge> = {};
+	const edgeTypes: EdgeType[] = [
+		"input",
+		"output",
+		"choice",
+		"debug",
+		"simple",
+		"variable",
+	];
 
 	for (const edgeData of canvasData.edges) {
 		let edgeType: EdgeType = "simple";
+		let content: string | null = null;
+
+		// Initialize variables for the label and the parsed lines
+		let label = "";
+		let labelLines: string[] = [];
+
+		// If a label is given, parse it for a /type tag
+		if (edgeData.label) {
+			label = edgeData.label;
+			labelLines = label.split("\n");
+			const potentialTypeTag =
+				labelLines[0].startsWith("/") && labelLines[0].slice(1);
+
+			// Check if the type tag exists and is valid
+			if (
+				potentialTypeTag &&
+				edgeTypes.includes(potentialTypeTag as EdgeType)
+			) {
+				edgeType = potentialTypeTag as EdgeType;
+				labelLines.shift(); // Remove the type tag line
+			}
+		}
+
+		// If there's no valid type tag, check for color mapping
 		if (
+			edgeType === "simple" &&
 			edgeData.color &&
 			colorToEdgeTypeMapping.hasOwnProperty(edgeData.color)
 		) {
 			edgeType = colorToEdgeTypeMapping[edgeData.color];
+		}
+		// If there's no type tag and no color, but there's a label, it's a variable type
+		else if (edgeType === "simple" && label) {
+			edgeType = "variable";
+		}
+
+		// Check for content in the label
+		if (
+			edgeType !== "simple" &&
+			edgeType !== "input" &&
+			edgeType !== "output" &&
+			edgeType !== "debug"
+		) {
+			content = labelLines.join("\n").trim() || null;
+			if (!content) {
+				throw new Error(
+					`No content found for variable edge ${edgeData.id}`
+				);
+			}
+		} else if (
+			(edgeType === "simple" ||
+				edgeType === "input" ||
+				edgeType === "output" ||
+				edgeType === "debug") &&
+			labelLines.length > 0
+		) {
+			throw new Error(
+				`Invalid content found for ${edgeType} edge ${edgeData.id}`
+			);
 		}
 
 		const edge = new CannoliEdge(
@@ -296,7 +350,7 @@ function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
 			edgeData.fromNode,
 			edgeData.toNode,
 			edgeType,
-			edgeData.label ?? null
+			content
 		);
 
 		edges[edge.id] = edge;
@@ -337,10 +391,10 @@ function processGroups(
 // Node Types
 type NodeType = "call" | "input" | "output" | "debug" | "globalVar";
 
-class CannoliNode extends EventEmitter {
+class CannoliNode {
 	id: string;
 	content: string;
-	status: "incomplete" | "executing" | "executed" | "rejected";
+	status: "pending" | "processing" | "complete" | "rejected";
 	x: number;
 	y: number;
 	width: number;
@@ -352,6 +406,7 @@ class CannoliNode extends EventEmitter {
 	vault: Vault;
 	canvasFile: TFile;
 	openai: OpenAIApi;
+	nodes: Record<string, CannoliNode>;
 
 	constructor(
 		id: string,
@@ -365,12 +420,12 @@ class CannoliNode extends EventEmitter {
 		incomingEdges: CannoliEdge[],
 		vault: Vault,
 		canvasFile: TFile,
-		openai: OpenAIApi
+		openai: OpenAIApi,
+		nodes: Record<string, CannoliNode>
 	) {
-		super();
 		this.id = id;
 		this.content = content;
-		this.status = "incomplete";
+		this.status = "pending";
 		this.x = x;
 		this.y = y;
 		this.width = width;
@@ -381,56 +436,19 @@ class CannoliNode extends EventEmitter {
 		this.vault = vault;
 		this.canvasFile = canvasFile;
 		this.openai = openai;
+		this.nodes = nodes;
 	}
 
-	async waitForDependencies(nodes: Record<string, CannoliNode>) {
-		const readyEdges = this.incomingEdges.filter(
-			(edge) => edge.status === "ready"
-		);
-		if (readyEdges.length === this.incomingEdges.length) {
-			// All dependencies are ready, proceed with processing
-			await this.process(nodes);
-		} else {
-			// Not all dependencies are ready, register a callback on each edge's source node to re-check dependencies when it's done
-			this.incomingEdges.forEach((edge) => {
-				const sourceNode = edge.getSource(nodes);
-				if (!sourceNode) {
-					console.log(
-						`Source node for edge ${edge.id} not found in nodes`
-					);
-				} else if (!sourceNode.once) {
-					console.log(
-						`Node ${sourceNode.id} does not have a 'once' method`
-					);
-				} else {
-					sourceNode.once("done", () => {
-						this.waitForDependencies(nodes);
-					});
-				}
-			});
-		}
-	}
-
-	async process(nodes: Record<string, CannoliNode>) {
+	async process(nodeCompleted: () => void) {
 		if (this.type === "input") {
 			// Node is an input node, send its content on the outgoing variable edge
 			// Assuming there is only one outgoing edge for input nodes
 			this.outgoingEdges[0].setPayload(this.content);
-			this.changeColor("4");
-			this.status = "executed";
-			this.emit("done", this);
 		} else if (this.type === "output" || this.type === "debug") {
 			// Node is an output or debug node, take the content from its single incoming edge
 			this.content = this.incomingEdges[0].getPayload() as string;
 			this.changeContent(this.content);
-			this.changeColor("4");
-			this.status = "executed";
-			this.emit("done", this);
 		} else if (this.type === "call") {
-			// Change the color of the node to yellow
-			await this.changeColor("3");
-			this.status = "executing";
-
 			// Node is a call node, build its message
 			let messageContent = this.content;
 
@@ -445,16 +463,26 @@ class CannoliNode extends EventEmitter {
 					throw new Error(`Variable ${varName} has not been set`);
 				}
 
-				// Replace the variable name with the content of the edge
-				if (messageContent.includes(`{${varName}}`)) {
+				// Use regular expressions to check for variable names within braces
+				const varPattern = new RegExp(`{${varName}}`, "g");
+				const isVarNamePresent = varPattern.test(messageContent);
+
+				if (isVarNamePresent) {
 					messageContent = messageContent.replace(
-						`{${varName}}`,
+						varPattern,
 						varValue
 					);
 				}
 
-				// Replace the variable name with the content of the page
-				if (messageContent.includes(`{[${varName}]}`)) {
+				// Use regular expressions to check for variable names within double braces
+				const varDoubleBracePattern = new RegExp(
+					`{\\[${varName}\\]}`,
+					"g"
+				);
+				const isDoubleBraceVarNamePresent =
+					varDoubleBracePattern.test(messageContent);
+
+				if (isDoubleBraceVarNamePresent) {
 					// If the value has [[double brackets]], remove them
 					const pageName =
 						varValue.startsWith("[[") && varValue.endsWith("]]")
@@ -467,16 +495,16 @@ class CannoliNode extends EventEmitter {
 					if (page) {
 						const pageContent = await this.vault.read(page);
 						messageContent = messageContent.replace(
-							`{${varName}}`,
+							varDoubleBracePattern,
 							pageContent
 						);
 					} else {
 						messageContent = messageContent.replace(
-							`{${varName}}`,
+							varDoubleBracePattern,
 							`The page: "${pageName}" doesn't exist`
 						);
 					}
-				} else {
+				} else if (!isVarNamePresent) {
 					throw new Error(
 						`Content does not include an instance of variable ${varName}`
 					);
@@ -485,7 +513,7 @@ class CannoliNode extends EventEmitter {
 
 			// Search nodes for nodes of type "globalVar". The content will look like this: "{variable name}\nvalue"
 			const globalVars: Record<string, string> = {};
-			for (const node of Object.values(nodes)) {
+			for (const node of Object.values(this.nodes)) {
 				if (node.type === "globalVar") {
 					// Split the content into the variable name and value, removing brackets from the name
 					const [varName, varValue] = node.content.split("\n");
@@ -526,7 +554,7 @@ class CannoliNode extends EventEmitter {
 			const simpleEdge = this.incomingEdges.find(
 				(edge) =>
 					edge.type === "simple" &&
-					edge.getSource(nodes).type === "call"
+					edge.getSource(this.nodes).type === "call"
 			);
 			if (simpleEdge) {
 				messages =
@@ -534,67 +562,101 @@ class CannoliNode extends EventEmitter {
 				messages.push({ role: "user", content: messageContent });
 			} else {
 				messages = [{ role: "user", content: messageContent }];
-
-				// Send a request to OpenAI
-				const chatResponse = await llmCall({
-					messages,
-					openai: this.openai,
-					verbose: true,
-				});
-
-				if (!chatResponse) {
-					throw new Error("Chat response is undefined");
-				}
-
-				// For all outgoing variable and output type edges, set the payload to the content of the response message
-				for (const edge of this.outgoingEdges.filter(
-					(edge) => edge.type === "variable" || edge.type === "output"
-				)) {
-					const varName = edge.content;
-					const varValue = chatResponse.content;
-
-					if (!varValue) {
-						throw new Error(`Variable ${varName} has not been set`);
-					}
-					edge.setPayload(varValue);
-					edge.status = "ready";
-				}
-
-				// For all outgoing simple type edges, set the payload to the array of prompt messages with the response message appended
-				for (const edge of this.outgoingEdges.filter(
-					(edge) => edge.type === "simple"
-				)) {
-					if (chatResponse) {
-						messages.push(chatResponse);
-					}
-					edge.setPayload(messages);
-					edge.status = "ready";
-				}
-
-				// For all outgoing debug type edges, set the payload to a markdown string containing the prompt messages and the response message formatted nicely
-				for (const edge of this.outgoingEdges.filter(
-					(edge) => edge.type === "debug"
-				)) {
-					let debugContent = "";
-					for (const message of messages) {
-						debugContent += `**${message.role}**: ${message.content}\n`;
-					}
-					debugContent += `**AI**: ${chatResponse.content}`;
-					edge.setPayload(debugContent);
-					edge.status = "ready";
-				}
 			}
 
-			// Change the color of the node to green
-			await this.changeColor("4");
-			this.status = "executed";
-			this.emit("done", this);
+			// Send a request to OpenAI
+			const chatResponse = await llmCall({
+				messages,
+				openai: this.openai,
+				verbose: true,
+			});
+
+			if (!chatResponse) {
+				throw new Error("Chat response is undefined");
+			}
+
+			// Load outgoing edges
+
+			// For all outgoing variable and output type edges, set the payload to the content of the response message
+			for (const edge of this.outgoingEdges.filter(
+				(edge) => edge.type === "variable" || edge.type === "output"
+			)) {
+				const varName = edge.content;
+				const varValue = chatResponse.content;
+
+				if (!varValue) {
+					throw new Error(`Variable ${varName} has not been set`);
+				}
+				edge.setPayload(varValue);
+			}
+
+			// For all outgoing simple type edges, set the payload to the array of prompt messages with the response message appended
+			for (const edge of this.outgoingEdges.filter(
+				(edge) => edge.type === "simple"
+			)) {
+				if (chatResponse) {
+					messages.push(chatResponse);
+				}
+				edge.setPayload(messages);
+			}
+
+			// For all outgoing debug type edges, set the payload to a markdown string containing the prompt messages and the response message formatted nicely
+			for (const edge of this.outgoingEdges.filter(
+				(edge) => edge.type === "debug"
+			)) {
+				let debugContent = "";
+				for (const message of messages) {
+					debugContent += `**${message.role}**: ${message.content}\n`;
+				}
+				debugContent += `**AI**: ${chatResponse.content}`;
+				edge.setPayload(debugContent);
+			}
+		}
+
+		await this.showCompleted();
+		nodeCompleted();
+
+		for (const edge of this.outgoingEdges) {
+			await edge.getTarget(this.nodes).attemptProcess(nodeCompleted);
 		}
 	}
 
-	allIncomingEdgesReady(): boolean {
-		// Check if all incoming edges have status "ready"
-		return this.incomingEdges.every((edge) => edge.status === "ready");
+	// Process the node if all its dependencies are complete
+	async attemptProcess(nodeCompleted: () => void) {
+		if (this.allDependenciesComplete()) {
+			console.log(`Processing node ${this.id}`);
+			await this.showProcessing();
+			this.process(nodeCompleted);
+		}
+	}
+
+	// Check if the node has all its dependencies complete
+	allDependenciesComplete(): boolean {
+		// Check if sources of all incoming edges have status "complete"
+		return this.incomingEdges.every(
+			(edge) => edge.getSource(this.nodes).status === "complete"
+		);
+	}
+
+	// Set the status of the node to complete, change its color to green, and call attemptProcess on target nodes of all outgoing edges
+	async showCompleted() {
+		this.status = "complete";
+		await this.changeColor("4");
+	}
+
+	// Set the status of the node to rejected, change its color to "0", and call reject on target nodes of all outgoing edges
+	async rejected() {
+		this.status = "rejected";
+		await this.changeColor("0");
+		for (const edge of this.outgoingEdges) {
+			await edge.getTarget(this.nodes).rejected();
+		}
+	}
+
+	// Set the status of the node to processing, change its color to yellow
+	async showProcessing() {
+		this.status = "processing";
+		await this.changeColor("3");
 	}
 
 	// Change the color of the node
@@ -649,7 +711,6 @@ class CannoliEdge {
 	content: string | null;
 	type: EdgeType;
 	payload: ChatCompletionRequestMessage[] | string | null;
-	status: "ready" | "not-ready" | "rejected";
 
 	constructor(
 		id: string,
@@ -664,7 +725,6 @@ class CannoliEdge {
 		this.type = type;
 		this.payload = null;
 		this.content = content;
-		this.status = "not-ready";
 	}
 
 	getSource(nodes: Record<string, CannoliNode>): CannoliNode {
