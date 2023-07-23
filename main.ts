@@ -28,27 +28,7 @@ export default class Cannoli extends Plugin {
 		const ribbonIconEl = this.addRibbonIcon(
 			"brain-circuit",
 			"Start this Cannoli",
-			async (evt: MouseEvent) => {
-				// Get the active file
-				const activeFile = this.app.workspace.getActiveFile();
-
-				// Check if file is a .canvas file
-				if (!activeFile || !activeFile.path.endsWith(".canvas")) {
-					// Send notice if not a .canvas file
-					new Notice("Move to a canvas file to start a Cannoli");
-					return;
-				}
-
-				// Call the function from cannoli.ts with the active file, the API key and the vault
-				await startCannoli(
-					activeFile,
-					this.settings.openaiAPIKey,
-					this.app.vault
-				);
-
-				// Send notice containing active file name
-				new Notice(`Starting Cannoli on ${activeFile.path}`);
-			}
+			this.start
 		);
 
 		// Perform additional things with the ribbon
@@ -65,6 +45,12 @@ export default class Cannoli extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
+
+		// add a button to the dom to trigger cannoli
+		this.app.workspace.containerEl.createEl("button", {
+			text: "Start Cannoli",
+			cls: "cannoli-button",
+		}).addEventListener("click", this.start)
 	}
 
 	onunload() {}
@@ -79,6 +65,28 @@ export default class Cannoli extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	start = async () => {
+		// Get the active file
+		const activeFile = this.app.workspace.getActiveFile();
+
+		// Check if file is a .canvas file
+		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
+			// Send notice if not a .canvas file
+			new Notice("Move to a canvas file to start a Cannoli");
+			return;
+		}
+
+		// Call the function from cannoli.ts with the active file, the API key and the vault
+		await startCannoli(
+			activeFile,
+			this.settings.openaiAPIKey,
+			this.app.vault
+		);
+
+		// Send notice containing active file name
+		new Notice(`Starting Cannoli on ${activeFile.path}`);
 	}
 }
 

@@ -6,3 +6,12 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+.cannoli-button {
+	position: absolute;
+	bottom: 3rem;
+	margin: auto;
+	left: 53.5%;
+	transform: translateX(-50%);
+	width: 144px;
+}
