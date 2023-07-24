@@ -8,9 +8,6 @@ export async function startCannoli(
 	apiKey: string,
 	vault: Vault
 ) {
-	console.log(`File Path: ${canvasFile.path}`);
-	console.log(`API Key: ${apiKey}`);
-
 	const configuration = new Configuration({ apiKey: apiKey });
 	delete configuration.baseOptions.headers["User-Agent"];
 
@@ -145,8 +142,10 @@ async function processCanvas(
 			group.nodes.some(
 				(node) =>
 					node !== root &&
-					node.incomingEdges.filter((edge) =>
-						group.nodes.includes(edge.getSource(nodes))
+					node.incomingEdges.filter(
+						(edge) =>
+							group.nodes.includes(edge.getSource(nodes)) &&
+							edge.type !== "variable"
 					).length !== 1
 			)
 		) {
@@ -556,7 +555,8 @@ class CannoliNode {
 					edge.type === "simple" &&
 					edge.getSource(this.nodes).type === "call"
 			);
-			if (simpleEdge) {
+			if (simpleEdge && simpleEdge.getPayload()) {
+				console.log("Simple edge payload: ", simpleEdge.getPayload());
 				messages =
 					simpleEdge.getPayload() as ChatCompletionRequestMessage[];
 				messages.push({ role: "user", content: messageContent });
@@ -591,13 +591,15 @@ class CannoliNode {
 			}
 
 			// For all outgoing simple type edges, set the payload to the array of prompt messages with the response message appended
+			if (chatResponse) {
+				messages.push(chatResponse);
+			}
+
 			for (const edge of this.outgoingEdges.filter(
 				(edge) => edge.type === "simple"
 			)) {
-				if (chatResponse) {
-					messages.push(chatResponse);
-				}
-				edge.setPayload(messages);
+				const payloadMessages = messages.slice();
+				edge.setPayload(payloadMessages);
 			}
 
 			// For all outgoing debug type edges, set the payload to a markdown string containing the prompt messages and the response message formatted nicely
@@ -624,7 +626,6 @@ class CannoliNode {
 	// Process the node if all its dependencies are complete
 	async attemptProcess(nodeCompleted: () => void) {
 		if (this.allDependenciesComplete()) {
-			console.log(`Processing node ${this.id}`);
 			await this.showProcessing();
 			this.process(nodeCompleted);
 		}
@@ -728,7 +729,6 @@ class CannoliEdge {
 	}
 
 	getSource(nodes: Record<string, CannoliNode>): CannoliNode {
-		console.log(nodes);
 		return nodes[this.sourceId];
 	}
 
@@ -806,11 +806,8 @@ async function llmCall({
 	verbose?: boolean;
 }) {
 	if (verbose) {
-		// Log out input chat messages, formatted nicely
-		console.log("Input messages:");
-		for (const message of messages) {
-			console.log(`${message.role}: ${message.content}`);
-		}
+		// Log out input chat messages raw, with good indentation
+		console.log("Input Messages:\n" + JSON.stringify(messages, null, 2));
 	}
 
 	const chatResponse = await openai.createChatCompletion({
@@ -822,9 +819,11 @@ async function llmCall({
 	});
 
 	if (verbose) {
-		// Log out the response message, formatted nicely
-		console.log("Response message:");
-		console.log(`AI: ${chatResponse.data.choices[0].message?.content}`);
+		// Log out the response message raw, with good indentation
+		console.log(
+			"Response Message:\n" +
+				JSON.stringify(chatResponse.data.choices[0].message, null, 2)
+		);
 	}
 
 	return chatResponse.data.choices[0].message;
