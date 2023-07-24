@@ -446,7 +446,7 @@ class CannoliNode {
 		} else if (this.type === "output" || this.type === "debug") {
 			// Node is an output or debug node, take the content from its single incoming edge
 			this.content = this.incomingEdges[0].getPayload() as string;
-			this.changeContent(this.content);
+			await this.changeContent(this.content);
 		} else if (this.type === "call") {
 			// Node is a call node, build its message
 			let messageContent = this.content;
@@ -609,11 +609,18 @@ class CannoliNode {
 			for (const edge of this.outgoingEdges.filter(
 				(edge) => edge.type === "debug"
 			)) {
-				let debugContent = "";
-				for (const message of messages) {
-					debugContent += `**${message.role}**: ${message.content}\n`;
-				}
-				debugContent += `**AI**: ${chatResponse.content}`;
+				const allMessages = messages
+					.slice(0, -1)
+					.map(
+						(m) =>
+							`### ${
+								m.role === "user" ? "USER" : "ASSISTANT"
+							}:\n${m.content}`
+					)
+					.join("\n\n");
+				const inputContent = `# <u>PROMPT</u>\n${allMessages}`;
+				const outputContent = `# <u>RESPONSE</u>\n${chatResponse.content}`;
+				const debugContent = `${inputContent}\n\n${outputContent}`;
 				edge.setPayload(debugContent);
 			}
 		}
@@ -692,6 +699,22 @@ class CannoliNode {
 			throw new Error(`Node with id ${this.id} not found`);
 		}
 
+		await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
+	}
+
+	// Double height of node
+	async doubleHeight() {
+		const canvasData = JSON.parse(
+			await this.vault.read(this.canvasFile)
+		) as CanvasData;
+
+		const node = canvasData.nodes.find((node) => node.id === this.id);
+		if (node !== undefined) {
+			node.height *= 2;
+		} else {
+			throw new Error(`Node with id ${this.id} not found`);
+		}
+		console.log("Updated canvas:\n" + JSON.stringify(canvasData, null, 2));
 		await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
 	}
 }
