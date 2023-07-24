@@ -9,7 +9,7 @@ If your plugin does not need CSS, delete this file.
 
 .cannoli-button {
 	position: absolute;
-	bottom: 3rem;
+	bottom: 5rem;
 	margin: auto;
 	left: 53.5%;
 	transform: translateX(-50%);

@@ -28,7 +28,7 @@ export default class Cannoli extends Plugin {
 		const ribbonIconEl = this.addRibbonIcon(
 			"brain-circuit",
 			"Start this Cannoli",
-			this.start
+			this.startCannoli
 		);
 
 		// Perform additional things with the ribbon
@@ -47,13 +47,17 @@ export default class Cannoli extends Plugin {
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
 
 		// add a button to the dom to trigger cannoli
-		this.app.workspace.containerEl.createEl("button", {
-			text: "Start Cannoli",
-			cls: "cannoli-button",
-		}).addEventListener("click", this.start)
+		setTimeout(() => {
+			this.app.workspace.containerEl.createEl("button", {
+				text: "Start Cannoli",
+				cls: "cannoli-button",
+			}).addEventListener("click", this.startCannoli)
+		}, 250)
+		
 	}
 
-	onunload() {}
+	onunload() {
+	}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -67,7 +71,7 @@ export default class Cannoli extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	start = async () => {
+	startCannoli = async () => {
 		// Get the active file
 		const activeFile = this.app.workspace.getActiveFile();
 
