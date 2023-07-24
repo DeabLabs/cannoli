@@ -451,97 +451,59 @@ class CannoliNode {
 			// Node is a call node, build its message
 			let messageContent = this.content;
 
-			// For all incoming variable type edges, replace the variable name with the content of the edge
+			// Process incoming variable type edges
 			for (const edge of this.incomingEdges.filter(
 				(edge) => edge.type === "variable"
 			)) {
 				const varName = edge.content;
 				const varValue = edge.getPayload() as string;
 
+				if (!varName) {
+					throw new Error(
+						`Variable name not found for edge ${edge.id}`
+					);
+				}
+
 				if (!varValue) {
 					throw new Error(`Variable ${varName} has not been set`);
 				}
-
-				// Use regular expressions to check for variable names within braces
-				const varPattern = new RegExp(`{${varName}}`, "g");
-				const isVarNamePresent = varPattern.test(messageContent);
-
-				if (isVarNamePresent) {
-					messageContent = messageContent.replace(
-						varPattern,
-						varValue
-					);
-				}
-
-				// Use regular expressions to check for variable names within double braces
-				const varDoubleBracePattern = new RegExp(
-					`{\\[${varName}\\]}`,
-					"g"
+				messageContent = await this.processVariable(
+					varName,
+					varValue,
+					messageContent,
+					true
 				);
-				const isDoubleBraceVarNamePresent =
-					varDoubleBracePattern.test(messageContent);
-
-				if (isDoubleBraceVarNamePresent) {
-					// If the value has [[double brackets]], remove them
-					const pageName =
-						varValue.startsWith("[[") && varValue.endsWith("]]")
-							? varValue.slice(2, -2)
-							: varValue;
-
-					const page = this.vault
-						.getMarkdownFiles()
-						.find((file) => file.name === pageName);
-					if (page) {
-						const pageContent = await this.vault.read(page);
-						messageContent = messageContent.replace(
-							varDoubleBracePattern,
-							pageContent
-						);
-					} else {
-						messageContent = messageContent.replace(
-							varDoubleBracePattern,
-							`The page: "${pageName}" doesn't exist`
-						);
-					}
-				} else if (!isVarNamePresent) {
-					throw new Error(
-						`Content does not include an instance of variable ${varName}`
-					);
-				}
 			}
 
-			// Search nodes for nodes of type "globalVar". The content will look like this: "{variable name}\nvalue"
+			// Process global variables
 			const globalVars: Record<string, string> = {};
 			for (const node of Object.values(this.nodes)) {
 				if (node.type === "globalVar") {
-					// Split the content into the variable name and value, removing brackets from the name
 					const [varName, varValue] = node.content.split("\n");
 					globalVars[varName.slice(1, -1)] = varValue;
 				}
 			}
 
 			for (const [varName, varValue] of Object.entries(globalVars)) {
-				messageContent = messageContent.replace(
-					`{${varName}}`,
-					varValue
+				messageContent = await this.processVariable(
+					varName,
+					varValue,
+					messageContent,
+					false
 				);
 			}
 
-			// Replace all instances of {[[page name]]} with the content of the page
+			// Replace static page references with the content of the page
 			const pageNameMatches =
 				messageContent.match(/{\[\[(.*?)\]\]}/g) || [];
 			for (const match of pageNameMatches) {
 				const pageName = match.slice(3, -3); // Remove {[[ and ]]}
 
-				const page = this.vault
-					.getMarkdownFiles()
-					.find((file) => file.basename === pageName);
-				if (page) {
-					const pageContent = await this.vault.read(page);
-					const renderedPage = "# " + pageName + "\n" + pageContent;
+				const formattedPage = await this.getPageContent(pageName);
+				if (formattedPage) {
 					messageContent = messageContent.replace(
 						match,
-						renderedPage
+						formattedPage
 					);
 				} else {
 					messageContent = messageContent.replace(
@@ -647,6 +609,77 @@ class CannoliNode {
 		return this.incomingEdges.every(
 			(edge) => edge.getSource(this.nodes).status === "complete"
 		);
+	}
+
+	// Helper function to get a page by its name and return its content
+	async getPageContent(pageName: string) {
+		// First, attempt to find the page with the original casing
+		let page = this.vault
+			.getMarkdownFiles()
+			.find((file) => file.basename === pageName);
+
+		// If the page isn't found, try again with all-lowercase version
+		if (!page) {
+			page = this.vault
+				.getMarkdownFiles()
+				.find(
+					(file) =>
+						file.basename.toLowerCase() === pageName.toLowerCase()
+				);
+		}
+
+		if (page) {
+			const pageContent = await this.vault.read(page);
+			const renderedPage = "# " + page.basename + "\n" + pageContent; // Use the actual page name here to maintain original casing
+			return renderedPage;
+		}
+		return null;
+	}
+
+	async processVariable(
+		varName: string,
+		varValue: string,
+		messageContent: string,
+		isRequired: boolean
+	) {
+		// Check if the variable name is within braces
+		const varPattern = new RegExp(`{${varName}}`, "g");
+		const isVarNamePresent = varPattern.test(messageContent);
+
+		if (isVarNamePresent) {
+			messageContent = messageContent.replace(varPattern, varValue);
+		}
+
+		// Check for variable names within double braces
+		const varDoubleBracePattern = new RegExp(`{\\[${varName}\\]}`, "g");
+		const isDoubleBraceVarNamePresent =
+			varDoubleBracePattern.test(messageContent);
+
+		if (isDoubleBraceVarNamePresent) {
+			const pageName =
+				varValue.startsWith("[[") && varValue.endsWith("]]")
+					? varValue.slice(2, -2)
+					: varValue;
+			const pageContent = await this.getPageContent(pageName);
+
+			if (pageContent) {
+				messageContent = messageContent.replace(
+					varDoubleBracePattern,
+					pageContent
+				);
+			} else {
+				messageContent = messageContent.replace(
+					varDoubleBracePattern,
+					`The page: "${pageName}" doesn't exist`
+				);
+			}
+		} else if (isRequired && !isVarNamePresent) {
+			throw new Error(
+				`Content does not include an instance of variable ${varName}`
+			);
+		}
+
+		return messageContent;
 	}
 
 	// Set the status of the node to complete, change its color to green, and call attemptProcess on target nodes of all outgoing edges
