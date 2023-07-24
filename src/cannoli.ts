@@ -443,10 +443,20 @@ class CannoliNode {
 			// Node is an input node, send its content on the outgoing variable edge
 			// Assuming there is only one outgoing edge for input nodes
 			this.outgoingEdges[0].setPayload(this.content);
-		} else if (this.type === "output" || this.type === "debug") {
-			// Node is an output or debug node, take the content from its single incoming edge
+		} else if (this.type === "debug") {
+			// Node is a debug node, take the content from its single incoming edge
 			this.content = this.incomingEdges[0].getPayload() as string;
 			await this.changeContent(this.content);
+		} else if (this.type === "output") {
+			// Node is an output node, change its content to the content of its incoming variable edge
+			this.content = this.incomingEdges[0].getPayload() as string;
+			await this.changeContent(this.content);
+			// // Put the content in its outgoing variable edges
+			// for (const edge of this.outgoingEdges.filter(
+			// 	(edge) => edge.type === "variable"
+			// )) {
+			// 	edge.setPayload(this.content);
+			// }
 		} else if (this.type === "call") {
 			// Node is a call node, build its message
 			let messageContent = this.content;
