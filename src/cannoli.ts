@@ -204,35 +204,51 @@ async function processNodes(
 			incomingEdgeIds.includes(edge.id)
 		);
 
-		// Check if any outgoing edge is of type "input"
-		if (outgoingEdges.some((edge) => edge.type === "input")) {
-			// All outgoing edges should be of type "input"
-			if (outgoingEdges.every((edge) => edge.type === "input")) {
-				type = "input";
-			} else {
+		// Check if there are any incoming write edges or outgoing read edges
+		if (
+			incomingEdges.some((edge) => edge.type === "write") ||
+			outgoingEdges.some((edge) => edge.type === "read")
+		) {
+			// Set the type to "variable"
+			type = "variable";
+
+			// If there are incoming edges, there should be exactly one and its type must be 'write'
+			if (incomingEdges.length > 0) {
+				if (
+					incomingEdges.length > 1 ||
+					incomingEdges[0].type !== "write"
+				) {
+					console.error(
+						"Error: Variable nodes with incoming edges must have exactly one incoming edge of 'write' type"
+					);
+				}
+			}
+
+			// Check for outgoing edges of other types
+			if (
+				outgoingEdges.some(
+					(edge) => edge.type !== "read" && edge.type !== "write"
+				)
+			) {
 				console.error(
-					"Error: If one outgoing edge is 'input', all must be 'input'"
+					"Error: Outgoing edges of variable nodes must be of 'read' or 'write' type"
 				);
 			}
 		}
 
-		// Check if any incoming edge is of type "output" or "debug"
-		if (
-			incomingEdges.some(
-				(edge) => edge.type === "output" || edge.type === "debug"
-			)
-		) {
+		// Check if any incoming edge is of type "debug"
+		if (incomingEdges.some((edge) => edge.type === "debug")) {
 			// Should only be one incoming edge
-			if (incomingEdges.length === 1) {
-				// If the incoming edge is of type "output", the node is of type "output", and same for "debug"
-				if (incomingEdges[0].type === "output") {
-					type = "output";
-				} else if (incomingEdges[0].type === "debug") {
-					type = "debug";
-				}
+			if (
+				incomingEdges.length === 1 &&
+				outgoingEdges.length === 0 &&
+				incomingEdges[0].type === "debug"
+			) {
+				// If there's only one incoming edge and it's of type "debug", the node is of type "debug"
+				type = "debug";
 			} else {
 				console.error(
-					"Error: If one incoming edge is 'output' or 'debug', it must be the only incoming edge"
+					"Error: If one incoming edge is 'debug', it must be the only edge on the node"
 				);
 			}
 		}
@@ -273,8 +289,8 @@ async function processNodes(
 function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
 	const edges: Record<string, CannoliEdge> = {};
 	const edgeTypes: EdgeType[] = [
-		"input",
-		"output",
+		"read",
+		"write",
 		"choice",
 		"debug",
 		"simple",
@@ -319,23 +335,21 @@ function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
 			edgeType = "variable";
 		}
 
-		// Check for content in the label
+		// If the edge is not a simple, read, write, or debug edge, the label is the content
 		if (
 			edgeType !== "simple" &&
-			edgeType !== "input" &&
-			edgeType !== "output" &&
+			edgeType !== "write" &&
 			edgeType !== "debug"
 		) {
 			content = labelLines.join("\n").trim() || null;
 			if (!content) {
 				throw new Error(
-					`No content found for variable edge ${edgeData.id}`
+					`No content found for ${edgeType} edge ${edgeData.id}`
 				);
 			}
 		} else if (
 			(edgeType === "simple" ||
-				edgeType === "input" ||
-				edgeType === "output" ||
+				edgeType === "write" ||
 				edgeType === "debug") &&
 			labelLines.length > 0
 		) {
@@ -388,7 +402,7 @@ function processGroups(
 }
 
 // Node Types
-type NodeType = "call" | "input" | "output" | "debug" | "globalVar";
+type NodeType = "call" | "variable" | "debug" | "globalVar";
 
 class CannoliNode {
 	id: string;
@@ -439,31 +453,29 @@ class CannoliNode {
 	}
 
 	async process(nodeCompleted: () => void) {
-		if (this.type === "input") {
-			// Node is an input node, send its content on the outgoing variable edge
-			// Assuming there is only one outgoing edge for input nodes
-			this.outgoingEdges[0].setPayload(this.content);
+		if (this.type === "variable") {
+			// Node is a variable node. If it has an incoming edge, change its content to the content of its incoming edge
+			if (this.incomingEdges.length > 0) {
+				this.content = this.incomingEdges[0].getPayload() as string;
+			}
+			await this.changeContent(this.content);
+			// Send its content on the outgoing read and write edges
+			for (const edge of this.outgoingEdges.filter(
+				(edge) => edge.type === "read" || edge.type === "write"
+			)) {
+				edge.setPayload(this.content);
+			}
 		} else if (this.type === "debug") {
 			// Node is a debug node, take the content from its single incoming edge
 			this.content = this.incomingEdges[0].getPayload() as string;
 			await this.changeContent(this.content);
-		} else if (this.type === "output") {
-			// Node is an output node, change its content to the content of its incoming variable edge
-			this.content = this.incomingEdges[0].getPayload() as string;
-			await this.changeContent(this.content);
-			// // Put the content in its outgoing variable edges
-			// for (const edge of this.outgoingEdges.filter(
-			// 	(edge) => edge.type === "variable"
-			// )) {
-			// 	edge.setPayload(this.content);
-			// }
 		} else if (this.type === "call") {
 			// Node is a call node, build its message
 			let messageContent = this.content;
 
-			// Process incoming variable type edges
+			// Process incoming variable and read type edges
 			for (const edge of this.incomingEdges.filter(
-				(edge) => edge.type === "variable"
+				(edge) => edge.type === "variable" || edge.type === "read"
 			)) {
 				const varName = edge.content;
 				const varValue = edge.getPayload() as string;
@@ -554,7 +566,7 @@ class CannoliNode {
 
 			// For all outgoing variable and output type edges, set the payload to the content of the response message
 			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "variable" || edge.type === "output"
+				(edge) => edge.type === "variable" || edge.type === "write"
 			)) {
 				const varName = edge.content;
 				const varValue = chatResponse.content;
@@ -608,8 +620,15 @@ class CannoliNode {
 	// Process the node if all its dependencies are complete
 	async attemptProcess(nodeCompleted: () => void) {
 		if (this.allDependenciesComplete()) {
-			await this.showProcessing();
-			this.process(nodeCompleted);
+			// If the node is not a call node, await its process function
+			if (this.type !== "call") {
+				await this.process(nodeCompleted);
+			}
+			// If the node is a call node, show that it is processing and don't await its process function
+			else {
+				await this.showProcessing();
+				this.process(nodeCompleted);
+			}
 		}
 	}
 
@@ -763,13 +782,13 @@ class CannoliNode {
 }
 
 // Edge Types
-type EdgeType = "input" | "output" | "choice" | "debug" | "simple" | "variable";
+type EdgeType = "read" | "write" | "choice" | "debug" | "simple" | "variable";
 
 const colorToEdgeTypeMapping: Record<string, EdgeType> = {
-	"1": "output",
+	"1": "write",
 	"2": "choice",
 	"3": "choice",
-	"4": "input",
+	"4": "read",
 	"5": "debug",
 	"6": "debug",
 };
