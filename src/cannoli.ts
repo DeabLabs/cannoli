@@ -531,14 +531,18 @@ class CannoliNode {
 			const pageNameMatches =
 				messageContent.match(/{\[\[(.*?)\]\]}/g) || [];
 			for (const match of pageNameMatches) {
-				const pageName = match.slice(2, -2); // Remove {[[ and ]]}
+				const pageName = match.slice(3, -3); // Remove {[[ and ]]}
 
 				const page = this.vault
 					.getMarkdownFiles()
-					.find((file) => file.name === pageName);
+					.find((file) => file.basename === pageName);
 				if (page) {
 					const pageContent = await this.vault.read(page);
-					messageContent = messageContent.replace(match, pageContent);
+					const renderedPage = "# " + pageName + "\n" + pageContent;
+					messageContent = messageContent.replace(
+						match,
+						renderedPage
+					);
 				} else {
 					messageContent = messageContent.replace(
 						match,
@@ -556,7 +560,6 @@ class CannoliNode {
 					edge.getSource(this.nodes).type === "call"
 			);
 			if (simpleEdge && simpleEdge.getPayload()) {
-				console.log("Simple edge payload: ", simpleEdge.getPayload());
 				messages =
 					simpleEdge.getPayload() as ChatCompletionRequestMessage[];
 				messages.push({ role: "user", content: messageContent });
