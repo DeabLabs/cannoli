@@ -42,9 +42,9 @@ export async function startCannoli(
 async function runCannoli(nodes: Record<string, CannoliNode>) {
 	const nodeKeys = Object.keys(nodes);
 
-	// Change all non-globalVar type nodes to "0"
+	// Change all call nodes to color 0
 	for (const key of nodeKeys) {
-		if (nodes[key].type !== "globalVar") {
+		if (nodes[key].type === "call") {
 			await nodes[key].changeColor("0");
 		}
 	}
@@ -85,7 +85,7 @@ async function processCanvas(
         Edge ${edge.id}
         Source: ${edge.sourceId}
         Target: ${edge.targetId}
-        Content: ${edge.content}
+        Label: ${edge.label}
         Type: ${edge.type}
         `);
 	}
@@ -155,6 +155,25 @@ async function processCanvas(
 		}
 	}
 
+	// Final checks
+
+	// Check if there are call nodes with outgoing blank edges to call nodes in other groups/non-grouped call nodes
+	for (const node of Object.values(nodes)) {
+		if (
+			node.type === "call" &&
+			node.outgoingEdges.some(
+				(edge) =>
+					edge.type === "blank" &&
+					edge.getTarget(nodes).type === "call" &&
+					edge.getTarget(nodes).groupId !== node.groupId
+			)
+		) {
+			throw new Error(
+				`Call node with id ${node.id} has an outgoing blank edge to a call node in another group`
+			);
+		}
+	}
+
 	return nodes;
 }
 
@@ -167,10 +186,10 @@ async function processNodes(
 	openai: OpenAIApi
 ): Promise<Record<string, CannoliNode>> {
 	const nodes: Record<string, CannoliNode> = {};
+	const nodeTypes: NodeType[] = ["call", "content", "globalVar"];
 
 	for (const nodeData of canvasData.nodes) {
-		let content = "";
-		let type: NodeType = "call"; // Default to "call" type
+		let nodeText = "";
 
 		if (nodeData.type === "group") {
 			continue;
@@ -179,12 +198,12 @@ async function processNodes(
 		if ("file" in nodeData) {
 			const nodeFile = vault.getAbstractFileByPath(nodeData.file);
 			if (nodeFile instanceof TFile) {
-				content = await vault.read(nodeFile);
+				nodeText = await vault.read(nodeFile);
 			}
 		} else if ("text" in nodeData) {
-			content = nodeData.text;
+			nodeText = nodeData.text;
 		} else if ("url" in nodeData) {
-			content = nodeData.url;
+			nodeText = nodeData.url;
 		}
 
 		// Find the outgoing and incoming edge ids of the node in the canvas data
@@ -204,63 +223,101 @@ async function processNodes(
 			incomingEdgeIds.includes(edge.id)
 		);
 
-		// Check if there are any incoming write edges or outgoing read edges
-		if (
-			incomingEdges.some((edge) => edge.type === "write") ||
-			outgoingEdges.some((edge) => edge.type === "read")
-		) {
-			// Set the type to "variable"
-			type = "variable";
+		let nodeType: NodeType = "call";
 
-			// If there are incoming edges, there should be exactly one and its type must be 'write'
-			if (incomingEdges.length > 0) {
-				if (
-					incomingEdges.length > 1 ||
-					incomingEdges[0].type !== "write"
-				) {
-					console.error(
-						"Error: Variable nodes with incoming edges must have exactly one incoming edge of 'write' type"
-					);
-				}
-			}
+		let content = "";
+		let contentLines: string[] = [];
 
-			// Check for outgoing edges of other types
+		// If text is given, parse it for a /type tag
+		if (nodeText) {
+			content = nodeText;
+			contentLines = content.split("\n");
+			const potentialTypeTag =
+				contentLines[0].startsWith("/") && contentLines[0].slice(1);
+
+			// Check if the type tag exists and is valid
 			if (
-				outgoingEdges.some(
-					(edge) => edge.type !== "read" && edge.type !== "write"
-				)
+				potentialTypeTag &&
+				nodeTypes.includes(potentialTypeTag as NodeType)
 			) {
-				console.error(
-					"Error: Outgoing edges of variable nodes must be of 'read' or 'write' type"
-				);
+				nodeType = potentialTypeTag as NodeType;
+				contentLines.shift(); // Remove the type tag line
 			}
+
+			content = contentLines.join("\n");
 		}
 
-		// Check if any incoming edge is of type "debug"
-		if (incomingEdges.some((edge) => edge.type === "debug")) {
-			// Should only be one incoming edge
-			if (
-				incomingEdges.length === 1 &&
-				outgoingEdges.length === 0 &&
-				incomingEdges[0].type === "debug"
-			) {
-				// If there's only one incoming edge and it's of type "debug", the node is of type "debug"
-				type = "debug";
-			} else {
-				console.error(
-					"Error: If one incoming edge is 'debug', it must be the only edge on the node"
-				);
-			}
+		// If there's no valid type tag, check for color mapping
+		if (
+			nodeType === "call" &&
+			nodeData.color &&
+			colorToNodeTypeMapping.hasOwnProperty(nodeData.color)
+		) {
+			nodeType = colorToNodeTypeMapping[nodeData.color];
 		}
 
 		// Check if the node is a global variable node
 		if (outgoingEdges.length === 0 && incomingEdges.length === 0) {
 			const firstLine = content.split("\n")[0];
 			if (firstLine.startsWith("{") && firstLine.endsWith("}")) {
-				type = "globalVar";
+				nodeType = "globalVar";
 			} else {
 				console.log("Floating node that is not a global variable");
 				continue;
+			}
+		}
+
+		// After categorizing the node, ensure each node type fits the requirements
+
+		// If the node is a call node, ensure it fits the requirements
+		if (nodeType === "call") {
+			// Disallow incoming debug edges
+			if (incomingEdges.some((edge) => edge.type === "debug")) {
+				throw new Error(
+					"Error: Call nodes cannot have incoming edges of 'debug' type"
+				);
+			}
+		}
+
+		// If the node is a content node, ensure it fits the requirements
+		if (nodeType === "content") {
+			// If the node has more than one incoming edges, it must have 2 edges: one of them must be of type "blank", and the other must be of type "variable". It must also have content matching the form "{edgeLabel}"
+			if (incomingEdges.length > 1) {
+				if (
+					incomingEdges.length === 2 &&
+					incomingEdges.some((edge) => edge.type === "blank") &&
+					incomingEdges.some((edge) => edge.type === "variable")
+				) {
+					if (
+						content ===
+						`{${
+							incomingEdges.find(
+								(edge) => edge.type === "variable"
+							)?.label
+						}}`
+					) {
+						/* empty */
+					} else {
+						throw new Error(
+							"Error: Content nodes with an incoming variable edge must have content matching the form '{edgeLabel}'"
+						);
+					}
+				} else {
+					throw new Error(
+						"Error: Content nodes with more than one incoming edge must have one of type 'blank' and one of type 'variable'"
+					);
+				}
+			} else {
+				// If the node has one incoming edge, it must be of type "blank" or "debug"
+				if (
+					incomingEdges.length === 1 &&
+					incomingEdges[0].type !== "blank" &&
+					incomingEdges[0].type !== "debug"
+				) {
+					throw new Error(
+						"Error: Content nodes with one incoming edge must have an incoming edge of type 'blank' or 'debug'"
+					);
+				}
 			}
 		}
 
@@ -271,7 +328,7 @@ async function processNodes(
 			nodeData.y,
 			nodeData.width,
 			nodeData.height,
-			type,
+			nodeType,
 			outgoingEdges,
 			incomingEdges,
 			vault,
@@ -288,18 +345,10 @@ async function processNodes(
 // Function to process edges
 function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
 	const edges: Record<string, CannoliEdge> = {};
-	const edgeTypes: EdgeType[] = [
-		"read",
-		"write",
-		"choice",
-		"debug",
-		"simple",
-		"variable",
-	];
+	const edgeTypes: EdgeType[] = ["choice", "debug", "blank", "variable"];
 
 	for (const edgeData of canvasData.edges) {
-		let edgeType: EdgeType = "simple";
-		let content: string | null = null;
+		let edgeType: EdgeType = "blank";
 
 		// Initialize variables for the label and the parsed lines
 		let label = "";
@@ -320,42 +369,21 @@ function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
 				edgeType = potentialTypeTag as EdgeType;
 				labelLines.shift(); // Remove the type tag line
 			}
+
+			label = labelLines.join("\n");
 		}
 
 		// If there's no valid type tag, check for color mapping
 		if (
-			edgeType === "simple" &&
+			edgeType === "blank" &&
 			edgeData.color &&
 			colorToEdgeTypeMapping.hasOwnProperty(edgeData.color)
 		) {
 			edgeType = colorToEdgeTypeMapping[edgeData.color];
 		}
-		// If there's no type tag and no color, but there's a label, it's a variable type
-		else if (edgeType === "simple" && label) {
+		// If there's no type tag and no color, but there's a label, it's a variable type and the label is the content
+		else if (edgeType === "blank" && label) {
 			edgeType = "variable";
-		}
-
-		// If the edge is not a simple, read, write, or debug edge, the label is the content
-		if (
-			edgeType !== "simple" &&
-			edgeType !== "write" &&
-			edgeType !== "debug"
-		) {
-			content = labelLines.join("\n").trim() || null;
-			if (!content) {
-				throw new Error(
-					`No content found for ${edgeType} edge ${edgeData.id}`
-				);
-			}
-		} else if (
-			(edgeType === "simple" ||
-				edgeType === "write" ||
-				edgeType === "debug") &&
-			labelLines.length > 0
-		) {
-			throw new Error(
-				`Invalid content found for ${edgeType} edge ${edgeData.id}`
-			);
 		}
 
 		const edge = new CannoliEdge(
@@ -363,7 +391,7 @@ function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
 			edgeData.fromNode,
 			edgeData.toNode,
 			edgeType,
-			content
+			label
 		);
 
 		edges[edge.id] = edge;
@@ -402,7 +430,12 @@ function processGroups(
 }
 
 // Node Types
-type NodeType = "call" | "variable" | "debug" | "globalVar";
+type NodeType = "call" | "content" | "globalVar";
+
+const colorToNodeTypeMapping: Record<string, NodeType> = {
+	"0": "call",
+	"6": "content",
+};
 
 class CannoliNode {
 	id: string;
@@ -453,31 +486,180 @@ class CannoliNode {
 	}
 
 	async process(nodeCompleted: () => void) {
-		if (this.type === "variable") {
-			// Node is a variable node. If it has an incoming edge, change its content to the content of its incoming edge
-			if (this.incomingEdges.length > 0) {
-				this.content = this.incomingEdges[0].getPayload() as string;
+		if (this.type === "content") {
+			// Node is a content node.
+
+			// Initialize debug variables
+			let wroteToPage = false;
+			let pageName = "";
+			let writtenContent = "";
+			let pageCreated = false;
+
+			// If it has an incoming variable edge, replace the content with the label of the variable edge, and write it to the page with the same name as the label if it exists, and create it if it doesn't.
+			if (this.incomingEdges.some((edge) => edge.type === "variable")) {
+				// If the edge's payload is null, throw an error
+				if (this.incomingEdges.some((edge) => edge.payload === null)) {
+					// The error should look like: "No existing page could be parsed for the edge with id: 123"
+					throw new Error(
+						`No existing page could be parsed for the edge with id: ${
+							this.incomingEdges.find(
+								(edge) => edge.payload === null
+							)?.id
+						}`
+					);
+				}
+
+				let varValue = this.incomingEdges
+					.find((edge) => edge.type === "variable")
+					?.getPayload() as string;
+
+				// If the varValue is not surrounded by double braces, surround it with double braces
+				if (varValue) {
+					if (
+						!varValue.startsWith("[[") &&
+						!varValue.endsWith("]]")
+					) {
+						varValue = "[[" + varValue + "]]";
+					}
+				} else {
+					throw new Error(
+						`Variable name not found for edge ${
+							this.incomingEdges.find(
+								(edge) => edge.type === "variable"
+							)?.id
+						}`
+					);
+				}
+
+				// Set pageContent variable to the payload of the incoming blank edge
+				let pageContent = this.incomingEdges
+					.find((edge) => edge.type === "blank")
+					?.getPayload() as string;
+
+				// If the first line of page content is "# " followed by the page name, regardless of case, remove the first line, because obsidian will add it automatically
+				const pageContentLines = pageContent.split("\n");
+				if (
+					pageContentLines[0].toLowerCase() ===
+					`# ${varValue.toLowerCase()}`
+				) {
+					pageContentLines.shift();
+				}
+
+				pageContent = pageContentLines.join("\n");
+
+				// If the varValue without double-braces corresponds to a page (accounting for case), write the pageContent to the page
+				pageName = varValue.slice(2, -2);
+				const page = this.vault
+					.getMarkdownFiles()
+					.find(
+						(file) =>
+							file.basename.toLowerCase() ===
+							pageName.toLowerCase()
+					);
+
+				if (page) {
+					console.log("Page exists, editing");
+					await this.vault.modify(page, pageContent);
+					wroteToPage = true;
+					writtenContent = pageContent;
+				} else {
+					console.log("Page doesn't exist, creating");
+					await this.vault.create(pageName + ".md", pageContent);
+					pageCreated = true;
+					wroteToPage = true;
+					writtenContent = pageContent;
+				}
+
+				this.content = varValue;
+				await this.changeContent(this.content);
 			}
-			await this.changeContent(this.content);
-			// Send its content on the outgoing read and write edges
+
+			// If it has an incoming blank edge
+			else if (this.incomingEdges.some((edge) => edge.type === "blank")) {
+				// If the content of the node is a markdown page reference, write the payload of the blank edge to the page with the same name as the reference if it exists, and error if it doesn't
+				if (
+					this.content.startsWith("[[") &&
+					this.content.endsWith("]]")
+				) {
+					pageName = this.content.slice(2, -2);
+					const page = this.vault
+						.getMarkdownFiles()
+						.find(
+							(file) =>
+								file.basename.toLowerCase() ===
+								pageName.toLowerCase()
+						);
+
+					if (page) {
+						console.log("Page exists, editing");
+						await this.vault.modify(
+							page,
+							this.incomingEdges
+								.find((edge) => edge.type === "blank")
+								?.getPayload() as string
+						);
+						wroteToPage = true;
+						writtenContent = this.incomingEdges
+							.find((edge) => edge.type === "blank")
+							?.getPayload() as string;
+					} else {
+						throw new Error(
+							`The page: "${pageName}" doesn't exist`
+						);
+					}
+				} else {
+					// If the content isn't a markdown page reference, set the content of the node to the payload of the blank edge
+					this.content = this.incomingEdges
+						.find((edge) => edge.type === "blank")
+						?.getPayload() as string;
+					await this.changeContent(this.content);
+					writtenContent = this.content;
+				}
+			}
+
+			// If it has an incoming debug edge, set the content of the node to the payload of the debug edge
+			else if (this.incomingEdges.some((edge) => edge.type === "debug")) {
+				this.content = this.incomingEdges
+					.find((edge) => edge.type === "debug")
+					?.getPayload() as string;
+				await this.changeContent(this.content);
+				writtenContent = this.content;
+			}
+
+			// Set the payload of all outgoing variable and blank edges to the content of the node
 			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "read" || edge.type === "write"
+				(edge) => edge.type === "variable" || edge.type === "blank"
 			)) {
 				edge.setPayload(this.content);
 			}
-		} else if (this.type === "debug") {
-			// Node is a debug node, take the content from its single incoming edge
-			this.content = this.incomingEdges[0].getPayload() as string;
-			await this.changeContent(this.content);
+
+			// Set the payload of all outgoing debug edges to a markdown string explaining what happened.
+			// Say if the content was written to the node or a page, and show the content. If it was written to a page, say the name and mention if it was created.
+			for (const edge of this.outgoingEdges.filter(
+				(edge) => edge.type === "debug"
+			)) {
+				let debugContent = "";
+				if (wroteToPage) {
+					if (pageCreated) {
+						debugContent = `[[${pageName}]] was created:`;
+					} else {
+						debugContent = `[[${pageName}]] was edited:`;
+					}
+					debugContent += `\n\n${writtenContent}`;
+				} else {
+					debugContent = `This was written to the content node:\n\n${writtenContent}`;
+				}
+				edge.setPayload(debugContent);
+			}
 		} else if (this.type === "call") {
 			// Node is a call node, build its message
 			let messageContent = this.content;
 
 			// Process incoming variable and read type edges
 			for (const edge of this.incomingEdges.filter(
-				(edge) => edge.type === "variable" || edge.type === "read"
+				(edge) => edge.type === "variable"
 			)) {
-				const varName = edge.content;
+				const varName = edge.label;
 				const varValue = edge.getPayload() as string;
 
 				if (!varName) {
@@ -535,21 +717,28 @@ class CannoliNode {
 				}
 			}
 
-			let messages: ChatCompletionRequestMessage[];
+			let messages: ChatCompletionRequestMessage[] = [];
 
-			// If there is an incoming simple type edge from a node within the same group, it's payload is an array of messages. Append the current message to them and make that the messages array
-			const simpleEdge = this.incomingEdges.find(
-				(edge) =>
-					edge.type === "simple" &&
-					edge.getSource(this.nodes).type === "call"
-			);
-			if (simpleEdge && simpleEdge.getPayload()) {
-				messages =
-					simpleEdge.getPayload() as ChatCompletionRequestMessage[];
-				messages.push({ role: "user", content: messageContent });
-			} else {
-				messages = [{ role: "user", content: messageContent }];
+			// For all incoming blank edges.
+			for (const edge of this.incomingEdges.filter(
+				(edge) => edge.type === "blank"
+			)) {
+				// If the edge is from a content node, the payload is a string. Turn it into a system chatMessage and push it to the messages array
+				if (edge.getSource(this.nodes).type === "content") {
+					messages.push({
+						role: "system",
+						content: edge.getPayload() as string,
+					});
+				}
+				// If the edge is from a call node, the payload is an array of messages. Append them to the messages array
+				else if (edge.getSource(this.nodes).type === "call") {
+					messages =
+						edge.getPayload() as ChatCompletionRequestMessage[];
+				}
 			}
+
+			// Append the current message to the messages array
+			messages.push({ role: "user", content: messageContent });
 
 			// Send a request to OpenAI
 			const chatResponse = await llmCall({
@@ -562,31 +751,54 @@ class CannoliNode {
 				throw new Error("Chat response is undefined");
 			}
 
+			if (chatResponse.content === undefined) {
+				throw new Error("Chat response content is undefined");
+			}
+
 			// Load outgoing edges
 
-			// For all outgoing variable and output type edges, set the payload to the content of the response message
+			// For all outgoing variable edges
 			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "variable" || edge.type === "write"
+				(edge) => edge.type === "variable"
 			)) {
-				const varName = edge.content;
-				const varValue = chatResponse.content;
-
-				if (!varValue) {
-					throw new Error(`Variable ${varName} has not been set`);
+				// If the variable label is surrounded by double braces, call ensurePageExists on the payload of the variable edge
+				if (edge.label?.startsWith("[[") && edge.label.endsWith("]]")) {
+					const maybePageName = chatResponse.content;
+					if (!maybePageName) {
+						throw new Error("Chat response content is undefined");
+					}
+					const realPageName = await ensurePageExists(
+						maybePageName,
+						this.vault
+					);
+					edge.setPayload(realPageName);
+				} else {
+					// If the variable label is not surrounded by double braces, set the payload to the content of the response message
+					edge.setPayload(chatResponse.content);
 				}
-				edge.setPayload(varValue);
 			}
 
-			// For all outgoing simple type edges, set the payload to the array of prompt messages with the response message appended
-			if (chatResponse) {
-				messages.push(chatResponse);
-			}
-
+			// For all outgoing blank type edges
 			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "simple"
+				(edge) => edge.type === "blank"
 			)) {
-				const payloadMessages = messages.slice();
-				edge.setPayload(payloadMessages);
+				// If the edge is to a call node
+				if (edge.getTarget(this.nodes).type === "call") {
+					// If the target node is within the same group, set the payload to the whole messages array with the response message appended
+					if (edge.getTarget(this.nodes).groupId === this.groupId) {
+						const payloadMessages = messages.slice();
+						payloadMessages.push(chatResponse);
+						edge.setPayload(payloadMessages);
+					}
+					// If the target node is not within the same group, set the payload to the response message
+					else {
+						edge.setPayload(chatResponse.content);
+					}
+				}
+				// If the edge is to a content node, set the payload to the response message content
+				else if (edge.getTarget(this.nodes).type === "content") {
+					edge.setPayload(chatResponse.content);
+				}
 			}
 
 			// For all outgoing debug type edges, set the payload to a markdown string containing the prompt messages and the response message formatted nicely
@@ -594,7 +806,6 @@ class CannoliNode {
 				(edge) => edge.type === "debug"
 			)) {
 				const allMessages = messages
-					.slice(0, -1)
 					.map(
 						(m) =>
 							`### ${
@@ -607,9 +818,11 @@ class CannoliNode {
 				const debugContent = `${inputContent}\n\n${outputContent}`;
 				edge.setPayload(debugContent);
 			}
+
+			await this.showCompleted();
 		}
 
-		await this.showCompleted();
+		this.status = "complete";
 		nodeCompleted();
 
 		for (const edge of this.outgoingEdges) {
@@ -750,6 +963,7 @@ class CannoliNode {
 
 	// Change the content of the node
 	async changeContent(content: string) {
+		console.log("Changing content of node " + this.id + " to " + content);
 		const canvasData = JSON.parse(
 			await this.vault.read(this.canvasFile)
 		) as CanvasData;
@@ -763,33 +977,13 @@ class CannoliNode {
 
 		await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
 	}
-
-	// Double height of node
-	async doubleHeight() {
-		const canvasData = JSON.parse(
-			await this.vault.read(this.canvasFile)
-		) as CanvasData;
-
-		const node = canvasData.nodes.find((node) => node.id === this.id);
-		if (node !== undefined) {
-			node.height *= 2;
-		} else {
-			throw new Error(`Node with id ${this.id} not found`);
-		}
-		console.log("Updated canvas:\n" + JSON.stringify(canvasData, null, 2));
-		await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
-	}
 }
 
 // Edge Types
-type EdgeType = "read" | "write" | "choice" | "debug" | "simple" | "variable";
+type EdgeType = "choice" | "debug" | "blank" | "variable";
 
 const colorToEdgeTypeMapping: Record<string, EdgeType> = {
-	"1": "write",
-	"2": "choice",
-	"3": "choice",
-	"4": "read",
-	"5": "debug",
+	"1": "choice",
 	"6": "debug",
 };
 
@@ -797,7 +991,7 @@ class CannoliEdge {
 	id: string;
 	sourceId: string;
 	targetId: string;
-	content: string | null;
+	label: string | null;
 	type: EdgeType;
 	payload: ChatCompletionRequestMessage[] | string | null;
 
@@ -806,14 +1000,14 @@ class CannoliEdge {
 		sourceId: string,
 		targetId: string,
 		type: EdgeType,
-		content: string | null
+		label: string | null
 	) {
 		this.id = id;
 		this.sourceId = sourceId;
 		this.targetId = targetId;
 		this.type = type;
 		this.payload = null;
-		this.content = content;
+		this.label = label;
 	}
 
 	getSource(nodes: Record<string, CannoliNode>): CannoliNode {
@@ -824,7 +1018,7 @@ class CannoliEdge {
 		return nodes[this.targetId];
 	}
 
-	setPayload(payload: ChatCompletionRequestMessage[] | string) {
+	setPayload(payload: ChatCompletionRequestMessage[] | string | null) {
 		this.payload = payload;
 	}
 
@@ -874,6 +1068,38 @@ function isDAG(
 
 	recursionStack.delete(node);
 	return false;
+}
+
+// Search the input string for the first instance of a valid page name surrounded by braces, and return it, or return null if none is found
+async function ensurePageExists(
+	maybePageName: string,
+	vault: Vault
+): Promise<string | null> {
+	// Look for instances of [[pageName]]
+	const pageNameMatches = maybePageName.match(/\[\[.*?\]\]/g) || [];
+
+	// Initialize a variable to hold the found page
+	let foundPage = null;
+
+	// Loop through each match
+	for (const match of pageNameMatches) {
+		// Remove [[ and ]]
+		const pageName = match.slice(2, -2);
+
+		// Look for a markdown file with a matching basename
+		const page = vault
+			.getMarkdownFiles()
+			.find((file) => file.basename === pageName);
+
+		// If a page was found, store its original name (with brackets) and break the loop
+		if (page) {
+			foundPage = match; // match still has the brackets
+			break;
+		}
+	}
+
+	// Return the found page's name (with brackets), or null if none was found
+	return foundPage;
 }
 
 async function llmCall({
