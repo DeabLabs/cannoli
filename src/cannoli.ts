@@ -157,22 +157,22 @@ async function processCanvas(
 
 	// Final checks
 
-	// Check if there are call nodes with outgoing blank edges to call nodes in other groups/non-grouped call nodes
-	for (const node of Object.values(nodes)) {
-		if (
-			node.type === "call" &&
-			node.outgoingEdges.some(
-				(edge) =>
-					edge.type === "blank" &&
-					edge.getTarget(nodes).type === "call" &&
-					edge.getTarget(nodes).groupId !== node.groupId
-			)
-		) {
-			throw new Error(
-				`Call node with id ${node.id} has an outgoing blank edge to a call node in another group`
-			);
-		}
-	}
+	// // Check if there are call nodes with outgoing blank edges to call nodes in other groups/non-grouped call nodes
+	// for (const node of Object.values(nodes)) {
+	// 	if (
+	// 		node.type === "call" &&
+	// 		node.outgoingEdges.some(
+	// 			(edge) =>
+	// 				edge.type === "blank" &&
+	// 				edge.getTarget(nodes).type === "call" &&
+	// 				edge.getTarget(nodes).groupId !== node.groupId
+	// 		)
+	// 	) {
+	// 		throw new Error(
+	// 			`Call node with id ${node.id} has an outgoing blank edge to a call node in another group`
+	// 		);
+	// 	}
+	// }
 
 	return nodes;
 }
@@ -785,15 +785,9 @@ class CannoliNode {
 				// If the edge is to a call node
 				if (edge.getTarget(this.nodes).type === "call") {
 					// If the target node is within the same group, set the payload to the whole messages array with the response message appended
-					if (edge.getTarget(this.nodes).groupId === this.groupId) {
-						const payloadMessages = messages.slice();
-						payloadMessages.push(chatResponse);
-						edge.setPayload(payloadMessages);
-					}
-					// If the target node is not within the same group, set the payload to the response message
-					else {
-						edge.setPayload(chatResponse.content);
-					}
+					const payloadMessages = messages.slice();
+					payloadMessages.push(chatResponse);
+					edge.setPayload(payloadMessages);
 				}
 				// If the edge is to a content node, set the payload to the response message content
 				else if (edge.getTarget(this.nodes).type === "content") {
