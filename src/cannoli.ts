@@ -31,11 +31,11 @@ class Canvas {
 		this.canvasData = JSON.parse(fileContent) as CanvasData;
 	}
 
-	async parse(): {
+	async parse(): Promise<{
 		groups: Record<string, CannoliGroup>;
 		nodes: Record<string, CannoliNode>;
 		edges: Record<string, CannoliEdge>;
-	} {
+	}> {
 		await this.getCurrentData();
 
 		const groups: Record<string, CannoliGroup> = {};
@@ -136,24 +136,44 @@ class Canvas {
 		// For each node in the nodes object
 		for (const node of Object.values(nodes)) {
 			// Find the direct parent group of the node
-			for (const groupId in groups) {
-				const group = groups[groupId];
-				if (group.nodes.some((groupNode) => groupNode.id === node.id)) {
-					// Check if the node is not present in any of its child groups
-					if (
-						group.childGroups.every(
-							(childGroup) =>
-								!childGroup.nodes.some(
-									(groupNode) => groupNode.id === node.id
-								)
-						)
-					) {
-						node.setGroup(group);
-					}
+			this.setDirectParentGroup(node, groups);
+		}
+
+		// For each edge in the edges object, set the leaving and entering groups and the subtype
+		for (const edge of Object.values(edges)) {
+			edge.crossingGroups = this.computeCrossingGroups(edge, groups);
+			edge.subtype = this.findEdgeSubtype(edge);
+		}
+
+		// For each node in the nodes object, set the subtype
+		for (const node of Object.values(nodes)) {
+			node.subtype = this.findNodeSubtype(node);
+		}
+
+		// Return the groups, nodes, and edges objects
+		return { groups, nodes, edges };
+	}
+
+	setDirectParentGroup(
+		node: CannoliNode,
+		groups: Record<string, CannoliGroup>
+	) {
+		// Find the direct parent group of the node
+		for (const groupId in groups) {
+			const group = groups[groupId];
+			if (group.nodes.some((groupNode) => groupNode.id === node.id)) {
+				// Check if the node is not present in any of its child groups
+				if (
+					group.childGroups.every(
+						(childGroup) =>
+							!childGroup.nodes.some(
+								(groupNode) => groupNode.id === node.id
+							)
+					)
+				) {
+					node.setGroup(group);
 				}
 			}
-
-			// Find the subtype of the node
 		}
 	}
 
@@ -261,47 +281,14 @@ class Canvas {
 
 		// If there are any incoming edges of type "list"
 		if (incomingEdges.some((edge) => edge.type === "list")) {
-			// If all the incoming list edges come from the same node, have only one variable, and it's the same one
-			if (
-				incomingEdges.every(
-					(edge) =>
-						edge.source === incomingEdges[0].source &&
-						edge.variables.length === 1 &&
-						edge.variables[0].type === "regular" &&
-						edge.variables[0].name ===
-							incomingEdges[0].variables[0].name
-				)
-			) {
-				// If there are no more than one outgoing list edges
-				if (
-					outgoingEdges.filter((edge) => edge.type === "list")
-						.length <= 1
-				) {
-					// The group is a list group
-					type = "list";
-				} else {
-					throw new Error(
-						`Invalid Cannoli layout: Group with id ${group.id} has more than one outgoing list edge`
-					);
-				}
-			} else {
-				throw new Error(
-					`Invalid Cannoli layout: Group with id ${group.id} has incoming list edges with more than one variable`
-				);
-			}
+			// It's a list group
+			type = "list";
 		}
 
 		// If there are any outgoing edges of type "choice"
 		if (outgoingEdges.some((edge) => edge.type === "choice")) {
-			// If type wasn't already set to "list"
-			if (type !== "list") {
-				// It's a choice group
-				type = "choice";
-			} else {
-				throw new Error(
-					`Invalid Cannoli layout: Group with id ${group.id} has both incoming list edges and outgoing choice edges`
-				);
-			}
+			// It's a choice group
+			type = "choice";
 		}
 
 		// Parse the maxLoops and choiceString from the group's label
@@ -312,13 +299,6 @@ class Canvas {
 			const labelParts = group.label
 				.split("|")
 				.map((part) => part.trim());
-
-			// If the label has more than 2 parts and it's not a choice group, throw an error. Only choice groups can have choiceStrings
-			if (labelParts.length > 2 && type !== "choice") {
-				throw new Error(
-					`Invalid Cannoli layout: Group with id ${group.id} is not a choice group but has a choice option string`
-				);
-			}
 
 			// If the first part is not an integer, throw an error
 			if (isNaN(parseInt(labelParts[0]))) {
@@ -337,8 +317,8 @@ class Canvas {
 				);
 			}
 
-			// If the group is a choice group, set the choiceString
-			if (type === "choice") {
+			// If the group is a choice group and there is a second part, set the choiceString
+			if (type === "choice" && labelParts.length > 1) {
 				choiceString = labelParts[1];
 			}
 		}
@@ -387,17 +367,191 @@ class Canvas {
 			nodeType = "call";
 		}
 
-		// If the node is a call node and has no outgoing edges, throw an error
-		if (nodeType === "call" && outgoingEdges.length === 0) {
-			throw new Error(
-				`Call node with id ${node.id} isn't doing anything with its output`
-			);
-		}
-
 		return { nodeType, incomingEdges, outgoingEdges };
 	}
 
-	findNodeSubtype(node: CannoliNode) {}
+	findEdgeSubtype(
+		edge: CannoliEdge
+	):
+		| BlankSubtype
+		| VariableSubtype
+		| UtilitySubtype
+		| ListSubtype
+		| FunctionSubtype
+		| ChoiceSubtype {
+		// If the edge is a blank edge
+		if (edge.type === "blank") {
+			// If it's coming from a call node
+			if (edge.source.type === "call") {
+				// If it's going to a call node
+				if (edge.target.type === "call") {
+					// It's a continueChat edge
+					return "continueChat";
+				} else {
+					// It's going to a content node, so it's a write edge
+					return "write";
+				}
+			}
+			// It's coming from a content node
+			else {
+				// If it's going to a call node
+				if (edge.target.type === "call") {
+					// It's a systemMessage edge
+					return "systemMessage";
+				} else {
+					// It's going to a content node, so it's a write edge
+					return "write";
+				}
+			}
+		}
+		// If the edge is a variable edge
+		else if (edge.type === "variable") {
+			// It's a variable edge
+			return "";
+		}
+		// If the edge is a utility edge
+		else if (edge.type === "utility") {
+			// If there's no variables, it's a logging edge
+			if (edge.variables.length === 0) {
+				return "logging";
+			} else {
+				// The variable is the utility subtype. Throw an error if it's not a valid subtype or there are multiple variables
+				if (edge.variables.length > 1) {
+					throw new Error(
+						`Invalid Cannoli layout: Utility arrow with id ${edge.id} has more than one label`
+					);
+				}
+				if (!(edge.variables[0].name in this.utilitySubtypeMap)) {
+					throw new Error(
+						`Invalid Cannoli layout: Utility arrow with id ${edge.id} has an invalid variable. It must be one of the LLM configuration options.`
+					);
+				}
+				return this.utilitySubtypeMap[edge.variables[0].name];
+			}
+		}
+		// If the edge is a function edge
+		else if (edge.type === "function") {
+			// It's a function edge
+			return "";
+		}
+		// If the edge is a choice edge
+		else if (edge.type === "choice") {
+			// If the edge is leaving a group
+			if (edge.crossingGroups.find((group) => !group.isEntering)) {
+				// It's an outOfGroup choice edge
+				return "outOfGroup";
+			} else {
+				// It's a normal choice edge
+				return "normal";
+			}
+		}
+		// If the edge is a list edge
+		else if (edge.type === "list") {
+			// If the edge is leaving a group
+			if (edge.crossingGroups.find((group) => !group.isEntering)) {
+				// It's a select edge
+				return "select";
+			} else {
+				// It's a list edge
+				return "list";
+			}
+		}
+
+		throw new Error(
+			`Invalid Cannoli layout: Edge with id ${edge.id} has an invalid type`
+		);
+	}
+
+	findNodeSubtype(
+		node: CannoliNode
+	): CallSubtype | ContentSubtype | FloatingSubtype {
+		if (node.type === "floating") {
+			node.subtype = "";
+		} else if (node.type === "call") {
+			// If the node has any outgoing edge of type "list"
+			if (node.outgoingEdges.some((edge) => edge.type === "list")) {
+				// If one of them is a select edge
+				if (
+					node.outgoingEdges.some((edge) => edge.subtype === "select")
+				) {
+					// It's a select subtype
+					return "select";
+				} else {
+					// It's a list subtype
+					return "list";
+				}
+			}
+			// If the node has any outgoing edges of type "choice"
+			else if (
+				node.outgoingEdges.some((edge) => edge.type === "choice")
+			) {
+				// It's a choice subtype
+				return "choice";
+			} else {
+				// If it has no outgoing edges of type "list" or "choice", it's a normal node
+				return "normal";
+			}
+		} else if (node.type === "content") {
+			// If its content is just a link of the format [[link]], or [link], it's a reference node
+			if (node.content.startsWith("[[") && node.content.endsWith("]]")) {
+				return "reference";
+			} else if (
+				node.content.startsWith("[") &&
+				node.content.endsWith("]")
+			) {
+				return "reference";
+			}
+			// If it contains any variable references of the format {variable} or {{variable}}, and they are all valid, it's a formatter node
+			else if (node.content.includes("{") && node.content.includes("}")) {
+				const regex = /{{?([^{}]+)}}?/g;
+
+				let match;
+				let allVariablesFound = true; // Initial flag
+				while ((match = regex.exec(node.content)) !== null) {
+					const matchedVariable = match[1];
+
+					// Use some() to check if any edge has the variable
+					const hasVariable = node.incomingEdges.some((edge) =>
+						edge.variables.some(
+							(variable) =>
+								variable.name === matchedVariable &&
+								variable.type !== "choiceOption"
+						)
+					);
+
+					if (!hasVariable) {
+						allVariablesFound = false; // Set flag to false if variable is not found
+						break;
+					}
+				}
+
+				if (allVariablesFound) {
+					// If all variables are found, return "formatter"
+					return "formatter";
+				}
+			}
+			// If it has any incoming edges that contain any variables that aren't of type choiceOption or regular, it's a vault node
+			else if (
+				node.incomingEdges.some((edge) =>
+					edge.variables.some(
+						(variable) =>
+							variable.type !== "choiceOption" &&
+							variable.type !== "regular"
+					)
+				)
+			) {
+				return "vault";
+			}
+			// Otherwise, it's a normal node
+			else {
+				return "normal";
+			}
+		}
+
+		throw new Error(
+			`Invalid Cannoli layout: Node with id ${node.id} has an invalid type`
+		);
+	}
 
 	getIncomingEdges(
 		node: CanvasNodeData,
@@ -550,6 +704,61 @@ class Canvas {
 		return { edgeType, edgeTags, edgeVariables };
 	}
 
+	computeCrossingGroups(
+		edge: CannoliEdge,
+		groups: Record<string, CannoliGroup>
+	): { group: CannoliGroup; isEntering: boolean }[] {
+		const crossingGroups: { group: CannoliGroup; isEntering: boolean }[] =
+			[];
+
+		let currentGroup: CannoliGroup | null = edge.source.group;
+
+		// If the source node isn't in a group, start from the target node's group
+		if (!currentGroup) {
+			currentGroup = edge.target.group;
+
+			if (currentGroup) {
+				crossingGroups.push({ group: currentGroup, isEntering: true });
+			}
+		} else {
+			// Step 2 to 4: Traverse up the group hierarchy from the source node
+			while (currentGroup && !currentGroup.hasNode(edge.target.id)) {
+				crossingGroups.push({ group: currentGroup, isEntering: false });
+				currentGroup =
+					currentGroup.parentGroups.length > 0
+						? currentGroup.parentGroups[0]
+						: null;
+			}
+
+			// Step 5: If a group was found that contains the target node, traverse down to the target node
+			if (currentGroup) {
+				let childGroups = [...currentGroup.childGroups];
+
+				while (childGroups.length > 0) {
+					const childGroup = childGroups.pop();
+
+					if (!childGroup) continue;
+
+					// If the child group contains the target node, traverse into it
+					if (childGroup.hasNode(edge.target.id)) {
+						crossingGroups.push({
+							group: childGroup,
+							isEntering: true,
+						});
+						childGroups = [...childGroup.childGroups];
+					}
+				}
+			}
+
+			// If the target node isn't in a group, then the edge is leaving the final group
+			if (!edge.target.group && crossingGroups.length > 0) {
+				crossingGroups[crossingGroups.length - 1].isEntering = false;
+			}
+		}
+
+		return crossingGroups;
+	}
+
 	edgeColorMap: Record<string, EdgeType> = {
 		"2": "choice",
 		"3": "list",
@@ -580,6 +789,20 @@ class Canvas {
 		"3": "call",
 		"4": "call",
 		"6": "content",
+	};
+
+	utilitySubtypeMap: Record<string, UtilitySubtype> = {
+		logging: "logging",
+		function: "function",
+		model: "model",
+		max_tokens: "max_tokens",
+		temperature: "temperature",
+		top_p: "top_p",
+		frequency_penalty: "frequency_penalty",
+		presence_penalty: "presence_penalty",
+		stop: "stop",
+		echo: "echo",
+		debug: "debug",
 	};
 }
 
@@ -681,379 +904,12 @@ async function runCannoli(nodes: Record<string, CannoliNode>) {
 	}
 }
 
-// // Top-level function to process and validate the canvas data
-// async function processCanvas(
-// 	canvasData: CanvasData,
-// 	vault: Vault,
-// 	canvasFile: TFile,
-// 	openai: OpenAIApi
-// ): Promise<Record<string, CannoliNode>> {
-// 	// Process edges
-// 	const edges = processEdges(canvasData);
-// 	// Log out the edges with their properties, formatted nicely. Only using one log statement per edge to avoid cluttering the console
-// 	console.log("Edges:");
-// 	for (const edge of Object.values(edges)) {
-// 		console.log(`
-//         Edge ${edge.id}
-//         Source: ${edge.sourceId}
-//         Target: ${edge.targetId}
-//         Label: ${edge.label}
-//         Type: ${edge.type}
-//         `);
-// 	}
-
-// 	// Process nodes
-// 	const nodes = await processNodes(
-// 		canvasData,
-// 		edges,
-// 		vault,
-// 		canvasFile,
-// 		openai
-// 	);
-// 	// Log out the properties of the nodes, formatted nicely
-// 	console.log("Nodes:");
-// 	for (const node of Object.values(nodes)) {
-// 		console.log(`
-//         Node ${node.id}
-//         Content: ${node.content}
-//         Status: ${node.status}
-//         X: ${node.x}
-//         Y: ${node.y}
-//         Width: ${node.width}
-//         Height: ${node.height}
-//         Type: ${node.type}
-//         Outgoing Edges: ${node.outgoingEdges.map((edge) => edge.id)}
-//         Incoming Edges: ${node.incomingEdges.map((edge) => edge.id)}
-//         `);
-// 	}
-
-// 	// Process groups
-// 	console.log("Processing groups");
-// 	const groups = processGroups(canvasData, nodes);
-
-// 	// Validation of structures
-// 	for (const node of Object.values(nodes)) {
-// 		// Check if the graph starting from each node is a DAG
-// 		if (isDAG(node, new Set(), new Set(), nodes)) {
-// 			throw new Error(
-// 				`The call nodes form a cycle, starting from node with id ${node.id}`
-// 			);
-// 		}
-// 	}
-
-// 	for (const group of Object.values(groups)) {
-// 		// Check if the nodes in the group form a tree structure
-// 		const root = group.nodes.find(
-// 			(node) =>
-// 				node.incomingEdges.filter((edge) =>
-// 					group.nodes.includes(edge.getSource(nodes))
-// 				).length === 0
-// 		);
-
-// 		if (
-// 			group.nodes.some(
-// 				(node) =>
-// 					node !== root &&
-// 					node.incomingEdges.filter(
-// 						(edge) =>
-// 							group.nodes.includes(edge.getSource(nodes)) &&
-// 							edge.type !== "variable"
-// 					).length !== 1
-// 			)
-// 		) {
-// 			throw new Error(
-// 				`The group with id ${group.id} is not a tree structure`
-// 			);
-// 		}
-// 	}
-
-// 	// Final checks
-
-// 	// // Check if there are call nodes with outgoing blank edges to call nodes in other groups/non-grouped call nodes
-// 	// for (const node of Object.values(nodes)) {
-// 	// 	if (
-// 	// 		node.type === "call" &&
-// 	// 		node.outgoingEdges.some(
-// 	// 			(edge) =>
-// 	// 				edge.type === "blank" &&
-// 	// 				edge.getTarget(nodes).type === "call" &&
-// 	// 				edge.getTarget(nodes).groupId !== node.groupId
-// 	// 		)
-// 	// 	) {
-// 	// 		throw new Error(
-// 	// 			`Call node with id ${node.id} has an outgoing blank edge to a call node in another group`
-// 	// 		);
-// 	// 	}
-// 	// }
-
-// 	return nodes;
-// }
-
-// // Processing function for nodes
-// async function processNodes(
-// 	canvasData: CanvasData,
-// 	edges: Record<string, CannoliEdge>,
-// 	vault: Vault,
-// 	canvasFile: TFile,
-// 	openai: OpenAIApi
-// ): Promise<Record<string, CannoliNode>> {
-// 	const nodes: Record<string, CannoliNode> = {};
-// 	const nodeTypes: NodeType[] = ["call", "content", "globalVar"];
-
-// 	for (const nodeData of canvasData.nodes) {
-// 		let nodeText = "";
-
-// 		if (nodeData.type === "group") {
-// 			continue;
-// 		}
-
-// 		if ("file" in nodeData) {
-// 			const nodeFile = vault.getAbstractFileByPath(nodeData.file);
-// 			if (nodeFile instanceof TFile) {
-// 				nodeText = await vault.read(nodeFile);
-// 			}
-// 		} else if ("text" in nodeData) {
-// 			nodeText = nodeData.text;
-// 		} else if ("url" in nodeData) {
-// 			nodeText = nodeData.url;
-// 		}
-
-// 		// Find the outgoing and incoming edge ids of the node in the canvas data
-// 		const outgoingEdgeIds = canvasData.edges
-// 			.filter((edge) => edge.fromNode === nodeData.id)
-// 			.map((edge) => edge.id);
-// 		const incomingEdgeIds = canvasData.edges
-// 			.filter((edge) => edge.toNode === nodeData.id)
-// 			.map((edge) => edge.id);
-
-// 		// Find the outgoing and incoming edges in the edges object
-// 		const outgoingEdges = Object.values(edges).filter((edge) =>
-// 			outgoingEdgeIds.includes(edge.id)
-// 		);
-
-// 		const incomingEdges = Object.values(edges).filter((edge) =>
-// 			incomingEdgeIds.includes(edge.id)
-// 		);
-
-// 		let nodeType: NodeType = "call";
-
-// 		let content = "";
-// 		let contentLines: string[] = [];
-
-// 		// If text is given, parse it for a /type tag
-// 		if (nodeText) {
-// 			content = nodeText;
-// 			contentLines = content.split("\n");
-// 			const potentialTypeTag =
-// 				contentLines[0].startsWith("/") && contentLines[0].slice(1);
-
-// 			// Check if the type tag exists and is valid
-// 			if (
-// 				potentialTypeTag &&
-// 				nodeTypes.includes(potentialTypeTag as NodeType)
-// 			) {
-// 				nodeType = potentialTypeTag as NodeType;
-// 				contentLines.shift(); // Remove the type tag line
-// 			}
-
-// 			content = contentLines.join("\n");
-// 		}
-
-// 		// If there's no valid type tag, check for color mapping
-// 		if (
-// 			nodeType === "call" &&
-// 			nodeData.color &&
-// 			colorToNodeTypeMapping.hasOwnProperty(nodeData.color)
-// 		) {
-// 			nodeType = colorToNodeTypeMapping[nodeData.color];
-// 		}
-
-// 		// Check if the node is a global variable node
-// 		if (outgoingEdges.length === 0 && incomingEdges.length === 0) {
-// 			const firstLine = content.split("\n")[0];
-// 			if (firstLine.startsWith("{") && firstLine.endsWith("}")) {
-// 				nodeType = "globalVar";
-// 			} else {
-// 				console.log("Floating node that is not a global variable");
-// 				continue;
-// 			}
-// 		}
-
-// 		// After categorizing the node, ensure each node type fits the requirements
-
-// 		// If the node is a call node, ensure it fits the requirements
-// 		if (nodeType === "call") {
-// 			// Disallow incoming debug edges
-// 			if (incomingEdges.some((edge) => edge.type === "debug")) {
-// 				throw new Error(
-// 					"Error: Call nodes cannot have incoming edges of 'debug' type"
-// 				);
-// 			}
-// 		}
-
-// 		// If the node is a content node, ensure it fits the requirements
-// 		if (nodeType === "content") {
-// 			// If the node has more than one incoming edges, it must have 2 edges: one of them must be of type "blank", and the other must be of type "variable". It must also have content matching the form "{edgeLabel}"
-// 			if (incomingEdges.length > 1) {
-// 				if (
-// 					incomingEdges.length === 2 &&
-// 					incomingEdges.some((edge) => edge.type === "blank") &&
-// 					incomingEdges.some((edge) => edge.type === "variable")
-// 				) {
-// 					if (
-// 						content ===
-// 						`{${
-// 							incomingEdges.find(
-// 								(edge) => edge.type === "variable"
-// 							)?.label
-// 						}}`
-// 					) {
-// 						/* empty */
-// 					} else {
-// 						throw new Error(
-// 							"Error: Content nodes with an incoming variable edge must have content matching the form '{edgeLabel}'"
-// 						);
-// 					}
-// 				} else {
-// 					throw new Error(
-// 						"Error: Content nodes with more than one incoming edge must have one of type 'blank' and one of type 'variable'"
-// 					);
-// 				}
-// 			} else {
-// 				// If the node has one incoming edge, it must be of type "blank" or "debug"
-// 				if (
-// 					incomingEdges.length === 1 &&
-// 					incomingEdges[0].type !== "blank" &&
-// 					incomingEdges[0].type !== "debug"
-// 				) {
-// 					throw new Error(
-// 						"Error: Content nodes with one incoming edge must have an incoming edge of type 'blank' or 'debug'"
-// 					);
-// 				}
-// 			}
-// 		}
-
-// 		const node = new CannoliNode(
-// 			nodeData.id,
-// 			content,
-// 			nodeData.x,
-// 			nodeData.y,
-// 			nodeData.width,
-// 			nodeData.height,
-// 			nodeType,
-// 			outgoingEdges,
-// 			incomingEdges,
-// 			vault,
-// 			canvasFile,
-// 			openai,
-// 			nodes
-// 		);
-// 		nodes[node.id] = node;
-// 	}
-
-// 	return nodes;
-// }
-
-// // Function to process edges
-// function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
-// 	const edges: Record<string, CannoliEdge> = {};
-// 	const edgeTypes: EdgeType[] = ["choice", "debug", "blank", "variable"];
-
-// 	for (const edgeData of canvasData.edges) {
-// 		let edgeType: EdgeType = "blank";
-
-// 		// Initialize variables for the label and the parsed lines
-// 		let label = "";
-// 		let labelLines: string[] = [];
-
-// 		// If a label is given, parse it for a /type tag
-// 		if (edgeData.label) {
-// 			label = edgeData.label;
-// 			labelLines = label.split("\n");
-// 			const potentialTypeTag =
-// 				labelLines[0].startsWith("/") && labelLines[0].slice(1);
-
-// 			// Check if the type tag exists and is valid
-// 			if (
-// 				potentialTypeTag &&
-// 				edgeTypes.includes(potentialTypeTag as EdgeType)
-// 			) {
-// 				edgeType = potentialTypeTag as EdgeType;
-// 				labelLines.shift(); // Remove the type tag line
-// 			}
-
-// 			label = labelLines.join("\n");
-// 		}
-
-// 		// If there's no valid type tag, check for color mapping
-// 		if (
-// 			edgeType === "blank" &&
-// 			edgeData.color &&
-// 			colorToEdgeTypeMapping.hasOwnProperty(edgeData.color)
-// 		) {
-// 			edgeType = colorToEdgeTypeMapping[edgeData.color];
-// 		}
-// 		// If there's no type tag and no color, but there's a label, it's a variable type and the label is the content
-// 		else if (edgeType === "blank" && label) {
-// 			edgeType = "variable";
-// 		}
-
-// 		const edge = new CannoliEdge(
-// 			edgeData.id,
-// 			edgeData.fromNode,
-// 			edgeData.toNode,
-// 			edgeType,
-// 			label
-// 		);
-
-// 		edges[edge.id] = edge;
-// 	}
-
-// 	return edges;
-// }
-
-// function processGroups(
-// 	canvasData: CanvasData,
-// 	nodes: Record<string, CannoliNode>
-// ): Record<string, CannoliGroup> {
-// 	const groups: Record<string, CannoliGroup> = {};
-
-// 	// For each group in the canvas data, create a CannoliGroup object and add it to the groups object
-// 	// For each node in the canvas data, check if it is within the group using the geometric properties
-// 	for (const nodeData of canvasData.nodes) {
-// 		if (nodeData.type === "group") {
-// 			const group = new CannoliGroup(nodeData.id);
-// 			groups[nodeData.id] = group;
-// 			for (const nodeId in nodes) {
-// 				const node = nodes[nodeId];
-// 				// Check if the node is within the group using the geometric properties
-// 				if (
-// 					nodeData.x <= node.x &&
-// 					node.x <= nodeData.x + nodeData.width &&
-// 					nodeData.y <= node.y &&
-// 					node.y <= nodeData.y + nodeData.height
-// 				) {
-// 					group.addNode(node);
-// 					node.groupId = group.id;
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	return groups;
-// }
-
 // Node Types
 type NodeType = "call" | "content" | "floating";
 
 type CallSubtype = "list" | "select" | "choice" | "normal";
 
-type ContentSubtype =
-	| "reference"
-	| "builder"
-	| "formatter"
-	| "display"
-	| "input";
+type ContentSubtype = "reference" | "vault" | "formatter" | "normal";
 
 type FloatingSubtype = "";
 
@@ -1595,6 +1451,10 @@ type EdgeType =
 	| "choice"
 	| "list";
 
+type BlankSubtype = "continueChat" | "systemMessage" | "write";
+
+type VariableSubtype = "";
+
 type UtilitySubtype =
 	| "logging"
 	| "function"
@@ -1608,9 +1468,9 @@ type UtilitySubtype =
 	| "echo"
 	| "debug";
 
-type ListSubtype = "normal" | "intoGroup" | "outOfGroup";
+type ListSubtype = "list" | "listGroup" | "select";
 
-type FunctionSubtype = "builtIn" | "custom";
+type FunctionSubtype = "";
 
 type ChoiceSubtype = "normal" | "outOfGroup";
 
@@ -1636,10 +1496,17 @@ class CannoliEdge {
 	targetId: string;
 	source: CannoliNode;
 	target: CannoliNode;
+	crossingGroups: { group: CannoliGroup; isEntering: boolean }[];
 	variables: Variable[];
 	tags: EdgeTag[];
 	type: EdgeType;
-	subtype: UtilitySubtype | FunctionSubtype | ChoiceSubtype | ListSubtype;
+	subtype:
+		| UtilitySubtype
+		| FunctionSubtype
+		| ChoiceSubtype
+		| ListSubtype
+		| BlankSubtype
+		| VariableSubtype;
 	chatHistory: ChatCompletionRequestMessage[];
 	copies: CannoliEdge[];
 
