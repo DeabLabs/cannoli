@@ -1,7 +1,619 @@
 import { ChatCompletionRequestMessage, Configuration, OpenAIApi } from "openai";
 import { ErrorModal } from "main";
 import { Vault, TFile } from "obsidian";
-import { CanvasData } from "obsidian/canvas.d";
+import {
+	CanvasData,
+	CanvasEdgeData,
+	CanvasGroupData,
+	CanvasNodeData,
+} from "obsidian/canvas.d";
+
+// Cannoli class
+
+class Canvas {
+	canvasFile: TFile;
+	canvasData: CanvasData;
+	subCanvasGroupId?: string;
+	cannoli: Cannoli;
+
+	constructor(
+		canvasFile: TFile,
+		cannoli: Cannoli,
+		subCanvasGroupId?: string
+	) {
+		this.canvasFile = canvasFile;
+		this.subCanvasGroupId = subCanvasGroupId;
+		this.cannoli = cannoli;
+	}
+
+	async getCurrentData() {
+		const fileContent = await this.canvasFile.vault.read(this.canvasFile);
+		this.canvasData = JSON.parse(fileContent) as CanvasData;
+	}
+
+	async parse(): {
+		groups: Record<string, CannoliGroup>;
+		nodes: Record<string, CannoliNode>;
+		edges: Record<string, CannoliEdge>;
+	} {
+		await this.getCurrentData();
+
+		const groups: Record<string, CannoliGroup> = {};
+		const nodes: Record<string, CannoliNode> = {};
+		const edges: Record<string, CannoliEdge> = {};
+
+		// For each edge in the canvas data, create a CannoliEdge object and add it to the edges object
+		for (const edgeData of this.canvasData.edges) {
+			const edgeInfo = this.parseEdge(edgeData);
+
+			if (!edgeInfo) continue;
+
+			const { edgeType, edgeTags, edgeVariables } = edgeInfo;
+
+			const edge = new CannoliEdge({
+				id: edgeData.id,
+				sourceId: edgeData.fromNode,
+				targetId: edgeData.toNode,
+				type: edgeType,
+				tags: edgeTags,
+				variables: edgeVariables,
+			});
+
+			edges[edge.id] = edge;
+		}
+
+		// For each node in the canvas data, create a CannoliNode object and add it to the nodes object
+		for (const nodeData of this.canvasData.nodes) {
+			const nodeInfo = this.parseNode(nodeData, edges);
+
+			if (!nodeInfo) continue;
+
+			const { nodeType, incomingEdges, outgoingEdges } = nodeInfo;
+
+			const node = new CannoliNode({
+				id: nodeData.id,
+				content: nodeData.text,
+				incomingEdges,
+				outgoingEdges,
+				type: nodeType,
+				cannoli: this.cannoli,
+			});
+
+			nodes[node.id] = node;
+		}
+
+		// Set the source and target nodes for each edge
+		for (const edge of Object.values(edges)) {
+			edge.setSourceAndTarget(nodes);
+		}
+
+		// For each group in the canvas data, get the arguments for the CannoliGroup constructor, create it, and add it to the groups object
+		for (const groupData of this.canvasData.nodes.filter(
+			(node) => node.type === "group"
+		)) {
+			// Get the children of the group
+			const { cannoliNodes, groupIds } = this.parseGroupChildren(
+				groupData as CanvasGroupData,
+				nodes
+			);
+
+			// Get group edges
+			const { incomingEdges, outgoingEdges } = this.parseGroupEdges(
+				cannoliNodes,
+				edges
+			);
+
+			// Parse the group
+			const { maxLoops, choiceString, type } = this.parseGroup(
+				groupData as CanvasGroupData,
+				incomingEdges,
+				outgoingEdges
+			);
+
+			// Create the group
+			const group = new CannoliGroup({
+				id: groupData.id,
+				nodes: cannoliNodes,
+				incomingEdges,
+				outgoingEdges,
+				maxLoops,
+				choiceString,
+				type,
+				childGroupIds: groupIds,
+			});
+
+			groups[group.id] = group;
+		}
+
+		// Cannoli objects have been set, do second pass of groups, nodes and edges to further validate and fill in missing information
+
+		// For each group in the groups object, set the parent groups, a hierarchical list of all groups the group is in, and child groups
+		for (const group of Object.values(groups)) {
+			group.setParentGroups(groups);
+			group.setChildGroups(groups);
+		}
+
+		// For each node in the nodes object
+		for (const node of Object.values(nodes)) {
+			// Find the direct parent group of the node
+			for (const groupId in groups) {
+				const group = groups[groupId];
+				if (group.nodes.some((groupNode) => groupNode.id === node.id)) {
+					// Check if the node is not present in any of its child groups
+					if (
+						group.childGroups.every(
+							(childGroup) =>
+								!childGroup.nodes.some(
+									(groupNode) => groupNode.id === node.id
+								)
+						)
+					) {
+						node.setGroup(group);
+					}
+				}
+			}
+
+			// Find the subtype of the node
+		}
+	}
+
+	parseGroupChildren(
+		group: CanvasGroupData,
+		validNodes: Record<string, CannoliNode>
+	): { cannoliNodes: CannoliNode[]; groupIds: string[] } {
+		// Initialize the array of nodes and groups
+		const cannoliNodes: CannoliNode[] = [];
+		const groupIds: string[] = [];
+
+		// For each node in the canvas data
+		for (const node of this.canvasData.nodes) {
+			// Skip the group itself
+			if (node.id === group.id) continue;
+
+			// Check if node is fully enclosed by group
+			const isInside =
+				node.x >= group.x &&
+				node.y >= group.y &&
+				node.x + node.width <= group.x + group.width &&
+				node.y + node.height <= group.y + group.height;
+
+			if (isInside) {
+				// If the node has the type "group", add it to the group as a child group without validation
+				if (node.type === "group") {
+					groupIds.push(node.id);
+				} else {
+					// Check if node id exists in validNodes
+					if (!(node.id in validNodes)) continue;
+
+					// If the node has the type "file", "text" or "link", add it to the group as a node
+					if (
+						node.type === "text" ||
+						node.type === "file" ||
+						node.type === "link"
+					) {
+						cannoliNodes.push(validNodes[node.id]);
+					}
+				}
+				// additional node types can be added here if necessary
+			} else {
+				// Check if node and group overlap
+				const isOverlap =
+					node.x < group.x + group.width &&
+					node.x + node.width > group.x &&
+					node.y < group.y + group.height &&
+					node.y + node.height > group.y;
+				if (isOverlap) {
+					throw new Error(
+						`Invalid Cannoli layout: Object with id ${node.id} is improperly placed. All objects should be fully inside or outside of each other.`
+					);
+				}
+			}
+		}
+
+		return { cannoliNodes, groupIds };
+	}
+
+	parseGroupEdges(
+		childNodes: CannoliNode[],
+		validEdges: Record<string, CannoliEdge>
+	): { incomingEdges: CannoliEdge[]; outgoingEdges: CannoliEdge[] } {
+		// Initialize the arrays of incoming and outgoing edges
+		const incomingEdges: CannoliEdge[] = [];
+		const outgoingEdges: CannoliEdge[] = [];
+
+		// For each edge in the canvas data
+		for (const edge of this.canvasData.edges) {
+			const validEdge = validEdges[edge.id];
+
+			// An edge is incoming if its target node is in the group and its source node is outside the group
+			if (
+				childNodes.includes(validEdge.target) &&
+				!childNodes.includes(validEdge.source)
+			) {
+				incomingEdges.push(validEdge);
+			}
+
+			// An edge is outgoing if its source node is in the group and its target node is outside the group
+			if (
+				childNodes.includes(validEdge.source) &&
+				!childNodes.includes(validEdge.target)
+			) {
+				outgoingEdges.push(validEdge);
+			}
+		}
+
+		return { incomingEdges, outgoingEdges };
+	}
+
+	parseGroup(
+		group: CanvasGroupData,
+		incomingEdges: CannoliEdge[],
+		outgoingEdges: CannoliEdge[]
+	): {
+		maxLoops: number;
+		choiceString: string | null;
+		type: GroupType;
+	} {
+		// Initialize the maxLoops, choiceString, and type variables
+		let maxLoops = 0;
+		let choiceString = null;
+		let type: GroupType = "basic";
+
+		// If there are any incoming edges of type "list"
+		if (incomingEdges.some((edge) => edge.type === "list")) {
+			// If all the incoming list edges come from the same node, have only one variable, and it's the same one
+			if (
+				incomingEdges.every(
+					(edge) =>
+						edge.source === incomingEdges[0].source &&
+						edge.variables.length === 1 &&
+						edge.variables[0].type === "regular" &&
+						edge.variables[0].name ===
+							incomingEdges[0].variables[0].name
+				)
+			) {
+				// If there are no more than one outgoing list edges
+				if (
+					outgoingEdges.filter((edge) => edge.type === "list")
+						.length <= 1
+				) {
+					// The group is a list group
+					type = "list";
+				} else {
+					throw new Error(
+						`Invalid Cannoli layout: Group with id ${group.id} has more than one outgoing list edge`
+					);
+				}
+			} else {
+				throw new Error(
+					`Invalid Cannoli layout: Group with id ${group.id} has incoming list edges with more than one variable`
+				);
+			}
+		}
+
+		// If there are any outgoing edges of type "choice"
+		if (outgoingEdges.some((edge) => edge.type === "choice")) {
+			// If type wasn't already set to "list"
+			if (type !== "list") {
+				// It's a choice group
+				type = "choice";
+			} else {
+				throw new Error(
+					`Invalid Cannoli layout: Group with id ${group.id} has both incoming list edges and outgoing choice edges`
+				);
+			}
+		}
+
+		// Parse the maxLoops and choiceString from the group's label
+
+		// If the group has a label
+		if (group.label) {
+			// Split the label by pipe and strip whitespace. The first part is the maxLoops, the second part is the choiceString
+			const labelParts = group.label
+				.split("|")
+				.map((part) => part.trim());
+
+			// If the label has more than 2 parts and it's not a choice group, throw an error. Only choice groups can have choiceStrings
+			if (labelParts.length > 2 && type !== "choice") {
+				throw new Error(
+					`Invalid Cannoli layout: Group with id ${group.id} is not a choice group but has a choice option string`
+				);
+			}
+
+			// If the first part is not an integer, throw an error
+			if (isNaN(parseInt(labelParts[0]))) {
+				throw new Error(
+					`Invalid Cannoli layout: Group with id ${group.id} has an invalid maxLoops value`
+				);
+			}
+
+			// Set the maxLoops
+			maxLoops = parseInt(labelParts[0]);
+
+			// If maxLoops is 0, throw an error, it needs to be set
+			if (maxLoops === 0) {
+				throw new Error(
+					`Invalid Cannoli layout: Group with id ${group.id} has invalid maxLoops value, edit the label to set it to a positive integer`
+				);
+			}
+
+			// If the group is a choice group, set the choiceString
+			if (type === "choice") {
+				choiceString = labelParts[1];
+			}
+		}
+
+		return { maxLoops, choiceString, type };
+	}
+
+	parseNode(
+		node: CanvasNodeData,
+		validEdges: Record<string, CannoliEdge>
+	): {
+		nodeType: NodeType;
+		incomingEdges: CannoliEdge[];
+		outgoingEdges: CannoliEdge[];
+	} | null {
+		// Initialize the arrays of incoming and outgoing edges
+		const incomingEdges = this.getIncomingEdges(node, validEdges);
+		const outgoingEdges = this.getOutgoingEdges(node, validEdges);
+
+		// Initialize the node type
+		let nodeType: NodeType;
+
+		// If the node has no incoming or outgoing edges
+		if (incomingEdges.length === 0 && outgoingEdges.length === 0) {
+			// If the first line of the node's text is a string surrounded by single square brackets, it's a floating node
+			if (
+				node.text &&
+				node.text.split("\n")[0].startsWith("[") &&
+				node.text.split("\n")[0].endsWith("]")
+			) {
+				nodeType = "floating";
+			}
+			// Otherwise, ignore it
+			else {
+				return null;
+			}
+		}
+		// Check the node's color against the node color map to determine the node type. If it has no color, its a call node. If it's not in the map, return null
+		else if (node.color) {
+			if (node.color in this.nodeColorMap) {
+				nodeType = this.nodeColorMap[node.color];
+			} else {
+				return null;
+			}
+		} else {
+			nodeType = "call";
+		}
+
+		// If the node is a call node and has no outgoing edges, throw an error
+		if (nodeType === "call" && outgoingEdges.length === 0) {
+			throw new Error(
+				`Call node with id ${node.id} isn't doing anything with its output`
+			);
+		}
+
+		return { nodeType, incomingEdges, outgoingEdges };
+	}
+
+	findNodeSubtype(node: CannoliNode) {}
+
+	getIncomingEdges(
+		node: CanvasNodeData,
+		validEdges: Record<string, CannoliEdge>
+	): CannoliEdge[] {
+		// Here we're converting the validEdges object into an array and then using .filter()
+		return Object.values(validEdges).filter(
+			(edge: CannoliEdge) => edge.targetId === node.id
+		);
+	}
+
+	getOutgoingEdges(
+		node: CanvasNodeData,
+		validEdges: Record<string, CannoliEdge>
+	): CannoliEdge[] {
+		// Here we're converting the validEdges object into an array and then using .filter()
+		return Object.values(validEdges).filter(
+			(edge: CannoliEdge) => edge.sourceId === node.id
+		);
+	}
+
+	isUnidirectional(edge: CanvasEdgeData): boolean {
+		// Edge is unidirectional if it does not have fromEnd or toEnd properties
+		return !(
+			edge.hasOwnProperty("fromEnd") || edge.hasOwnProperty("toEnd")
+		);
+	}
+
+	getSourceNode(
+		edge: CanvasEdgeData,
+		nodes: CanvasNodeData[]
+	): CanvasNodeData {
+		// Find the source node for the edge
+		const sourceNode = nodes.find((node) => node.id === edge.fromNode);
+		if (!sourceNode) {
+			throw new Error(
+				`Edge with id ${edge.id} does not have a valid source node.`
+			);
+		}
+		return sourceNode;
+	}
+
+	getTargetNode(
+		edge: CanvasEdgeData,
+		nodes: CanvasNodeData[]
+	): CanvasNodeData {
+		// Find the target node for the edge
+		const targetNode = nodes.find((node) => node.id === edge.toNode);
+		if (!targetNode) {
+			throw new Error(
+				`Edge with id ${edge.id} does not have a valid target node.`
+			);
+		}
+		return targetNode;
+	}
+
+	parseEdge(edge: CanvasEdgeData): {
+		edgeType: EdgeType;
+		edgeTags: EdgeTag[];
+		edgeVariables: Variable[];
+	} | null {
+		let edgeType: EdgeType | null = null;
+		const edgeTags: EdgeTag[] = [];
+		const edgeVariables: Variable[] = [];
+
+		let label = edge.label;
+
+		// if the edge's color is 1, we won't parse it
+		if (edge.color === "1") {
+			return null;
+		}
+
+		// If the edge isn't uni-directional, we won't parse it
+		if (!this.isUnidirectional(edge)) {
+			return null;
+		}
+
+		// if the edge has a label, check the first character of the label against the edge prefix map to determine the edge type. If there was a prefix, remove it from the label
+		if (label) {
+			if (label[0] in this.edgePrefixMap) {
+				edgeType = this.edgePrefixMap[label[0]];
+				label = label.slice(1);
+			}
+		}
+
+		// if we still haven't determined the type, and the edge has a color, check the edge color against the edge color map to determine the edge type
+		if (!edgeType && edge.color) {
+			edgeType = this.edgeColorMap[edge.color];
+		}
+
+		// If we still haven't determined the type, it's either a blank edge or a variable edge, depending on if there is text in the label
+		if (!edgeType) {
+			edgeType = label ? "variable" : "blank";
+		}
+
+		// Return if there's no label, from here on out we'll assume there is a label
+		if (!label) {
+			return { edgeType, edgeTags, edgeVariables };
+		}
+
+		// If the edge isn't a blank edge, check if the last character is a tag on the edge tag map. If you find one, remove it from the label and add it to the tags array
+		if (
+			edgeType !== "blank" &&
+			label &&
+			label[label.length - 1] in this.edgeTagMap
+		) {
+			edgeTags.push(this.edgeTagMap[label[label.length - 1]]);
+			label = label.slice(0, -1);
+		}
+
+		// Split the label by comma and trim the variables
+		const unparsedEdgeVariables = label
+			.split(",")
+			.map((variable) => variable.trim());
+
+		// For each unparsed variable
+		for (const unparsedVariable of unparsedEdgeVariables) {
+			// Try to match the first two characters first
+			let prefix = unparsedVariable.substring(0, 2);
+			if (prefix in this.variablePrefixMap) {
+				edgeVariables.push({
+					type: this.variablePrefixMap[prefix],
+					name: unparsedVariable.substring(2),
+				});
+				continue;
+			}
+
+			// If that didn't work, try to match the first character
+			prefix = unparsedVariable.substring(0, 1);
+			if (prefix in this.variablePrefixMap) {
+				edgeVariables.push({
+					type: this.variablePrefixMap[prefix],
+					name: unparsedVariable.substring(1),
+				});
+				continue;
+			}
+
+			// If there's no prefix, its a regular variable
+			edgeVariables.push({
+				type: "regular",
+				name: unparsedVariable,
+			});
+		}
+
+		// If the type is choice, change the first variable to a choice option variable
+		if (edgeType === "choice") {
+			edgeVariables[0].type = "choiceOption";
+		}
+
+		return { edgeType, edgeTags, edgeVariables };
+	}
+
+	edgeColorMap: Record<string, EdgeType> = {
+		"2": "choice",
+		"3": "list",
+		"5": "utility",
+		"6": "function",
+	};
+
+	edgePrefixMap: Record<string, EdgeType> = {
+		"*": "utility",
+		"?": "choice",
+		"-": "list",
+		"=": "function",
+	};
+
+	edgeTagMap: Record<string, EdgeTag> = {
+		"|": "continueChat",
+	};
+
+	variablePrefixMap: Record<string, VariableType> = {
+		"@": "existingLink",
+		"/": "existingPath",
+		"+@": "newLink",
+		"+/": "newPath",
+	};
+
+	nodeColorMap: Record<string, NodeType> = {
+		"0": "call",
+		"3": "call",
+		"4": "call",
+		"6": "content",
+	};
+}
+
+class Cannoli {
+	canvas: Canvas;
+	apiKey: string;
+	openai: OpenAIApi;
+	vault: Vault;
+	groups: Record<string, CannoliGroup>;
+	nodes: Record<string, CannoliNode>;
+	edges: Record<string, CannoliEdge>;
+
+	constructor(canvasFile: TFile, apiKey: string, vault: Vault) {
+		this.canvas = new Canvas(canvasFile, this);
+		this.apiKey = apiKey;
+		this.vault = vault;
+		this.groups = {};
+		this.nodes = {};
+		this.edges = {};
+
+		const configuration = new Configuration({ apiKey: apiKey });
+		delete configuration.baseOptions.headers["User-Agent"];
+
+		// Create an instance of OpenAI
+		this.openai = new OpenAIApi(configuration);
+	}
+
+	async initialize() {
+		const { groups, nodes, edges } = this.canvas.parse();
+		this.groups = groups;
+		this.nodes = nodes;
+		this.edges = edges;
+	}
+}
 
 export async function startCannoli(
 	canvasFile: TFile,
@@ -69,420 +681,417 @@ async function runCannoli(nodes: Record<string, CannoliNode>) {
 	}
 }
 
-// Top-level function to process and validate the canvas data
-async function processCanvas(
-	canvasData: CanvasData,
-	vault: Vault,
-	canvasFile: TFile,
-	openai: OpenAIApi
-): Promise<Record<string, CannoliNode>> {
-	// Process edges
-	const edges = processEdges(canvasData);
-	// Log out the edges with their properties, formatted nicely. Only using one log statement per edge to avoid cluttering the console
-	console.log("Edges:");
-	for (const edge of Object.values(edges)) {
-		console.log(`
-        Edge ${edge.id}
-        Source: ${edge.sourceId}
-        Target: ${edge.targetId}
-        Label: ${edge.label}
-        Type: ${edge.type}
-        `);
-	}
+// // Top-level function to process and validate the canvas data
+// async function processCanvas(
+// 	canvasData: CanvasData,
+// 	vault: Vault,
+// 	canvasFile: TFile,
+// 	openai: OpenAIApi
+// ): Promise<Record<string, CannoliNode>> {
+// 	// Process edges
+// 	const edges = processEdges(canvasData);
+// 	// Log out the edges with their properties, formatted nicely. Only using one log statement per edge to avoid cluttering the console
+// 	console.log("Edges:");
+// 	for (const edge of Object.values(edges)) {
+// 		console.log(`
+//         Edge ${edge.id}
+//         Source: ${edge.sourceId}
+//         Target: ${edge.targetId}
+//         Label: ${edge.label}
+//         Type: ${edge.type}
+//         `);
+// 	}
 
-	// Process nodes
-	const nodes = await processNodes(
-		canvasData,
-		edges,
-		vault,
-		canvasFile,
-		openai
-	);
-	// Log out the properties of the nodes, formatted nicely
-	console.log("Nodes:");
-	for (const node of Object.values(nodes)) {
-		console.log(`
-        Node ${node.id}
-        Content: ${node.content}
-        Status: ${node.status}
-        X: ${node.x}
-        Y: ${node.y}
-        Width: ${node.width}
-        Height: ${node.height}
-        Type: ${node.type}
-        Outgoing Edges: ${node.outgoingEdges.map((edge) => edge.id)}
-        Incoming Edges: ${node.incomingEdges.map((edge) => edge.id)}
-        `);
-	}
+// 	// Process nodes
+// 	const nodes = await processNodes(
+// 		canvasData,
+// 		edges,
+// 		vault,
+// 		canvasFile,
+// 		openai
+// 	);
+// 	// Log out the properties of the nodes, formatted nicely
+// 	console.log("Nodes:");
+// 	for (const node of Object.values(nodes)) {
+// 		console.log(`
+//         Node ${node.id}
+//         Content: ${node.content}
+//         Status: ${node.status}
+//         X: ${node.x}
+//         Y: ${node.y}
+//         Width: ${node.width}
+//         Height: ${node.height}
+//         Type: ${node.type}
+//         Outgoing Edges: ${node.outgoingEdges.map((edge) => edge.id)}
+//         Incoming Edges: ${node.incomingEdges.map((edge) => edge.id)}
+//         `);
+// 	}
 
-	// Process groups
-	console.log("Processing groups");
-	const groups = processGroups(canvasData, nodes);
+// 	// Process groups
+// 	console.log("Processing groups");
+// 	const groups = processGroups(canvasData, nodes);
 
-	// Validation of structures
-	for (const node of Object.values(nodes)) {
-		// Check if the graph starting from each node is a DAG
-		if (isDAG(node, new Set(), new Set(), nodes)) {
-			throw new Error(
-				`The call nodes form a cycle, starting from node with id ${node.id}`
-			);
-		}
-	}
+// 	// Validation of structures
+// 	for (const node of Object.values(nodes)) {
+// 		// Check if the graph starting from each node is a DAG
+// 		if (isDAG(node, new Set(), new Set(), nodes)) {
+// 			throw new Error(
+// 				`The call nodes form a cycle, starting from node with id ${node.id}`
+// 			);
+// 		}
+// 	}
 
-	for (const group of Object.values(groups)) {
-		// Check if the nodes in the group form a tree structure
-		const root = group.nodes.find(
-			(node) =>
-				node.incomingEdges.filter((edge) =>
-					group.nodes.includes(edge.getSource(nodes))
-				).length === 0
-		);
+// 	for (const group of Object.values(groups)) {
+// 		// Check if the nodes in the group form a tree structure
+// 		const root = group.nodes.find(
+// 			(node) =>
+// 				node.incomingEdges.filter((edge) =>
+// 					group.nodes.includes(edge.getSource(nodes))
+// 				).length === 0
+// 		);
 
-		if (
-			group.nodes.some(
-				(node) =>
-					node !== root &&
-					node.incomingEdges.filter(
-						(edge) =>
-							group.nodes.includes(edge.getSource(nodes)) &&
-							edge.type !== "variable"
-					).length !== 1
-			)
-		) {
-			throw new Error(
-				`The group with id ${group.id} is not a tree structure`
-			);
-		}
-	}
+// 		if (
+// 			group.nodes.some(
+// 				(node) =>
+// 					node !== root &&
+// 					node.incomingEdges.filter(
+// 						(edge) =>
+// 							group.nodes.includes(edge.getSource(nodes)) &&
+// 							edge.type !== "variable"
+// 					).length !== 1
+// 			)
+// 		) {
+// 			throw new Error(
+// 				`The group with id ${group.id} is not a tree structure`
+// 			);
+// 		}
+// 	}
 
-	// Final checks
+// 	// Final checks
 
-	// // Check if there are call nodes with outgoing blank edges to call nodes in other groups/non-grouped call nodes
-	// for (const node of Object.values(nodes)) {
-	// 	if (
-	// 		node.type === "call" &&
-	// 		node.outgoingEdges.some(
-	// 			(edge) =>
-	// 				edge.type === "blank" &&
-	// 				edge.getTarget(nodes).type === "call" &&
-	// 				edge.getTarget(nodes).groupId !== node.groupId
-	// 		)
-	// 	) {
-	// 		throw new Error(
-	// 			`Call node with id ${node.id} has an outgoing blank edge to a call node in another group`
-	// 		);
-	// 	}
-	// }
+// 	// // Check if there are call nodes with outgoing blank edges to call nodes in other groups/non-grouped call nodes
+// 	// for (const node of Object.values(nodes)) {
+// 	// 	if (
+// 	// 		node.type === "call" &&
+// 	// 		node.outgoingEdges.some(
+// 	// 			(edge) =>
+// 	// 				edge.type === "blank" &&
+// 	// 				edge.getTarget(nodes).type === "call" &&
+// 	// 				edge.getTarget(nodes).groupId !== node.groupId
+// 	// 		)
+// 	// 	) {
+// 	// 		throw new Error(
+// 	// 			`Call node with id ${node.id} has an outgoing blank edge to a call node in another group`
+// 	// 		);
+// 	// 	}
+// 	// }
 
-	return nodes;
-}
+// 	return nodes;
+// }
 
-// Processing function for nodes
-async function processNodes(
-	canvasData: CanvasData,
-	edges: Record<string, CannoliEdge>,
-	vault: Vault,
-	canvasFile: TFile,
-	openai: OpenAIApi
-): Promise<Record<string, CannoliNode>> {
-	const nodes: Record<string, CannoliNode> = {};
-	const nodeTypes: NodeType[] = ["call", "content", "globalVar"];
+// // Processing function for nodes
+// async function processNodes(
+// 	canvasData: CanvasData,
+// 	edges: Record<string, CannoliEdge>,
+// 	vault: Vault,
+// 	canvasFile: TFile,
+// 	openai: OpenAIApi
+// ): Promise<Record<string, CannoliNode>> {
+// 	const nodes: Record<string, CannoliNode> = {};
+// 	const nodeTypes: NodeType[] = ["call", "content", "globalVar"];
 
-	for (const nodeData of canvasData.nodes) {
-		let nodeText = "";
+// 	for (const nodeData of canvasData.nodes) {
+// 		let nodeText = "";
 
-		if (nodeData.type === "group") {
-			continue;
-		}
+// 		if (nodeData.type === "group") {
+// 			continue;
+// 		}
 
-		if ("file" in nodeData) {
-			const nodeFile = vault.getAbstractFileByPath(nodeData.file);
-			if (nodeFile instanceof TFile) {
-				nodeText = await vault.read(nodeFile);
-			}
-		} else if ("text" in nodeData) {
-			nodeText = nodeData.text;
-		} else if ("url" in nodeData) {
-			nodeText = nodeData.url;
-		}
+// 		if ("file" in nodeData) {
+// 			const nodeFile = vault.getAbstractFileByPath(nodeData.file);
+// 			if (nodeFile instanceof TFile) {
+// 				nodeText = await vault.read(nodeFile);
+// 			}
+// 		} else if ("text" in nodeData) {
+// 			nodeText = nodeData.text;
+// 		} else if ("url" in nodeData) {
+// 			nodeText = nodeData.url;
+// 		}
 
-		// Find the outgoing and incoming edge ids of the node in the canvas data
-		const outgoingEdgeIds = canvasData.edges
-			.filter((edge) => edge.fromNode === nodeData.id)
-			.map((edge) => edge.id);
-		const incomingEdgeIds = canvasData.edges
-			.filter((edge) => edge.toNode === nodeData.id)
-			.map((edge) => edge.id);
+// 		// Find the outgoing and incoming edge ids of the node in the canvas data
+// 		const outgoingEdgeIds = canvasData.edges
+// 			.filter((edge) => edge.fromNode === nodeData.id)
+// 			.map((edge) => edge.id);
+// 		const incomingEdgeIds = canvasData.edges
+// 			.filter((edge) => edge.toNode === nodeData.id)
+// 			.map((edge) => edge.id);
 
-		// Find the outgoing and incoming edges in the edges object
-		const outgoingEdges = Object.values(edges).filter((edge) =>
-			outgoingEdgeIds.includes(edge.id)
-		);
+// 		// Find the outgoing and incoming edges in the edges object
+// 		const outgoingEdges = Object.values(edges).filter((edge) =>
+// 			outgoingEdgeIds.includes(edge.id)
+// 		);
 
-		const incomingEdges = Object.values(edges).filter((edge) =>
-			incomingEdgeIds.includes(edge.id)
-		);
+// 		const incomingEdges = Object.values(edges).filter((edge) =>
+// 			incomingEdgeIds.includes(edge.id)
+// 		);
 
-		let nodeType: NodeType = "call";
+// 		let nodeType: NodeType = "call";
 
-		let content = "";
-		let contentLines: string[] = [];
+// 		let content = "";
+// 		let contentLines: string[] = [];
 
-		// If text is given, parse it for a /type tag
-		if (nodeText) {
-			content = nodeText;
-			contentLines = content.split("\n");
-			const potentialTypeTag =
-				contentLines[0].startsWith("/") && contentLines[0].slice(1);
+// 		// If text is given, parse it for a /type tag
+// 		if (nodeText) {
+// 			content = nodeText;
+// 			contentLines = content.split("\n");
+// 			const potentialTypeTag =
+// 				contentLines[0].startsWith("/") && contentLines[0].slice(1);
 
-			// Check if the type tag exists and is valid
-			if (
-				potentialTypeTag &&
-				nodeTypes.includes(potentialTypeTag as NodeType)
-			) {
-				nodeType = potentialTypeTag as NodeType;
-				contentLines.shift(); // Remove the type tag line
-			}
+// 			// Check if the type tag exists and is valid
+// 			if (
+// 				potentialTypeTag &&
+// 				nodeTypes.includes(potentialTypeTag as NodeType)
+// 			) {
+// 				nodeType = potentialTypeTag as NodeType;
+// 				contentLines.shift(); // Remove the type tag line
+// 			}
 
-			content = contentLines.join("\n");
-		}
+// 			content = contentLines.join("\n");
+// 		}
 
-		// If there's no valid type tag, check for color mapping
-		if (
-			nodeType === "call" &&
-			nodeData.color &&
-			colorToNodeTypeMapping.hasOwnProperty(nodeData.color)
-		) {
-			nodeType = colorToNodeTypeMapping[nodeData.color];
-		}
+// 		// If there's no valid type tag, check for color mapping
+// 		if (
+// 			nodeType === "call" &&
+// 			nodeData.color &&
+// 			colorToNodeTypeMapping.hasOwnProperty(nodeData.color)
+// 		) {
+// 			nodeType = colorToNodeTypeMapping[nodeData.color];
+// 		}
 
-		// Check if the node is a global variable node
-		if (outgoingEdges.length === 0 && incomingEdges.length === 0) {
-			const firstLine = content.split("\n")[0];
-			if (firstLine.startsWith("{") && firstLine.endsWith("}")) {
-				nodeType = "globalVar";
-			} else {
-				console.log("Floating node that is not a global variable");
-				continue;
-			}
-		}
+// 		// Check if the node is a global variable node
+// 		if (outgoingEdges.length === 0 && incomingEdges.length === 0) {
+// 			const firstLine = content.split("\n")[0];
+// 			if (firstLine.startsWith("{") && firstLine.endsWith("}")) {
+// 				nodeType = "globalVar";
+// 			} else {
+// 				console.log("Floating node that is not a global variable");
+// 				continue;
+// 			}
+// 		}
 
-		// After categorizing the node, ensure each node type fits the requirements
+// 		// After categorizing the node, ensure each node type fits the requirements
 
-		// If the node is a call node, ensure it fits the requirements
-		if (nodeType === "call") {
-			// Disallow incoming debug edges
-			if (incomingEdges.some((edge) => edge.type === "debug")) {
-				throw new Error(
-					"Error: Call nodes cannot have incoming edges of 'debug' type"
-				);
-			}
-		}
+// 		// If the node is a call node, ensure it fits the requirements
+// 		if (nodeType === "call") {
+// 			// Disallow incoming debug edges
+// 			if (incomingEdges.some((edge) => edge.type === "debug")) {
+// 				throw new Error(
+// 					"Error: Call nodes cannot have incoming edges of 'debug' type"
+// 				);
+// 			}
+// 		}
 
-		// If the node is a content node, ensure it fits the requirements
-		if (nodeType === "content") {
-			// If the node has more than one incoming edges, it must have 2 edges: one of them must be of type "blank", and the other must be of type "variable". It must also have content matching the form "{edgeLabel}"
-			if (incomingEdges.length > 1) {
-				if (
-					incomingEdges.length === 2 &&
-					incomingEdges.some((edge) => edge.type === "blank") &&
-					incomingEdges.some((edge) => edge.type === "variable")
-				) {
-					if (
-						content ===
-						`{${
-							incomingEdges.find(
-								(edge) => edge.type === "variable"
-							)?.label
-						}}`
-					) {
-						/* empty */
-					} else {
-						throw new Error(
-							"Error: Content nodes with an incoming variable edge must have content matching the form '{edgeLabel}'"
-						);
-					}
-				} else {
-					throw new Error(
-						"Error: Content nodes with more than one incoming edge must have one of type 'blank' and one of type 'variable'"
-					);
-				}
-			} else {
-				// If the node has one incoming edge, it must be of type "blank" or "debug"
-				if (
-					incomingEdges.length === 1 &&
-					incomingEdges[0].type !== "blank" &&
-					incomingEdges[0].type !== "debug"
-				) {
-					throw new Error(
-						"Error: Content nodes with one incoming edge must have an incoming edge of type 'blank' or 'debug'"
-					);
-				}
-			}
-		}
+// 		// If the node is a content node, ensure it fits the requirements
+// 		if (nodeType === "content") {
+// 			// If the node has more than one incoming edges, it must have 2 edges: one of them must be of type "blank", and the other must be of type "variable". It must also have content matching the form "{edgeLabel}"
+// 			if (incomingEdges.length > 1) {
+// 				if (
+// 					incomingEdges.length === 2 &&
+// 					incomingEdges.some((edge) => edge.type === "blank") &&
+// 					incomingEdges.some((edge) => edge.type === "variable")
+// 				) {
+// 					if (
+// 						content ===
+// 						`{${
+// 							incomingEdges.find(
+// 								(edge) => edge.type === "variable"
+// 							)?.label
+// 						}}`
+// 					) {
+// 						/* empty */
+// 					} else {
+// 						throw new Error(
+// 							"Error: Content nodes with an incoming variable edge must have content matching the form '{edgeLabel}'"
+// 						);
+// 					}
+// 				} else {
+// 					throw new Error(
+// 						"Error: Content nodes with more than one incoming edge must have one of type 'blank' and one of type 'variable'"
+// 					);
+// 				}
+// 			} else {
+// 				// If the node has one incoming edge, it must be of type "blank" or "debug"
+// 				if (
+// 					incomingEdges.length === 1 &&
+// 					incomingEdges[0].type !== "blank" &&
+// 					incomingEdges[0].type !== "debug"
+// 				) {
+// 					throw new Error(
+// 						"Error: Content nodes with one incoming edge must have an incoming edge of type 'blank' or 'debug'"
+// 					);
+// 				}
+// 			}
+// 		}
 
-		const node = new CannoliNode(
-			nodeData.id,
-			content,
-			nodeData.x,
-			nodeData.y,
-			nodeData.width,
-			nodeData.height,
-			nodeType,
-			outgoingEdges,
-			incomingEdges,
-			vault,
-			canvasFile,
-			openai,
-			nodes
-		);
-		nodes[node.id] = node;
-	}
+// 		const node = new CannoliNode(
+// 			nodeData.id,
+// 			content,
+// 			nodeData.x,
+// 			nodeData.y,
+// 			nodeData.width,
+// 			nodeData.height,
+// 			nodeType,
+// 			outgoingEdges,
+// 			incomingEdges,
+// 			vault,
+// 			canvasFile,
+// 			openai,
+// 			nodes
+// 		);
+// 		nodes[node.id] = node;
+// 	}
 
-	return nodes;
-}
+// 	return nodes;
+// }
 
-// Function to process edges
-function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
-	const edges: Record<string, CannoliEdge> = {};
-	const edgeTypes: EdgeType[] = ["choice", "debug", "blank", "variable"];
+// // Function to process edges
+// function processEdges(canvasData: CanvasData): Record<string, CannoliEdge> {
+// 	const edges: Record<string, CannoliEdge> = {};
+// 	const edgeTypes: EdgeType[] = ["choice", "debug", "blank", "variable"];
 
-	for (const edgeData of canvasData.edges) {
-		let edgeType: EdgeType = "blank";
+// 	for (const edgeData of canvasData.edges) {
+// 		let edgeType: EdgeType = "blank";
 
-		// Initialize variables for the label and the parsed lines
-		let label = "";
-		let labelLines: string[] = [];
+// 		// Initialize variables for the label and the parsed lines
+// 		let label = "";
+// 		let labelLines: string[] = [];
 
-		// If a label is given, parse it for a /type tag
-		if (edgeData.label) {
-			label = edgeData.label;
-			labelLines = label.split("\n");
-			const potentialTypeTag =
-				labelLines[0].startsWith("/") && labelLines[0].slice(1);
+// 		// If a label is given, parse it for a /type tag
+// 		if (edgeData.label) {
+// 			label = edgeData.label;
+// 			labelLines = label.split("\n");
+// 			const potentialTypeTag =
+// 				labelLines[0].startsWith("/") && labelLines[0].slice(1);
 
-			// Check if the type tag exists and is valid
-			if (
-				potentialTypeTag &&
-				edgeTypes.includes(potentialTypeTag as EdgeType)
-			) {
-				edgeType = potentialTypeTag as EdgeType;
-				labelLines.shift(); // Remove the type tag line
-			}
+// 			// Check if the type tag exists and is valid
+// 			if (
+// 				potentialTypeTag &&
+// 				edgeTypes.includes(potentialTypeTag as EdgeType)
+// 			) {
+// 				edgeType = potentialTypeTag as EdgeType;
+// 				labelLines.shift(); // Remove the type tag line
+// 			}
 
-			label = labelLines.join("\n");
-		}
+// 			label = labelLines.join("\n");
+// 		}
 
-		// If there's no valid type tag, check for color mapping
-		if (
-			edgeType === "blank" &&
-			edgeData.color &&
-			colorToEdgeTypeMapping.hasOwnProperty(edgeData.color)
-		) {
-			edgeType = colorToEdgeTypeMapping[edgeData.color];
-		}
-		// If there's no type tag and no color, but there's a label, it's a variable type and the label is the content
-		else if (edgeType === "blank" && label) {
-			edgeType = "variable";
-		}
+// 		// If there's no valid type tag, check for color mapping
+// 		if (
+// 			edgeType === "blank" &&
+// 			edgeData.color &&
+// 			colorToEdgeTypeMapping.hasOwnProperty(edgeData.color)
+// 		) {
+// 			edgeType = colorToEdgeTypeMapping[edgeData.color];
+// 		}
+// 		// If there's no type tag and no color, but there's a label, it's a variable type and the label is the content
+// 		else if (edgeType === "blank" && label) {
+// 			edgeType = "variable";
+// 		}
 
-		const edge = new CannoliEdge(
-			edgeData.id,
-			edgeData.fromNode,
-			edgeData.toNode,
-			edgeType,
-			label
-		);
+// 		const edge = new CannoliEdge(
+// 			edgeData.id,
+// 			edgeData.fromNode,
+// 			edgeData.toNode,
+// 			edgeType,
+// 			label
+// 		);
 
-		edges[edge.id] = edge;
-	}
+// 		edges[edge.id] = edge;
+// 	}
 
-	return edges;
-}
+// 	return edges;
+// }
 
-function processGroups(
-	canvasData: CanvasData,
-	nodes: Record<string, CannoliNode>
-): Record<string, CannoliGroup> {
-	const groups: Record<string, CannoliGroup> = {};
+// function processGroups(
+// 	canvasData: CanvasData,
+// 	nodes: Record<string, CannoliNode>
+// ): Record<string, CannoliGroup> {
+// 	const groups: Record<string, CannoliGroup> = {};
 
-	for (const nodeData of canvasData.nodes) {
-		if (nodeData.type === "group") {
-			const group = new CannoliGroup(nodeData.id);
-			groups[nodeData.id] = group;
-			for (const nodeId in nodes) {
-				const node = nodes[nodeId];
-				// Check if the node is within the group using the geometric properties
-				if (
-					nodeData.x <= node.x &&
-					node.x <= nodeData.x + nodeData.width &&
-					nodeData.y <= node.y &&
-					node.y <= nodeData.y + nodeData.height
-				) {
-					group.addNode(node);
-					node.groupId = group.id;
-				}
-			}
-		}
-	}
+// 	// For each group in the canvas data, create a CannoliGroup object and add it to the groups object
+// 	// For each node in the canvas data, check if it is within the group using the geometric properties
+// 	for (const nodeData of canvasData.nodes) {
+// 		if (nodeData.type === "group") {
+// 			const group = new CannoliGroup(nodeData.id);
+// 			groups[nodeData.id] = group;
+// 			for (const nodeId in nodes) {
+// 				const node = nodes[nodeId];
+// 				// Check if the node is within the group using the geometric properties
+// 				if (
+// 					nodeData.x <= node.x &&
+// 					node.x <= nodeData.x + nodeData.width &&
+// 					nodeData.y <= node.y &&
+// 					node.y <= nodeData.y + nodeData.height
+// 				) {
+// 					group.addNode(node);
+// 					node.groupId = group.id;
+// 				}
+// 			}
+// 		}
+// 	}
 
-	return groups;
-}
+// 	return groups;
+// }
 
 // Node Types
-type NodeType = "call" | "content" | "globalVar";
+type NodeType = "call" | "content" | "floating";
 
-const colorToNodeTypeMapping: Record<string, NodeType> = {
-	"0": "call",
-	"6": "content",
-};
+type CallSubtype = "list" | "select" | "choice" | "normal";
+
+type ContentSubtype =
+	| "reference"
+	| "builder"
+	| "formatter"
+	| "display"
+	| "input";
+
+type FloatingSubtype = "";
 
 class CannoliNode {
 	id: string;
 	content: string;
 	status: "pending" | "processing" | "complete" | "rejected";
-	x: number;
-	y: number;
-	width: number;
-	height: number;
 	type: NodeType;
+	subtype: CallSubtype | ContentSubtype | FloatingSubtype;
 	outgoingEdges: CannoliEdge[];
 	incomingEdges: CannoliEdge[];
-	groupId: string | null;
-	vault: Vault;
-	canvasFile: TFile;
-	openai: OpenAIApi;
-	nodes: Record<string, CannoliNode>;
+	group: CannoliGroup;
+	cannoli: Cannoli;
+	copies: CannoliNode[];
 
-	constructor(
-		id: string,
-		content: string,
-		x: number,
-		y: number,
-		width: number,
-		height: number,
-		type: NodeType,
-		outgoingEdges: CannoliEdge[],
-		incomingEdges: CannoliEdge[],
-		vault: Vault,
-		canvasFile: TFile,
-		openai: OpenAIApi,
-		nodes: Record<string, CannoliNode>
-	) {
+	constructor({
+		id,
+		content,
+		type,
+		outgoingEdges,
+		incomingEdges,
+		cannoli,
+	}: {
+		id: string;
+		content: string;
+		type: NodeType;
+		outgoingEdges: CannoliEdge[];
+		incomingEdges: CannoliEdge[];
+		cannoli: Cannoli;
+	}) {
 		this.id = id;
 		this.content = content;
-		this.status = "pending";
-		this.x = x;
-		this.y = y;
-		this.width = width;
-		this.height = height;
 		this.type = type;
-		this.outgoingEdges = outgoingEdges || [];
-		this.incomingEdges = incomingEdges || [];
-		this.vault = vault;
-		this.canvasFile = canvasFile;
-		this.openai = openai;
-		this.nodes = nodes;
+		this.outgoingEdges = outgoingEdges;
+		this.incomingEdges = incomingEdges;
+		this.cannoli = cannoli;
+
+		this.status = "pending";
 	}
 
 	async process(nodeCompleted: () => void) {
@@ -971,45 +1580,96 @@ class CannoliNode {
 
 		await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
 	}
+
+	setGroup(group: CannoliGroup) {
+		this.group = group;
+	}
 }
 
 // Edge Types
-type EdgeType = "choice" | "debug" | "blank" | "variable";
+type EdgeType =
+	| "blank"
+	| "variable"
+	| "utility"
+	| "function"
+	| "choice"
+	| "list";
 
-const colorToEdgeTypeMapping: Record<string, EdgeType> = {
-	"1": "choice",
-	"6": "debug",
+type UtilitySubtype =
+	| "logging"
+	| "function"
+	| "model"
+	| "max_tokens"
+	| "temperature"
+	| "top_p"
+	| "frequency_penalty"
+	| "presence_penalty"
+	| "stop"
+	| "echo"
+	| "debug";
+
+type ListSubtype = "normal" | "intoGroup" | "outOfGroup";
+
+type FunctionSubtype = "builtIn" | "custom";
+
+type ChoiceSubtype = "normal" | "outOfGroup";
+
+type EdgeTag = "continueChat";
+
+type Variable = {
+	name: string;
+	type: VariableType;
+	value?: string;
 };
+
+type VariableType =
+	| "existingLink"
+	| "existingPath"
+	| "newLink"
+	| "newPath"
+	| "choiceOption"
+	| "regular";
 
 class CannoliEdge {
 	id: string;
 	sourceId: string;
 	targetId: string;
-	label: string | null;
+	source: CannoliNode;
+	target: CannoliNode;
+	variables: Variable[];
+	tags: EdgeTag[];
 	type: EdgeType;
-	payload: ChatCompletionRequestMessage[] | string | null;
+	subtype: UtilitySubtype | FunctionSubtype | ChoiceSubtype | ListSubtype;
+	chatHistory: ChatCompletionRequestMessage[];
+	copies: CannoliEdge[];
 
-	constructor(
-		id: string,
-		sourceId: string,
-		targetId: string,
-		type: EdgeType,
-		label: string | null
-	) {
+	constructor({
+		id,
+		sourceId,
+		targetId,
+		type,
+		variables,
+		tags,
+	}: {
+		id: string;
+		sourceId: string;
+		targetId: string;
+		type: EdgeType;
+		variables: Variable[];
+		tags: EdgeTag[];
+	}) {
 		this.id = id;
 		this.sourceId = sourceId;
 		this.targetId = targetId;
 		this.type = type;
 		this.payload = null;
-		this.label = label;
+		this.tags = tags;
+		this.variables = variables;
 	}
 
-	getSource(nodes: Record<string, CannoliNode>): CannoliNode {
-		return nodes[this.sourceId];
-	}
-
-	getTarget(nodes: Record<string, CannoliNode>): CannoliNode {
-		return nodes[this.targetId];
+	setSourceAndTarget(nodes: Record<string, CannoliNode>) {
+		this.source = nodes[this.sourceId];
+		this.target = nodes[this.targetId];
 	}
 
 	setPayload(payload: ChatCompletionRequestMessage[] | string | null) {
@@ -1021,23 +1681,104 @@ class CannoliEdge {
 	}
 }
 
+type GroupType = "basic" | "choice" | "list";
+
 class CannoliGroup {
 	id: string;
 	nodes: CannoliNode[];
-	edges: CannoliEdge[];
+	incomingEdges: CannoliEdge[];
+	outgoingEdges: CannoliEdge[];
+	maxLoops: number;
+	choiceString: string | null;
+	type: GroupType;
+	childGroupIds: string[];
+	parentGroups: CannoliGroup[]; // ordered set of groups, from bottom level (smallest) to top level (biggest)
+	childGroups: CannoliGroup[]; // unordered set of child groups
+	copies: CannoliGroup[];
 
-	constructor(id: string) {
+	constructor({
+		id,
+		nodes,
+		incomingEdges,
+		outgoingEdges,
+		maxLoops,
+		choiceString,
+		type,
+		childGroupIds,
+	}: {
+		id: string;
+		nodes: CannoliNode[];
+		incomingEdges: CannoliEdge[];
+		outgoingEdges: CannoliEdge[];
+		maxLoops: number;
+		choiceString: string | null;
+		type: GroupType;
+		childGroupIds: string[];
+	}) {
 		this.id = id;
-		this.nodes = [];
-		this.edges = [];
+		this.nodes = nodes;
+		this.incomingEdges = incomingEdges;
+		this.outgoingEdges = outgoingEdges;
+		this.maxLoops = maxLoops;
+		this.choiceString = choiceString;
+		this.type = type;
+		this.childGroupIds = childGroupIds;
 	}
 
-	addNode(node: CannoliNode): void {
-		this.nodes.push(node);
+	setChildGroups(groups: Record<string, CannoliGroup>) {
+		// Just map the child group ids to the actual child groups
+		this.childGroups = this.childGroupIds.map(
+			(childGroupId) => groups[childGroupId]
+		);
 	}
 
-	hasNode(node: CannoliNode): boolean {
-		return this.nodes.includes(node);
+	setParentGroups(groups: Record<string, CannoliGroup>) {
+		this.parentGroups = []; // Clear the current list of parent groups
+
+		// Iterate through all groups
+		for (const groupId in groups) {
+			const group = groups[groupId];
+
+			// If the current group is a child of the group we're considering
+			if (group.childGroupIds.includes(this.id)) {
+				this.parentGroups.push(group);
+			}
+		}
+
+		// Helper function to find the top level parent of a group and calculate depth
+		const findTopLevelParentAndDepth = (
+			group: CannoliGroup
+		): [CannoliGroup, number] => {
+			let depth = 0;
+			while (group.parentGroups && group.parentGroups.length > 0) {
+				group = group.parentGroups[0]; // Choose the first parent as the new group
+				depth++;
+			}
+			return [group, depth];
+		};
+
+		// Sort the parent groups based on the level of their top-level parent and depth
+		this.parentGroups.sort((a, b) => {
+			const [aTopLevelParent, aDepth] = findTopLevelParentAndDepth(a);
+			const [bTopLevelParent, bDepth] = findTopLevelParentAndDepth(b);
+
+			// Compare based on depth first, then the id of the top-level parent
+			if (aDepth < bDepth) {
+				return -1;
+			} else if (aDepth > bDepth) {
+				return 1;
+			} else {
+				return aTopLevelParent.id.localeCompare(bTopLevelParent.id);
+			}
+		});
+	}
+
+	addChildGroup(id: string) {
+		this.childGroupIds.push(id);
+	}
+
+	hasNode(id: string) {
+		return this.nodes.some((node) => node.id === id);
 	}
 }
 
