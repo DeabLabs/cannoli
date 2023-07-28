@@ -392,10 +392,33 @@ export class Canvas {
 		let maxLoops = 0;
 		let type: GroupType = "basic";
 
-		// If there are any incoming edges of type "list"
 		if (incomingEdges.some((edge) => edge.type === "list")) {
-			// It's a list group
-			type = "list";
+			let isListGroup = true;
+
+			for (const edge of incomingEdges.filter(
+				(edge) => edge.type === "list"
+			)) {
+				for (const outgoingEdge of edge.source.outgoingEdges.filter(
+					(edge) => edge.type === "list"
+				)) {
+					if (
+						outgoingEdge.variables.length !== 1 ||
+						outgoingEdge.variables[0].name !==
+							edge.variables[0].name
+					) {
+						isListGroup = false;
+						break;
+					}
+				}
+
+				if (!isListGroup) {
+					break;
+				}
+			}
+
+			if (isListGroup) {
+				type = "list";
+			}
 		}
 
 		// If the group has a label
@@ -424,12 +447,8 @@ export class Canvas {
 
 		// If the node has no incoming or outgoing edges
 		if (incomingEdges.length === 0 && outgoingEdges.length === 0) {
-			// If the first line of the node's text is a string surrounded by single square brackets, it's a floating node
-			if (
-				node.text &&
-				node.text.split("\n")[0].startsWith("[") &&
-				node.text.split("\n")[0].endsWith("]")
-			) {
+			// If the first line of the node's text is a string surrounded by single (not double) square brackets, it's a floating node
+			if (node.text && node.text.split("\n")[0].match(/^\[[^[\]]+\]$/)) {
 				nodeType = "floating";
 			}
 			// Otherwise, ignore it
@@ -518,10 +537,35 @@ export class Canvas {
 		}
 		// If the edge is a list edge
 		else if (edge.type === "list") {
-			// If the edge is leaving a group
-			if (edge.crossingGroups.find((group) => !group.isEntering)) {
+			// If the edge is leaving a group of type list
+			if (
+				edge.crossingGroups.find(
+					(group) => !group.isEntering && group.group.type === "list"
+				)
+			) {
 				// It's a select edge
 				return "select";
+			}
+			// If the edge is entering a group
+			else if (edge.crossingGroups.find((group) => group.isEntering)) {
+				// If all the ougoing list edges of the source node have the same variable
+				if (
+					edge.source.outgoingEdges
+						.filter((edge) => edge.type === "list")
+						.every(
+							(edge) =>
+								edge.variables.length === 1 &&
+								edge.variables[0].name ===
+									edge.source.outgoingEdges[0].variables[0]
+										.name
+						)
+				) {
+					// It's a listGroup edge
+					return "listGroup";
+				} else {
+					// It's a list edge
+					return "list";
+				}
 			} else {
 				// It's a list edge
 				return "list";
@@ -537,7 +581,7 @@ export class Canvas {
 		node: CannoliNode
 	): CallSubtype | ContentSubtype | FloatingSubtype {
 		if (node.type === "floating") {
-			node.subtype = "";
+			return "";
 		} else if (node.type === "call") {
 			// If the node has any outgoing edge of type "list"
 			if (node.outgoingEdges.some((edge) => edge.type === "list")) {

@@ -47,7 +47,10 @@ export class CannoliEdge {
 	targetId: string;
 	source: CannoliNode;
 	target: CannoliNode;
-	crossingGroups: { group: CannoliGroup; isEntering: boolean }[];
+	crossingGroups: {
+		group: CannoliGroup;
+		isEntering: boolean;
+	}[];
 	variables: Variable[];
 	tags: EdgeTag[];
 	type: EdgeType;
@@ -132,8 +135,6 @@ export class CannoliEdge {
 	}
 
 	validate() {
-		// Do global validation first
-
 		// Do type-specific validation by calling the validate function for the type
 		switch (this.type) {
 			case "blank":
@@ -162,15 +163,266 @@ export class CannoliEdge {
 		}
 	}
 
-	validateBlank() {}
+	validateBlank() {
+		switch (this.subtype) {
+			case "continueChat":
+				// The source node must be a call node
+				if (this.source.type !== "call") {
+					throw new Error(
+						`Edge ${this.id} is a continueChat edge but the source node is not a call node`
+					);
+				}
 
-	validateVariable() {}
+				// The target node must be a call node
+				if (this.target.type !== "call") {
+					throw new Error(
+						`Edge ${this.id} is a continueChat edge but the target node is not a call node`
+					);
+				}
+				break;
+			case "systemMessage":
+				// The source node must be a content node
+				if (this.source.type !== "content") {
+					throw new Error(
+						`Edge ${this.id} is a systemMessage edge but the source node is not a content node`
+					);
+				}
+				// The target node must be a call node
+				if (this.target.type !== "call") {
+					throw new Error(
+						`Edge ${this.id} is a systemMessage edge but the target node is not a call node`
+					);
+				}
+				break;
+			case "write":
+				// The target node must be a content node
+				if (this.target.type !== "content") {
+					throw new Error(
+						`Edge ${this.id} is a write edge but the target node is not a content node`
+					);
+				}
+				break;
+			default:
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+		}
+	}
 
-	validateUtility() {}
+	validateVariable() {
+		switch (this.subtype) {
+			case "":
+				// There must be only one variable
+				if (this.variables.length !== 1) {
+					throw new Error(
+						`Edge ${this.id} is a variable edge but has ${this.variables.length} variables`
+					);
+				}
+				// The variable must not be a choice option or config variable
+				if (
+					this.variables[0].type === "choiceOption" ||
+					this.variables[0].type === "config"
+				) {
+					throw new Error(
+						`Edge ${this.id} is a variable edge but has a choice option or config variable`
+					);
+				}
 
-	validateFunction() {}
+				break;
+			default:
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+		}
+	}
 
-	validateChoice() {}
+	validateUtility() {
+		switch (this.subtype) {
+			case "logging":
+				// There must be no variables
+				if (this.variables.length !== 0) {
+					throw new Error(
+						`Edge ${this.id} is a logging edge but has ${this.variables.length} variables`
+					);
+				}
+				break;
+			case "config":
+				// All variables must be config variables
+				if (
+					this.variables.some(
+						(variable) => variable.type !== "config"
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is a config edge but has a non-config variable`
+					);
+				}
+				break;
+			default:
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+		}
+	}
 
-	validateList() {}
+	validateFunction() {
+		switch (this.subtype) {
+			case "":
+				// There must be some variables
+				if (this.variables.length === 0) {
+					throw new Error(
+						`Edge ${this.id} is a function edge but has no variables`
+					);
+				}
+				// No variables can be choice options
+				if (
+					this.variables.some(
+						(variable) => variable.type === "choiceOption"
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is a function edge but has a choice option variable`
+					);
+				}
+				break;
+			default:
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+		}
+	}
+
+	validateChoice() {
+		// The first variable must be a choice option
+		if (this.variables[0].type !== "choiceOption") {
+			throw new Error(
+				`Edge ${this.id} is a choice edge but the first variable is not a choice option`
+			);
+		}
+		// No other variables can be choice options
+		if (
+			this.variables
+				.slice(1)
+				.some((variable) => variable.type === "choiceOption")
+		) {
+			throw new Error(
+				`Edge ${this.id} is a choice edge but a non-first variable is a choice option`
+			);
+		}
+
+		switch (this.subtype) {
+			case "normal":
+				// It must not be leaving a group
+				if (
+					this.crossingGroups.some(
+						(crossingGroup) => !crossingGroup.isEntering
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is a normal choice edge but is leaving a group`
+					);
+				}
+				break;
+			case "outOfGroup":
+				// It must be leaving a group
+				if (
+					this.crossingGroups.every(
+						(crossingGroup) => crossingGroup.isEntering
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is an outOfGroup choice edge but is not leaving a group`
+					);
+				}
+				break;
+			default:
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+		}
+	}
+
+	validateList() {
+		// It must only have one variable
+		if (this.variables.length !== 1) {
+			throw new Error(
+				`Edge ${this.id} is a list edge but has ${this.variables.length} variables`
+			);
+		}
+
+		// It's source must be a call node
+		if (this.source.type !== "call") {
+			throw new Error(
+				`Edge ${this.id} is a list edge but the source node is not a call node`
+			);
+		}
+
+		switch (this.subtype) {
+			case "list":
+				break;
+			case "listGroup":
+				// It must be entering a group
+				if (
+					this.crossingGroups.every(
+						(crossingGroup) => !crossingGroup.isEntering
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is a listGroup edge but is not entering a group`
+					);
+				}
+				// All of its source node's outgoing list edges must be listGroup edges
+				if (
+					this.source.outgoingEdges
+						.filter((edge) => edge.subtype === "list")
+						.some((edge) => edge.subtype !== "listGroup")
+				) {
+					throw new Error(
+						`Edge ${this.id} is a listGroup edge but its source node has a list edge that is not a listGroup edge`
+					);
+				}
+
+				// Its first variable must be the only variable coming out of its source node
+				if (
+					// Of the source node's outgoing edges, the ones that are listGroup edges must have the same first variable as this edge
+					this.source.outgoingEdges
+						.filter((edge) => edge.subtype === "listGroup")
+						.some(
+							(edge) =>
+								edge.variables[0].name !==
+								this.variables[0].name
+						)
+				) {
+					// Logging
+					console.log(
+						this.source.outgoingEdges
+							.filter((edge) => edge.subtype === "listGroup")
+							.map((edge) => edge.variables[0].name)
+					);
+					console.log(this.variables[0].name);
+
+					throw new Error(
+						`Edge ${this.id} is a listGroup edge but its first variable is not the only variable coming out of its source node`
+					);
+				}
+				break;
+			case "select":
+				// It must be exiting a group
+				if (
+					this.crossingGroups.some(
+						(crossingGroup) => crossingGroup.isEntering
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is a select edge but is entering a group`
+					);
+				}
+
+				break;
+			default:
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+		}
+	}
 }

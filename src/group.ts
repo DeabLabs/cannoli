@@ -173,6 +173,13 @@ export class CannoliGroup {
 	}
 
 	validate() {
+		// Its maxLoops property must be a non-negative integer less than or equal to 10.
+		if (this.maxLoops < 0 || this.maxLoops > 10) {
+			throw new Error(
+				`Group ${this.id} has an invalid maxLoops label, must be less than 10: ${this.maxLoops}`
+			);
+		}
+
 		// Check if there are any paths that leave the group and reenter.
 		const queue: CannoliNode[] = [];
 
@@ -219,7 +226,46 @@ export class CannoliGroup {
 		}
 	}
 
-	validateBasicGroup() {}
+	validateBasicGroup() {
+		// It must have no listGroup edges entering it.
+		if (this.incomingEdges.some((edge) => edge.subtype === "listGroup")) {
+			throw new Error(
+				`Basic Group ${this.id} has a listGroup edge entering it.`
+			);
+		}
+	}
 
-	validateListGroup() {}
+	validateListGroup() {
+		// It must have at least one listGroup edge entering the group.
+		if (!this.incomingEdges.some((edge) => edge.subtype === "listGroup")) {
+			throw new Error(
+				`List Group ${this.id} has no listGroup edge entering it.`
+			);
+		}
+
+		// If there are any select edges exiting the group, they must come from the same node, and their first variables must all have the same name
+		const selectEdges = this.outgoingEdges.filter(
+			(edge) => edge.subtype === "select"
+		);
+		if (selectEdges.length > 0) {
+			const firstVariableNames = selectEdges.map(
+				(edge) => edge.variables[0].name
+			);
+			if (
+				!firstVariableNames.every(
+					(name) => name === firstVariableNames[0]
+				)
+			) {
+				throw new Error(
+					`List Group ${this.id} has select edges exiting it with different first variable names.`
+				);
+			}
+		}
+		// If there are not any select edges exiting the group, there must be no edges exiting the group.
+		else if (this.outgoingEdges.length > 0) {
+			throw new Error(
+				`List Group ${this.id} doesn't have a select edge exiting it, but it has other edges exiting it.`
+			);
+		}
+	}
 }

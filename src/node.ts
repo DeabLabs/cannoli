@@ -90,6 +90,35 @@ export class CannoliNode {
 		console.log(logString);
 	}
 
+	setGroup(group: CannoliGroup) {
+		this.group = group;
+	}
+
+	validate() {
+		// Do global validation first
+
+		// Do type-specific validation by calling the validate function for the type
+		switch (this.type) {
+			case "call":
+				this.validateCall();
+				break;
+			case "content":
+				this.validateContent();
+				break;
+			case "floating":
+				this.validateFloating();
+				break;
+			default:
+				throw new Error(`Node type ${this.type} not recognized`);
+		}
+	}
+
+	validateCall() {}
+
+	validateContent() {}
+
+	validateFloating() {}
+
 	// async process(nodeCompleted: () => void) {
 	// 	if (this.type === "content") {
 	// 		// Node is a content node.
@@ -576,33 +605,4 @@ export class CannoliNode {
 
 	// 	await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
 	// }
-
-	setGroup(group: CannoliGroup) {
-		this.group = group;
-	}
-
-	validate() {
-		// Do global validation first
-
-		// Do type-specific validation by calling the validate function for the type
-		switch (this.type) {
-			case "call":
-				this.validateCall();
-				break;
-			case "content":
-				this.validateContent();
-				break;
-			case "floating":
-				this.validateFloating();
-				break;
-			default:
-				throw new Error(`Node type ${this.type} not recognized`);
-		}
-	}
-
-	validateCall() {}
-
-	validateContent() {}
-
-	validateFloating() {}
 }

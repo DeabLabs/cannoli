@@ -46,17 +46,8 @@ export class CannoliGraph {
 
 	validate() {
 		// Check if the graph is a DAG
-		const visited = new Set<CannoliNode>();
-		const recursionStack = new Set<CannoliNode>();
-		const nodeKeys = Object.keys(this.nodes);
-		for (const key of nodeKeys) {
-			if (!visited.has(this.nodes[key])) {
-				if (
-					isDAG(this.nodes[key], visited, recursionStack, this.nodes)
-				) {
-					throw new Error("Graph is not a DAG");
-				}
-			}
+		if (isDAG(this.nodes)) {
+			throw new Error("Graph is not a DAG");
 		}
 
 		// NEXT: Call validator functions on groups, nodes, and edges
@@ -157,7 +148,27 @@ export class CannoliGraph {
 // 	}
 // }
 
-function isDAG(
+function isDAG(nodes: Record<string, CannoliNode>): boolean {
+	const visited = new Set<CannoliNode>();
+	const recursionStack = new Set<CannoliNode>();
+
+	for (const node of Object.values(nodes)) {
+		// Skip the node if it is of type 'floating'
+		if (node.type === "floating") {
+			continue;
+		}
+
+		if (!visited.has(node)) {
+			if (isDAGHelper(node, visited, recursionStack, nodes)) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+function isDAGHelper(
 	node: CannoliNode,
 	visited: Set<CannoliNode>,
 	recursionStack: Set<CannoliNode>,
@@ -169,8 +180,9 @@ function isDAG(
 	for (const edge of node.outgoingEdges) {
 		const adjacentNode = edge.target;
 		if (!visited.has(adjacentNode)) {
-			if (isDAG(adjacentNode, visited, recursionStack, nodes))
+			if (isDAGHelper(adjacentNode, visited, recursionStack, nodes)) {
 				return true;
+			}
 		} else if (recursionStack.has(adjacentNode)) {
 			return true;
 		}
