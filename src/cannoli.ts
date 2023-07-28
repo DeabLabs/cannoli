@@ -40,8 +40,6 @@ class Canvas {
 		const nodes: Record<string, CannoliNode> = {};
 		const edges: Record<string, CannoliEdge> = {};
 
-		console.log(this.canvasData);
-
 		// For each edge in the canvas data, create a CannoliEdge object and add it to the edges object
 		for (const edgeData of this.canvasData.edges) {
 			const edgeInfo = this.parseEdge(edgeData);
@@ -244,7 +242,6 @@ class Canvas {
 						node.type === "link"
 					) {
 						cannoliNodes.push(validNodes[node.id]);
-						console.log(node.id);
 					}
 				}
 			} else if (this.overlaps(groupRectangle, nodeRectangle)) {
@@ -493,18 +490,20 @@ class Canvas {
 
 				let match;
 				let allVariablesFound = true; // Initial flag
+				const attemptedVariableMatch = true; // Set flag to true to indicate a match was attempted
 				while ((match = regex.exec(node.content)) !== null) {
 					const matchedVariable = match[1];
 
 					// Use some() to check if any edge has the variable
-					const hasVariable = node.incomingEdges.some((edge) =>
-						edge.variables.some(
+					const hasVariable = node.incomingEdges.some((edge) => {
+						const variableExists = edge.variables.some(
 							(variable) =>
 								variable.name === matchedVariable &&
 								variable.type !== "choiceOption" &&
 								variable.type !== "config"
-						)
-					);
+						);
+						return variableExists;
+					});
 
 					if (!hasVariable) {
 						allVariablesFound = false; // Set flag to false if variable is not found
@@ -515,8 +514,11 @@ class Canvas {
 				if (allVariablesFound) {
 					// If all variables are found, return "formatter"
 					return "formatter";
+				} else if (attemptedVariableMatch) {
+					return "normal";
 				}
 			}
+
 			// If it has any incoming edges that contain any variables that are newLink, existingLink, newPath, or existingPath, it's a vault node
 			else if (
 				node.incomingEdges.some((edge) =>
@@ -682,6 +684,14 @@ class Canvas {
 			if (unparsedVariable in this.utilityConfigMap) {
 				edgeVariables.push({
 					type: "config",
+					name: unparsedVariable,
+				});
+			}
+
+			// If it doesn't match any of the prefixes or utility config names, it's a normal variable
+			else {
+				edgeVariables.push({
+					type: "regular",
 					name: unparsedVariable,
 				});
 			}
@@ -1609,12 +1619,15 @@ class CannoliEdge {
 		const variablesFormat =
 			this.variables.length > 0
 				? this.variables
-						.map((variable) => `\n\tVariable: "${variable.name}"`)
+						.map(
+							(variable) =>
+								`\n\tVariable: "${variable.name}", Type: ${variable.type}`
+						)
 						.join("")
 				: "\n\tVariables: None";
 		const tagsFormat =
 			this.tags.length > 0
-				? this.tags.map((tag) => `\n\tTag: "${tag}"`).join("")
+				? this.tags.map((tag) => `\n\tTag: ${tag}`).join("")
 				: "\n\tTags: None";
 
 		const logString = `Edge: ${sourceFormat}----${this.label}---->${targetFormat} (Type: ${this.type}, Subtype: ${this.subtype}), ${variablesFormat}, ${crossingGroupsFormat} , ${tagsFormat}`;
