@@ -55,6 +55,25 @@ export default class Cannoli extends Plugin {
 				})
 				.addEventListener("click", this.startCannoli);
 		}, 250);
+
+		// this.registerEvent(
+		// 	this.app.workspace.on("editor-menu", (menu, editor, view) => {
+		// 		menu.addItem((item) => {
+		// 			item.setTitle("Open in Cannoli")
+		// 				.setIcon("dot-network")
+		// 				.onClick(async () => {
+		// 					// Extract the selected text (this could be your group identifier)
+		// 					const selection = editor.getSelection();
+
+		// 					// Add your logic here to open this group in Cannoli
+		// 					console.log(`Opening ${selection} in Cannoli`);
+
+		// 					// You can replace the console log above with actual function call to open the group in Cannoli
+		// 					// this.openInCannoli(selection);
+		// 				});
+		// 		});
+		// 	})
+		// );
 	}
 
 	onunload() {}
@@ -81,6 +100,11 @@ export default class Cannoli extends Plugin {
 			new Notice("Move to a canvas file to start a Cannoli");
 			return;
 		}
+
+		console.log("Starting Cannoli...");
+
+		// Wait 200ms for recent changes to be saved
+		await new Promise((resolve) => setTimeout(resolve, 1500));
 
 		// Create a Cannoli object and initialize it
 		const cannoli = new CannoliGraph(
