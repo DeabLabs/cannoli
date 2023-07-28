@@ -177,56 +177,80 @@ class Canvas {
 		}
 	}
 
+	createRectangle(x: number, y: number, width: number, height: number) {
+		return {
+			x,
+			y,
+			width,
+			height,
+			x_right: x + width,
+			y_bottom: y + height,
+		};
+	}
+
+	encloses(
+		a: ReturnType<typeof this.createRectangle>,
+		b: ReturnType<typeof this.createRectangle>
+	): boolean {
+		return (
+			a.x <= b.x &&
+			a.y <= b.y &&
+			a.x_right >= b.x_right &&
+			a.y_bottom >= b.y_bottom
+		);
+	}
+
+	overlaps(
+		a: ReturnType<typeof this.createRectangle>,
+		b: ReturnType<typeof this.createRectangle>
+	): boolean {
+		const horizontalOverlap = a.x < b.x_right && a.x_right > b.x;
+		const verticalOverlap = a.y < b.y_bottom && a.y_bottom > b.y;
+		const overlap = horizontalOverlap && verticalOverlap;
+		return overlap && !this.encloses(a, b) && !this.encloses(b, a);
+	}
+
 	parseGroupChildren(
 		group: CanvasGroupData,
 		validNodes: Record<string, CannoliNode>
 	): { cannoliNodes: CannoliNode[]; groupIds: string[] } {
-		// Initialize the array of nodes and groups
 		const cannoliNodes: CannoliNode[] = [];
 		const groupIds: string[] = [];
+		const groupRectangle = this.createRectangle(
+			group.x,
+			group.y,
+			group.width,
+			group.height
+		);
 
-		// For each node in the canvas data
 		for (const node of this.canvasData.nodes) {
-			// Skip the group itself
 			if (node.id === group.id) continue;
 
-			// Check if node is fully enclosed by group
-			const isInside =
-				node.x >= group.x &&
-				node.y >= group.y &&
-				node.x + node.width <= group.x + group.width &&
-				node.y + node.height <= group.y + group.height;
+			const nodeRectangle = this.createRectangle(
+				node.x,
+				node.y,
+				node.width,
+				node.height
+			);
 
-			if (isInside) {
-				// If the node has the type "group", add it to the group as a child group without validation
+			if (this.encloses(groupRectangle, nodeRectangle)) {
 				if (node.type === "group") {
 					groupIds.push(node.id);
 				} else {
-					// Check if node id exists in validNodes
 					if (!(node.id in validNodes)) continue;
-
-					// If the node has the type "file", "text" or "link", add it to the group as a node
 					if (
 						node.type === "text" ||
 						node.type === "file" ||
 						node.type === "link"
 					) {
 						cannoliNodes.push(validNodes[node.id]);
+						console.log(node.id);
 					}
 				}
-				// additional node types can be added here if necessary
-			} else {
-				// Check if node and group overlap
-				const isOverlap =
-					node.x < group.x + group.width &&
-					node.x + node.width > group.x &&
-					node.y < group.y + group.height &&
-					node.y + node.height > group.y;
-				if (isOverlap) {
-					throw new Error(
-						`Invalid Cannoli layout: Object with id ${node.id} is improperly placed. All objects should be fully inside or outside of each other.`
-					);
-				}
+			} else if (this.overlaps(groupRectangle, nodeRectangle)) {
+				throw new Error(
+					`Invalid Cannoli layout: Object with id ${node.id} is improperly placed. All objects should be fully inside or outside of each other.`
+				);
 			}
 		}
 
