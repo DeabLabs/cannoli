@@ -1,5 +1,5 @@
 import { ChatCompletionRequestMessage, Configuration, OpenAIApi } from "openai";
-import { ErrorModal } from "main";
+// import { ErrorModal } from "main";
 import { Vault, TFile } from "obsidian";
 import {
 	CanvasData,
@@ -8,17 +8,15 @@ import {
 	CanvasNodeData,
 } from "obsidian/canvas.d";
 
-// Cannoli class
-
 class Canvas {
 	canvasFile: TFile;
 	canvasData: CanvasData;
 	subCanvasGroupId?: string;
-	cannoli: Cannoli;
+	cannoli: CannoliGraph;
 
 	constructor(
 		canvasFile: TFile,
-		cannoli: Cannoli,
+		cannoli: CannoliGraph,
 		subCanvasGroupId?: string
 	) {
 		this.canvasFile = canvasFile;
@@ -26,21 +24,23 @@ class Canvas {
 		this.cannoli = cannoli;
 	}
 
-	async getCurrentData() {
+	async fetchData() {
 		const fileContent = await this.canvasFile.vault.read(this.canvasFile);
-		this.canvasData = JSON.parse(fileContent) as CanvasData;
+
+		console.log(fileContent);
+		this.canvasData = JSON.parse(fileContent);
 	}
 
-	async parse(): Promise<{
+	parse(): {
 		groups: Record<string, CannoliGroup>;
 		nodes: Record<string, CannoliNode>;
 		edges: Record<string, CannoliEdge>;
-	}> {
-		await this.getCurrentData();
-
+	} {
 		const groups: Record<string, CannoliGroup> = {};
 		const nodes: Record<string, CannoliNode> = {};
 		const edges: Record<string, CannoliEdge> = {};
+
+		console.log(this.canvasData);
 
 		// For each edge in the canvas data, create a CannoliEdge object and add it to the edges object
 		for (const edgeData of this.canvasData.edges) {
@@ -52,6 +52,7 @@ class Canvas {
 
 			const edge = new CannoliEdge({
 				id: edgeData.id,
+				label: edgeData.label || "",
 				sourceId: edgeData.fromNode,
 				targetId: edgeData.toNode,
 				type: edgeType,
@@ -104,20 +105,19 @@ class Canvas {
 			);
 
 			// Parse the group
-			const { maxLoops, choiceString, type } = this.parseGroup(
+			const { maxLoops, type } = this.parseGroup(
 				groupData as CanvasGroupData,
-				incomingEdges,
-				outgoingEdges
+				incomingEdges
 			);
 
 			// Create the group
 			const group = new CannoliGroup({
 				id: groupData.id,
+				label: groupData.label || "",
 				nodes: cannoliNodes,
 				incomingEdges,
 				outgoingEdges,
 				maxLoops,
-				choiceString,
 				type,
 				childGroupIds: groupIds,
 			});
@@ -267,16 +267,13 @@ class Canvas {
 
 	parseGroup(
 		group: CanvasGroupData,
-		incomingEdges: CannoliEdge[],
-		outgoingEdges: CannoliEdge[]
+		incomingEdges: CannoliEdge[]
 	): {
 		maxLoops: number;
-		choiceString: string | null;
 		type: GroupType;
 	} {
 		// Initialize the maxLoops, choiceString, and type variables
 		let maxLoops = 0;
-		let choiceString = null;
 		let type: GroupType = "basic";
 
 		// If there are any incoming edges of type "list"
@@ -285,45 +282,20 @@ class Canvas {
 			type = "list";
 		}
 
-		// If there are any outgoing edges of type "choice"
-		if (outgoingEdges.some((edge) => edge.type === "choice")) {
-			// It's a choice group
-			type = "choice";
-		}
-
-		// Parse the maxLoops and choiceString from the group's label
-
 		// If the group has a label
 		if (group.label) {
-			// Split the label by pipe and strip whitespace. The first part is the maxLoops, the second part is the choiceString
-			const labelParts = group.label
-				.split("|")
-				.map((part) => part.trim());
-
-			// If the first part is not an integer, throw an error
-			if (isNaN(parseInt(labelParts[0]))) {
+			// If the label isn't an integer or is 0, throw an error
+			if (!parseInt(group.label) || parseInt(group.label) === 0) {
 				throw new Error(
-					`Invalid Cannoli layout: Group with id ${group.id} has an invalid maxLoops value`
+					`Invalid Cannoli layout: Group with id ${group.id} has invalid label, loop labels must be set it to a positive integer representing the maximum number of times the group can loop`
 				);
 			}
 
 			// Set the maxLoops
-			maxLoops = parseInt(labelParts[0]);
-
-			// If maxLoops is 0, throw an error, it needs to be set
-			if (maxLoops === 0) {
-				throw new Error(
-					`Invalid Cannoli layout: Group with id ${group.id} has invalid maxLoops value, edit the label to set it to a positive integer`
-				);
-			}
-
-			// If the group is a choice group and there is a second part, set the choiceString
-			if (type === "choice" && labelParts.length > 1) {
-				choiceString = labelParts[1];
-			}
+			maxLoops = parseInt(group.label);
 		}
 
-		return { maxLoops, choiceString, type };
+		return { maxLoops, type };
 	}
 
 	parseNode(
@@ -415,18 +387,8 @@ class Canvas {
 			if (edge.variables.length === 0) {
 				return "logging";
 			} else {
-				// The variable is the utility subtype. Throw an error if it's not a valid subtype or there are multiple variables
-				if (edge.variables.length > 1) {
-					throw new Error(
-						`Invalid Cannoli layout: Utility arrow with id ${edge.id} has more than one label`
-					);
-				}
-				if (!(edge.variables[0].name in this.utilitySubtypeMap)) {
-					throw new Error(
-						`Invalid Cannoli layout: Utility arrow with id ${edge.id} has an invalid variable. It must be one of the LLM configuration options.`
-					);
-				}
-				return this.utilitySubtypeMap[edge.variables[0].name];
+				// If there are any variables, its a config edge
+				return "config";
 			}
 		}
 		// If the edge is a function edge
@@ -515,7 +477,8 @@ class Canvas {
 						edge.variables.some(
 							(variable) =>
 								variable.name === matchedVariable &&
-								variable.type !== "choiceOption"
+								variable.type !== "choiceOption" &&
+								variable.type !== "config"
 						)
 					);
 
@@ -530,13 +493,15 @@ class Canvas {
 					return "formatter";
 				}
 			}
-			// If it has any incoming edges that contain any variables that aren't of type choiceOption or regular, it's a vault node
+			// If it has any incoming edges that contain any variables that are newLink, existingLink, newPath, or existingPath, it's a vault node
 			else if (
 				node.incomingEdges.some((edge) =>
 					edge.variables.some(
 						(variable) =>
-							variable.type !== "choiceOption" &&
-							variable.type !== "regular"
+							variable.type === "newLink" ||
+							variable.type === "existingLink" ||
+							variable.type === "newPath" ||
+							variable.type === "existingPath"
 					)
 				)
 			) {
@@ -689,16 +654,18 @@ class Canvas {
 				continue;
 			}
 
-			// If there's no prefix, its a regular variable
-			edgeVariables.push({
-				type: "regular",
-				name: unparsedVariable,
-			});
-		}
+			// If it matches one of the utility config names, the variable type is config
+			if (unparsedVariable in this.utilityConfigMap) {
+				edgeVariables.push({
+					type: "config",
+					name: unparsedVariable,
+				});
+			}
 
-		// If the type is choice, change the first variable to a choice option variable
-		if (edgeType === "choice") {
-			edgeVariables[0].type = "choiceOption";
+			// If the type is choice, change the first variable to a choice option variable
+			if (edgeType === "choice") {
+				edgeVariables[0].type = "choiceOption";
+			}
 		}
 
 		return { edgeType, edgeTags, edgeVariables };
@@ -778,9 +745,9 @@ class Canvas {
 	};
 
 	variablePrefixMap: Record<string, VariableType> = {
-		"@": "existingLink",
+		"[": "existingLink",
 		"/": "existingPath",
-		"+@": "newLink",
+		"+[": "newLink",
 		"+/": "newPath",
 	};
 
@@ -791,7 +758,7 @@ class Canvas {
 		"6": "content",
 	};
 
-	utilitySubtypeMap: Record<string, UtilitySubtype> = {
+	utilityConfigMap: Record<string, string> = {
 		logging: "logging",
 		function: "function",
 		model: "model",
@@ -806,7 +773,7 @@ class Canvas {
 	};
 }
 
-class Cannoli {
+export class CannoliGraph {
 	canvas: Canvas;
 	apiKey: string;
 	openai: OpenAIApi;
@@ -830,79 +797,105 @@ class Cannoli {
 		this.openai = new OpenAIApi(configuration);
 	}
 
-	async initialize() {
+	async initialize(verbose = false) {
+		await this.canvas.fetchData();
 		const { groups, nodes, edges } = this.canvas.parse();
 		this.groups = groups;
 		this.nodes = nodes;
 		this.edges = edges;
-	}
-}
 
-export async function startCannoli(
-	canvasFile: TFile,
-	apiKey: string,
-	vault: Vault
-) {
-	const configuration = new Configuration({ apiKey: apiKey });
-	delete configuration.baseOptions.headers["User-Agent"];
-
-	// Create an instance of OpenAI
-	const openai = new OpenAIApi(configuration);
-
-	// Read the content of the file
-	const fileContent = await vault.read(canvasFile);
-
-	const canvasData = JSON.parse(fileContent) as CanvasData;
-
-	console.log(canvasData);
-
-	let nodes: Record<string, CannoliNode>;
-
-	try {
-		nodes = await processCanvas(canvasData, vault, canvasFile, openai);
-
-		// Rest of the logic goes here with the processed and validated nodes and groups
-	} catch (error) {
-		new ErrorModal(
-			this.app,
-			"Error processing canvas: " + error.message
-		).open();
-		return;
-	}
-
-	// Run the cannoli
-	await runCannoli(nodes);
-}
-
-async function runCannoli(nodes: Record<string, CannoliNode>) {
-	const nodeKeys = Object.keys(nodes);
-
-	// Change all call nodes to color 0
-	for (const key of nodeKeys) {
-		if (nodes[key].type === "call") {
-			await nodes[key].changeColor("0");
+		if (verbose) {
+			this.logCannoliObjects();
 		}
 	}
 
-	// Create nodeCompleted callback, which will be called when a node is completed, and checks if all nodes are complete
-	const nodeCompleted = () => {
-		// Check if all nodes are complete
-		if (nodeKeys.every((key) => nodes[key].status === "complete")) {
-			console.log("All nodes complete");
-			return;
+	logCannoliObjects() {
+		// Call logEdgeDetails() on each edge
+		for (const edge of Object.values(this.edges)) {
+			edge.logEdgeDetails();
 		}
-	};
 
-	// Attempt to process all nodes with no incoming edges and at least one outgoing edge
-	for (const key of nodeKeys) {
-		if (
-			nodes[key].incomingEdges.length === 0 &&
-			nodes[key].outgoingEdges.length > 0
-		) {
-			await nodes[key].attemptProcess(nodeCompleted);
+		// Call logNodeDetails() on each node
+		for (const node of Object.values(this.nodes)) {
+			node.logNodeDetails();
+		}
+
+		// Call logGroupDetails() on each group
+		for (const group of Object.values(this.groups)) {
+			group.logGroupDetails();
 		}
 	}
+
+	validate() {
+		// NEXT: Call validator functions on groups, nodes, and edges
+	}
 }
+
+// export async function startCannoli(
+// 	canvasFile: TFile,
+// 	apiKey: string,
+// 	vault: Vault
+// ) {
+// 	const configuration = new Configuration({ apiKey: apiKey });
+// 	delete configuration.baseOptions.headers["User-Agent"];
+
+// 	// Create an instance of OpenAI
+// 	const openai = new OpenAIApi(configuration);
+
+// 	// Read the content of the file
+// 	const fileContent = await vault.read(canvasFile);
+
+// 	const canvasData = JSON.parse(fileContent) as CanvasData;
+
+// 	console.log(canvasData);
+
+// 	let nodes: Record<string, CannoliNode>;
+
+// 	try {
+// 		nodes = await processCanvas(canvasData, vault, canvasFile, openai);
+
+// 		// Rest of the logic goes here with the processed and validated nodes and groups
+// 	} catch (error) {
+// 		new ErrorModal(
+// 			this.app,
+// 			"Error processing canvas: " + error.message
+// 		).open();
+// 		return;
+// 	}
+
+// 	// Run the cannoli
+// 	await runCannoli(nodes);
+// }
+
+// async function runCannoli(nodes: Record<string, CannoliNode>) {
+// 	const nodeKeys = Object.keys(nodes);
+
+// 	// Change all call nodes to color 0
+// 	for (const key of nodeKeys) {
+// 		if (nodes[key].type === "call") {
+// 			await nodes[key].changeColor("0");
+// 		}
+// 	}
+
+// 	// Create nodeCompleted callback, which will be called when a node is completed, and checks if all nodes are complete
+// 	const nodeCompleted = () => {
+// 		// Check if all nodes are complete
+// 		if (nodeKeys.every((key) => nodes[key].status === "complete")) {
+// 			console.log("All nodes complete");
+// 			return;
+// 		}
+// 	};
+
+// 	// Attempt to process all nodes with no incoming edges and at least one outgoing edge
+// 	for (const key of nodeKeys) {
+// 		if (
+// 			nodes[key].incomingEdges.length === 0 &&
+// 			nodes[key].outgoingEdges.length > 0
+// 		) {
+// 			await nodes[key].attemptProcess(nodeCompleted);
+// 		}
+// 	}
+// }
 
 // Node Types
 type NodeType = "call" | "content" | "floating";
@@ -922,7 +915,7 @@ class CannoliNode {
 	outgoingEdges: CannoliEdge[];
 	incomingEdges: CannoliEdge[];
 	group: CannoliGroup;
-	cannoli: Cannoli;
+	cannoli: CannoliGraph;
 	copies: CannoliNode[];
 
 	constructor({
@@ -938,7 +931,7 @@ class CannoliNode {
 		type: NodeType;
 		outgoingEdges: CannoliEdge[];
 		incomingEdges: CannoliEdge[];
-		cannoli: Cannoli;
+		cannoli: CannoliGraph;
 	}) {
 		this.id = id;
 		this.content = content;
@@ -950,492 +943,534 @@ class CannoliNode {
 		this.status = "pending";
 	}
 
-	async process(nodeCompleted: () => void) {
-		if (this.type === "content") {
-			// Node is a content node.
+	logNodeDetails() {
+		const contentFormat = `"${this.content.substring(0, 20)}..."`;
+		const outgoingEdgesFormat =
+			this.outgoingEdges.length > 0
+				? this.outgoingEdges
+						.map(
+							(edge) =>
+								`\n\tOutgoing Edge: "${
+									edge.label
+										? edge.label.substring(0, 20)
+										: "No Label"
+								}..."`
+						)
+						.join("")
+				: "\n\tOutgoing Edges: None";
+		const incomingEdgesFormat =
+			this.incomingEdges.length > 0
+				? this.incomingEdges
+						.map(
+							(edge) =>
+								`\n\tIncoming Edge: "${
+									edge.label
+										? edge.label.substring(0, 20)
+										: "No Label"
+								}..."`
+						)
+						.join("")
+				: "\n\tIncoming Edges: None";
+		const groupFormat = this.group
+			? `\n\tGroup: "${
+					this.group.label
+						? this.group.label.substring(0, 20)
+						: "No Label"
+					// eslint-disable-next-line no-mixed-spaces-and-tabs
+			  }..."`
+			: "\n\tGroup: None";
 
-			// Initialize debug variables
-			let wroteToPage = false;
-			let pageName = "";
-			let writtenContent = "";
-			let pageCreated = false;
+		const logString = `Node: ${contentFormat} (Type: ${this.type}, Subtype: ${this.subtype}),${outgoingEdgesFormat},${incomingEdgesFormat},${groupFormat}`;
 
-			// If it has an incoming variable edge, replace the content with the label of the variable edge, and write it to the page with the same name as the label if it exists, and create it if it doesn't.
-			if (this.incomingEdges.some((edge) => edge.type === "variable")) {
-				// If the edge's payload is null, throw an error
-				if (this.incomingEdges.some((edge) => edge.payload === null)) {
-					// The error should look like: "No existing page could be parsed for the edge with id: 123"
-					throw new Error(
-						`No existing page could be parsed for the edge with id: ${
-							this.incomingEdges.find(
-								(edge) => edge.payload === null
-							)?.id
-						}`
-					);
-				}
-
-				let varValue = this.incomingEdges
-					.find((edge) => edge.type === "variable")
-					?.getPayload() as string;
-
-				// If the varValue is not surrounded by double braces, surround it with double braces
-				if (varValue) {
-					if (
-						!varValue.startsWith("[[") &&
-						!varValue.endsWith("]]")
-					) {
-						varValue = "[[" + varValue + "]]";
-					}
-				} else {
-					throw new Error(
-						`Variable name not found for edge ${
-							this.incomingEdges.find(
-								(edge) => edge.type === "variable"
-							)?.id
-						}`
-					);
-				}
-
-				// Set pageContent variable to the payload of the incoming blank edge
-				let pageContent = this.incomingEdges
-					.find((edge) => edge.type === "blank")
-					?.getPayload() as string;
-
-				// If the first line of page content is "# " followed by the page name, regardless of case, remove the first line, because obsidian will add it automatically
-				const pageContentLines = pageContent.split("\n");
-				if (
-					pageContentLines[0].toLowerCase() ===
-					`# ${varValue.toLowerCase()}`
-				) {
-					pageContentLines.shift();
-				}
-
-				pageContent = pageContentLines.join("\n");
-
-				// If the varValue without double-braces corresponds to a page (accounting for case), write the pageContent to the page
-				pageName = varValue.slice(2, -2);
-				const page = this.vault
-					.getMarkdownFiles()
-					.find(
-						(file) =>
-							file.basename.toLowerCase() ===
-							pageName.toLowerCase()
-					);
-
-				if (page) {
-					console.log("Page exists, editing");
-					await this.vault.modify(page, pageContent);
-					wroteToPage = true;
-					writtenContent = pageContent;
-				} else {
-					console.log("Page doesn't exist, creating");
-					await this.vault.create(pageName + ".md", pageContent);
-					pageCreated = true;
-					wroteToPage = true;
-					writtenContent = pageContent;
-				}
-
-				this.content = varValue;
-				await this.changeContent(this.content);
-			}
-
-			// If it has an incoming blank edge
-			else if (this.incomingEdges.some((edge) => edge.type === "blank")) {
-				// If the content of the node is a markdown page reference, write the payload of the blank edge to the page with the same name as the reference if it exists, and error if it doesn't
-				if (
-					this.content.startsWith("[[") &&
-					this.content.endsWith("]]")
-				) {
-					pageName = this.content.slice(2, -2);
-					const page = this.vault
-						.getMarkdownFiles()
-						.find(
-							(file) =>
-								file.basename.toLowerCase() ===
-								pageName.toLowerCase()
-						);
-
-					if (page) {
-						console.log("Page exists, editing");
-						await this.vault.modify(
-							page,
-							this.incomingEdges
-								.find((edge) => edge.type === "blank")
-								?.getPayload() as string
-						);
-						wroteToPage = true;
-						writtenContent = this.incomingEdges
-							.find((edge) => edge.type === "blank")
-							?.getPayload() as string;
-					} else {
-						throw new Error(
-							`The page: "${pageName}" doesn't exist`
-						);
-					}
-				} else {
-					// If the content isn't a markdown page reference, set the content of the node to the payload of the blank edge
-					this.content = this.incomingEdges
-						.find((edge) => edge.type === "blank")
-						?.getPayload() as string;
-					await this.changeContent(this.content);
-					writtenContent = this.content;
-				}
-			}
-
-			// If it has an incoming debug edge, set the content of the node to the payload of the debug edge
-			else if (this.incomingEdges.some((edge) => edge.type === "debug")) {
-				this.content = this.incomingEdges
-					.find((edge) => edge.type === "debug")
-					?.getPayload() as string;
-				await this.changeContent(this.content);
-				writtenContent = this.content;
-			}
-
-			// Set the payload of all outgoing variable and blank edges to the content of the node
-			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "variable" || edge.type === "blank"
-			)) {
-				edge.setPayload(this.content);
-			}
-
-			// Set the payload of all outgoing debug edges to a markdown string explaining what happened.
-			// Say if the content was written to the node or a page, and show the content. If it was written to a page, say the name and mention if it was created.
-			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "debug"
-			)) {
-				let debugContent = "";
-				if (wroteToPage) {
-					if (pageCreated) {
-						debugContent = `[[${pageName}]] was created:`;
-					} else {
-						debugContent = `[[${pageName}]] was edited:`;
-					}
-					debugContent += `\n\n${writtenContent}`;
-				} else {
-					debugContent = `This was written to the content node:\n\n${writtenContent}`;
-				}
-				edge.setPayload(debugContent);
-			}
-		} else if (this.type === "call") {
-			// Node is a call node, build its message
-			let messageContent = this.content;
-
-			// Process incoming variable and read type edges
-			for (const edge of this.incomingEdges.filter(
-				(edge) => edge.type === "variable"
-			)) {
-				const varName = edge.label;
-				const varValue = edge.getPayload() as string;
-
-				if (!varName) {
-					throw new Error(
-						`Variable name not found for edge ${edge.id}`
-					);
-				}
-
-				if (!varValue) {
-					throw new Error(`Variable ${varName} has not been set`);
-				}
-				messageContent = await this.processVariable(
-					varName,
-					varValue,
-					messageContent,
-					true
-				);
-			}
-
-			// Process global variables
-			const globalVars: Record<string, string> = {};
-			for (const node of Object.values(this.nodes)) {
-				if (node.type === "globalVar") {
-					const [varName, varValue] = node.content.split("\n");
-					globalVars[varName.slice(1, -1)] = varValue;
-				}
-			}
-
-			for (const [varName, varValue] of Object.entries(globalVars)) {
-				messageContent = await this.processVariable(
-					varName,
-					varValue,
-					messageContent,
-					false
-				);
-			}
-
-			// Replace static page references with the content of the page
-			const pageNameMatches =
-				messageContent.match(/{\[\[(.*?)\]\]}/g) || [];
-			for (const match of pageNameMatches) {
-				const pageName = match.slice(3, -3); // Remove {[[ and ]]}
-
-				const formattedPage = await this.getPageContent(pageName);
-				if (formattedPage) {
-					messageContent = messageContent.replace(
-						match,
-						formattedPage
-					);
-				} else {
-					messageContent = messageContent.replace(
-						match,
-						`The page: "${pageName}" doesn't exist`
-					);
-				}
-			}
-
-			let messages: ChatCompletionRequestMessage[] = [];
-
-			// For all incoming blank edges.
-			for (const edge of this.incomingEdges.filter(
-				(edge) => edge.type === "blank"
-			)) {
-				// If the edge is from a content node, the payload is a string. Turn it into a system chatMessage and push it to the messages array
-				if (edge.getSource(this.nodes).type === "content") {
-					messages.push({
-						role: "system",
-						content: edge.getPayload() as string,
-					});
-				}
-				// If the edge is from a call node, the payload is an array of messages. Append them to the messages array
-				else if (edge.getSource(this.nodes).type === "call") {
-					messages =
-						edge.getPayload() as ChatCompletionRequestMessage[];
-				}
-			}
-
-			// Append the current message to the messages array
-			messages.push({ role: "user", content: messageContent });
-
-			// Send a request to OpenAI
-			const chatResponse = await llmCall({
-				messages,
-				openai: this.openai,
-				verbose: true,
-			});
-
-			if (!chatResponse) {
-				throw new Error("Chat response is undefined");
-			}
-
-			if (chatResponse.content === undefined) {
-				throw new Error("Chat response content is undefined");
-			}
-
-			// Load outgoing edges
-
-			// For all outgoing variable edges
-			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "variable"
-			)) {
-				// If the variable label is surrounded by double braces, call ensurePageExists on the payload of the variable edge
-				if (edge.label?.startsWith("[[") && edge.label.endsWith("]]")) {
-					const maybePageName = chatResponse.content;
-					if (!maybePageName) {
-						throw new Error("Chat response content is undefined");
-					}
-					const realPageName = await ensurePageExists(
-						maybePageName,
-						this.vault
-					);
-					edge.setPayload(realPageName);
-				} else {
-					// If the variable label is not surrounded by double braces, set the payload to the content of the response message
-					edge.setPayload(chatResponse.content);
-				}
-			}
-
-			// For all outgoing blank type edges
-			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "blank"
-			)) {
-				// If the edge is to a call node
-				if (edge.getTarget(this.nodes).type === "call") {
-					// If the target node is within the same group, set the payload to the whole messages array with the response message appended
-					const payloadMessages = messages.slice();
-					payloadMessages.push(chatResponse);
-					edge.setPayload(payloadMessages);
-				}
-				// If the edge is to a content node, set the payload to the response message content
-				else if (edge.getTarget(this.nodes).type === "content") {
-					edge.setPayload(chatResponse.content);
-				}
-			}
-
-			// For all outgoing debug type edges, set the payload to a markdown string containing the prompt messages and the response message formatted nicely
-			for (const edge of this.outgoingEdges.filter(
-				(edge) => edge.type === "debug"
-			)) {
-				const allMessages = messages
-					.map(
-						(m) =>
-							`### ${
-								m.role === "user" ? "USER" : "ASSISTANT"
-							}:\n${m.content}`
-					)
-					.join("\n\n");
-				const inputContent = `# <u>PROMPT</u>\n${allMessages}`;
-				const outputContent = `# <u>RESPONSE</u>\n${chatResponse.content}`;
-				const debugContent = `${inputContent}\n\n${outputContent}`;
-				edge.setPayload(debugContent);
-			}
-
-			await this.showCompleted();
-		}
-
-		this.status = "complete";
-		nodeCompleted();
-
-		for (const edge of this.outgoingEdges) {
-			await edge.getTarget(this.nodes).attemptProcess(nodeCompleted);
-		}
+		console.log(logString);
 	}
 
-	// Process the node if all its dependencies are complete
-	async attemptProcess(nodeCompleted: () => void) {
-		if (this.allDependenciesComplete()) {
-			// If the node is not a call node, await its process function
-			if (this.type !== "call") {
-				await this.process(nodeCompleted);
-			}
-			// If the node is a call node, show that it is processing and don't await its process function
-			else {
-				await this.showProcessing();
-				this.process(nodeCompleted);
-			}
-		}
-	}
+	// async process(nodeCompleted: () => void) {
+	// 	if (this.type === "content") {
+	// 		// Node is a content node.
+
+	// 		// Initialize debug variables
+	// 		let wroteToPage = false;
+	// 		let pageName = "";
+	// 		let writtenContent = "";
+	// 		let pageCreated = false;
+
+	// 		// If it has an incoming variable edge, replace the content with the label of the variable edge, and write it to the page with the same name as the label if it exists, and create it if it doesn't.
+	// 		if (this.incomingEdges.some((edge) => edge.type === "variable")) {
+	// 			// If the edge's payload is null, throw an error
+	// 			if (this.incomingEdges.some((edge) => edge.payload === null)) {
+	// 				// The error should look like: "No existing page could be parsed for the edge with id: 123"
+	// 				throw new Error(
+	// 					`No existing page could be parsed for the edge with id: ${
+	// 						this.incomingEdges.find(
+	// 							(edge) => edge.payload === null
+	// 						)?.id
+	// 					}`
+	// 				);
+	// 			}
+
+	// 			let varValue = this.incomingEdges
+	// 				.find((edge) => edge.type === "variable")
+	// 				?.getPayload() as string;
+
+	// 			// If the varValue is not surrounded by double braces, surround it with double braces
+	// 			if (varValue) {
+	// 				if (
+	// 					!varValue.startsWith("[[") &&
+	// 					!varValue.endsWith("]]")
+	// 				) {
+	// 					varValue = "[[" + varValue + "]]";
+	// 				}
+	// 			} else {
+	// 				throw new Error(
+	// 					`Variable name not found for edge ${
+	// 						this.incomingEdges.find(
+	// 							(edge) => edge.type === "variable"
+	// 						)?.id
+	// 					}`
+	// 				);
+	// 			}
+
+	// 			// Set pageContent variable to the payload of the incoming blank edge
+	// 			let pageContent = this.incomingEdges
+	// 				.find((edge) => edge.type === "blank")
+	// 				?.getPayload() as string;
+
+	// 			// If the first line of page content is "# " followed by the page name, regardless of case, remove the first line, because obsidian will add it automatically
+	// 			const pageContentLines = pageContent.split("\n");
+	// 			if (
+	// 				pageContentLines[0].toLowerCase() ===
+	// 				`# ${varValue.toLowerCase()}`
+	// 			) {
+	// 				pageContentLines.shift();
+	// 			}
+
+	// 			pageContent = pageContentLines.join("\n");
+
+	// 			// If the varValue without double-braces corresponds to a page (accounting for case), write the pageContent to the page
+	// 			pageName = varValue.slice(2, -2);
+	// 			const page = this.vault
+	// 				.getMarkdownFiles()
+	// 				.find(
+	// 					(file) =>
+	// 						file.basename.toLowerCase() ===
+	// 						pageName.toLowerCase()
+	// 				);
+
+	// 			if (page) {
+	// 				console.log("Page exists, editing");
+	// 				await this.vault.modify(page, pageContent);
+	// 				wroteToPage = true;
+	// 				writtenContent = pageContent;
+	// 			} else {
+	// 				console.log("Page doesn't exist, creating");
+	// 				await this.vault.create(pageName + ".md", pageContent);
+	// 				pageCreated = true;
+	// 				wroteToPage = true;
+	// 				writtenContent = pageContent;
+	// 			}
+
+	// 			this.content = varValue;
+	// 			await this.changeContent(this.content);
+	// 		}
+
+	// 		// If it has an incoming blank edge
+	// 		else if (this.incomingEdges.some((edge) => edge.type === "blank")) {
+	// 			// If the content of the node is a markdown page reference, write the payload of the blank edge to the page with the same name as the reference if it exists, and error if it doesn't
+	// 			if (
+	// 				this.content.startsWith("[[") &&
+	// 				this.content.endsWith("]]")
+	// 			) {
+	// 				pageName = this.content.slice(2, -2);
+	// 				const page = this.vault
+	// 					.getMarkdownFiles()
+	// 					.find(
+	// 						(file) =>
+	// 							file.basename.toLowerCase() ===
+	// 							pageName.toLowerCase()
+	// 					);
+
+	// 				if (page) {
+	// 					console.log("Page exists, editing");
+	// 					await this.vault.modify(
+	// 						page,
+	// 						this.incomingEdges
+	// 							.find((edge) => edge.type === "blank")
+	// 							?.getPayload() as string
+	// 					);
+	// 					wroteToPage = true;
+	// 					writtenContent = this.incomingEdges
+	// 						.find((edge) => edge.type === "blank")
+	// 						?.getPayload() as string;
+	// 				} else {
+	// 					throw new Error(
+	// 						`The page: "${pageName}" doesn't exist`
+	// 					);
+	// 				}
+	// 			} else {
+	// 				// If the content isn't a markdown page reference, set the content of the node to the payload of the blank edge
+	// 				this.content = this.incomingEdges
+	// 					.find((edge) => edge.type === "blank")
+	// 					?.getPayload() as string;
+	// 				await this.changeContent(this.content);
+	// 				writtenContent = this.content;
+	// 			}
+	// 		}
+
+	// 		// If it has an incoming debug edge, set the content of the node to the payload of the debug edge
+	// 		else if (this.incomingEdges.some((edge) => edge.type === "debug")) {
+	// 			this.content = this.incomingEdges
+	// 				.find((edge) => edge.type === "debug")
+	// 				?.getPayload() as string;
+	// 			await this.changeContent(this.content);
+	// 			writtenContent = this.content;
+	// 		}
+
+	// 		// Set the payload of all outgoing variable and blank edges to the content of the node
+	// 		for (const edge of this.outgoingEdges.filter(
+	// 			(edge) => edge.type === "variable" || edge.type === "blank"
+	// 		)) {
+	// 			edge.setPayload(this.content);
+	// 		}
+
+	// 		// Set the payload of all outgoing debug edges to a markdown string explaining what happened.
+	// 		// Say if the content was written to the node or a page, and show the content. If it was written to a page, say the name and mention if it was created.
+	// 		for (const edge of this.outgoingEdges.filter(
+	// 			(edge) => edge.type === "debug"
+	// 		)) {
+	// 			let debugContent = "";
+	// 			if (wroteToPage) {
+	// 				if (pageCreated) {
+	// 					debugContent = `[[${pageName}]] was created:`;
+	// 				} else {
+	// 					debugContent = `[[${pageName}]] was edited:`;
+	// 				}
+	// 				debugContent += `\n\n${writtenContent}`;
+	// 			} else {
+	// 				debugContent = `This was written to the content node:\n\n${writtenContent}`;
+	// 			}
+	// 			edge.setPayload(debugContent);
+	// 		}
+	// 	} else if (this.type === "call") {
+	// 		// Node is a call node, build its message
+	// 		let messageContent = this.content;
+
+	// 		// Process incoming variable and read type edges
+	// 		for (const edge of this.incomingEdges.filter(
+	// 			(edge) => edge.type === "variable"
+	// 		)) {
+	// 			const varName = edge.label;
+	// 			const varValue = edge.getPayload() as string;
+
+	// 			if (!varName) {
+	// 				throw new Error(
+	// 					`Variable name not found for edge ${edge.id}`
+	// 				);
+	// 			}
+
+	// 			if (!varValue) {
+	// 				throw new Error(`Variable ${varName} has not been set`);
+	// 			}
+	// 			messageContent = await this.processVariable(
+	// 				varName,
+	// 				varValue,
+	// 				messageContent,
+	// 				true
+	// 			);
+	// 		}
+
+	// 		// Process global variables
+	// 		const globalVars: Record<string, string> = {};
+	// 		for (const node of Object.values(this.nodes)) {
+	// 			if (node.type === "globalVar") {
+	// 				const [varName, varValue] = node.content.split("\n");
+	// 				globalVars[varName.slice(1, -1)] = varValue;
+	// 			}
+	// 		}
+
+	// 		for (const [varName, varValue] of Object.entries(globalVars)) {
+	// 			messageContent = await this.processVariable(
+	// 				varName,
+	// 				varValue,
+	// 				messageContent,
+	// 				false
+	// 			);
+	// 		}
+
+	// 		// Replace static page references with the content of the page
+	// 		const pageNameMatches =
+	// 			messageContent.match(/{\[\[(.*?)\]\]}/g) || [];
+	// 		for (const match of pageNameMatches) {
+	// 			const pageName = match.slice(3, -3); // Remove {[[ and ]]}
+
+	// 			const formattedPage = await this.getPageContent(pageName);
+	// 			if (formattedPage) {
+	// 				messageContent = messageContent.replace(
+	// 					match,
+	// 					formattedPage
+	// 				);
+	// 			} else {
+	// 				messageContent = messageContent.replace(
+	// 					match,
+	// 					`The page: "${pageName}" doesn't exist`
+	// 				);
+	// 			}
+	// 		}
+
+	// 		let messages: ChatCompletionRequestMessage[] = [];
+
+	// 		// For all incoming blank edges.
+	// 		for (const edge of this.incomingEdges.filter(
+	// 			(edge) => edge.type === "blank"
+	// 		)) {
+	// 			// If the edge is from a content node, the payload is a string. Turn it into a system chatMessage and push it to the messages array
+	// 			if (edge.getSource(this.nodes).type === "content") {
+	// 				messages.push({
+	// 					role: "system",
+	// 					content: edge.getPayload() as string,
+	// 				});
+	// 			}
+	// 			// If the edge is from a call node, the payload is an array of messages. Append them to the messages array
+	// 			else if (edge.getSource(this.nodes).type === "call") {
+	// 				messages =
+	// 					edge.getPayload() as ChatCompletionRequestMessage[];
+	// 			}
+	// 		}
+
+	// 		// Append the current message to the messages array
+	// 		messages.push({ role: "user", content: messageContent });
+
+	// 		// Send a request to OpenAI
+	// 		const chatResponse = await llmCall({
+	// 			messages,
+	// 			openai: this.openai,
+	// 			verbose: true,
+	// 		});
+
+	// 		if (!chatResponse) {
+	// 			throw new Error("Chat response is undefined");
+	// 		}
+
+	// 		if (chatResponse.content === undefined) {
+	// 			throw new Error("Chat response content is undefined");
+	// 		}
+
+	// 		// Load outgoing edges
+
+	// 		// For all outgoing variable edges
+	// 		for (const edge of this.outgoingEdges.filter(
+	// 			(edge) => edge.type === "variable"
+	// 		)) {
+	// 			// If the variable label is surrounded by double braces, call ensurePageExists on the payload of the variable edge
+	// 			if (edge.label?.startsWith("[[") && edge.label.endsWith("]]")) {
+	// 				const maybePageName = chatResponse.content;
+	// 				if (!maybePageName) {
+	// 					throw new Error("Chat response content is undefined");
+	// 				}
+	// 				const realPageName = await ensurePageExists(
+	// 					maybePageName,
+	// 					this.vault
+	// 				);
+	// 				edge.setPayload(realPageName);
+	// 			} else {
+	// 				// If the variable label is not surrounded by double braces, set the payload to the content of the response message
+	// 				edge.setPayload(chatResponse.content);
+	// 			}
+	// 		}
+
+	// 		// For all outgoing blank type edges
+	// 		for (const edge of this.outgoingEdges.filter(
+	// 			(edge) => edge.type === "blank"
+	// 		)) {
+	// 			// If the edge is to a call node
+	// 			if (edge.getTarget(this.nodes).type === "call") {
+	// 				// If the target node is within the same group, set the payload to the whole messages array with the response message appended
+	// 				const payloadMessages = messages.slice();
+	// 				payloadMessages.push(chatResponse);
+	// 				edge.setPayload(payloadMessages);
+	// 			}
+	// 			// If the edge is to a content node, set the payload to the response message content
+	// 			else if (edge.getTarget(this.nodes).type === "content") {
+	// 				edge.setPayload(chatResponse.content);
+	// 			}
+	// 		}
+
+	// 		// For all outgoing debug type edges, set the payload to a markdown string containing the prompt messages and the response message formatted nicely
+	// 		for (const edge of this.outgoingEdges.filter(
+	// 			(edge) => edge.type === "debug"
+	// 		)) {
+	// 			const allMessages = messages
+	// 				.map(
+	// 					(m) =>
+	// 						`### ${
+	// 							m.role === "user" ? "USER" : "ASSISTANT"
+	// 						}:\n${m.content}`
+	// 				)
+	// 				.join("\n\n");
+	// 			const inputContent = `# <u>PROMPT</u>\n${allMessages}`;
+	// 			const outputContent = `# <u>RESPONSE</u>\n${chatResponse.content}`;
+	// 			const debugContent = `${inputContent}\n\n${outputContent}`;
+	// 			edge.setPayload(debugContent);
+	// 		}
+
+	// 		await this.showCompleted();
+	// 	}
+
+	// 	this.status = "complete";
+	// 	nodeCompleted();
+
+	// 	for (const edge of this.outgoingEdges) {
+	// 		await edge.getTarget(this.nodes).attemptProcess(nodeCompleted);
+	// 	}
+	// }
+
+	// // Process the node if all its dependencies are complete
+	// async attemptProcess(nodeCompleted: () => void) {
+	// 	if (this.allDependenciesComplete()) {
+	// 		// If the node is not a call node, await its process function
+	// 		if (this.type !== "call") {
+	// 			await this.process(nodeCompleted);
+	// 		}
+	// 		// If the node is a call node, show that it is processing and don't await its process function
+	// 		else {
+	// 			await this.showProcessing();
+	// 			this.process(nodeCompleted);
+	// 		}
+	// 	}
+	// }
 
 	// Check if the node has all its dependencies complete
 	allDependenciesComplete(): boolean {
 		// Check if sources of all incoming edges have status "complete"
 		return this.incomingEdges.every(
-			(edge) => edge.getSource(this.nodes).status === "complete"
+			(edge) => edge.source.status === "complete"
 		);
 	}
 
-	// Helper function to get a page by its name and return its content
-	async getPageContent(pageName: string) {
-		// First, attempt to find the page with the original casing
-		let page = this.vault
-			.getMarkdownFiles()
-			.find((file) => file.basename === pageName);
+	// // Helper function to get a page by its name and return its content
+	// async getPageContent(pageName: string) {
+	// 	// First, attempt to find the page with the original casing
+	// 	let page = this.vault
+	// 		.getMarkdownFiles()
+	// 		.find((file) => file.basename === pageName);
 
-		// If the page isn't found, try again with all-lowercase version
-		if (!page) {
-			page = this.vault
-				.getMarkdownFiles()
-				.find(
-					(file) =>
-						file.basename.toLowerCase() === pageName.toLowerCase()
-				);
-		}
+	// 	// If the page isn't found, try again with all-lowercase version
+	// 	if (!page) {
+	// 		page = this.vault
+	// 			.getMarkdownFiles()
+	// 			.find(
+	// 				(file) =>
+	// 					file.basename.toLowerCase() === pageName.toLowerCase()
+	// 			);
+	// 	}
 
-		if (page) {
-			const pageContent = await this.vault.read(page);
-			const renderedPage = "# " + page.basename + "\n" + pageContent; // Use the actual page name here to maintain original casing
-			return renderedPage;
-		}
-		return null;
-	}
+	// 	if (page) {
+	// 		const pageContent = await this.vault.read(page);
+	// 		const renderedPage = "# " + page.basename + "\n" + pageContent; // Use the actual page name here to maintain original casing
+	// 		return renderedPage;
+	// 	}
+	// 	return null;
+	// }
 
-	async processVariable(
-		varName: string,
-		varValue: string,
-		messageContent: string,
-		isRequired: boolean
-	) {
-		// Check if the variable name is within braces
-		const varPattern = new RegExp(`{${varName}}`, "g");
-		const isVarNamePresent = varPattern.test(messageContent);
+	// async processVariable(
+	// 	varName: string,
+	// 	varValue: string,
+	// 	messageContent: string,
+	// 	isRequired: boolean
+	// ) {
+	// 	// Check if the variable name is within braces
+	// 	const varPattern = new RegExp(`{${varName}}`, "g");
+	// 	const isVarNamePresent = varPattern.test(messageContent);
 
-		if (isVarNamePresent) {
-			messageContent = messageContent.replace(varPattern, varValue);
-		}
+	// 	if (isVarNamePresent) {
+	// 		messageContent = messageContent.replace(varPattern, varValue);
+	// 	}
 
-		// Check for variable names within double braces
-		const varDoubleBracePattern = new RegExp(`{\\[${varName}\\]}`, "g");
-		const isDoubleBraceVarNamePresent =
-			varDoubleBracePattern.test(messageContent);
+	// 	// Check for variable names within double braces
+	// 	const varDoubleBracePattern = new RegExp(`{\\[${varName}\\]}`, "g");
+	// 	const isDoubleBraceVarNamePresent =
+	// 		varDoubleBracePattern.test(messageContent);
 
-		if (isDoubleBraceVarNamePresent) {
-			const pageName =
-				varValue.startsWith("[[") && varValue.endsWith("]]")
-					? varValue.slice(2, -2)
-					: varValue;
-			const pageContent = await this.getPageContent(pageName);
+	// 	if (isDoubleBraceVarNamePresent) {
+	// 		const pageName =
+	// 			varValue.startsWith("[[") && varValue.endsWith("]]")
+	// 				? varValue.slice(2, -2)
+	// 				: varValue;
+	// 		const pageContent = await this.getPageContent(pageName);
 
-			if (pageContent) {
-				messageContent = messageContent.replace(
-					varDoubleBracePattern,
-					pageContent
-				);
-			} else {
-				messageContent = messageContent.replace(
-					varDoubleBracePattern,
-					`The page: "${pageName}" doesn't exist`
-				);
-			}
-		} else if (isRequired && !isVarNamePresent) {
-			throw new Error(
-				`Content does not include an instance of variable ${varName}`
-			);
-		}
+	// 		if (pageContent) {
+	// 			messageContent = messageContent.replace(
+	// 				varDoubleBracePattern,
+	// 				pageContent
+	// 			);
+	// 		} else {
+	// 			messageContent = messageContent.replace(
+	// 				varDoubleBracePattern,
+	// 				`The page: "${pageName}" doesn't exist`
+	// 			);
+	// 		}
+	// 	} else if (isRequired && !isVarNamePresent) {
+	// 		throw new Error(
+	// 			`Content does not include an instance of variable ${varName}`
+	// 		);
+	// 	}
 
-		return messageContent;
-	}
+	// 	return messageContent;
+	// }
 
-	// Set the status of the node to complete, change its color to green, and call attemptProcess on target nodes of all outgoing edges
-	async showCompleted() {
-		this.status = "complete";
-		await this.changeColor("4");
-	}
+	// // Set the status of the node to complete, change its color to green, and call attemptProcess on target nodes of all outgoing edges
+	// async showCompleted() {
+	// 	this.status = "complete";
+	// 	await this.changeColor("4");
+	// }
 
-	// Set the status of the node to rejected, change its color to "0", and call reject on target nodes of all outgoing edges
-	async rejected() {
-		this.status = "rejected";
-		await this.changeColor("0");
-		for (const edge of this.outgoingEdges) {
-			await edge.getTarget(this.nodes).rejected();
-		}
-	}
+	// // Set the status of the node to rejected, change its color to "0", and call reject on target nodes of all outgoing edges
+	// async rejected() {
+	// 	this.status = "rejected";
+	// 	await this.changeColor("0");
+	// 	for (const edge of this.outgoingEdges) {
+	// 		await edge.getTarget(this.nodes).rejected();
+	// 	}
+	// }
 
-	// Set the status of the node to processing, change its color to yellow
-	async showProcessing() {
-		this.status = "processing";
-		await this.changeColor("3");
-	}
+	// // Set the status of the node to processing, change its color to yellow
+	// async showProcessing() {
+	// 	this.status = "processing";
+	// 	await this.changeColor("3");
+	// }
 
-	// Change the color of the node
-	async changeColor(color: string) {
-		const canvasData = JSON.parse(
-			await this.vault.read(this.canvasFile)
-		) as CanvasData;
+	// // Change the color of the node
+	// async changeColor(color: string) {
+	// 	const canvasData = JSON.parse(
+	// 		await this.vault.read(this.canvasFile)
+	// 	) as CanvasData;
 
-		const node = canvasData.nodes.find((node) => node.id === this.id);
-		if (node !== undefined) {
-			node.color = color;
-		} else {
-			throw new Error(`Node with id ${this.id} not found`);
-		}
+	// 	const node = canvasData.nodes.find((node) => node.id === this.id);
+	// 	if (node !== undefined) {
+	// 		node.color = color;
+	// 	} else {
+	// 		throw new Error(`Node with id ${this.id} not found`);
+	// 	}
 
-		await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
-	}
+	// 	await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
+	// }
 
-	// Change the content of the node
-	async changeContent(content: string) {
-		console.log("Changing content of node " + this.id + " to " + content);
-		const canvasData = JSON.parse(
-			await this.vault.read(this.canvasFile)
-		) as CanvasData;
+	// // Change the content of the node
+	// async changeContent(content: string) {
+	// 	console.log("Changing content of node " + this.id + " to " + content);
+	// 	const canvasData = JSON.parse(
+	// 		await this.vault.read(this.canvasFile)
+	// 	) as CanvasData;
 
-		const node = canvasData.nodes.find((node) => node.id === this.id);
-		if (node !== undefined) {
-			node.text = content;
-		} else {
-			throw new Error(`Node with id ${this.id} not found`);
-		}
+	// 	const node = canvasData.nodes.find((node) => node.id === this.id);
+	// 	if (node !== undefined) {
+	// 		node.text = content;
+	// 	} else {
+	// 		throw new Error(`Node with id ${this.id} not found`);
+	// 	}
 
-		await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
-	}
+	// 	await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
+	// }
 
 	setGroup(group: CannoliGroup) {
 		this.group = group;
@@ -1455,18 +1490,7 @@ type BlankSubtype = "continueChat" | "systemMessage" | "write";
 
 type VariableSubtype = "";
 
-type UtilitySubtype =
-	| "logging"
-	| "function"
-	| "model"
-	| "max_tokens"
-	| "temperature"
-	| "top_p"
-	| "frequency_penalty"
-	| "presence_penalty"
-	| "stop"
-	| "echo"
-	| "debug";
+type UtilitySubtype = "logging" | "config";
 
 type ListSubtype = "list" | "listGroup" | "select";
 
@@ -1488,10 +1512,12 @@ type VariableType =
 	| "newLink"
 	| "newPath"
 	| "choiceOption"
-	| "regular";
+	| "regular"
+	| "config";
 
 class CannoliEdge {
 	id: string;
+	label: string;
 	sourceId: string;
 	targetId: string;
 	source: CannoliNode;
@@ -1512,6 +1538,7 @@ class CannoliEdge {
 
 	constructor({
 		id,
+		label,
 		sourceId,
 		targetId,
 		type,
@@ -1519,6 +1546,7 @@ class CannoliEdge {
 		tags,
 	}: {
 		id: string;
+		label: string;
 		sourceId: string;
 		targetId: string;
 		type: EdgeType;
@@ -1526,37 +1554,65 @@ class CannoliEdge {
 		tags: EdgeTag[];
 	}) {
 		this.id = id;
+		this.label = label;
 		this.sourceId = sourceId;
 		this.targetId = targetId;
 		this.type = type;
-		this.payload = null;
 		this.tags = tags;
 		this.variables = variables;
+	}
+
+	logEdgeDetails() {
+		const sourceFormat = this.source
+			? `"${this.source.content.substring(0, 20)}..."`
+			: "None";
+		const targetFormat = this.target
+			? `"${this.target.content.substring(0, 20)}..."`
+			: "None";
+		const crossingGroupsFormat =
+			this.crossingGroups.length > 0
+				? this.crossingGroups
+						.map(
+							(group) =>
+								`\n\tCrossing Group: "${
+									group.group.label
+										? group.group.label.substring(0, 20)
+										: "No Label"
+								}..."`
+						)
+						.join("")
+				: "\n\tCrossing Groups: None";
+		const variablesFormat =
+			this.variables.length > 0
+				? this.variables
+						.map((variable) => `\n\tVariable: "${variable.name}"`)
+						.join("")
+				: "\n\tVariables: None";
+		const tagsFormat =
+			this.tags.length > 0
+				? this.tags.map((tag) => `\n\tTag: "${tag}"`).join("")
+				: "\n\tTags: None";
+
+		const logString = `Edge: ${sourceFormat}----${this.label}---->${targetFormat} (Type: ${this.type}, Subtype: ${this.subtype}), ${variablesFormat}, ${crossingGroupsFormat} , ${tagsFormat}`;
+
+		console.log(logString);
 	}
 
 	setSourceAndTarget(nodes: Record<string, CannoliNode>) {
 		this.source = nodes[this.sourceId];
 		this.target = nodes[this.targetId];
 	}
-
-	setPayload(payload: ChatCompletionRequestMessage[] | string | null) {
-		this.payload = payload;
-	}
-
-	getPayload(): ChatCompletionRequestMessage[] | string | null {
-		return this.payload;
-	}
 }
 
-type GroupType = "basic" | "choice" | "list";
+type GroupType = "basic" | "list";
 
 class CannoliGroup {
 	id: string;
+	label: string;
 	nodes: CannoliNode[];
 	incomingEdges: CannoliEdge[];
 	outgoingEdges: CannoliEdge[];
 	maxLoops: number;
-	choiceString: string | null;
 	type: GroupType;
 	childGroupIds: string[];
 	parentGroups: CannoliGroup[]; // ordered set of groups, from bottom level (smallest) to top level (biggest)
@@ -1565,31 +1621,102 @@ class CannoliGroup {
 
 	constructor({
 		id,
+		label,
 		nodes,
 		incomingEdges,
 		outgoingEdges,
 		maxLoops,
-		choiceString,
 		type,
 		childGroupIds,
 	}: {
 		id: string;
+		label: string;
 		nodes: CannoliNode[];
 		incomingEdges: CannoliEdge[];
 		outgoingEdges: CannoliEdge[];
 		maxLoops: number;
-		choiceString: string | null;
 		type: GroupType;
 		childGroupIds: string[];
 	}) {
 		this.id = id;
+		this.label = label;
 		this.nodes = nodes;
 		this.incomingEdges = incomingEdges;
 		this.outgoingEdges = outgoingEdges;
 		this.maxLoops = maxLoops;
-		this.choiceString = choiceString;
 		this.type = type;
 		this.childGroupIds = childGroupIds;
+	}
+
+	logGroupDetails() {
+		const nodesFormat =
+			this.nodes.length > 0
+				? this.nodes
+						.map(
+							(node) =>
+								`\n\tNode: "${node.content.substring(
+									0,
+									20
+								)}..."`
+						)
+						.join("")
+				: "\n\tNodes: None";
+		const incomingEdgesFormat =
+			this.incomingEdges.length > 0
+				? this.incomingEdges
+						.map(
+							(edge) =>
+								`\n\tIncoming Edge: "${
+									edge.label
+										? edge.label.substring(0, 20)
+										: "No Label"
+								}..."`
+						)
+						.join("")
+				: "\n\tIncoming Edges: None";
+		const outgoingEdgesFormat =
+			this.outgoingEdges.length > 0
+				? this.outgoingEdges
+						.map(
+							(edge) =>
+								`\n\tOutgoing Edge: "${
+									edge.label
+										? edge.label.substring(0, 20)
+										: "No Label"
+								}..."`
+						)
+						.join("")
+				: "\n\tOutgoing Edges: None";
+		const parentGroupsFormat =
+			this.parentGroups.length > 0
+				? this.parentGroups
+						.map(
+							(group) =>
+								`\n\tParent Group: "${
+									group.label
+										? group.label.substring(0, 20)
+										: "No Label"
+								}..."`
+						)
+						.join("")
+				: "\n\tParent Groups: None";
+		const childGroupsFormat =
+			this.childGroups.length > 0
+				? this.childGroups
+						.map(
+							(group) =>
+								`\n\tChild Group: "${
+									group.label
+										? group.label.substring(0, 20)
+										: "No Label"
+								}..."`
+						)
+						.join("")
+				: "\n\tChild Groups: None";
+
+		const logString = `Group: MaxLoops: ${this.maxLoops}, (Type: ${this.type}), ${nodesFormat}, ${incomingEdgesFormat}, ${outgoingEdgesFormat}, ${parentGroupsFormat}, ${childGroupsFormat}`;
+
+		console.log(logString);
 	}
 
 	setChildGroups(groups: Record<string, CannoliGroup>) {
@@ -1649,98 +1776,98 @@ class CannoliGroup {
 	}
 }
 
-function isDAG(
-	node: CannoliNode,
-	visited: Set<CannoliNode>,
-	recursionStack: Set<CannoliNode>,
-	nodes: Record<string, CannoliNode>
-): boolean {
-	visited.add(node);
-	recursionStack.add(node);
+// function isDAG(
+// 	node: CannoliNode,
+// 	visited: Set<CannoliNode>,
+// 	recursionStack: Set<CannoliNode>,
+// 	nodes: Record<string, CannoliNode>
+// ): boolean {
+// 	visited.add(node);
+// 	recursionStack.add(node);
 
-	for (const edge of node.outgoingEdges) {
-		const adjacentNode = edge.getTarget(nodes);
-		if (!visited.has(adjacentNode)) {
-			if (isDAG(adjacentNode, visited, recursionStack, nodes))
-				return true;
-		} else if (recursionStack.has(adjacentNode)) {
-			return true;
-		}
-	}
+// 	for (const edge of node.outgoingEdges) {
+// 		const adjacentNode = edge.target;
+// 		if (!visited.has(adjacentNode)) {
+// 			if (isDAG(adjacentNode, visited, recursionStack, nodes))
+// 				return true;
+// 		} else if (recursionStack.has(adjacentNode)) {
+// 			return true;
+// 		}
+// 	}
 
-	recursionStack.delete(node);
-	return false;
-}
+// 	recursionStack.delete(node);
+// 	return false;
+// }
 
-// Search the input string for the first instance of a valid page name surrounded by braces, and return it, or return null if none is found
-async function ensurePageExists(
-	maybePageName: string,
-	vault: Vault
-): Promise<string | null> {
-	// Look for instances of [[pageName]]
-	const pageNameMatches = maybePageName.match(/\[\[.*?\]\]/g) || [];
+// // Search the input string for the first instance of a valid page name surrounded by braces, and return it, or return null if none is found
+// async function ensurePageExists(
+// 	maybePageName: string,
+// 	vault: Vault
+// ): Promise<string | null> {
+// 	// Look for instances of [[pageName]]
+// 	const pageNameMatches = maybePageName.match(/\[\[.*?\]\]/g) || [];
 
-	// Initialize a variable to hold the found page
-	let foundPage = null;
+// 	// Initialize a variable to hold the found page
+// 	let foundPage = null;
 
-	// Loop through each match
-	for (const match of pageNameMatches) {
-		// Remove [[ and ]]
-		const pageName = match.slice(2, -2);
+// 	// Loop through each match
+// 	for (const match of pageNameMatches) {
+// 		// Remove [[ and ]]
+// 		const pageName = match.slice(2, -2);
 
-		// Look for a markdown file with a matching basename
-		const page = vault
-			.getMarkdownFiles()
-			.find((file) => file.basename === pageName);
+// 		// Look for a markdown file with a matching basename
+// 		const page = vault
+// 			.getMarkdownFiles()
+// 			.find((file) => file.basename === pageName);
 
-		// If a page was found, store its original name (with brackets) and break the loop
-		if (page) {
-			foundPage = match; // match still has the brackets
-			break;
-		}
-	}
+// 		// If a page was found, store its original name (with brackets) and break the loop
+// 		if (page) {
+// 			foundPage = match; // match still has the brackets
+// 			break;
+// 		}
+// 	}
 
-	// Return the found page's name (with brackets), or null if none was found
-	return foundPage;
-}
+// 	// Return the found page's name (with brackets), or null if none was found
+// 	return foundPage;
+// }
 
-async function llmCall({
-	messages,
-	openai,
-	model = "gpt-3.5-turbo",
-	max_tokens = 300,
-	n = 1,
-	temperature = 0.8,
-	verbose = false,
-}: {
-	messages: ChatCompletionRequestMessage[];
-	openai: OpenAIApi;
-	model?: string;
-	max_tokens?: number;
-	n?: number;
-	temperature?: number;
-	verbose?: boolean;
-}) {
-	if (verbose) {
-		// Log out input chat messages raw, with good indentation
-		console.log("Input Messages:\n" + JSON.stringify(messages, null, 2));
-	}
+// async function llmCall({
+// 	messages,
+// 	openai,
+// 	model = "gpt-3.5-turbo",
+// 	max_tokens = 300,
+// 	n = 1,
+// 	temperature = 0.8,
+// 	verbose = false,
+// }: {
+// 	messages: ChatCompletionRequestMessage[];
+// 	openai: OpenAIApi;
+// 	model?: string;
+// 	max_tokens?: number;
+// 	n?: number;
+// 	temperature?: number;
+// 	verbose?: boolean;
+// }) {
+// 	if (verbose) {
+// 		// Log out input chat messages raw, with good indentation
+// 		console.log("Input Messages:\n" + JSON.stringify(messages, null, 2));
+// 	}
 
-	const chatResponse = await openai.createChatCompletion({
-		messages,
-		model,
-		max_tokens,
-		temperature,
-		n,
-	});
+// 	const chatResponse = await openai.createChatCompletion({
+// 		messages,
+// 		model,
+// 		max_tokens,
+// 		temperature,
+// 		n,
+// 	});
 
-	if (verbose) {
-		// Log out the response message raw, with good indentation
-		console.log(
-			"Response Message:\n" +
-				JSON.stringify(chatResponse.data.choices[0].message, null, 2)
-		);
-	}
+// 	if (verbose) {
+// 		// Log out the response message raw, with good indentation
+// 		console.log(
+// 			"Response Message:\n" +
+// 				JSON.stringify(chatResponse.data.choices[0].message, null, 2)
+// 		);
+// 	}
 
-	return chatResponse.data.choices[0].message;
-}
+// 	return chatResponse.data.choices[0].message;
+// }

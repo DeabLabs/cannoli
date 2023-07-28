@@ -6,7 +6,7 @@ import {
 	PluginSettingTab,
 	Setting,
 } from "obsidian";
-import { startCannoli } from "src/cannoli";
+import { CannoliGraph } from "src/cannoli";
 
 // Remember to rename these classes and interfaces!
 
@@ -48,16 +48,16 @@ export default class Cannoli extends Plugin {
 
 		// add a button to the dom to trigger cannoli
 		setTimeout(() => {
-			this.app.workspace.containerEl.createEl("button", {
-				text: "Start Cannoli",
-				cls: "cannoli-button",
-			}).addEventListener("click", this.startCannoli)
-		}, 250)
-		
+			this.app.workspace.containerEl
+				.createEl("button", {
+					text: "Start Cannoli",
+					cls: "cannoli-button",
+				})
+				.addEventListener("click", this.startCannoli);
+		}, 250);
 	}
 
-	onunload() {
-	}
+	onunload() {}
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -82,16 +82,19 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		// Call the function from cannoli.ts with the active file, the API key and the vault
-		await startCannoli(
+		// Create a Cannoli object and initialize it
+		const cannoli = new CannoliGraph(
 			activeFile,
 			this.settings.openaiAPIKey,
 			this.app.vault
 		);
 
+		// Initialize the graph
+		await cannoli.initialize(true);
+
 		// Send notice containing active file name
 		new Notice(`Starting Cannoli on ${activeFile.path}`);
-	}
+	};
 }
 
 // class SampleModal extends Modal {
