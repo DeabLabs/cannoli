@@ -483,14 +483,15 @@ class Canvas {
 				node.content.endsWith("]")
 			) {
 				return "reference";
-			}
-			// If it contains any variable references of the format {variable} or {{variable}}, and they are all valid, it's a formatter node
-			else if (node.content.includes("{") && node.content.includes("}")) {
+			} else if (
+				node.content.includes("{") &&
+				node.content.includes("}")
+			) {
 				const regex = /{{?([^{}]+)}}?/g;
 
 				let match;
-				let allVariablesFound = true; // Initial flag
-				const attemptedVariableMatch = true; // Set flag to true to indicate a match was attempted
+				const variablesNotFound = []; // Array to track variables not found
+
 				while ((match = regex.exec(node.content)) !== null) {
 					const matchedVariable = match[1];
 
@@ -506,16 +507,22 @@ class Canvas {
 					});
 
 					if (!hasVariable) {
-						allVariablesFound = false; // Set flag to false if variable is not found
-						break;
+						variablesNotFound.push(matchedVariable); // Add the variable to the not found array
 					}
 				}
 
-				if (allVariablesFound) {
+				if (variablesNotFound.length > 0) {
+					// If there are any variables not found, throw an error
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${
+							node.id
+						} has missing variables in incoming edges: ${variablesNotFound.join(
+							", "
+						)}`
+					);
+				} else {
 					// If all variables are found, return "formatter"
 					return "formatter";
-				} else if (attemptedVariableMatch) {
-					return "normal";
 				}
 			}
 
