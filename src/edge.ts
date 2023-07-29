@@ -374,17 +374,7 @@ export class CannoliEdge {
 		switch (this.subtype) {
 			case "list":
 				break;
-			case "listGroup":
-				// It must be entering a group
-				if (
-					this.crossingGroups.every(
-						(crossingGroup) => !crossingGroup.isEntering
-					)
-				) {
-					throw new Error(
-						`Edge ${this.id} is a listGroup edge but is not entering a group`
-					);
-				}
+			case "listGroup": {
 				// All of its source node's outgoing list edges must be listGroup edges
 				if (
 					this.source.outgoingEdges
@@ -393,6 +383,35 @@ export class CannoliEdge {
 				) {
 					throw new Error(
 						`Edge ${this.id} is a listGroup edge but its source node has a list edge that is not a listGroup edge`
+					);
+				}
+
+				// At least one of its source node's outgoing edges must be a listGroup edge that crosses a listGroup and no other groups
+				if (
+					!this.source.outgoingEdges
+						.filter((edge) => edge.subtype === "listGroup")
+						.some(
+							(edge) =>
+								edge.crossingGroups.length === 1 &&
+								edge.crossingGroups[0].group.type === "list"
+						)
+				) {
+					throw new Error(
+						`Edge ${this.id} is a listGroup edge but its source node has no listGroup edges that cross a listGroup`
+					);
+				}
+
+				// All of its source node's outgoing edges that are listGroup edges that cross groups must have the same first crossing group
+				const firstCrossingGroups = this.source.outgoingEdges
+					.filter((edge) => edge.subtype === "listGroup")
+					.map((edge) => edge.crossingGroups[0].group);
+				if (
+					!firstCrossingGroups.every(
+						(group) => group === firstCrossingGroups[0]
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is a listGroup edge but its source node has listGroup edges that cross different groups`
 					);
 				}
 
@@ -407,19 +426,12 @@ export class CannoliEdge {
 								this.variables[0].name
 						)
 				) {
-					// Logging
-					console.log(
-						this.source.outgoingEdges
-							.filter((edge) => edge.subtype === "listGroup")
-							.map((edge) => edge.variables[0].name)
-					);
-					console.log(this.variables[0].name);
-
 					throw new Error(
 						`Edge ${this.id} is a listGroup edge but its first variable is not the only variable coming out of its source node`
 					);
 				}
 				break;
+			}
 			case "select":
 				// It must be exiting a group
 				if (

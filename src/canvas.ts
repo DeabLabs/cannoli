@@ -235,7 +235,7 @@ export class Canvas {
 
 		// For each edge in the edges object, set the leaving and entering groups and the subtype
 		for (const edge of Object.values(edges)) {
-			edge.crossingGroups = this.computeCrossingGroups(edge, groups);
+			edge.crossingGroups = this.computeCrossingGroups(edge);
 			edge.subtype = this.findEdgeSubtype(edge);
 		}
 
@@ -392,34 +392,28 @@ export class Canvas {
 		// Initialize the maxLoops, choiceString, and type variables
 		let maxLoops = 0;
 		let type: GroupType = "basic";
+		let isListGroup = false; // Initialize as false
 
-		if (incomingEdges.some((edge) => edge.type === "list")) {
-			let isListGroup = true;
-
-			for (const edge of incomingEdges.filter(
-				(edge) => edge.type === "list"
-			)) {
-				for (const outgoingEdge of edge.source.outgoingEdges.filter(
-					(edge) => edge.type === "list"
-				)) {
-					if (
-						outgoingEdge.variables.length !== 1 ||
-						outgoingEdge.variables[0].name !==
+		for (const edge of incomingEdges.filter(
+			(edge) => edge.type === "list"
+		)) {
+			const allOutgoingHaveSameVariable = edge.source.outgoingEdges
+				.filter((edge) => edge.type === "list")
+				.every(
+					(outgoingEdge) =>
+						outgoingEdge.variables.length === 1 &&
+						outgoingEdge.variables[0].name ===
 							edge.variables[0].name
-					) {
-						isListGroup = false;
-						break;
-					}
-				}
+				);
 
-				if (!isListGroup) {
-					break;
-				}
+			if (allOutgoingHaveSameVariable) {
+				isListGroup = true;
+				break;
 			}
+		}
 
-			if (isListGroup) {
-				type = "list";
-			}
+		if (isListGroup) {
+			type = "list";
 		}
 
 		// If the group has a label
@@ -546,29 +540,42 @@ export class Canvas {
 			) {
 				// It's a select edge
 				return "select";
-			}
-			// If the edge is entering a group
-			else if (edge.crossingGroups.find((group) => group.isEntering)) {
-				// If all the ougoing list edges of the source node have the same variable
-				if (
-					edge.source.outgoingEdges
-						.filter((edge) => edge.type === "list")
-						.every(
-							(edge) =>
-								edge.variables.length === 1 &&
-								edge.variables[0].name ===
-									edge.source.outgoingEdges[0].variables[0]
-										.name
-						)
-				) {
-					// It's a listGroup edge
+			} else if (
+				edge.crossingGroups &&
+				edge.crossingGroups.find((group) => group.isEntering)
+			) {
+				// Extract the outgoing edges which are of type "list"
+				const listOutgoingEdges = edge.source.outgoingEdges.filter(
+					(edge) => edge.type === "list"
+				);
+
+				// Check for each outgoing edge
+				const hasListGroupEdge = listOutgoingEdges.some((outEdge) => {
+					// Ensure crossingGroups property is defined and non-empty
+					if (
+						outEdge.crossingGroups &&
+						outEdge.crossingGroups.length > 0
+					) {
+						// Find if any crossing group satisfies the condition
+						const crossingGroupFound = outEdge.crossingGroups.find(
+							(group) =>
+								group.isEntering &&
+								group.group.type === "list" &&
+								outEdge.crossingGroups.length === 1
+						);
+						// Return true if a group was found that satisfies the conditions
+						return Boolean(crossingGroupFound);
+					}
+					// If no crossingGroups or it is empty, return false
+					return false;
+				});
+
+				if (hasListGroupEdge) {
 					return "listGroup";
 				} else {
-					// It's a list edge
 					return "list";
 				}
 			} else {
-				// It's a list edge
 				return "list";
 			}
 		}
@@ -620,10 +627,6 @@ export class Canvas {
 				nodes,
 				node.cannoli,
 				true
-			);
-
-			console.log(
-				`The node with content ${node.content} has ${validReferencesCount} valid references.`
 			);
 
 			// If its content is just a link of the format [[link]], or [link], it's a reference node
@@ -837,57 +840,138 @@ export class Canvas {
 	}
 
 	computeCrossingGroups(
-		edge: CannoliEdge,
-		groups: Record<string, CannoliGroup>
+		edge: CannoliEdge
 	): { group: CannoliGroup; isEntering: boolean }[] {
+		// Initialize an empty array to store the groups the edge crosses
 		const crossingGroups: { group: CannoliGroup; isEntering: boolean }[] =
 			[];
 
-		let currentGroup: CannoliGroup | null = edge.source.group;
+		// Start with the parent groups of the source and target nodes
+		let sourceGroup: CannoliGroup | null = edge.source?.group || null;
+		let targetGroup: CannoliGroup | null = edge.target?.group || null;
 
-		// If the source node isn't in a group, start from the target node's group
-		if (!currentGroup) {
-			currentGroup = edge.target.group;
-
-			if (currentGroup) {
-				crossingGroups.push({ group: currentGroup, isEntering: true });
+		// If both nodes have groups
+		if (sourceGroup && targetGroup) {
+			// If the source and target nodes belong to the same group, the edge doesn't cross any group boundaries
+			if (sourceGroup === targetGroup) {
+				return [];
 			}
-		} else {
-			// Step 2 to 4: Traverse up the group hierarchy from the source node
-			while (currentGroup && !currentGroup.hasNode(edge.target.id)) {
-				crossingGroups.push({ group: currentGroup, isEntering: false });
-				currentGroup =
-					currentGroup.parentGroups.length > 0
-						? currentGroup.parentGroups[0]
-						: null;
-			}
-
-			// Step 5: If a group was found that contains the target node, traverse down to the target node
-			if (currentGroup) {
-				let childGroups = [...currentGroup.childGroups];
-
-				while (childGroups.length > 0) {
-					const childGroup = childGroups.pop();
-
-					if (!childGroup) continue;
-
-					// If the child group contains the target node, traverse into it
-					if (childGroup.hasNode(edge.target.id)) {
-						crossingGroups.push({
-							group: childGroup,
-							isEntering: true,
-						});
-						childGroups = [...childGroup.childGroups];
-					}
+			// If the source group is a parent of the target group, the edge enters the groups from the target group up to (but not including) the source group
+			else if (targetGroup.parentGroups.includes(sourceGroup)) {
+				while (targetGroup && targetGroup !== sourceGroup) {
+					crossingGroups.push({
+						group: targetGroup,
+						isEntering: true,
+					});
+					targetGroup =
+						targetGroup.parentGroups &&
+						targetGroup.parentGroups.length > 0
+							? targetGroup.parentGroups[
+									targetGroup.parentGroups.length - 1
+									// eslint-disable-next-line no-mixed-spaces-and-tabs
+							  ]
+							: null;
 				}
 			}
+			// If the target group is a parent of the source group, the edge exits the groups from the source group up to (but not including) the target group
+			else if (sourceGroup.parentGroups.includes(targetGroup)) {
+				while (sourceGroup && sourceGroup !== targetGroup) {
+					crossingGroups.push({
+						group: sourceGroup,
+						isEntering: false,
+					});
+					sourceGroup =
+						sourceGroup.parentGroups &&
+						sourceGroup.parentGroups.length > 0
+							? sourceGroup.parentGroups[
+									sourceGroup.parentGroups.length - 1
+									// eslint-disable-next-line no-mixed-spaces-and-tabs
+							  ]
+							: null;
+				}
+			}
+			// If source group and target group are different and neither is a parent of the other, we find the common group and exit groups from source to it, then enter groups from target to it
+			else {
+				// Find the deepest common parent group
+				let commonGroup: CannoliGroup | null = null;
+				for (const group of sourceGroup.parentGroups
+					.slice()
+					.reverse()) {
+					// Check if the group is also a parent group of the target node
+					if (targetGroup.parentGroups.includes(group)) {
+						commonGroup = group;
+						break;
+					}
+				}
 
-			// If the target node isn't in a group, then the edge is leaving the final group
-			if (!edge.target.group && crossingGroups.length > 0) {
-				crossingGroups[crossingGroups.length - 1].isEntering = false;
+				// Exit groups from source to the common group
+				while (sourceGroup && sourceGroup !== commonGroup) {
+					crossingGroups.push({
+						group: sourceGroup,
+						isEntering: false,
+					});
+					sourceGroup =
+						sourceGroup.parentGroups &&
+						sourceGroup.parentGroups.length > 0
+							? sourceGroup.parentGroups[
+									sourceGroup.parentGroups.length - 1
+									// eslint-disable-next-line no-mixed-spaces-and-tabs
+							  ]
+							: null;
+				}
+
+				// Enter groups from target to the common group
+				while (targetGroup && targetGroup !== commonGroup) {
+					crossingGroups.push({
+						group: targetGroup,
+						isEntering: true,
+					});
+					targetGroup =
+						targetGroup.parentGroups &&
+						targetGroup.parentGroups.length > 0
+							? targetGroup.parentGroups[
+									targetGroup.parentGroups.length - 1
+									// eslint-disable-next-line no-mixed-spaces-and-tabs
+							  ]
+							: null;
+				}
 			}
 		}
 
+		// If the source node has a group but the target node doesn't, the edge is leaving the source node's group
+		else if (sourceGroup && !targetGroup) {
+			while (sourceGroup) {
+				crossingGroups.push({ group: sourceGroup, isEntering: false });
+				sourceGroup =
+					sourceGroup.parentGroups &&
+					sourceGroup.parentGroups.length > 0
+						? sourceGroup.parentGroups[
+								sourceGroup.parentGroups.length - 1
+								// eslint-disable-next-line no-mixed-spaces-and-tabs
+						  ]
+						: null;
+			}
+		}
+
+		// If the target node has a group but the source node doesn't, the edge is entering the target node's group
+		else if (targetGroup && !sourceGroup) {
+			while (targetGroup) {
+				crossingGroups.unshift({
+					group: targetGroup,
+					isEntering: true,
+				});
+				targetGroup =
+					targetGroup.parentGroups &&
+					targetGroup.parentGroups.length > 0
+						? targetGroup.parentGroups[
+								targetGroup.parentGroups.length - 1
+								// eslint-disable-next-line no-mixed-spaces-and-tabs
+						  ]
+						: null;
+			}
+		}
+
+		// Return the crossingGroups array
 		return crossingGroups;
 	}
 
