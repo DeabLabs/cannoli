@@ -35,6 +35,7 @@ export class Canvas {
 	canvasData: CanvasData;
 	subCanvasGroupId?: string;
 	cannoli: CannoliGraph;
+	editQueue: Promise<unknown>;
 
 	constructor(
 		canvasFile: TFile,
@@ -44,6 +45,8 @@ export class Canvas {
 		this.canvasFile = canvasFile;
 		this.subCanvasGroupId = subCanvasGroupId;
 		this.cannoli = cannoli;
+
+		this.editQueue = Promise.resolve();
 	}
 
 	async fetchData() {
@@ -71,6 +74,14 @@ export class Canvas {
 		}
 
 		this.canvasData = parsedContent;
+	}
+
+	async editCanvasFile(newContent: string) {
+		// Push the edit operation to the queue
+		this.editQueue = this.editQueue.then(() =>
+			this.canvasFile.vault.modify(this.canvasFile, newContent)
+		);
+		return this.editQueue;
 	}
 
 	getNodesAndEdgesInGroup(group: CanvasGroupData): {

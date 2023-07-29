@@ -5,10 +5,29 @@ import { Canvas } from "./canvas";
 import { CannoliGroup } from "./group";
 import { CannoliNode } from "./node";
 import { CannoliEdge } from "./edge";
+
+import pLimit from "p-limit";
+import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
+
+interface Limit {
+	(
+		fn: () => Promise<{
+			message: ChatCompletionRequestMessage;
+			promptTokens: number;
+			completionTokens: number;
+		}>
+	): Promise<{
+		message: ChatCompletionRequestMessage;
+		promptTokens: number;
+		completionTokens: number;
+	}>;
+}
+
 export class CannoliGraph {
 	canvas: Canvas;
 	apiKey: string;
 	openai: OpenAIApi;
+	limit: Limit;
 	vault: Vault;
 	groups: Record<string, CannoliGroup>;
 	nodes: Record<string, CannoliNode>;
@@ -27,6 +46,10 @@ export class CannoliGraph {
 
 		// Create an instance of OpenAI
 		this.openai = new OpenAIApi(configuration);
+
+		// Limit the number of concurrent requests to 10
+		// Adjust this number as needed
+		this.limit = pLimit(10);
 	}
 
 	async initialize(verbose = false) {
@@ -78,6 +101,226 @@ export class CannoliGraph {
 		// Call logGroupDetails() on each group
 		for (const group of Object.values(this.groups)) {
 			group.logGroupDetails();
+		}
+	}
+
+	async editNote(
+		noteName: string,
+		newContent: string,
+		verbose = false
+	): Promise<boolean> {
+		// Get the note
+		const note = this.vault.getMarkdownFiles().find((file) => {
+			return file.basename === noteName;
+		});
+
+		if (!note) {
+			return false;
+		}
+
+		// Update the note's content
+		await this.vault.modify(note, newContent);
+
+		if (verbose) {
+			console.log(`Note "${noteName}" updated`);
+		}
+
+		return true;
+	}
+
+	async createNoteAtExistingPath(
+		noteName: string,
+		path: string,
+		content?: string,
+		verbose = false
+	): Promise<boolean> {
+		// Create the path by appending the note name to the path with .md
+		const fullPath = `${path}/${noteName}.md`;
+
+		// Check if a note already exists at the path
+		const note = this.vault.getMarkdownFiles().find((file) => {
+			return file.path === fullPath;
+		});
+
+		if (note) {
+			return false;
+		}
+
+		// Create the note
+		await this.vault.create(fullPath, content ?? "");
+
+		if (verbose) {
+			console.log(`Note "${noteName}" created at path "${fullPath}"`);
+		}
+
+		return true;
+	}
+
+	async createNoteAtNewPath(
+		noteName: string,
+		path: string,
+		content?: string,
+		verbose = false
+	): Promise<boolean> {
+		// Create the path by appending the note name to the path with .md
+		const fullPath = `${path}/${noteName}.md`;
+
+		// Create the note
+		await this.vault.create(fullPath, content ?? "");
+
+		if (verbose) {
+			console.log(`Note "${noteName}" created at path "${fullPath}"`);
+		}
+
+		return true;
+	}
+
+	async createFolder(path: string, verbose = false): Promise<boolean> {
+		// Check if the path already exists
+		const folder = this.vault.getAbstractFileByPath(path);
+
+		if (folder) {
+			return false;
+		}
+
+		// Create the folder
+		this.vault.createFolder(path);
+
+		if (verbose) {
+			console.log(`Folder created at path "${path}"`);
+		}
+
+		return true;
+	}
+
+	async moveNote(
+		noteName: string,
+		oldPath: string,
+		newPath: string,
+		verbose = false
+	): Promise<boolean> {
+		// Create the paths by appending the note name to the paths with .md
+		const oldFullPath = `${oldPath}/${noteName}.md`;
+		const newFullPath = `${newPath}/${noteName}.md`;
+
+		// Get the note
+		const note = this.vault.getMarkdownFiles().find((file) => {
+			return file.path === oldFullPath;
+		});
+
+		if (!note) {
+			return false;
+		}
+
+		// Move the note
+		await this.vault.rename(note, newFullPath);
+
+		if (verbose) {
+			console.log(
+				`Note "${noteName}" moved from path "${oldFullPath}" to path "${newFullPath}"`
+			);
+		}
+
+		return true;
+	}
+
+	async llmCall({
+		messages,
+		model = "gpt-3.5-turbo",
+		max_tokens = 300,
+		n = 1,
+		temperature = 0.8,
+		verbose = false,
+		mock = false,
+	}: {
+		messages: ChatCompletionRequestMessage[];
+		model?: TiktokenModel;
+		max_tokens?: number;
+		n?: number;
+		temperature?: number;
+		verbose?: boolean;
+		mock?: boolean;
+	}): Promise<{
+		message: ChatCompletionRequestMessage;
+		promptTokens: number;
+		completionTokens: number;
+	}> {
+		if (mock) {
+			const enc = encoding_for_model(model);
+
+			let textMessages = "";
+
+			// For each message, convert it to a string, including the role and the content, and a function call if present
+			for (const message of messages) {
+				if (message.function_call) {
+					textMessages += `${message.role}: ${message.content} ${message.function_call} `;
+				} else {
+					textMessages += `${message.role}: ${message.content} `;
+				}
+			}
+
+			const encoded = enc.encode(textMessages);
+
+			const promptTokens = encoded.length;
+
+			return {
+				message: { role: "user", content: "mock" },
+				promptTokens: promptTokens,
+				completionTokens: 0,
+			};
+		} else {
+			return this.limit(
+				async (): Promise<{
+					message: ChatCompletionRequestMessage;
+					promptTokens: number;
+					completionTokens: number;
+				}> => {
+					if (verbose) {
+						console.log(
+							"Input Messages:\n" +
+								JSON.stringify(messages, null, 2)
+						);
+					}
+
+					const chatResponse = await this.openai.createChatCompletion(
+						{
+							messages,
+							model,
+							max_tokens,
+							temperature,
+							n,
+						}
+					);
+
+					if (verbose) {
+						console.log(
+							"Response Message:\n" +
+								JSON.stringify(
+									chatResponse.data.choices[0].message,
+									null,
+									2
+								)
+						);
+					}
+
+					if (
+						!chatResponse.data.choices[0].message ||
+						!chatResponse.data.usage
+					) {
+						throw new Error(
+							"OpenAI returned an error: " +
+								chatResponse.data.choices[0].message
+						);
+					}
+
+					return {
+						message: chatResponse.data.choices[0].message,
+						promptTokens: chatResponse.data.usage?.prompt_tokens,
+						completionTokens:
+							chatResponse.data.usage?.completion_tokens,
+					};
+				}
+			);
 		}
 	}
 }
@@ -223,44 +466,3 @@ function isDAGHelper(
 // 	// Return the found page's name (with brackets), or null if none was found
 // 	return foundPage;
 // }
-
-export async function llmCall({
-	messages,
-	openai,
-	model = "gpt-3.5-turbo",
-	max_tokens = 300,
-	n = 1,
-	temperature = 0.8,
-	verbose = false,
-}: {
-	messages: ChatCompletionRequestMessage[];
-	openai: OpenAIApi;
-	model?: string;
-	max_tokens?: number;
-	n?: number;
-	temperature?: number;
-	verbose?: boolean;
-}) {
-	if (verbose) {
-		// Log out input chat messages raw, with good indentation
-		console.log("Input Messages:\n" + JSON.stringify(messages, null, 2));
-	}
-
-	const chatResponse = await openai.createChatCompletion({
-		messages,
-		model,
-		max_tokens,
-		temperature,
-		n,
-	});
-
-	if (verbose) {
-		// Log out the response message raw, with good indentation
-		console.log(
-			"Response Message:\n" +
-				JSON.stringify(chatResponse.data.choices[0].message, null, 2)
-		);
-	}
-
-	return chatResponse.data.choices[0].message;
-}
