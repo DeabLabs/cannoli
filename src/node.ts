@@ -150,9 +150,23 @@ export class CannoliNode {
 			);
 		}
 
-		this.checkVariablesInContent(
+		// Disallow multiple incoming edges of subtype continueChat or have the continueChat tag
+		if (
+			this.incomingEdges.filter(
+				(edge) =>
+					edge.subtype === "continueChat" ||
+					edge.tags.includes("continueChat")
+			).length > 1
+		) {
+			throw new Error(
+				`Invalid Cannoli layout: Node with id ${this.id} has multiple incoming edges of subtype "continueChat"`
+			);
+		}
+
+		checkVariablesInContent(
 			this.content,
 			incomingVariables,
+			this.cannoli.nodes,
 			this.cannoli
 		);
 
@@ -395,9 +409,10 @@ export class CannoliNode {
 			}
 
 			case "formatter": {
-				this.checkVariablesInContent(
+				checkVariablesInContent(
 					this.content,
 					incomingVariables,
+					this.cannoli.nodes,
 					this.cannoli
 				);
 
@@ -449,65 +464,10 @@ export class CannoliNode {
 
 	validateFloating() {
 		// The first line of a floating node's content must have the format: [variable name]
-		if (!this.content.startsWith("[") || !this.content.endsWith("]")) {
+		const firstLine = this.content.split("\n")[0];
+		if (!firstLine.startsWith("[") || !firstLine.endsWith("]")) {
 			throw new Error(
 				`Floating node ${this.id} has invalid content: ${this.content}`
-			);
-		}
-	}
-
-	checkVariablesInContent(
-		content: string,
-		variables: Variable[],
-		cannoli: CannoliGraph
-	): void {
-		const regex = /{{\[\[([^{}]+)]]}}|{{\[(.+?)\]}}|{{(.+?)}}/g;
-		let match: RegExpExecArray | null;
-		const variablesNotFound = [];
-
-		while ((match = regex.exec(content)) !== null) {
-			if (match[1]) {
-				// Note reference
-				const noteName = match[1];
-				const note = cannoli.vault
-					.getMarkdownFiles()
-					.find((file) => file.basename === noteName);
-				if (!note) {
-					throw new Error(`Note ${noteName} not found`);
-				}
-			} else if (match[2]) {
-				// Floating variable reference
-				const varName = match[2];
-				const floatingNode = Object.values(cannoli.nodes).find(
-					(node) =>
-						node.type === "floating" &&
-						node.content.startsWith(varName)
-				);
-				if (!floatingNode) {
-					throw new Error(`Floating variable ${varName} not found`);
-				}
-			} else if (match[3]) {
-				// Regular variable
-				const variableExists = variables.some(
-					(variable) =>
-						// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-						variable.name === match![3]! &&
-						variable.type !== "choiceOption" &&
-						variable.type !== "config"
-				);
-
-				if (!variableExists) {
-					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-					variablesNotFound.push(match[3]!);
-				}
-			}
-		}
-
-		if (variablesNotFound.length > 0) {
-			throw new Error(
-				`Invalid Cannoli layout: Node has missing variables in incoming edges: ${variablesNotFound.join(
-					", "
-				)}`
 			);
 		}
 	}
@@ -998,4 +958,84 @@ export class CannoliNode {
 
 	// 	await this.vault.modify(this.canvasFile, JSON.stringify(canvasData));
 	// }
+}
+
+export function checkVariablesInContent(
+	content: string,
+	variables: Variable[],
+	nodes: Record<string, CannoliNode>,
+	cannoli: CannoliGraph,
+	suppressErrors = false // new parameter
+): number | void {
+	const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|{{(.+?)}}|{(.+?)}/g;
+
+	let match: RegExpExecArray | null;
+	const variablesNotFound = [];
+
+	let validReferencesCount = 0; // new variable
+
+	while ((match = regex.exec(content)) !== null) {
+		if (match[1]) {
+			// Note reference
+			const noteName = match[1];
+			const note = cannoli.vault
+				.getMarkdownFiles()
+				.find((file) => file.basename === noteName);
+			if (!note) {
+				if (suppressErrors) {
+					variablesNotFound.push(noteName);
+					continue;
+				} else {
+					throw new Error(`Note ${noteName} not found`);
+				}
+			}
+			validReferencesCount++;
+		} else if (match[2]) {
+			// Floating variable reference
+			const varName = match[2];
+			const floatingNodes = Object.values(nodes).filter(
+				(node) => node.type === "floating"
+			);
+			const floatingNode = floatingNodes.find((node) =>
+				node.content.startsWith(`[${varName}]`)
+			);
+			if (!floatingNode) {
+				if (suppressErrors) {
+					variablesNotFound.push(varName);
+					continue;
+				} else {
+					throw new Error(`Floating variable ${varName} not found`);
+				}
+			}
+			validReferencesCount++;
+		} else if (match[3] || match[4]) {
+			// Regular variable
+			const variableName = match[3] || match[4];
+			const variableExists = variables.some(
+				(variable) =>
+					variable.name === variableName &&
+					variable.type !== "choiceOption" &&
+					variable.type !== "config"
+			);
+
+			if (variableExists) {
+				validReferencesCount++; // Increment the count for valid reference
+			} else if (!suppressErrors) {
+				variablesNotFound.push(variableName);
+				throw new Error(
+					`Invalid Cannoli layout: Node has missing variables in incoming edges: ${variableName}`
+				);
+			}
+		}
+	}
+
+	if (suppressErrors) {
+		return validReferencesCount; // Return the count for valid references if suppressErrors is true
+	} else if (variablesNotFound.length > 0) {
+		throw new Error(
+			`Invalid Cannoli layout: Node has missing variables in incoming edges: ${variablesNotFound.join(
+				", "
+			)}`
+		);
+	}
 }

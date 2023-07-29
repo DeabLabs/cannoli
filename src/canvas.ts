@@ -14,6 +14,7 @@ import {
 	ContentSubtype,
 	FloatingSubtype,
 	NodeType,
+	checkVariablesInContent,
 } from "./node";
 import {
 	BlankSubtype,
@@ -240,7 +241,7 @@ export class Canvas {
 
 		// For each node in the nodes object, set the subtype
 		for (const node of Object.values(nodes)) {
-			node.subtype = this.findNodeSubtype(node);
+			node.subtype = this.findNodeSubtype(node, nodes);
 		}
 
 		// Return the groups, nodes, and edges objects
@@ -578,7 +579,8 @@ export class Canvas {
 	}
 
 	findNodeSubtype(
-		node: CannoliNode
+		node: CannoliNode,
+		nodes: Record<string, CannoliNode>
 	): CallSubtype | ContentSubtype | FloatingSubtype {
 		if (node.type === "floating") {
 			return "";
@@ -607,6 +609,23 @@ export class Canvas {
 				return "normal";
 			}
 		} else if (node.type === "content") {
+			// Put variables from all incoming edges into an array. Edges have the property "variables" which is an array of variables
+			const incomingVariables = node.incomingEdges.flatMap(
+				(edge) => edge.variables
+			);
+
+			const validReferencesCount = checkVariablesInContent(
+				node.content,
+				incomingVariables,
+				nodes,
+				node.cannoli,
+				true
+			);
+
+			console.log(
+				`The node with content ${node.content} has ${validReferencesCount} valid references.`
+			);
+
 			// If its content is just a link of the format [[link]], or [link], it's a reference node
 			if (node.content.startsWith("[[") && node.content.endsWith("]]")) {
 				return "reference";
@@ -616,45 +635,19 @@ export class Canvas {
 			) {
 				return "reference";
 			} else if (
-				node.content.includes("{") &&
-				node.content.includes("}")
+				// If there are any valid references in the content, they seem to intend for it to be a formatter node
+				validReferencesCount !== undefined &&
+				validReferencesCount > 0
 			) {
-				const regex = /{{?([^{}]+)}}?/g;
+				// Check if all references in the content are valid
+				checkVariablesInContent(
+					node.content,
+					incomingVariables,
+					nodes,
+					node.cannoli
+				);
 
-				let match;
-				const variablesNotFound = []; // Array to track variables not found
-
-				while ((match = regex.exec(node.content)) !== null) {
-					const matchedVariable = match[1];
-
-					// Use some() to check if any edge has the variable
-					const hasVariable = node.incomingEdges.some((edge) => {
-						const variableExists = edge.variables.some(
-							(variable) =>
-								variable.name === matchedVariable &&
-								variable.type !== "choiceOption"
-						);
-						return variableExists;
-					});
-
-					if (!hasVariable) {
-						variablesNotFound.push(matchedVariable); // Add the variable to the not found array
-					}
-				}
-
-				if (variablesNotFound.length > 0) {
-					// If there are any variables not found, throw an error
-					throw new Error(
-						`Invalid Cannoli layout: Node with id ${
-							node.id
-						} has missing variables in incoming edges: ${variablesNotFound.join(
-							", "
-						)}`
-					);
-				} else {
-					// If all variables are found, return "formatter"
-					return "formatter";
-				}
+				return "formatter";
 			}
 
 			// If it has any incoming edges that contain any variables that are newLink, existingLink, newPath, or existingPath, it's a vault node
@@ -896,6 +889,69 @@ export class Canvas {
 		}
 
 		return crossingGroups;
+	}
+
+	containsValidReferences(
+		content: string,
+		variables: Variable[],
+		cannoli: CannoliGraph
+	): boolean {
+		const regex = /{{(.+?)}}|{(.+?)}|{\[\[(.+?)\]\]}|{\[(.+?)\]}/g;
+		let match;
+
+		while ((match = regex.exec(content)) !== null) {
+			console.log("Match found: ", match);
+
+			if (match[3]) {
+				// Note reference
+				const noteName = match[3];
+				console.log("Checking for note reference: ", noteName);
+				const note = cannoli.vault
+					.getMarkdownFiles()
+					.find((file) => file.basename === noteName);
+				if (note) {
+					console.log("Note found: ", note);
+					return true;
+				} else {
+					console.log("Note not found.");
+				}
+			} else if (match[4]) {
+				// Floating variable reference
+				const varName = match[4];
+				console.log("Checking for floating variable: ", varName);
+				const floatingNode = Object.values(cannoli.nodes).find(
+					(node) =>
+						node.type === "floating" &&
+						node.content.startsWith(varName)
+				);
+				if (floatingNode) {
+					console.log("Floating variable found: ", floatingNode);
+					return true;
+				} else {
+					console.log("Floating variable not found.");
+				}
+			} else if (match[1] || match[2]) {
+				// Regular variable
+				const variableName = match[1] || match[2];
+				console.log("Checking for regular variable: ", variableName);
+				const variableExists = variables.some(
+					(variable) =>
+						variable.name === variableName &&
+						variable.type !== "choiceOption" &&
+						variable.type !== "config"
+				);
+				if (variableExists) {
+					console.log("Variable exists: ", variableName);
+					return true;
+				} else {
+					console.log("Variable not found: ", variableName);
+				}
+			}
+		}
+
+		// If no valid references were found
+		console.log("No valid references were found.");
+		return false;
 	}
 
 	edgeColorMap: Record<string, EdgeType> = {
