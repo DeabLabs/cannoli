@@ -135,6 +135,20 @@ export class CannoliEdge {
 	}
 
 	validate() {
+		// If there's an edge tag, the source node must be a call node and the target node must be a call node
+		if (this.tags.length > 0) {
+			if (this.source.type !== "call") {
+				throw new Error(
+					`Edge ${this.id} has an edge tag but the source node is not a call node`
+				);
+			}
+			if (this.target.type !== "call") {
+				throw new Error(
+					`Edge ${this.id} has an edge tag but the target node is not a call node`
+				);
+			}
+		}
+
 		// Do type-specific validation by calling the validate function for the type
 		switch (this.type) {
 			case "blank":

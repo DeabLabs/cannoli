@@ -632,8 +632,7 @@ export class Canvas {
 						const variableExists = edge.variables.some(
 							(variable) =>
 								variable.name === matchedVariable &&
-								variable.type !== "choiceOption" &&
-								variable.type !== "config"
+								variable.type !== "choiceOption"
 						);
 						return variableExists;
 					});

@@ -1,5 +1,5 @@
 import { CannoliGraph } from "./cannoli";
-import { CannoliEdge } from "./edge";
+import { CannoliEdge, Variable } from "./edge";
 import { CannoliGroup } from "./group";
 
 // Node Types
@@ -97,13 +97,35 @@ export class CannoliNode {
 	validate() {
 		// Do global validation first
 
+		// Put variables from all incoming edges into an array. Edges have the property "variables" which is an array of variables
+		const incomingVariables = this.incomingEdges.flatMap(
+			(edge) => edge.variables
+		);
+
+		// Disallow multiple non-choiceOption variables with the same name
+		const variableNames = incomingVariables
+			.filter((v) => v.type !== "choiceOption")
+			.map((v) => v.name);
+		const duplicateVariableNames = variableNames.filter(
+			(name, index) => variableNames.indexOf(name) !== index
+		);
+		if (duplicateVariableNames.length > 0) {
+			throw new Error(
+				`Invalid Cannoli layout: Node with id ${
+					this.id
+				} has multiple incoming variables with the same name: ${duplicateVariableNames.join(
+					", "
+				)}`
+			);
+		}
+
 		// Do type-specific validation by calling the validate function for the type
 		switch (this.type) {
 			case "call":
-				this.validateCall();
+				this.validateCall(incomingVariables);
 				break;
 			case "content":
-				this.validateContent();
+				this.validateContent(incomingVariables);
 				break;
 			case "floating":
 				this.validateFloating();
@@ -113,11 +135,382 @@ export class CannoliNode {
 		}
 	}
 
-	validateCall() {}
+	validateCall(incomingVariables: Variable[]) {
+		// Disallow incoming edges of subtype write
+		if (this.incomingEdges.some((edge) => edge.subtype === "write")) {
+			throw new Error(
+				`Invalid Cannoli layout: Node with id ${this.id} has incoming edges of subtype "write"`
+			);
+		}
 
-	validateContent() {}
+		// Disallow incoming edges of subtype logging
+		if (this.incomingEdges.some((edge) => edge.subtype === "logging")) {
+			throw new Error(
+				`Invalid Cannoli layout: Node with id ${this.id} has incoming edges of subtype "logging"`
+			);
+		}
 
-	validateFloating() {}
+		this.checkVariablesInContent(
+			this.content,
+			incomingVariables,
+			this.cannoli
+		);
+
+		switch (this.subtype) {
+			case "list": {
+				// If there's any outgoing list type edges with subtype listGroup, they must all have the same variable name
+				const listGroupEdges = this.outgoingEdges.filter(
+					(edge) =>
+						edge.type === "list" && edge.subtype === "listGroup"
+				);
+				if (listGroupEdges.length > 0) {
+					const variableNames = listGroupEdges.map(
+						(edge) => edge.label
+					);
+					const uniqueVariableNames = new Set(variableNames);
+					if (uniqueVariableNames.size > 1) {
+						throw new Error(
+							`Invalid Cannoli layout: Node with id ${
+								this.id
+							} has outgoing listGroup edges with different variable names: ${Array.from(
+								uniqueVariableNames
+							).join(", ")}`
+						);
+					}
+				}
+
+				// If there are any outgoing list type edges with subtype list, there must be at least two
+				const listEdges = this.outgoingEdges.filter(
+					(edge) => edge.type === "list" && edge.subtype === "list"
+				);
+				if (listEdges.length > 0 && listEdges.length < 2) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has outgoing list edges with subtype list, but there are less than two`
+					);
+				}
+
+				break;
+			}
+			case "select": {
+				// There must be no outgoing choice type edges
+				if (this.outgoingEdges.some((edge) => edge.type === "choice")) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has outgoing choice edges`
+					);
+				}
+
+				// There must be at least one outgoing list type edge with subtype select
+				const selectEdges = this.outgoingEdges.filter(
+					(edge) => edge.type === "list" && edge.subtype === "select"
+				);
+				if (selectEdges.length === 0) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has no outgoing list edges with subtype select`
+					);
+				}
+
+				// If there are any outgoing list type edges with subtype select, they must all have the same variable name
+				if (selectEdges.length > 0) {
+					const variableNames = selectEdges.map((edge) => edge.label);
+					const duplicateVariableNames = variableNames.filter(
+						(name, index) => variableNames.indexOf(name) !== index
+					);
+					if (duplicateVariableNames.length > 0) {
+						throw new Error(
+							`Invalid Cannoli layout: Node with id ${
+								this.id
+							} has multiple outgoing select edges with different variable names: ${duplicateVariableNames.join(
+								", "
+							)}`
+						);
+					}
+				}
+				break;
+			}
+			case "choice": {
+				// There must be no outgoing list type edges
+				if (this.outgoingEdges.some((edge) => edge.type === "list")) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has outgoing list edges`
+					);
+				}
+
+				// There must be at least one outgoing choice type edge
+				const choiceEdges = this.outgoingEdges.filter(
+					(edge) => edge.type === "choice"
+				);
+				if (choiceEdges.length === 0) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has no outgoing choice edges`
+					);
+				}
+
+				break;
+			}
+			case "normal": {
+				// There must be no outgoing list or choice type edges
+				if (
+					this.outgoingEdges.some(
+						(edge) => edge.type === "list" || edge.type === "choice"
+					)
+				) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has outgoing list or choice edges`
+					);
+				}
+
+				break;
+			}
+
+			default:
+				throw new Error(
+					`Call node subtype ${this.subtype} not recognized`
+				);
+		}
+	}
+
+	validateContent(incomingVariables: Variable[]) {
+		switch (this.subtype) {
+			case "reference":
+				// If the content is a note reference (starts with [[ and ends with ]]), check if the note exists
+				if (
+					this.content.startsWith("[[") &&
+					this.content.endsWith("]]")
+				) {
+					// If it has an incoming list edge with the subtype listGroup, error
+					if (
+						this.incomingEdges.some(
+							(edge) => edge.subtype === "listGroup"
+						)
+					) {
+						throw new Error(
+							`Reference node ${this.id} cannot have an incoming list edge with subtype listGroup`
+						);
+					}
+
+					const noteName = this.content.slice(2, -2);
+					const note = this.cannoli.vault
+						.getMarkdownFiles()
+						.find((file) => file.basename === noteName);
+					if (!note) {
+						throw new Error(`Note ${noteName} not found`);
+					}
+				}
+				// If the content is a floating node reference (starts with [ and ends with ]), check if the floating node exists
+				else if (
+					this.content.startsWith("[") &&
+					this.content.endsWith("]")
+				) {
+					const floatingNodeId = this.content.slice(1, -1);
+					const floatingNode = this.cannoli.nodes[floatingNodeId];
+					if (!floatingNode) {
+						throw new Error(
+							`Floating node ${floatingNodeId} not found`
+						);
+					}
+				}
+				// Reference nodes must have a valid reference
+				else {
+					throw new Error(
+						`Content of reference node ${this.id} is not a valid reference`
+					);
+				}
+				break;
+
+			case "vault": {
+				// Check variables array for valid variable combinations
+				const newLinkCount = incomingVariables.filter(
+					(v) => v.type === "newLink"
+				).length;
+				const newPathCount = incomingVariables.filter(
+					(v) => v.type === "newPath"
+				).length;
+				const existingLinkCount = incomingVariables.filter(
+					(v) => v.type === "existingLink"
+				).length;
+				const existingPathCount = incomingVariables.filter(
+					(v) => v.type === "existingPath"
+				).length;
+
+				const totalLinkCount = newLinkCount + existingLinkCount;
+				const totalPathCount = newPathCount + existingPathCount;
+
+				if (totalLinkCount > 1) {
+					throw new Error(
+						"Invalid combination: Multiple link variables are not allowed in a vault node"
+					);
+				}
+
+				if (totalPathCount > 1) {
+					throw new Error(
+						"Invalid combination: Multiple path variables are not allowed in a vault node"
+					);
+				}
+
+				if (existingPathCount > 0 && totalLinkCount === 0) {
+					throw new Error(
+						"Invalid combination: Existing path variables are not allowed without any link variables in a vault node"
+					);
+				}
+
+				// Disallow multiple variables of type "regular"
+				if (
+					incomingVariables.filter((v) => v.type === "regular")
+						.length > 1
+				) {
+					throw new Error(
+						"Invalid combination: Multiple regular variables are not allowed in a vault node"
+					);
+				}
+
+				const regularVariableCount = incomingVariables.filter(
+					(v) => v.type === "regular"
+				).length;
+				const writeEdgeCount = this.outgoingEdges.filter(
+					(e) => e.subtype === "write"
+				).length;
+				const loggingEdgeCount = this.outgoingEdges.filter(
+					(e) => e.subtype === "logging"
+				).length;
+
+				const totalContentSources =
+					regularVariableCount + writeEdgeCount + loggingEdgeCount;
+
+				if (totalContentSources > 1) {
+					throw new Error(
+						"Invalid combination: Multiple content sources are not allowed in a vault node"
+					);
+				}
+
+				if (
+					totalContentSources === 1 &&
+					newPathCount === 1 &&
+					totalLinkCount === 0
+				) {
+					throw new Error(
+						"Invalid combination: A content source is specified, but there is no note to write to in a vault node"
+					);
+				}
+				break;
+			}
+
+			case "formatter": {
+				this.checkVariablesInContent(
+					this.content,
+					incomingVariables,
+					this.cannoli
+				);
+
+				// Disallow incoming edges of type "blank"
+				if (this.incomingEdges.some((edge) => edge.type === "blank")) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has incoming edges of type "blank"`
+					);
+				}
+
+				// Disallow incoming edges of subtype "logging"
+				if (
+					this.incomingEdges.some(
+						(edge) => edge.subtype === "logging"
+					)
+				) {
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${this.id} has incoming edges of subtype "logging"`
+					);
+				}
+
+				break;
+			}
+
+			case "normal": {
+				// Disallow multiple incoming variables that aren't of type "choiceOption"
+				if (
+					incomingVariables.filter((v) => v.type !== "choiceOption")
+						.length > 1
+				) {
+					throw new Error(
+						"Invalid combination: Multiple incoming variables that aren't of type choiceOption are not allowed in a normal node"
+					);
+				}
+
+				// Disallow multiple incoming edges of type "blank" or subtype "logging"
+				if (
+					this.incomingEdges.filter(
+						(e) => e.type === "blank" || e.subtype === "logging"
+					).length > 1
+				) {
+					throw new Error(
+						"Invalid combination: Multiple incoming edges of type blank or subtype logging are not allowed in a normal content node"
+					);
+				}
+			}
+		}
+	}
+
+	validateFloating() {
+		// The first line of a floating node's content must have the format: [variable name]
+		if (!this.content.startsWith("[") || !this.content.endsWith("]")) {
+			throw new Error(
+				`Floating node ${this.id} has invalid content: ${this.content}`
+			);
+		}
+	}
+
+	checkVariablesInContent(
+		content: string,
+		variables: Variable[],
+		cannoli: CannoliGraph
+	): void {
+		const regex = /{{\[\[([^{}]+)]]}}|{{\[(.+?)\]}}|{{(.+?)}}/g;
+		let match: RegExpExecArray | null;
+		const variablesNotFound = [];
+
+		while ((match = regex.exec(content)) !== null) {
+			if (match[1]) {
+				// Note reference
+				const noteName = match[1];
+				const note = cannoli.vault
+					.getMarkdownFiles()
+					.find((file) => file.basename === noteName);
+				if (!note) {
+					throw new Error(`Note ${noteName} not found`);
+				}
+			} else if (match[2]) {
+				// Floating variable reference
+				const varName = match[2];
+				const floatingNode = Object.values(cannoli.nodes).find(
+					(node) =>
+						node.type === "floating" &&
+						node.content.startsWith(varName)
+				);
+				if (!floatingNode) {
+					throw new Error(`Floating variable ${varName} not found`);
+				}
+			} else if (match[3]) {
+				// Regular variable
+				const variableExists = variables.some(
+					(variable) =>
+						// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+						variable.name === match![3]! &&
+						variable.type !== "choiceOption" &&
+						variable.type !== "config"
+				);
+
+				if (!variableExists) {
+					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+					variablesNotFound.push(match[3]!);
+				}
+			}
+		}
+
+		if (variablesNotFound.length > 0) {
+			throw new Error(
+				`Invalid Cannoli layout: Node has missing variables in incoming edges: ${variablesNotFound.join(
+					", "
+				)}`
+			);
+		}
+	}
 
 	// async process(nodeCompleted: () => void) {
 	// 	if (this.type === "content") {
