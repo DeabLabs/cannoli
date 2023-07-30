@@ -125,21 +125,6 @@ export class CannoliNode {
 			(edge) => edge.variables
 		);
 
-		// Disallow multiple variables with the same name
-		const variableNames = incomingVariables.map((v) => v.name);
-		const duplicateVariableNames = variableNames.filter(
-			(name, index) => variableNames.indexOf(name) !== index
-		);
-		if (duplicateVariableNames.length > 0) {
-			throw new Error(
-				`Invalid Cannoli layout: Node with id ${
-					this.id
-				} has multiple incoming variables with the same name: ${duplicateVariableNames.join(
-					", "
-				)}`
-			);
-		}
-
 		// Do type-specific validation by calling the validate function for the type
 		switch (this.type) {
 			case "call":
@@ -1076,157 +1061,167 @@ export function checkVariablesInContent(
 	}
 }
 
-type Path = CannoliEdge[];
+// type Path = CannoliEdge[];
 
-/**
- * Returns all paths from the given edge to leaves in the graph.
- * @param {CannoliEdge} edge - the starting edge.
- * @param {Set<CannoliNode>} visited - the set of visited nodes, used to prevent cycles.
- * @param {Path} path - the current path from the source of edge.
- * @param {Path[]} paths - all paths from the source of edge.
- */
-function getPathsFromEdge(
-	edge: CannoliEdge,
-	visited: Set<CannoliNode> = new Set<CannoliNode>(),
-	path: Path = [],
-	paths: Path[] = []
-): Path[] {
-	visited.add(edge.target);
-	path.push(edge);
+// /**
+//  * Returns all paths from the given edge to leaves in the graph.
+//  * @param {CannoliEdge} edge - the starting edge.
+//  * @param {Set<CannoliNode>} visited - the set of visited nodes, used to prevent cycles.
+//  * @param {Path} path - the current path from the source of edge.
+//  * @param {Path[]} paths - all paths from the source of edge.
+//  */
+// function getPathsFromEdge(
+// 	edge: CannoliEdge,
+// 	visited: Set<CannoliNode> = new Set<CannoliNode>(),
+// 	path: Path = [],
+// 	paths: Path[] = []
+// ): Path[] {
+// 	visited.add(edge.target);
+// 	path.push(edge);
 
-	if (edge.target.outgoingEdges.length === 0) {
-		paths.push([...path]);
-	} else {
-		for (const outgoingEdge of edge.target.outgoingEdges) {
-			if (!visited.has(outgoingEdge.target)) {
-				getPathsFromEdge(outgoingEdge, visited, path, paths);
-			}
-		}
-	}
+// 	if (edge.target.outgoingEdges.length === 0) {
+// 		paths.push([...path]);
+// 	} else {
+// 		for (const outgoingEdge of edge.target.outgoingEdges) {
+// 			if (!visited.has(outgoingEdge.target)) {
+// 				getPathsFromEdge(outgoingEdge, visited, path, paths);
+// 			}
+// 		}
+// 	}
 
-	path.pop();
-	visited.delete(edge.target);
-	return paths;
-}
+// 	path.pop();
+// 	visited.delete(edge.target);
+// 	return paths;
+// }
 
-/**
- * Returns all paths to the given edge from roots in the graph.
- * @param {CannoliEdge} edge - the ending edge.
- * @param {Set<CannoliNode>} visited - the set of visited nodes, used to prevent cycles.
- * @param {Path} path - the current path to the target of edge.
- * @param {Path[]} paths - all paths to the target of edge.
- */
-function getPathsToEdge(
-	edge: CannoliEdge,
-	visited = new Set<CannoliNode>(),
-	path: Path = [],
-	paths: Path[] = []
-): Path[] {
-	visited.add(edge.source);
-	path.push(edge);
+// /**
+//  * Returns all paths to the given edge from roots in the graph.
+//  * @param {CannoliEdge} edge - the ending edge.
+//  * @param {Set<CannoliNode>} visited - the set of visited nodes, used to prevent cycles.
+//  * @param {Path} path - the current path to the target of edge.
+//  * @param {Path[]} paths - all paths to the target of edge.
+//  */
+// function getPathsToEdge(
+// 	edge: CannoliEdge,
+// 	visited = new Set<CannoliNode>(),
+// 	path: Path = [],
+// 	paths: Path[] = []
+// ): Path[] {
+// 	visited.add(edge.source);
+// 	path.push(edge);
 
-	if (edge.source.incomingEdges.length === 0) {
-		paths.push([...path]);
-	} else {
-		for (const incomingEdge of edge.source.incomingEdges) {
-			if (!visited.has(incomingEdge.source)) {
-				getPathsToEdge(incomingEdge, visited, path, paths);
-			}
-		}
-	}
+// 	if (edge.source.incomingEdges.length === 0) {
+// 		paths.push([...path]);
+// 	} else {
+// 		for (const incomingEdge of edge.source.incomingEdges) {
+// 			if (!visited.has(incomingEdge.source)) {
+// 				getPathsToEdge(incomingEdge, visited, path, paths);
+// 			}
+// 		}
+// 	}
 
-	path.pop();
-	visited.delete(edge.source);
-	return paths;
-}
+// 	path.pop();
+// 	visited.delete(edge.source);
+// 	return paths;
+// }
 
-/**
- * Helper function to check if the variable sets of two edges are equal.
- * @param {CannoliEdge[]} edges - array containing two edges.
- * @returns {boolean} - true if the variable sets are equal, else false.
- */
-function variableSetsAreEqual(edges: CannoliEdge[]): boolean {
-	// Get the sets of variable names for the two edges
-	const varNames1 = new Set(
-		edges[0].variables.map((variable) => variable.name)
-	);
-	const varNames2 = new Set(
-		edges[1].variables.map((variable) => variable.name)
-	);
+// /**
+//  * Helper function to check if the variable sets of two edges are equal.
+//  * @param {CannoliEdge[]} edges - array containing two edges.
+//  * @returns {boolean} - true if the variable sets are equal, else false.
+//  */
+// function variableSetsAreEqual(edges: CannoliEdge[]): boolean {
+// 	// Get the sets of variable names for the two edges
+// 	const varNames1 = new Set(
+// 		edges[0].variables.map((variable) => variable.name)
+// 	);
+// 	const varNames2 = new Set(
+// 		edges[1].variables.map((variable) => variable.name)
+// 	);
 
-	// Check if both sets have the same size
-	if (varNames1.size !== varNames2.size) {
-		return false;
-	}
+// 	// Check if both sets have the same size
+// 	if (varNames1.size !== varNames2.size) {
+// 		return false;
+// 	}
 
-	// Check if every element in the first set is also in the second set
-	for (const varName of varNames1) {
-		if (!varNames2.has(varName)) {
-			return false;
-		}
-	}
+// 	// Check if every element in the first set is also in the second set
+// 	for (const varName of varNames1) {
+// 		if (!varNames2.has(varName)) {
+// 			return false;
+// 		}
+// 	}
 
-	return true;
-}
+// 	return true;
+// }
 
-/**
- * Returns true if the given choice node and its downstream are valid, else false.
- * @param {CannoliNode} node - the choice node to validate.
- */
-export function isChoiceNodeValid(node: CannoliNode): boolean {
-	const choiceEdges = node.outgoingEdges.filter(
-		(edge) => edge.type === "choice"
-	);
+// /**
+//  * Returns true if the given choice node and its downstream are valid, else false.
+//  * @param {CannoliNode} node - the choice node to validate.
+//  */
+// export function isChoiceNodeValid(node: CannoliNode): boolean {
+// 	const choiceEdges = node.outgoingEdges.filter(
+// 		(edge) => edge.type === "choice"
+// 	);
 
-	for (let i = 0; i < choiceEdges.length; i++) {
-		for (let j = i + 1; j < choiceEdges.length; j++) {
-			const pathsFromEdgeI = getPathsFromEdge(choiceEdges[i]);
-			const pathsFromEdgeJ = getPathsFromEdge(choiceEdges[j]);
+// 	for (let i = 0; i < choiceEdges.length; i++) {
+// 		for (let j = i + 1; j < choiceEdges.length; j++) {
+// 			if (choiceEdges[i].choiceOption === choiceEdges[j].choiceOption)
+// 				continue; // Same choiceOption, skip.
 
-			for (const pathI of pathsFromEdgeI) {
-				for (const pathJ of pathsFromEdgeJ) {
-					const crossEdge = pathI.find((edgeI) =>
-						pathJ.includes(edgeI)
-					);
+// 			const pathsFromEdgeI = getPathsFromEdge(choiceEdges[i]);
+// 			const pathsFromEdgeJ = getPathsFromEdge(choiceEdges[j]);
 
-					if (crossEdge) {
-						const conflictingEdge =
-							crossEdge.target.incomingEdges.find(
-								(edge) =>
-									edge.type === "choice" &&
-									!variableSetsAreEqual([edge, crossEdge])
-							);
+// 			for (const pathI of pathsFromEdgeI) {
+// 				for (const pathJ of pathsFromEdgeJ) {
+// 					// Check if there's a common edge in pathI and pathJ that originated from the same choice node.
+// 					const crossEdge = pathI.find(
+// 						(edgeI) =>
+// 							pathJ.includes(edgeI) &&
+// 							traceBackToCommonChoiceNode([
+// 								edgeI,
+// 								choiceEdges[i],
+// 								choiceEdges[j],
+// 							])
+// 					);
 
-						if (conflictingEdge) {
-							return false;
-						}
-					}
-				}
-			}
-		}
-	}
+// 					if (crossEdge) {
+// 						const incomingEdges = crossEdge.target.incomingEdges;
+// 						// Make sure all incoming edges to the crossEdge's target node
+// 						// share the same set of variables
+// 						if (
+// 							!incomingEdges.every((edge) =>
+// 								variableSetsAreEqual([edge, crossEdge])
+// 							)
+// 						) {
+// 							return false;
+// 						}
+// 					}
+// 				}
+// 			}
+// 		}
+// 	}
 
-	return true;
-}
+// 	return true;
+// }
 
-/**
- * Returns true if there's a common choice node for the given edges, else false.
- * @param {CannoliEdge[]} edges - the edges to trace back.
- */
-export function traceBackToCommonChoiceNode(edges: CannoliEdge[]): boolean {
-	const commonChoiceNode = edges[0].source;
-	if (!commonChoiceNode || commonChoiceNode.subtype !== "choice")
-		return false;
+// export function traceBackToCommonChoiceNode(edges: CannoliEdge[]): boolean {
+// 	const commonChoiceNode = edges[0].source;
+// 	if (!commonChoiceNode || commonChoiceNode.subtype !== "choice")
+// 		return false; // Not a choice node.
 
-	for (const edge of edges) {
-		const pathsToEdge = getPathsToEdge(edge);
-		for (const path of pathsToEdge) {
-			const pathHasCommonChoiceNode = path.some(
-				(pathEdge) => pathEdge.source === commonChoiceNode
-			);
-			if (!pathHasCommonChoiceNode) return false;
-		}
-	}
+// 	const pathsToEdge0 = getPathsToEdge(edges[0]);
+// 	const pathsToEdge1 = getPathsToEdge(edges[1]);
 
-	return true;
-}
+// 	for (const path0 of pathsToEdge0) {
+// 		for (const path1 of pathsToEdge1) {
+// 			if (
+// 				path0.some((edge) => edge.target === commonChoiceNode) &&
+// 				path1.some((edge) => edge.target === commonChoiceNode)
+// 			) {
+// 				return true; // Common choice node found.
+// 			}
+// 		}
+// 	}
+
+// 	return false; // No common choice node found.
+// }

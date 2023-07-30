@@ -160,6 +160,7 @@ export class Canvas {
 				tags: edgeTags,
 				variables: edgeVariables,
 				choiceOption,
+				cannoli: this.cannoli,
 			});
 
 			edges[edge.id] = edge;
@@ -531,8 +532,10 @@ export class Canvas {
 		}
 		// If the edge is a function edge
 		else if (edge.type === "function") {
-			// It's a function edge
-			return "";
+			// If there's no variables, it's a writeFunction edge
+			if (edge.variables.length === 0) {
+				return "writeFunction";
+			}
 		}
 		// If the edge is a choice edge
 		else if (edge.type === "choice") {

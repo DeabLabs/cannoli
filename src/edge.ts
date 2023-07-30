@@ -1,6 +1,7 @@
 import { ChatCompletionRequestMessage } from "openai";
 import { CannoliGroup } from "./group";
 import { CannoliNode } from "./node";
+import { CannoliGraph } from "./cannoli";
 
 // Edge Types
 export type EdgeType =
@@ -19,7 +20,7 @@ export type UtilitySubtype = "logging" | "config";
 
 export type ListSubtype = "list" | "listGroup";
 
-export type FunctionSubtype = "write" | "builtIn" | "custom";
+export type FunctionSubtype = "writeFunction" | "variableFunction";
 
 export type ChoiceSubtype = "normal" | "outOfGroup" | "outOfListGroup";
 
@@ -29,6 +30,11 @@ export type Variable = {
 	name: string;
 	type: VariableType;
 	value?: string;
+};
+
+export type LoadVariable = {
+	name: string;
+	content: string;
 };
 
 export type VariableType =
@@ -62,8 +68,9 @@ export class CannoliEdge {
 	chatHistory: ChatCompletionRequestMessage[];
 	variables: Variable[];
 	choiceOption: string | null;
-	payloadContent: string;
+	unnamedContent: string;
 	copies: CannoliEdge[];
+	cannoli: CannoliGraph;
 
 	constructor({
 		id,
@@ -74,6 +81,7 @@ export class CannoliEdge {
 		variables,
 		tags,
 		choiceOption,
+		cannoli,
 	}: {
 		id: string;
 		label: string;
@@ -83,6 +91,7 @@ export class CannoliEdge {
 		variables: Variable[];
 		tags: EdgeTag[];
 		choiceOption: string | null;
+		cannoli: CannoliGraph;
 	}) {
 		this.id = id;
 		this.label = label;
@@ -92,43 +101,273 @@ export class CannoliEdge {
 		this.tags = tags;
 		this.variables = variables;
 		this.choiceOption = choiceOption;
+		this.cannoli = cannoli;
 	}
 
-	loadBlank({
-		content,
+	load({
+		unnamedContent,
+		loadVariables,
 		chatHistory,
 	}: {
-		content?: string;
+		unnamedContent?: string;
+		loadVariables?: LoadVariable[];
 		chatHistory?: ChatCompletionRequestMessage[];
 	}) {
-		switch (this.subtype) {
-			case "continueChat": {
-				if (chatHistory) {
-					this.chatHistory = chatHistory;
+		// Validate and extract vault variables
+		if (loadVariables) {
+			for (const loadVariable of loadVariables) {
+				// Switch on the variable type of the same-named variable
+				const variable = this.variables.find(
+					(variable) => variable.name === loadVariable.name
+				);
+				if (variable) {
+					switch (variable.type) {
+						case "existingLink": {
+							// Get the load variable's content
+							const loadVariableContent = loadVariable.content;
+
+							// Check if it corresponds to a file in the vault
+							const note = this.cannoli.vault
+								.getMarkdownFiles()
+								.find(
+									(file) =>
+										file.basename === loadVariableContent
+								);
+
+							if (!note) {
+								throw new Error(
+									`Edge ${this.id} has a variable with type existingLink but there is no file in the vault with the name ${loadVariableContent}`
+								);
+							}
+							break;
+						}
+						case "existingPath": {
+							// Get the load variable's content
+							const path = loadVariable.content;
+
+							// Check if it corresponds to a folder in the vault
+							const folder =
+								this.cannoli.vault.getAbstractFileByPath(path);
+
+							if (!folder) {
+								throw new Error(
+									`Edge ${this.id} has a variable with type existingPath but there is no folder in the vault with the path ${path}`
+								);
+							}
+							break;
+						}
+						case "newLink": {
+							// Get the load variable's content
+							const loadVariableContent = loadVariable.content;
+
+							// Check if it corresponds to a file in the vault, error if it does
+							const note = this.cannoli.vault
+								.getMarkdownFiles()
+								.find(
+									(file) =>
+										file.basename === loadVariableContent
+								);
+
+							if (note) {
+								throw new Error(
+									`Edge ${this.id} has a variable with type newLink but there is already a file in the vault with the name ${loadVariableContent}`
+								);
+							}
+							break;
+						}
+						case "newPath": {
+							// Get the load variable's content
+							const path = loadVariable.content;
+
+							// Check if it corresponds to a folder in the vault, error if it does
+							const folder =
+								this.cannoli.vault.getAbstractFileByPath(path);
+
+							if (folder) {
+								throw new Error(
+									`Edge ${this.id} has a variable with type newPath but there is already a folder in the vault with the path ${path}`
+								);
+							}
+							break;
+						}
+					}
+
+					// Set the variable's value to the load variable's content
+					variable.value = loadVariable.content;
 				} else {
 					throw new Error(
-						`Edge ${this.id} is a continueChat edge but has no chat history`
+						`Edge ${this.id} has no variable with name ${loadVariable.name}`
+					);
+				}
+			}
+		}
+
+		// If it has the subtype continueChat, or if it has the tag continueChat, load the chat history
+		if (
+			this.subtype === "continueChat" ||
+			this.tags.includes("continueChat")
+		) {
+			if (chatHistory) {
+				this.chatHistory = chatHistory;
+			} else {
+				throw new Error(
+					`Edge ${this.id} is a continueChat edge but has no chat history`
+				);
+			}
+		}
+
+		// calls load function for the type
+		switch (this.type) {
+			case "blank":
+				this.loadBlank({ unnamedContent });
+				break;
+			case "variable":
+				this.loadVariable();
+				break;
+			case "utility":
+				this.loadUtility({ unnamedContent });
+
+				break;
+			case "function":
+				this.loadFunction({ unnamedContent });
+				break;
+			case "choice":
+				this.loadChoice();
+				break;
+			case "list":
+				this.loadList();
+				break;
+
+			default:
+				throw new Error(
+					`Edge ${this.id} has an invalid type: ${this.type}`
+				);
+		}
+	}
+
+	loadBlank({ unnamedContent }: { unnamedContent?: string }) {
+		switch (this.subtype) {
+			case "continueChat": {
+				break;
+			}
+			case "systemMessage": {
+				if (unnamedContent) {
+					this.chatHistory = [
+						{
+							role: "system",
+							content: unnamedContent,
+						},
+					];
+				} else {
+					throw new Error(
+						`Edge ${this.id} is a systemMessage edge but has no content`
 					);
 				}
 				break;
 			}
-			case "systemMessage": {
-				this.chatHistory = [
-					{
-						role: "system",
-						content: content,
-					},
-				];
-				break;
-			}
 			case "write": {
-				if (content) {
-					this.payloadContent = content;
+				if (unnamedContent) {
+					this.unnamedContent = unnamedContent;
 				} else {
 					throw new Error(
 						`Edge ${this.id} is a write edge but has no content`
 					);
 				}
+				break;
+			}
+			default: {
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+			}
+		}
+	}
+
+	loadVariable() {
+		switch (this.subtype) {
+			case "": {
+				break;
+			}
+			default: {
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+			}
+		}
+	}
+
+	loadUtility({ unnamedContent }: { unnamedContent?: string }) {
+		switch (this.subtype) {
+			case "logging": {
+				if (unnamedContent) {
+					this.unnamedContent = unnamedContent;
+				} else {
+					throw new Error(
+						`Edge ${this.id} is a logging edge but has no content`
+					);
+				}
+				break;
+			}
+			case "config": {
+				// For each load variable, find the variable with the same name and set its value to the load variable's content
+				break;
+			}
+			default: {
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+			}
+		}
+	}
+
+	loadFunction({ unnamedContent }: { unnamedContent?: string }) {
+		switch (this.subtype) {
+			case "writeFunction": {
+				if (unnamedContent) {
+					this.unnamedContent = unnamedContent;
+				} else {
+					throw new Error(
+						`Edge ${this.id} is a writeFunction edge but has no content`
+					);
+				}
+				break;
+			}
+			case "variableFunction": {
+				break;
+			}
+			default: {
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+			}
+		}
+	}
+
+	loadChoice() {
+		switch (this.subtype) {
+			case "normal": {
+				break;
+			}
+			case "outOfGroup": {
+				break;
+			}
+			case "outOfListGroup": {
+				break;
+			}
+			default: {
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+			}
+		}
+	}
+
+	loadList() {
+		switch (this.subtype) {
+			case "list": {
+				break;
+			}
+			case "listGroup": {
 				break;
 			}
 			default: {
@@ -327,14 +566,24 @@ export class CannoliEdge {
 
 	validateFunction() {
 		switch (this.subtype) {
-			case "builtIn":
-				// There must be some variables
-				if (this.variables.length === 0) {
+			case "writeFunction": {
+				// There must be no variables
+				if (this.variables.length !== 0) {
 					throw new Error(
-						`Edge ${this.id} is a function edge but has no variables`
+						`Edge ${this.id} is a writeFunction edge but has ${this.variables.length} variables`
 					);
 				}
 				break;
+			}
+			case "variableFunction": {
+				// There must be variables
+				if (this.variables.length === 0) {
+					throw new Error(
+						`Edge ${this.id} is a variableFunction edge but has no variables`
+					);
+				}
+				break;
+			}
 			default:
 				throw new Error(
 					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
