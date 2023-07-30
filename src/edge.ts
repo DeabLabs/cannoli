@@ -51,7 +51,6 @@ export class CannoliEdge {
 		group: CannoliGroup;
 		isEntering: boolean;
 	}[];
-	variables: Variable[];
 	tags: EdgeTag[];
 	type: EdgeType;
 	subtype:
@@ -62,6 +61,8 @@ export class CannoliEdge {
 		| BlankSubtype
 		| VariableSubtype;
 	chatHistory: ChatCompletionRequestMessage[];
+	variables: Variable[];
+	payloadContent: string;
 	copies: CannoliEdge[];
 
 	constructor({
@@ -88,6 +89,51 @@ export class CannoliEdge {
 		this.type = type;
 		this.tags = tags;
 		this.variables = variables;
+	}
+
+	loadBlank({
+		content,
+		chatHistory,
+	}: {
+		content?: string;
+		chatHistory?: ChatCompletionRequestMessage[];
+	}) {
+		switch (this.subtype) {
+			case "continueChat": {
+				if (chatHistory) {
+					this.chatHistory = chatHistory;
+				} else {
+					throw new Error(
+						`Edge ${this.id} is a continueChat edge but has no chat history`
+					);
+				}
+				break;
+			}
+			case "systemMessage": {
+				this.chatHistory = [
+					{
+						role: "system",
+						content: content,
+					},
+				];
+				break;
+			}
+			case "write": {
+				if (content) {
+					this.payloadContent = content;
+				} else {
+					throw new Error(
+						`Edge ${this.id} is a write edge but has no content`
+					);
+				}
+				break;
+			}
+			default: {
+				throw new Error(
+					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
+				);
+			}
+		}
 	}
 
 	logEdgeDetails() {

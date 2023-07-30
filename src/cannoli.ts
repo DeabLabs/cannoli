@@ -7,7 +7,7 @@ import { CannoliNode } from "./node";
 import { CannoliEdge } from "./edge";
 
 import pLimit from "p-limit";
-import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
+// import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
 
 interface Limit {
 	(
@@ -107,8 +107,13 @@ export class CannoliGraph {
 	async editNote(
 		noteName: string,
 		newContent: string,
-		verbose = false
+		verbose = false,
+		mock = false
 	): Promise<boolean> {
+		if (mock) {
+			return true;
+		}
+
 		// Get the note
 		const note = this.vault.getMarkdownFiles().find((file) => {
 			return file.basename === noteName;
@@ -132,8 +137,13 @@ export class CannoliGraph {
 		noteName: string,
 		path: string,
 		content?: string,
-		verbose = false
+		verbose = false,
+		mock = false
 	): Promise<boolean> {
+		if (mock) {
+			return true;
+		}
+
 		// Create the path by appending the note name to the path with .md
 		const fullPath = `${path}/${noteName}.md`;
 
@@ -160,8 +170,13 @@ export class CannoliGraph {
 		noteName: string,
 		path: string,
 		content?: string,
-		verbose = false
+		verbose = false,
+		mock = false
 	): Promise<boolean> {
+		if (mock) {
+			return true;
+		}
+
 		// Create the path by appending the note name to the path with .md
 		const fullPath = `${path}/${noteName}.md`;
 
@@ -197,8 +212,13 @@ export class CannoliGraph {
 		noteName: string,
 		oldPath: string,
 		newPath: string,
-		verbose = false
+		verbose = false,
+		mock = false
 	): Promise<boolean> {
+		if (mock) {
+			return true;
+		}
+
 		// Create the paths by appending the note name to the paths with .md
 		const oldFullPath = `${oldPath}/${noteName}.md`;
 		const newFullPath = `${newPath}/${noteName}.md`;
@@ -234,7 +254,7 @@ export class CannoliGraph {
 		mock = false,
 	}: {
 		messages: ChatCompletionRequestMessage[];
-		model?: TiktokenModel;
+		model?: string;
 		max_tokens?: number;
 		n?: number;
 		temperature?: number;
@@ -246,26 +266,26 @@ export class CannoliGraph {
 		completionTokens: number;
 	}> {
 		if (mock) {
-			const enc = encoding_for_model(model);
+			// const enc = encoding_for_model(model);
 
-			let textMessages = "";
+			// let textMessages = "";
 
-			// For each message, convert it to a string, including the role and the content, and a function call if present
-			for (const message of messages) {
-				if (message.function_call) {
-					textMessages += `${message.role}: ${message.content} ${message.function_call} `;
-				} else {
-					textMessages += `${message.role}: ${message.content} `;
-				}
-			}
+			// // For each message, convert it to a string, including the role and the content, and a function call if present
+			// for (const message of messages) {
+			// 	if (message.function_call) {
+			// 		textMessages += `${message.role}: ${message.content} ${message.function_call} `;
+			// 	} else {
+			// 		textMessages += `${message.role}: ${message.content} `;
+			// 	}
+			// }
 
-			const encoded = enc.encode(textMessages);
+			// const encoded = enc.encode(textMessages);
 
-			const promptTokens = encoded.length;
+			// const promptTokens = encoded.length;
 
 			return {
 				message: { role: "user", content: "mock" },
-				promptTokens: promptTokens,
+				promptTokens: 0,
 				completionTokens: 0,
 			};
 		} else {

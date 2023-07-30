@@ -192,11 +192,6 @@ export class Canvas {
 		for (const groupData of this.canvasData.nodes.filter(
 			(node) => node.type === "group"
 		)) {
-			// If the group's label is not an integer or is 0, disregard it
-			if (!parseInt(groupData.label) || parseInt(groupData.label) === 0) {
-				continue;
-			}
-
 			// Get the children of the group
 			const { cannoliNodes, groupIds } = this.parseGroupChildren(
 				groupData as CanvasGroupData,
@@ -403,34 +398,28 @@ export class Canvas {
 		// Initialize the maxLoops, choiceString, and type variables
 		let maxLoops = 0;
 		let type: GroupType = "basic";
-		let isListGroup = false; // Initialize as false
 
-		for (const edge of incomingEdges.filter(
-			(edge) => edge.type === "list"
-		)) {
-			const allOutgoingHaveSameVariable = edge.source.outgoingEdges
-				.filter((edge) => edge.type === "list")
-				.every(
-					(outgoingEdge) =>
-						outgoingEdge.variables.length === 1 &&
-						outgoingEdge.variables[0].name ===
-							edge.variables[0].name
-				);
-
-			if (allOutgoingHaveSameVariable) {
-				isListGroup = true;
-				break;
-			}
-		}
-
-		if (isListGroup) {
+		// If the color maps to type "list" on the edge color map, or the first character of the label maps to type "list" on the edge prefix map, it's a list group. Prefix takes precedence over color
+		if (
+			(group.color && this.edgeColorMap[group.color] === "list") ||
+			(group.label && this.edgePrefixMap[group.label[0]] === "list")
+		) {
 			type = "list";
 		}
 
 		// If the group has a label
 		if (group.label) {
-			// Set the maxLoops
-			maxLoops = parseInt(group.label);
+			// If the label's first character maps to type "list" on the edge prefix map, check if everything after the first character is an integer. If it is, it's the maxLoops
+			if (
+				this.edgePrefixMap[group.label[0]] === "list" &&
+				parseInt(group.label.slice(1))
+			) {
+				maxLoops = parseInt(group.label.slice(1));
+			} else if (
+				// If the label is an integer, it's the maxLoops
+				parseInt(group.label)
+			)
+				console.log(`Max Loops:` + maxLoops);
 		}
 
 		return { maxLoops, type };
@@ -1059,7 +1048,7 @@ export class Canvas {
 	edgePrefixMap: Record<string, EdgeType> = {
 		"*": "utility",
 		"?": "choice",
-		"-": "list",
+		"<": "list",
 		"=": "function",
 	};
 
