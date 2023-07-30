@@ -17,11 +17,11 @@ export type VariableSubtype = "";
 
 export type UtilitySubtype = "logging" | "config";
 
-export type ListSubtype = "list" | "listGroup" | "select";
+export type ListSubtype = "list" | "listGroup";
 
-export type FunctionSubtype = "";
+export type FunctionSubtype = "write" | "builtIn" | "custom";
 
-export type ChoiceSubtype = "normal" | "outOfGroup";
+export type ChoiceSubtype = "normal" | "outOfGroup" | "outOfListGroup";
 
 export type EdgeTag = "continueChat";
 
@@ -36,7 +36,6 @@ export type VariableType =
 	| "existingPath"
 	| "newLink"
 	| "newPath"
-	| "choiceOption"
 	| "regular"
 	| "config";
 
@@ -62,6 +61,7 @@ export class CannoliEdge {
 		| VariableSubtype;
 	chatHistory: ChatCompletionRequestMessage[];
 	variables: Variable[];
+	choiceOption: string | null;
 	payloadContent: string;
 	copies: CannoliEdge[];
 
@@ -73,6 +73,7 @@ export class CannoliEdge {
 		type,
 		variables,
 		tags,
+		choiceOption,
 	}: {
 		id: string;
 		label: string;
@@ -81,6 +82,7 @@ export class CannoliEdge {
 		type: EdgeType;
 		variables: Variable[];
 		tags: EdgeTag[];
+		choiceOption: string | null;
 	}) {
 		this.id = id;
 		this.label = label;
@@ -89,6 +91,7 @@ export class CannoliEdge {
 		this.type = type;
 		this.tags = tags;
 		this.variables = variables;
+		this.choiceOption = choiceOption;
 	}
 
 	loadBlank({
@@ -170,7 +173,7 @@ export class CannoliEdge {
 				? this.tags.map((tag) => `\n\tTag: ${tag}`).join("")
 				: "\n\tTags: None";
 
-		const logString = `Edge: ${sourceFormat}----${this.label}---->${targetFormat} (Type: ${this.type}, Subtype: ${this.subtype}), ${variablesFormat}, ${crossingGroupsFormat} , ${tagsFormat}`;
+		const logString = `--> Edge: ${sourceFormat}---${this.label}--->${targetFormat} (Type: ${this.type}, Subtype: ${this.subtype}), ${variablesFormat}, ${crossingGroupsFormat} , ${tagsFormat},\n Choice Option: ${this.choiceOption}`;
 
 		console.log(logString);
 	}
@@ -279,10 +282,7 @@ export class CannoliEdge {
 					);
 				}
 				// The variable must not be a choice option or config variable
-				if (
-					this.variables[0].type === "choiceOption" ||
-					this.variables[0].type === "config"
-				) {
+				if (this.variables[0].type === "config") {
 					throw new Error(
 						`Edge ${this.id} is a variable edge but has a choice option or config variable`
 					);
@@ -327,21 +327,11 @@ export class CannoliEdge {
 
 	validateFunction() {
 		switch (this.subtype) {
-			case "":
+			case "builtIn":
 				// There must be some variables
 				if (this.variables.length === 0) {
 					throw new Error(
 						`Edge ${this.id} is a function edge but has no variables`
-					);
-				}
-				// No variables can be choice options
-				if (
-					this.variables.some(
-						(variable) => variable.type === "choiceOption"
-					)
-				) {
-					throw new Error(
-						`Edge ${this.id} is a function edge but has a choice option variable`
 					);
 				}
 				break;
@@ -353,20 +343,10 @@ export class CannoliEdge {
 	}
 
 	validateChoice() {
-		// The first variable must be a choice option
-		if (this.variables[0].type !== "choiceOption") {
+		// The choice option must be set
+		if (!this.choiceOption) {
 			throw new Error(
-				`Edge ${this.id} is a choice edge but the first variable is not a choice option`
-			);
-		}
-		// No other variables can be choice options
-		if (
-			this.variables
-				.slice(1)
-				.some((variable) => variable.type === "choiceOption")
-		) {
-			throw new Error(
-				`Edge ${this.id} is a choice edge but a non-first variable is a choice option`
+				`Edge ${this.id} is a choice edge but has no choice option`
 			);
 		}
 
@@ -395,6 +375,30 @@ export class CannoliEdge {
 					);
 				}
 				break;
+			case "outOfListGroup": {
+				// Of its crossing groups, there must be one and only one list group
+				if (
+					this.crossingGroups.filter(
+						(crossingGroup) => crossingGroup.group.type === "list"
+					).length !== 1
+				) {
+					throw new Error(
+						`Edge ${this.id} is an outOfListGroup choice edge but does not cross exactly one list group`
+					);
+				}
+
+				// It must be leaving a list group
+				if (
+					this.crossingGroups.every(
+						(crossingGroup) => crossingGroup.group.type !== "list"
+					)
+				) {
+					throw new Error(
+						`Edge ${this.id} is an outOfListGroup choice edge but is not leaving a list group`
+					);
+				}
+				break;
+			}
 			default:
 				throw new Error(
 					`Edge ${this.id} has an invalid subtype: ${this.subtype}`
@@ -432,32 +436,19 @@ export class CannoliEdge {
 					);
 				}
 
-				// At least one of its source node's outgoing edges must be a listGroup edge that crosses a listGroup and no other groups
+				// At least one of its source node's outgoing edges must be a listGroup edge that enters a listGroup and no other groups
 				if (
 					!this.source.outgoingEdges
 						.filter((edge) => edge.subtype === "listGroup")
 						.some(
 							(edge) =>
 								edge.crossingGroups.length === 1 &&
-								edge.crossingGroups[0].group.type === "list"
+								edge.crossingGroups[0].group.type === "list" &&
+								edge.crossingGroups[0].isEntering
 						)
 				) {
 					throw new Error(
-						`Edge ${this.id} is a listGroup edge but its source node has no listGroup edges that cross a listGroup`
-					);
-				}
-
-				// All of its source node's outgoing edges that are listGroup edges that cross groups must have the same first crossing group
-				const firstCrossingGroups = this.source.outgoingEdges
-					.filter((edge) => edge.subtype === "listGroup")
-					.map((edge) => edge.crossingGroups[0].group);
-				if (
-					!firstCrossingGroups.every(
-						(group) => group === firstCrossingGroups[0]
-					)
-				) {
-					throw new Error(
-						`Edge ${this.id} is a listGroup edge but its source node has listGroup edges that cross different groups`
+						`Edge ${this.id} is a listGroup edge but its source node has no listGroup edges that enters a listGroup`
 					);
 				}
 
@@ -478,19 +469,6 @@ export class CannoliEdge {
 				}
 				break;
 			}
-			case "select":
-				// It must be exiting a group
-				if (
-					this.crossingGroups.some(
-						(crossingGroup) => crossingGroup.isEntering
-					)
-				) {
-					throw new Error(
-						`Edge ${this.id} is a select edge but is entering a group`
-					);
-				}
-
-				break;
 			default:
 				throw new Error(
 					`Edge ${this.id} has an invalid subtype: ${this.subtype}`

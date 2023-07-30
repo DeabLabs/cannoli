@@ -5,23 +5,36 @@ import { CannoliGroup } from "./group";
 // Node Types
 export type NodeType = "call" | "content" | "floating";
 
-export type CallSubtype = "list" | "select" | "choice" | "normal";
+export type CallSubtype = "list" | "choice" | "normal";
 
 export type ContentSubtype = "reference" | "vault" | "formatter" | "normal";
 
 export type FloatingSubtype = "";
 
+export type Reference = {
+	name: string;
+	sourceType: "note" | "floating" | "variable";
+	isExtracted: boolean;
+	valid: boolean;
+	position: number;
+	groupId: number | null; // Added groupId
+	resolvedVariable?: Variable;
+};
+
 export class CannoliNode {
 	id: string;
 	content: string;
+	renderFunction: (values: string[]) => string;
 	status: "pending" | "processing" | "complete" | "rejected";
 	type: NodeType;
 	subtype: CallSubtype | ContentSubtype | FloatingSubtype;
+	references: Reference[];
 	outgoingEdges: CannoliEdge[];
 	incomingEdges: CannoliEdge[];
 	group: CannoliGroup;
 	cannoli: CannoliGraph;
 	copies: CannoliNode[];
+	isConvergent: boolean;
 
 	constructor({
 		id,
@@ -85,9 +98,19 @@ export class CannoliNode {
 			  }..."`
 			: "\n\tGroup: None";
 
-		const logString = `Node: ${contentFormat} (Type: ${this.type}, Subtype: ${this.subtype}),${outgoingEdgesFormat},${incomingEdgesFormat},${groupFormat}`;
+		const logString = `[] Node: ${contentFormat} (Type: ${this.type}, Subtype: ${this.subtype}),${outgoingEdgesFormat},${incomingEdgesFormat},${groupFormat}`;
 
 		console.log(logString);
+	}
+
+	render(values: Record<string, string>): string {
+		// Convert the 'values' object to an array in the same order as 'references'
+		const valuesArray: string[] = this.references.map(
+			(reference) => values[reference.name] || ""
+		);
+
+		// Use the stored render function to produce the final string
+		return this.renderFunction(valuesArray);
 	}
 
 	setGroup(group: CannoliGroup) {
@@ -102,10 +125,8 @@ export class CannoliNode {
 			(edge) => edge.variables
 		);
 
-		// Disallow multiple non-choiceOption variables with the same name
-		const variableNames = incomingVariables
-			.filter((v) => v.type !== "choiceOption")
-			.map((v) => v.name);
+		// Disallow multiple variables with the same name
+		const variableNames = incomingVariables.map((v) => v.name);
 		const duplicateVariableNames = variableNames.filter(
 			(name, index) => variableNames.indexOf(name) !== index
 		);
@@ -122,7 +143,7 @@ export class CannoliNode {
 		// Do type-specific validation by calling the validate function for the type
 		switch (this.type) {
 			case "call":
-				this.validateCall(incomingVariables);
+				this.validateCall();
 				break;
 			case "content":
 				this.validateContent(incomingVariables);
@@ -135,7 +156,7 @@ export class CannoliNode {
 		}
 	}
 
-	validateCall(incomingVariables: Variable[]) {
+	validateCall() {
 		// Disallow incoming edges of subtype write
 		if (this.incomingEdges.some((edge) => edge.subtype === "write")) {
 			throw new Error(
@@ -163,12 +184,19 @@ export class CannoliNode {
 			);
 		}
 
-		checkVariablesInContent(
-			this.content,
-			incomingVariables,
-			this.cannoli.nodes,
-			this.cannoli
-		);
+		// If there are any invalid references, error and list them
+		if (this.references.some((ref) => !ref.valid)) {
+			const invalidReferences = this.references.filter(
+				(ref) => !ref.valid
+			);
+			throw new Error(
+				`Invalid Cannoli layout: Node with id ${
+					this.id
+				} has invalid references: ${invalidReferences
+					.map((ref) => ref.name)
+					.join(", ")}`
+			);
+		}
 
 		switch (this.subtype) {
 			case "list": {
@@ -205,42 +233,6 @@ export class CannoliNode {
 
 				break;
 			}
-			case "select": {
-				// There must be no outgoing choice type edges
-				if (this.outgoingEdges.some((edge) => edge.type === "choice")) {
-					throw new Error(
-						`Invalid Cannoli layout: Node with id ${this.id} has outgoing choice edges`
-					);
-				}
-
-				// There must be at least one outgoing list type edge with subtype select
-				const selectEdges = this.outgoingEdges.filter(
-					(edge) => edge.type === "list" && edge.subtype === "select"
-				);
-				if (selectEdges.length === 0) {
-					throw new Error(
-						`Invalid Cannoli layout: Node with id ${this.id} has no outgoing list edges with subtype select`
-					);
-				}
-
-				// If there are any outgoing list type edges with subtype select, they must all have the same variable name
-				if (selectEdges.length > 0) {
-					const variableNames = selectEdges.map((edge) => edge.label);
-					const duplicateVariableNames = variableNames.filter(
-						(name, index) => variableNames.indexOf(name) !== index
-					);
-					if (duplicateVariableNames.length > 0) {
-						throw new Error(
-							`Invalid Cannoli layout: Node with id ${
-								this.id
-							} has multiple outgoing select edges with different variable names: ${duplicateVariableNames.join(
-								", "
-							)}`
-						);
-					}
-				}
-				break;
-			}
 			case "choice": {
 				// There must be no outgoing list type edges
 				if (this.outgoingEdges.some((edge) => edge.type === "list")) {
@@ -249,16 +241,37 @@ export class CannoliNode {
 					);
 				}
 
-				// There must be at least one outgoing choice type edge
+				// If there is less than two unique choiceOptions among the outgoing choice type edges (choiceOption is a property of the edge)
 				const choiceEdges = this.outgoingEdges.filter(
 					(edge) => edge.type === "choice"
 				);
-				if (choiceEdges.length === 0) {
-					throw new Error(
-						`Invalid Cannoli layout: Node with id ${this.id} has no outgoing choice edges`
-					);
-				}
+				const choiceOptions = choiceEdges.map(
+					(edge) => edge.choiceOption
+				);
+				const uniqueChoiceOptions = new Set(choiceOptions);
+				if (uniqueChoiceOptions.size < 2) {
+					// They must be outOfListGroup edges
+					if (
+						choiceEdges.some(
+							(edge) => edge.subtype !== "outOfListGroup"
+						)
+					) {
+						throw new Error(
+							`Invalid Cannoli layout: Node with id ${this.id} has less than two unique choiceOptions among the outgoing choice type edges, but they are not all of subtype outOfListGroup`
+						);
+					}
 
+					// They must all be leaving a list group
+					if (
+						choiceEdges.some(
+							(edge) => edge.subtype !== "outOfListGroup"
+						)
+					) {
+						throw new Error(
+							`Invalid Cannoli layout: Node with id ${this.id} has less than two unique choiceOptions among the outgoing choice type edges, but they are not all leaving a list group`
+						);
+					}
+				}
 				break;
 			}
 			case "normal": {
@@ -409,12 +422,19 @@ export class CannoliNode {
 			}
 
 			case "formatter": {
-				checkVariablesInContent(
-					this.content,
-					incomingVariables,
-					this.cannoli.nodes,
-					this.cannoli
-				);
+				// If there are any invalid references, error and list them
+				if (this.references.some((ref) => !ref.valid)) {
+					const invalidReferences = this.references.filter(
+						(ref) => !ref.valid
+					);
+					throw new Error(
+						`Invalid Cannoli layout: Node with id ${
+							this.id
+						} has invalid references: ${invalidReferences
+							.map((ref) => ref.name)
+							.join(", ")}`
+					);
+				}
 
 				// Disallow incoming edges of type "blank"
 				if (this.incomingEdges.some((edge) => edge.type === "blank")) {
@@ -438,16 +458,6 @@ export class CannoliNode {
 			}
 
 			case "normal": {
-				// Disallow multiple incoming variables that aren't of type "choiceOption"
-				if (
-					incomingVariables.filter((v) => v.type !== "choiceOption")
-						.length > 1
-				) {
-					throw new Error(
-						"Invalid combination: Multiple incoming variables that aren't of type choiceOption are not allowed in a normal node"
-					);
-				}
-
 				// Disallow multiple incoming edges of type "blank" or subtype "logging"
 				if (
 					this.incomingEdges.filter(
@@ -960,13 +970,41 @@ export class CannoliNode {
 	// }
 }
 
+// Once you've gathered all the necessary variables and are ready to render out the string, you would use the render function returned by parseVariablesInContent. Here's an example of how you might do this:
+
+// // Call parseVariablesInContent with the appropriate arguments to get your Reference array and render function
+// const { references, render } = parseVariablesInContent(content, variables, nodes, cannoli, suppressErrors);
+
+// // Prepare an array to hold the values of your variables. This array should be the same length as the Reference array.
+// const values: string[] = new Array(references.length);
+
+// // Populate the values array using the references array. How you do this will depend on your exact use case.
+// // As an example, you might do something like this:
+// for (let i = 0; i < references.length; i++) {
+//     const reference = references[i];
+//     if (reference.sourceType === 'variable' && reference.valid) {
+//         // If the reference is to a valid variable, get its value from the variables array
+//         const variable = variables.find(variable => variable.name === reference.name);
+//         values[i] = variable ? variable.value || '' : '';
+//     }
+//     // Add similar checks for the 'note' and 'floating' sourceType cases if needed
+//     // If the reference isn't valid, just leave the corresponding entry in the values array as an empty string
+// }
+
+// // Finally, call the render function with your values array to get the final string
+// const finalString = render(values);
+
 export function checkVariablesInContent(
-	content: string,
-	variables: Variable[],
+	node: CannoliNode,
 	nodes: Record<string, CannoliNode>,
 	cannoli: CannoliGraph,
 	suppressErrors = false // new parameter
 ): number | void {
+	// Put variables from all incoming edges into an array. Edges have the property "variables" which is an array of variables
+	const variables = node.incomingEdges.flatMap((edge) => edge.variables);
+
+	const content = node.content;
+
 	const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|{{(.+?)}}|{(.+?)}/g;
 
 	let match: RegExpExecArray | null;
@@ -1013,9 +1051,7 @@ export function checkVariablesInContent(
 			const variableName = match[3] || match[4];
 			const variableExists = variables.some(
 				(variable) =>
-					variable.name === variableName &&
-					variable.type !== "choiceOption" &&
-					variable.type !== "config"
+					variable.name === variableName && variable.type !== "config"
 			);
 
 			if (variableExists) {
@@ -1038,4 +1074,159 @@ export function checkVariablesInContent(
 			)}`
 		);
 	}
+}
+
+type Path = CannoliEdge[];
+
+/**
+ * Returns all paths from the given edge to leaves in the graph.
+ * @param {CannoliEdge} edge - the starting edge.
+ * @param {Set<CannoliNode>} visited - the set of visited nodes, used to prevent cycles.
+ * @param {Path} path - the current path from the source of edge.
+ * @param {Path[]} paths - all paths from the source of edge.
+ */
+function getPathsFromEdge(
+	edge: CannoliEdge,
+	visited: Set<CannoliNode> = new Set<CannoliNode>(),
+	path: Path = [],
+	paths: Path[] = []
+): Path[] {
+	visited.add(edge.target);
+	path.push(edge);
+
+	if (edge.target.outgoingEdges.length === 0) {
+		paths.push([...path]);
+	} else {
+		for (const outgoingEdge of edge.target.outgoingEdges) {
+			if (!visited.has(outgoingEdge.target)) {
+				getPathsFromEdge(outgoingEdge, visited, path, paths);
+			}
+		}
+	}
+
+	path.pop();
+	visited.delete(edge.target);
+	return paths;
+}
+
+/**
+ * Returns all paths to the given edge from roots in the graph.
+ * @param {CannoliEdge} edge - the ending edge.
+ * @param {Set<CannoliNode>} visited - the set of visited nodes, used to prevent cycles.
+ * @param {Path} path - the current path to the target of edge.
+ * @param {Path[]} paths - all paths to the target of edge.
+ */
+function getPathsToEdge(
+	edge: CannoliEdge,
+	visited = new Set<CannoliNode>(),
+	path: Path = [],
+	paths: Path[] = []
+): Path[] {
+	visited.add(edge.source);
+	path.push(edge);
+
+	if (edge.source.incomingEdges.length === 0) {
+		paths.push([...path]);
+	} else {
+		for (const incomingEdge of edge.source.incomingEdges) {
+			if (!visited.has(incomingEdge.source)) {
+				getPathsToEdge(incomingEdge, visited, path, paths);
+			}
+		}
+	}
+
+	path.pop();
+	visited.delete(edge.source);
+	return paths;
+}
+
+/**
+ * Helper function to check if the variable sets of two edges are equal.
+ * @param {CannoliEdge[]} edges - array containing two edges.
+ * @returns {boolean} - true if the variable sets are equal, else false.
+ */
+function variableSetsAreEqual(edges: CannoliEdge[]): boolean {
+	// Get the sets of variable names for the two edges
+	const varNames1 = new Set(
+		edges[0].variables.map((variable) => variable.name)
+	);
+	const varNames2 = new Set(
+		edges[1].variables.map((variable) => variable.name)
+	);
+
+	// Check if both sets have the same size
+	if (varNames1.size !== varNames2.size) {
+		return false;
+	}
+
+	// Check if every element in the first set is also in the second set
+	for (const varName of varNames1) {
+		if (!varNames2.has(varName)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Returns true if the given choice node and its downstream are valid, else false.
+ * @param {CannoliNode} node - the choice node to validate.
+ */
+export function isChoiceNodeValid(node: CannoliNode): boolean {
+	const choiceEdges = node.outgoingEdges.filter(
+		(edge) => edge.type === "choice"
+	);
+
+	for (let i = 0; i < choiceEdges.length; i++) {
+		for (let j = i + 1; j < choiceEdges.length; j++) {
+			const pathsFromEdgeI = getPathsFromEdge(choiceEdges[i]);
+			const pathsFromEdgeJ = getPathsFromEdge(choiceEdges[j]);
+
+			for (const pathI of pathsFromEdgeI) {
+				for (const pathJ of pathsFromEdgeJ) {
+					const crossEdge = pathI.find((edgeI) =>
+						pathJ.includes(edgeI)
+					);
+
+					if (crossEdge) {
+						const conflictingEdge =
+							crossEdge.target.incomingEdges.find(
+								(edge) =>
+									edge.type === "choice" &&
+									!variableSetsAreEqual([edge, crossEdge])
+							);
+
+						if (conflictingEdge) {
+							return false;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+/**
+ * Returns true if there's a common choice node for the given edges, else false.
+ * @param {CannoliEdge[]} edges - the edges to trace back.
+ */
+export function traceBackToCommonChoiceNode(edges: CannoliEdge[]): boolean {
+	const commonChoiceNode = edges[0].source;
+	if (!commonChoiceNode || commonChoiceNode.subtype !== "choice")
+		return false;
+
+	for (const edge of edges) {
+		const pathsToEdge = getPathsToEdge(edge);
+		for (const path of pathsToEdge) {
+			const pathHasCommonChoiceNode = path.some(
+				(pathEdge) => pathEdge.source === commonChoiceNode
+			);
+			if (!pathHasCommonChoiceNode) return false;
+		}
+	}
+
+	return true;
 }

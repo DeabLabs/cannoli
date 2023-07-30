@@ -14,7 +14,7 @@ import {
 	ContentSubtype,
 	FloatingSubtype,
 	NodeType,
-	checkVariablesInContent,
+	Reference,
 } from "./node";
 import {
 	BlankSubtype,
@@ -148,7 +148,8 @@ export class Canvas {
 
 			if (!edgeInfo) continue;
 
-			const { edgeType, edgeTags, edgeVariables } = edgeInfo;
+			const { edgeType, edgeTags, edgeVariables, choiceOption } =
+				edgeInfo;
 
 			const edge = new CannoliEdge({
 				id: edgeData.id,
@@ -158,6 +159,7 @@ export class Canvas {
 				type: edgeType,
 				tags: edgeTags,
 				variables: edgeVariables,
+				choiceOption,
 			});
 
 			edges[edge.id] = edge;
@@ -245,8 +247,21 @@ export class Canvas {
 			edge.subtype = this.findEdgeSubtype(edge);
 		}
 
-		// For each node in the nodes object, set the subtype
+		// For each node in the nodes object, set the references, render function, and subtype
 		for (const node of Object.values(nodes)) {
+			const { references, renderFunction } = this.parseVariablesInContent(
+				node,
+				nodes,
+				node.cannoli
+			);
+			node.references = references;
+			node.renderFunction = renderFunction;
+
+			// if any references have a groupId, set isConvergent to true
+			if (node.references.some((reference) => reference.groupId)) {
+				node.isConvergent = true;
+			}
+
 			node.subtype = this.findNodeSubtype(node, nodes);
 		}
 
@@ -395,7 +410,7 @@ export class Canvas {
 		maxLoops: number;
 		type: GroupType;
 	} {
-		// Initialize the maxLoops, choiceString, and type variables
+		// Initialize the maxLoops and type variables
 		let maxLoops = 0;
 		let type: GroupType = "basic";
 
@@ -521,60 +536,46 @@ export class Canvas {
 		}
 		// If the edge is a choice edge
 		else if (edge.type === "choice") {
-			// If the edge is leaving a group
-			if (edge.crossingGroups.find((group) => !group.isEntering)) {
-				// It's an outOfGroup choice edge
+			// If the edge is leaving a basic group
+			if (
+				edge.crossingGroups.some(
+					(group) =>
+						group.group.type === "basic" &&
+						group.isEntering === false
+				)
+			) {
+				// It's an outOfGroup edge
 				return "outOfGroup";
-			} else {
-				// It's a normal choice edge
-				return "normal";
 			}
+
+			// If there is less than two unique choiceOptions among the outgoing choice type edges (choiceOption is a property of the edge)
+			const choiceEdges = edge.source.outgoingEdges.filter(
+				(edge) => edge.type === "choice"
+			);
+			const choiceOptions = choiceEdges.map((edge) => edge.choiceOption);
+			const uniqueChoiceOptions = new Set(choiceOptions);
+			if (uniqueChoiceOptions.size < 2) {
+				// It's an outOfListGroup edge
+				return "outOfListGroup";
+			}
+
+			// It's a normal choice edge
+			return "normal";
 		}
 		// If the edge is a list edge
 		else if (edge.type === "list") {
-			// If the edge is leaving a group of type list
+			// If all of the variables in list edges leaving its source node share the same first variable name
 			if (
-				edge.crossingGroups.find(
-					(group) => !group.isEntering && group.group.type === "list"
-				)
+				edge.source.outgoingEdges
+					.filter((edge) => edge.type === "list")
+					.every(
+						(edge) =>
+							edge.variables[0].name ===
+							edge.source.outgoingEdges[0].variables[0].name
+					)
 			) {
-				// It's a select edge
-				return "select";
-			} else if (
-				edge.crossingGroups &&
-				edge.crossingGroups.find((group) => group.isEntering)
-			) {
-				// Extract the outgoing edges which are of type "list"
-				const listOutgoingEdges = edge.source.outgoingEdges.filter(
-					(edge) => edge.type === "list"
-				);
-
-				// Check for each outgoing edge
-				const hasListGroupEdge = listOutgoingEdges.some((outEdge) => {
-					// Ensure crossingGroups property is defined and non-empty
-					if (
-						outEdge.crossingGroups &&
-						outEdge.crossingGroups.length > 0
-					) {
-						// Find if any crossing group satisfies the condition
-						const crossingGroupFound = outEdge.crossingGroups.find(
-							(group) =>
-								group.isEntering &&
-								group.group.type === "list" &&
-								outEdge.crossingGroups.length === 1
-						);
-						// Return true if a group was found that satisfies the conditions
-						return Boolean(crossingGroupFound);
-					}
-					// If no crossingGroups or it is empty, return false
-					return false;
-				});
-
-				if (hasListGroupEdge) {
-					return "listGroup";
-				} else {
-					return "list";
-				}
+				// It's a listGroup edge
+				return "listGroup";
 			} else {
 				return "list";
 			}
@@ -594,16 +595,8 @@ export class Canvas {
 		} else if (node.type === "call") {
 			// If the node has any outgoing edge of type "list"
 			if (node.outgoingEdges.some((edge) => edge.type === "list")) {
-				// If one of them is a select edge
-				if (
-					node.outgoingEdges.some((edge) => edge.subtype === "select")
-				) {
-					// It's a select subtype
-					return "select";
-				} else {
-					// It's a list subtype
-					return "list";
-				}
+				// It's a list subtype
+				return "list";
 			}
 			// If the node has any outgoing edges of type "choice"
 			else if (
@@ -616,19 +609,6 @@ export class Canvas {
 				return "normal";
 			}
 		} else if (node.type === "content") {
-			// Put variables from all incoming edges into an array. Edges have the property "variables" which is an array of variables
-			const incomingVariables = node.incomingEdges.flatMap(
-				(edge) => edge.variables
-			);
-
-			const validReferencesCount = checkVariablesInContent(
-				node.content,
-				incomingVariables,
-				nodes,
-				node.cannoli,
-				true
-			);
-
 			// If its content is just a link of the format [[link]], or [link], it's a reference node
 			if (node.content.startsWith("[[") && node.content.endsWith("]]")) {
 				return "reference";
@@ -638,18 +618,9 @@ export class Canvas {
 			) {
 				return "reference";
 			} else if (
-				// If there are any valid references in the content, they seem to intend for it to be a formatter node
-				validReferencesCount !== undefined &&
-				validReferencesCount > 0
+				// If there are any references that are valid, they seem to intend for it to be a formatter node
+				node.references.some((reference) => reference.valid)
 			) {
-				// Check if all references in the content are valid
-				checkVariablesInContent(
-					node.content,
-					incomingVariables,
-					nodes,
-					node.cannoli
-				);
-
 				return "formatter";
 			}
 
@@ -737,10 +708,12 @@ export class Canvas {
 		edgeType: EdgeType;
 		edgeTags: EdgeTag[];
 		edgeVariables: Variable[];
+		choiceOption: string | null;
 	} | null {
 		let edgeType: EdgeType | null = null;
 		const edgeTags: EdgeTag[] = [];
 		const edgeVariables: Variable[] = [];
+		let choiceOption: string | null = null;
 
 		let label = edge.label;
 
@@ -774,7 +747,7 @@ export class Canvas {
 
 		// Return if there's no label, from here on out we'll assume there is a label
 		if (!label) {
-			return { edgeType, edgeTags, edgeVariables };
+			return { edgeType, edgeTags, edgeVariables, choiceOption };
 		}
 
 		// If the edge isn't a blank edge, check if the last character is a tag on the edge tag map. If you find one, remove it from the label and add it to the tags array
@@ -791,6 +764,12 @@ export class Canvas {
 		const unparsedEdgeVariables = label
 			.split(",")
 			.map((variable) => variable.trim());
+
+		// If its a choice edge, set the edge's choiceOption to the first variable, and remove it from the variables array
+		if (edgeType === "choice") {
+			choiceOption = unparsedEdgeVariables[0];
+			unparsedEdgeVariables.shift();
+		}
 
 		// For each unparsed variable
 		for (const unparsedVariable of unparsedEdgeVariables) {
@@ -829,14 +808,9 @@ export class Canvas {
 					name: unparsedVariable,
 				});
 			}
-
-			// If the type is choice, change the first variable to a choice option variable
-			if (edgeType === "choice") {
-				edgeVariables[0].type = "choiceOption";
-			}
 		}
 
-		return { edgeType, edgeTags, edgeVariables };
+		return { edgeType, edgeTags, edgeVariables, choiceOption };
 	}
 
 	computeCrossingGroups(
@@ -975,6 +949,118 @@ export class Canvas {
 		return crossingGroups;
 	}
 
+	parseVariablesInContent(
+		node: CannoliNode,
+		nodes: Record<string, CannoliNode>,
+		cannoli: CannoliGraph,
+		suppressErrors = false
+	): {
+		references: Reference[];
+		renderFunction: (values: string[]) => string;
+	} {
+		const variables = node.incomingEdges.flatMap((edge) => edge.variables);
+		const content = node.content;
+		const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|{{(.+?)}}|{(.+?)}/g;
+		let match: RegExpExecArray | null;
+		const references: Reference[] = [];
+		let contentCopy = content;
+
+		const lines = contentCopy.split("\n");
+		const tableLines: { [index: number]: boolean } = {};
+		lines.forEach((line, index) => {
+			if (line.trim().startsWith("#")) {
+				tableLines[index] = true;
+			}
+		});
+
+		while ((match = regex.exec(contentCopy)) !== null) {
+			let sourceType: "note" | "floating" | "variable" = "variable";
+			let name = "";
+			let isExtracted = false;
+			let valid = true;
+			let resolvedVariable: Variable | undefined;
+			let groupId: number | null = null;
+
+			const lineIndex =
+				contentCopy.substr(0, match.index).split("\n").length - 1;
+			if (tableLines[lineIndex]) {
+				groupId = lineIndex;
+			}
+
+			if (match[1]) {
+				// Note reference
+				sourceType = "note";
+				name = match[1];
+				const note = cannoli.vault
+					.getMarkdownFiles()
+					.find((file) => file.basename === name);
+				if (!note) {
+					if (!suppressErrors) {
+						throw new Error(`Note ${name} not found`);
+					}
+					valid = false;
+				}
+			} else if (match[2]) {
+				// Floating variable reference
+				sourceType = "floating";
+				name = match[2];
+				const floatingNodes = Object.values(nodes).filter(
+					(node) => node.type === "floating"
+				);
+				const floatingNode = floatingNodes.find((node) =>
+					node.content.startsWith(`[${name}]`)
+				);
+				if (!floatingNode) {
+					if (!suppressErrors) {
+						throw new Error(`Floating variable ${name} not found`);
+					}
+					valid = false;
+				}
+			} else if (match[3] || match[4]) {
+				// Regular variable
+				name = match[3] || match[4];
+				isExtracted = !!match[3];
+				resolvedVariable = variables.find(
+					(variable) =>
+						variable.name === name && variable.type !== "config"
+				);
+
+				if (!resolvedVariable) {
+					if (!suppressErrors) {
+						throw new Error(
+							`Invalid Cannoli layout: Node has missing variables in incoming edges: ${name}`
+						);
+					}
+					valid = false;
+				}
+			}
+
+			const reference: Reference = {
+				name,
+				sourceType,
+				isExtracted,
+				valid,
+				position: references.length,
+				resolvedVariable,
+				groupId,
+			};
+			references.push(reference);
+			contentCopy = contentCopy.replace(
+				match[0],
+				`{${references.length - 1}}`
+			);
+		}
+
+		const renderFunction = (values: string[]) => {
+			return contentCopy.replace(
+				/\{(\d+)\}/g,
+				(match, index) => values[Number(index)]
+			);
+		};
+
+		return { references, renderFunction };
+	}
+
 	containsValidReferences(
 		content: string,
 		variables: Variable[],
@@ -1021,7 +1107,6 @@ export class Canvas {
 				const variableExists = variables.some(
 					(variable) =>
 						variable.name === variableName &&
-						variable.type !== "choiceOption" &&
 						variable.type !== "config"
 				);
 				if (variableExists) {
