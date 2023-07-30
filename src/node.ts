@@ -24,7 +24,7 @@ export type Reference = {
 export class CannoliNode {
 	id: string;
 	content: string;
-	renderFunction: (values: string[]) => string;
+	renderFunction: (references: Reference[]) => Promise<string>;
 	status: "pending" | "processing" | "complete" | "rejected";
 	type: NodeType;
 	subtype: CallSubtype | ContentSubtype | FloatingSubtype;
@@ -103,14 +103,15 @@ export class CannoliNode {
 		console.log(logString);
 	}
 
-	render(values: Record<string, string>): string {
-		// Convert the 'values' object to an array in the same order as 'references'
-		const valuesArray: string[] = this.references.map(
-			(reference) => values[reference.name] || ""
-		);
+	async execute(nodeCompleted: () => void) {
+		if (this.cannoli.isStopped) {
+			return;
+		}
+	}
 
+	async render(): Promise<string> {
 		// Use the stored render function to produce the final string
-		return this.renderFunction(valuesArray);
+		return await this.renderFunction(this.references);
 	}
 
 	setGroup(group: CannoliGroup) {

@@ -7,7 +7,7 @@ import { CannoliNode } from "./node";
 import { CannoliEdge } from "./edge";
 
 import pLimit from "p-limit";
-// import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
+import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
 
 interface Limit {
 	(
@@ -32,6 +32,7 @@ export class CannoliGraph {
 	groups: Record<string, CannoliGroup>;
 	nodes: Record<string, CannoliNode>;
 	edges: Record<string, CannoliEdge>;
+	isStopped: boolean;
 
 	constructor(canvasFile: TFile, apiKey: string, vault: Vault) {
 		this.canvas = new Canvas(canvasFile, this);
@@ -50,6 +51,12 @@ export class CannoliGraph {
 		// Limit the number of concurrent requests to 10
 		// Adjust this number as needed
 		this.limit = pLimit(10);
+
+		this.isStopped = false;
+	}
+
+	stop() {
+		this.isStopped = true;
 	}
 
 	async initialize(verbose = false) {
@@ -266,26 +273,26 @@ export class CannoliGraph {
 		completionTokens: number;
 	}> {
 		if (mock) {
-			// const enc = encoding_for_model(model);
+			const enc = encoding_for_model(model as TiktokenModel);
 
-			// let textMessages = "";
+			let textMessages = "";
 
-			// // For each message, convert it to a string, including the role and the content, and a function call if present
-			// for (const message of messages) {
-			// 	if (message.function_call) {
-			// 		textMessages += `${message.role}: ${message.content} ${message.function_call} `;
-			// 	} else {
-			// 		textMessages += `${message.role}: ${message.content} `;
-			// 	}
-			// }
+			// For each message, convert it to a string, including the role and the content, and a function call if present
+			for (const message of messages) {
+				if (message.function_call) {
+					textMessages += `${message.role}: ${message.content} ${message.function_call} `;
+				} else {
+					textMessages += `${message.role}: ${message.content} `;
+				}
+			}
 
-			// const encoded = enc.encode(textMessages);
+			const encoded = enc.encode(textMessages);
 
-			// const promptTokens = encoded.length;
+			const promptTokens = encoded.length;
 
 			return {
 				message: { role: "user", content: "mock" },
-				promptTokens: 0,
+				promptTokens: promptTokens,
 				completionTokens: 0,
 			};
 		} else {

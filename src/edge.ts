@@ -108,87 +108,100 @@ export class CannoliEdge {
 		unnamedContent,
 		loadVariables,
 		chatHistory,
+		mock = false,
 	}: {
 		unnamedContent?: string;
 		loadVariables?: LoadVariable[];
 		chatHistory?: ChatCompletionRequestMessage[];
+		mock?: boolean;
 	}) {
-		// Validate and extract vault variables
+		// Load the variables
 		if (loadVariables) {
 			for (const loadVariable of loadVariables) {
-				// Switch on the variable type of the same-named variable
 				const variable = this.variables.find(
 					(variable) => variable.name === loadVariable.name
 				);
+
 				if (variable) {
-					switch (variable.type) {
-						case "existingLink": {
-							// Get the load variable's content
-							const loadVariableContent = loadVariable.content;
+					// If it's not a mock run, validate the vault variables
+					if (!mock) {
+						switch (variable.type) {
+							case "existingLink": {
+								// Get the load variable's content
+								const loadVariableContent =
+									loadVariable.content;
 
-							// Check if it corresponds to a file in the vault
-							const note = this.cannoli.vault
-								.getMarkdownFiles()
-								.find(
-									(file) =>
-										file.basename === loadVariableContent
-								);
+								// Check if it corresponds to a file in the vault
+								const note = this.cannoli.vault
+									.getMarkdownFiles()
+									.find(
+										(file) =>
+											file.basename ===
+											loadVariableContent
+									);
 
-							if (!note) {
-								throw new Error(
-									`Edge ${this.id} has a variable with type existingLink but there is no file in the vault with the name ${loadVariableContent}`
-								);
+								if (!note) {
+									throw new Error(
+										`Edge ${this.id} has a variable with type existingLink but there is no file in the vault with the name ${loadVariableContent}`
+									);
+								}
+								break;
 							}
-							break;
-						}
-						case "existingPath": {
-							// Get the load variable's content
-							const path = loadVariable.content;
+							case "existingPath": {
+								// Get the load variable's content
+								const path = loadVariable.content;
 
-							// Check if it corresponds to a folder in the vault
-							const folder =
-								this.cannoli.vault.getAbstractFileByPath(path);
+								// Check if it corresponds to a folder in the vault
+								const folder =
+									this.cannoli.vault.getAbstractFileByPath(
+										path
+									);
 
-							if (!folder) {
-								throw new Error(
-									`Edge ${this.id} has a variable with type existingPath but there is no folder in the vault with the path ${path}`
-								);
+								if (!folder) {
+									throw new Error(
+										`Edge ${this.id} has a variable with type existingPath but there is no folder in the vault with the path ${path}`
+									);
+								}
+								break;
 							}
-							break;
-						}
-						case "newLink": {
-							// Get the load variable's content
-							const loadVariableContent = loadVariable.content;
+							case "newLink": {
+								// Get the load variable's content
+								const loadVariableContent =
+									loadVariable.content;
 
-							// Check if it corresponds to a file in the vault, error if it does
-							const note = this.cannoli.vault
-								.getMarkdownFiles()
-								.find(
-									(file) =>
-										file.basename === loadVariableContent
-								);
+								// Check if it corresponds to a file in the vault, error if it does
+								const note = this.cannoli.vault
+									.getMarkdownFiles()
+									.find(
+										(file) =>
+											file.basename ===
+											loadVariableContent
+									);
 
-							if (note) {
-								throw new Error(
-									`Edge ${this.id} has a variable with type newLink but there is already a file in the vault with the name ${loadVariableContent}`
-								);
+								if (note) {
+									throw new Error(
+										`Edge ${this.id} has a variable with type newLink but there is already a file in the vault with the name ${loadVariableContent}`
+									);
+								}
+								break;
 							}
-							break;
-						}
-						case "newPath": {
-							// Get the load variable's content
-							const path = loadVariable.content;
+							case "newPath": {
+								// Get the load variable's content
+								const path = loadVariable.content;
 
-							// Check if it corresponds to a folder in the vault, error if it does
-							const folder =
-								this.cannoli.vault.getAbstractFileByPath(path);
+								// Check if it corresponds to a folder in the vault, error if it does
+								const folder =
+									this.cannoli.vault.getAbstractFileByPath(
+										path
+									);
 
-							if (folder) {
-								throw new Error(
-									`Edge ${this.id} has a variable with type newPath but there is already a folder in the vault with the path ${path}`
-								);
+								if (folder) {
+									throw new Error(
+										`Edge ${this.id} has a variable with type newPath but there is already a folder in the vault with the path ${path}`
+									);
+								}
+								break;
 							}
-							break;
 						}
 					}
 

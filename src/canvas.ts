@@ -1,10 +1,12 @@
 // import { ErrorModal } from "main";
 import { TFile } from "obsidian";
 import {
+	CanvasColor,
 	CanvasData,
 	CanvasEdgeData,
 	CanvasGroupData,
 	CanvasNodeData,
+	CanvasTextData,
 } from "obsidian/canvas.d";
 import { CannoliGraph } from "./cannoli";
 import { CannoliGroup, GroupType } from "./group";
@@ -29,6 +31,7 @@ import {
 	VariableSubtype,
 	VariableType,
 } from "./edge";
+import { v4 as uuidv4 } from "uuid";
 
 export class Canvas {
 	canvasFile: TFile;
@@ -76,12 +79,76 @@ export class Canvas {
 		this.canvasData = parsedContent;
 	}
 
-	async editCanvasFile(newContent: string) {
-		// Push the edit operation to the queue
-		this.editQueue = this.editQueue.then(() =>
-			this.canvasFile.vault.modify(this.canvasFile, newContent)
-		);
+	private async readCanvasData(): Promise<CanvasData> {
+		const fileContent = await this.canvasFile.vault.read(this.canvasFile);
+		return JSON.parse(fileContent);
+	}
+
+	private async writeCanvasData(data: CanvasData) {
+		const newContent = JSON.stringify(data);
+		await this.canvasFile.vault.modify(this.canvasFile, newContent);
+	}
+
+	private changeNodeColor(
+		data: CanvasData,
+		nodeId: string,
+		newColor: CanvasColor
+	): CanvasData {
+		const node = data.nodes.find((node) => node.id === nodeId);
+		if (node) {
+			node.color = newColor;
+		}
+		return data;
+	}
+
+	private addErrorNode(data: CanvasData, nodeId: string): CanvasData {
+		const node = data.nodes.find((node) => node.id === nodeId);
+		if (node) {
+			const newNodeId = this.generateNewId();
+			const errorNode: CanvasTextData = {
+				id: newNodeId,
+				x: node.x + 100,
+				y: node.y,
+				width: node.width,
+				height: node.height,
+				color: "1",
+				text: "Error",
+				type: "text", // Add the 'type' property
+			};
+			const newEdge: CanvasEdgeData = {
+				id: this.generateNewId(),
+				fromNode: nodeId,
+				fromSide: "right",
+				toNode: newNodeId,
+				toSide: "left",
+				color: "1", // red color
+			};
+			data.nodes.push(errorNode);
+			data.edges.push(newEdge);
+		}
+		return data;
+	}
+
+	async enqueueChangeNodeColor(nodeId: string, newColor: CanvasColor) {
+		this.editQueue = this.editQueue.then(async () => {
+			const data = await this.readCanvasData();
+			const newData = this.changeNodeColor(data, nodeId, newColor);
+			await this.writeCanvasData(newData);
+		});
 		return this.editQueue;
+	}
+
+	async enqueueAddErrorNode(nodeId: string) {
+		this.editQueue = this.editQueue.then(async () => {
+			const data = await this.readCanvasData();
+			const newData = this.addErrorNode(data, nodeId);
+			await this.writeCanvasData(newData);
+		});
+		return this.editQueue;
+	}
+
+	generateNewId(): string {
+		return uuidv4().replace(/-/g, "").substring(0, 16);
 	}
 
 	getNodesAndEdgesInGroup(group: CanvasGroupData): {
@@ -959,7 +1026,7 @@ export class Canvas {
 		suppressErrors = false
 	): {
 		references: Reference[];
-		renderFunction: (values: string[]) => string;
+		renderFunction: (references: Reference[]) => Promise<string>;
 	} {
 		const variables = node.incomingEdges.flatMap((edge) => edge.variables);
 		const content = node.content;
@@ -985,7 +1052,7 @@ export class Canvas {
 			let groupId: number | null = null;
 
 			const lineIndex =
-				contentCopy.substr(0, match.index).split("\n").length - 1;
+				contentCopy.substring(0, match.index).split("\n").length - 1;
 			if (tableLines[lineIndex]) {
 				groupId = lineIndex;
 			}
@@ -1054,12 +1121,71 @@ export class Canvas {
 			);
 		}
 
-		const renderFunction = (values: string[]) => {
-			return contentCopy.replace(
-				/\{(\d+)\}/g,
-				(match, index) => values[Number(index)]
-			);
+		const renderFunction = async (references: Reference[]) => {
+			// Prepare a list of promises for each reference to be resolved
+			const referencePromises = references.map(async (reference) => {
+				let value = "{invalid reference}";
+
+				if (
+					reference.sourceType === "variable" &&
+					reference.valid &&
+					reference.resolvedVariable
+				) {
+					value = String(reference.resolvedVariable.value);
+				} else if (reference.sourceType === "note" && reference.valid) {
+					if (reference.isExtracted) {
+						const file = cannoli.vault
+							.getMarkdownFiles()
+							.find((file) => file.basename === reference.name);
+						if (!file) {
+							throw new Error(`Note ${reference.name} not found`);
+						}
+
+						const fileContent = await cannoli.vault.read(file);
+						value = fileContent;
+					} else {
+						value = `[[${reference.name}]]`;
+					}
+				} else if (
+					reference.sourceType === "floating" &&
+					reference.valid
+				) {
+					if (reference.isExtracted) {
+						const floatingNode = Object.values(nodes).find(
+							(node) =>
+								node.type === "floating" &&
+								node.content.startsWith(`[${reference.name}]`)
+						);
+
+						// Get everything after the first line
+						if (!floatingNode) {
+							throw new Error(
+								`Floating variable ${reference.name} not found`
+							);
+						}
+
+						value = floatingNode.content
+							.split("\n")
+							.slice(1)
+							.join("\n");
+					} else {
+						value = `[${reference.name}]`;
+					}
+				}
+
+				return value;
+			});
+
+			// Wait for all the promises to resolve
+			const resolvedReferences = await Promise.all(referencePromises);
+
+			// Now we can use replace, as we have all the values
+			return contentCopy.replace(/\{(\d+)\}/g, (match, index) => {
+				return resolvedReferences[Number(index)];
+			});
 		};
+
+		return { references, renderFunction };
 
 		return { references, renderFunction };
 	}
