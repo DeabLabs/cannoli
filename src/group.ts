@@ -248,10 +248,36 @@ export class CannoliGroup {
 			);
 		}
 
-		// At least one of the listGroup edges must only have one crossingGroup
-		if (!listGroupEdges.some((edge) => edge.crossingGroups.length === 1)) {
+		// Initialize the number of listGroup edges that only enter one list group
+		let numSingleListGroupEdges = 0;
+
+		// Iterate through all listGroup edges
+		for (const edge of listGroupEdges) {
+			// Initialize the number of listGroups it enters
+			let numListGroups = 0;
+
+			// If the edge enters more than one list group, throw an error (crossingGroups is an array of objects that contain the group and isEntering properties)
+			// For each of the groups in the edge's crossingGroups array
+			for (const crossingGroup of edge.crossingGroups) {
+				// If the edge is entering the group, and the group is a list group, increment the number of listGroups
+				if (
+					crossingGroup.isEntering &&
+					crossingGroup.group.type === "list"
+				) {
+					numListGroups++;
+				}
+			}
+
+			// If the edge entered exactly one list group, increment the number of single listGroup edges
+			if (numListGroups === 1) {
+				numSingleListGroupEdges++;
+			}
+		}
+
+		// It must have at least one listGroup edge entering it that only enters one list group.
+		if (numSingleListGroupEdges === 0) {
 			throw new Error(
-				`List Group ${this.id} has no listGroup edges entering it with only one crossingGroup.`
+				`List Group ${this.id} has no listGroup edges entering it that only enter one list group.`
 			);
 		}
 
