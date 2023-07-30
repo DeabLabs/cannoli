@@ -116,6 +116,9 @@ export default class Cannoli extends Plugin {
 		// Initialize the graph
 		await cannoli.initialize(true);
 
+		// Run the graph
+		cannoli.run();
+
 		// Send notice containing active file name
 		new Notice(`Starting Cannoli on ${activeFile.path}`);
 	};

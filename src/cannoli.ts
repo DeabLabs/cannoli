@@ -33,6 +33,7 @@ export class CannoliGraph {
 	nodes: Record<string, CannoliNode>;
 	edges: Record<string, CannoliEdge>;
 	isStopped: boolean;
+	mock: boolean;
 
 	constructor(canvasFile: TFile, apiKey: string, vault: Vault) {
 		this.canvas = new Canvas(canvasFile, this);
@@ -72,6 +73,75 @@ export class CannoliGraph {
 
 		// Validate the graph
 		this.validate();
+	}
+
+	mockRun() {
+		this.mock = true;
+
+		const nodeCompleted = () => {
+			// Check if all nodes are either complete or rejected
+			if (
+				Object.values(this.nodes).every(
+					(node) =>
+						node.status === "complete" || node.status === "rejected"
+				)
+			) {
+				console.log("Mock run complete");
+				return;
+			}
+		};
+
+		// Call attemptExecution() on all non floating nodes
+		for (const node of Object.values(this.nodes)) {
+			if (node.type !== "floating") {
+				node.attemptExecution(nodeCompleted);
+			}
+		}
+	}
+
+	async run() {
+		// Change the color of all call nodes to color 0 and status to "pending" for all non-floating nodes
+		for (const node of Object.values(this.nodes)) {
+			if (node.type === "call") {
+				await this.canvas.enqueueChangeNodeColor(node.id, "0");
+			}
+
+			if (node.type !== "floating") {
+				node.status = "pending";
+			}
+		}
+
+		// Mock run first
+		this.mockRun();
+
+		// Set all the nodes to pending again
+		for (const node of Object.values(this.nodes)) {
+			if (node.type !== "floating") {
+				node.status = "pending";
+			}
+		}
+
+		this.mock = false;
+
+		const nodeCompleted = () => {
+			// Check if all nodes are either complete or rejected
+			if (
+				Object.values(this.nodes).every(
+					(node) =>
+						node.status === "complete" || node.status === "rejected"
+				)
+			) {
+				console.log("Run complete");
+				return;
+			}
+		};
+
+		// Call attemptExecution() on all non floating nodes
+		for (const node of Object.values(this.nodes)) {
+			if (node.type !== "floating") {
+				node.attemptExecution(nodeCompleted);
+			}
+		}
 	}
 
 	validate() {
@@ -114,10 +184,9 @@ export class CannoliGraph {
 	async editNote(
 		noteName: string,
 		newContent: string,
-		verbose = false,
-		mock = false
+		verbose = false
 	): Promise<boolean> {
-		if (mock) {
+		if (this.mock) {
 			return true;
 		}
 
@@ -144,10 +213,9 @@ export class CannoliGraph {
 		noteName: string,
 		path: string,
 		content?: string,
-		verbose = false,
-		mock = false
+		verbose = false
 	): Promise<boolean> {
-		if (mock) {
+		if (this.mock) {
 			return true;
 		}
 
@@ -177,10 +245,9 @@ export class CannoliGraph {
 		noteName: string,
 		path: string,
 		content?: string,
-		verbose = false,
-		mock = false
+		verbose = false
 	): Promise<boolean> {
-		if (mock) {
+		if (this.mock) {
 			return true;
 		}
 
@@ -219,10 +286,9 @@ export class CannoliGraph {
 		noteName: string,
 		oldPath: string,
 		newPath: string,
-		verbose = false,
-		mock = false
+		verbose = false
 	): Promise<boolean> {
-		if (mock) {
+		if (this.mock) {
 			return true;
 		}
 
@@ -258,7 +324,6 @@ export class CannoliGraph {
 		n = 1,
 		temperature = 0.8,
 		verbose = false,
-		mock = false,
 	}: {
 		messages: ChatCompletionRequestMessage[];
 		model?: string;
@@ -266,13 +331,12 @@ export class CannoliGraph {
 		n?: number;
 		temperature?: number;
 		verbose?: boolean;
-		mock?: boolean;
 	}): Promise<{
 		message: ChatCompletionRequestMessage;
 		promptTokens: number;
 		completionTokens: number;
 	}> {
-		if (mock) {
+		if (this.mock) {
 			const enc = encoding_for_model(model as TiktokenModel);
 
 			let textMessages = "";

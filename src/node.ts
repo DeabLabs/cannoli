@@ -58,7 +58,7 @@ export class CannoliNode {
 		this.incomingEdges = incomingEdges;
 		this.cannoli = cannoli;
 
-		this.status = "pending";
+		this.status = "complete";
 	}
 
 	logNodeDetails() {
@@ -106,6 +106,60 @@ export class CannoliNode {
 	async execute(nodeCompleted: () => void) {
 		if (this.cannoli.isStopped) {
 			return;
+		}
+
+		if (
+			this.status === "complete" ||
+			this.status === "processing" ||
+			this.status === "rejected"
+		) {
+			return;
+		}
+
+		// Global execution
+
+		if (!this.cannoli.mock && this.type === "call") {
+			// Change status to processing
+			this.status = "processing";
+
+			// Change color to yellow
+			await this.cannoli.canvas.enqueueChangeNodeColor(this.id, "3");
+		}
+
+		// Execution code below...
+		// TESTING
+
+		if (!this.cannoli.mock) {
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+		}
+
+		// ... after execution, change status to complete
+		this.status = "complete";
+		console.log(`Node with content ${this.content} completed`);
+
+		if (!this.cannoli.mock && this.type === "call") {
+			// Change color to green
+			this.cannoli.canvas.enqueueChangeNodeColor(this.id, "4");
+		}
+
+		// Call nodeCompleted callback
+		nodeCompleted();
+
+		// Attempt execution of nodes at all outgoing edges
+		this.outgoingEdges.forEach((edge) => {
+			edge.target.attemptExecution(nodeCompleted);
+		});
+	}
+
+	attemptExecution(nodeCompleted: () => void) {
+		// If sources of all incoming edges are complete, or if there are no incoming edges, execute
+		if (
+			this.incomingEdges.every(
+				(edge) => edge.source.status === "complete"
+			) ||
+			this.incomingEdges.length === 0
+		) {
+			this.execute(nodeCompleted);
 		}
 	}
 

@@ -108,12 +108,10 @@ export class CannoliEdge {
 		unnamedContent,
 		loadVariables,
 		chatHistory,
-		mock = false,
 	}: {
 		unnamedContent?: string;
 		loadVariables?: LoadVariable[];
 		chatHistory?: ChatCompletionRequestMessage[];
-		mock?: boolean;
 	}) {
 		// Load the variables
 		if (loadVariables) {
@@ -124,7 +122,7 @@ export class CannoliEdge {
 
 				if (variable) {
 					// If it's not a mock run, validate the vault variables
-					if (!mock) {
+					if (!this.cannoli.mock) {
 						switch (variable.type) {
 							case "existingLink": {
 								// Get the load variable's content
