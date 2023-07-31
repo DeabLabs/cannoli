@@ -100,10 +100,14 @@ export default class Cannoli extends Plugin {
 				this.app.vault
 			);
 
+			cannoli.setOnCompleteCallback(() => {
+				delete this.runningCannolis[activeFilePath];
+			});
+
 			await cannoli.initialize(true);
 			cannoli.run();
 
-			this.runningCannolis[activeFilePath] = cannoli; // Add the new cannoli to the map
+			this.runningCannolis[activeFilePath] = cannoli;
 			new Notice(`Starting Cannoli on ${activeFilePath}`);
 		}
 	};

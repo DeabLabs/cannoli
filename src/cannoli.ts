@@ -35,6 +35,7 @@ export class CannoliGraph {
 	isStopped: boolean;
 	isComplete: boolean;
 	mock: boolean;
+	private onCompleteCallback: () => void;
 
 	constructor(canvasFile: TFile, apiKey: string, vault: Vault) {
 		this.canvas = new Canvas(canvasFile, this);
@@ -58,6 +59,10 @@ export class CannoliGraph {
 
 		// Bind the nodeCompleted callback to this
 		this.nodeCompleted = this.nodeCompleted.bind(this);
+	}
+
+	setOnCompleteCallback(callback: () => void) {
+		this.onCompleteCallback = callback;
 	}
 
 	stop() {
@@ -100,6 +105,11 @@ export class CannoliGraph {
 					console.log("Mock run complete");
 				} else {
 					console.log("Run complete");
+				}
+
+				// Remove the cannoli from the running cannolis map
+				if (this.onCompleteCallback) {
+					this.onCompleteCallback();
 				}
 			}
 			return;

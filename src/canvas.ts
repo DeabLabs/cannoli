@@ -129,6 +129,18 @@ export class Canvas {
 		return data;
 	}
 
+	private changeNodeText(
+		data: CanvasData,
+		nodeId: string,
+		newText: string
+	): CanvasData {
+		const node = data.nodes.find((node) => node.id === nodeId);
+		if (node) {
+			node.text = newText;
+		}
+		return data;
+	}
+
 	async enqueueChangeNodeColor(nodeId: string, newColor: CanvasColor) {
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
@@ -142,6 +154,15 @@ export class Canvas {
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
 			const newData = this.addErrorNode(data, nodeId);
+			await this.writeCanvasData(newData);
+		});
+		return this.editQueue;
+	}
+
+	async enqueueChangeNodeText(nodeId: string, newText: string) {
+		this.editQueue = this.editQueue.then(async () => {
+			const data = await this.readCanvasData();
+			const newData = this.changeNodeText(data, nodeId, newText);
 			await this.writeCanvasData(newData);
 		});
 		return this.editQueue;

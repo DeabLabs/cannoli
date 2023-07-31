@@ -118,9 +118,18 @@ export class CannoliNode {
 		// TESTING
 
 		// Wait a random amount of time between 0 and 3 seconds
-		if (!this.cannoli.mock && this.type === "call") {
-			const waitTime = Math.random() * 3000;
-			await new Promise((resolve) => setTimeout(resolve, waitTime));
+		switch (this.type) {
+			case "call":
+				await this.executeCall();
+				break;
+			case "content":
+				await this.executeContent();
+				break;
+			case "floating":
+				break;
+
+			default:
+				throw new Error(`Node type ${this.type} not recognized`);
 		}
 		// ... after execution, change status to complete
 
@@ -146,14 +155,42 @@ export class CannoliNode {
 	}
 
 	attemptExecution(nodeCompleted: () => void) {
-		// If sources of all incoming edges are complete, or if there are no incoming edges, execute
+		// If there are incoming edges and not all are complete, return early
 		if (
-			this.incomingEdges.every(
+			this.incomingEdges.length !== 0 &&
+			!this.incomingEdges.every(
 				(edge) => edge.source.status === "complete"
-			) ||
-			this.incomingEdges.length === 0
+			)
 		) {
-			this.execute(nodeCompleted);
+			return;
+		}
+
+		// If the node is processing, complete, or rejected, return early
+		if (
+			this.status === "processing" ||
+			this.status === "complete" ||
+			this.status === "rejected"
+		) {
+			return;
+		}
+
+		// All conditions pass, execute
+		this.execute(nodeCompleted);
+	}
+
+	async executeCall() {
+		if (!this.cannoli.mock) {
+			const waitTime = Math.random() * 3000;
+			await new Promise((resolve) => setTimeout(resolve, waitTime));
+		}
+	}
+
+	async executeContent() {
+		if (!this.cannoli.mock) {
+			await this.cannoli.canvas.enqueueChangeNodeText(
+				this.id,
+				"ayyy lmao"
+			);
 		}
 	}
 
