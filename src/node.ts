@@ -104,18 +104,6 @@ export class CannoliNode {
 	}
 
 	async execute(nodeCompleted: () => void) {
-		if (this.cannoli.isStopped) {
-			return;
-		}
-
-		if (
-			this.status === "complete" ||
-			this.status === "processing" ||
-			this.status === "rejected"
-		) {
-			return;
-		}
-
 		// Global execution
 
 		if (!this.cannoli.mock && this.type === "call") {
@@ -129,26 +117,32 @@ export class CannoliNode {
 		// Execution code below...
 		// TESTING
 
-		if (!this.cannoli.mock) {
-			await new Promise((resolve) => setTimeout(resolve, 1000));
+		// Wait a random amount of time between 0 and 3 seconds
+		if (!this.cannoli.mock && this.type === "call") {
+			const waitTime = Math.random() * 3000;
+			await new Promise((resolve) => setTimeout(resolve, waitTime));
+		}
+		// ... after execution, change status to complete
+
+		if (this.cannoli.isStopped) {
+			return;
 		}
 
-		// ... after execution, change status to complete
 		this.status = "complete";
-		console.log(`Node with content ${this.content} completed`);
+		console.log(`Node with this content completed:\n"${this.content}"`);
 
 		if (!this.cannoli.mock && this.type === "call") {
 			// Change color to green
-			this.cannoli.canvas.enqueueChangeNodeColor(this.id, "4");
+			await this.cannoli.canvas.enqueueChangeNodeColor(this.id, "4");
 		}
-
-		// Call nodeCompleted callback
-		nodeCompleted();
 
 		// Attempt execution of nodes at all outgoing edges
 		this.outgoingEdges.forEach((edge) => {
 			edge.target.attemptExecution(nodeCompleted);
 		});
+
+		// Call nodeCompleted callback
+		nodeCompleted();
 	}
 
 	attemptExecution(nodeCompleted: () => void) {

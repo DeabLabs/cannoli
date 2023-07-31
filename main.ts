@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
+	runningCannolis: { [key: string]: CannoliGraph } = {};
 
 	async onload() {
 		await this.loadSettings();
@@ -27,7 +28,7 @@ export default class Cannoli extends Plugin {
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon(
 			"brain-circuit",
-			"Start this Cannoli",
+			"Start/Stop this Cannoli",
 			this.startCannoli
 		);
 
@@ -55,25 +56,6 @@ export default class Cannoli extends Plugin {
 				})
 				.addEventListener("click", this.startCannoli);
 		}, 250);
-
-		// this.registerEvent(
-		// 	this.app.workspace.on("editor-menu", (menu, editor, view) => {
-		// 		menu.addItem((item) => {
-		// 			item.setTitle("Open in Cannoli")
-		// 				.setIcon("dot-network")
-		// 				.onClick(async () => {
-		// 					// Extract the selected text (this could be your group identifier)
-		// 					const selection = editor.getSelection();
-
-		// 					// Add your logic here to open this group in Cannoli
-		// 					console.log(`Opening ${selection} in Cannoli`);
-
-		// 					// You can replace the console log above with actual function call to open the group in Cannoli
-		// 					// this.openInCannoli(selection);
-		// 				});
-		// 		});
-		// 	})
-		// );
 	}
 
 	onunload() {}
@@ -91,36 +73,39 @@ export default class Cannoli extends Plugin {
 	}
 
 	startCannoli = async () => {
-		// Get the active file
 		const activeFile = this.app.workspace.getActiveFile();
 
 		// Check if file is a .canvas file
 		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
-			// Send notice if not a .canvas file
 			new Notice("Move to a canvas file to start a Cannoli");
 			return;
 		}
 
-		console.log("Starting Cannoli...");
+		const activeFilePath = activeFile.path;
+		const currentCannoli = this.runningCannolis[activeFilePath];
 
-		// Wait 200ms for recent changes to be saved
-		await new Promise((resolve) => setTimeout(resolve, 1500));
+		if (currentCannoli) {
+			// Stop the existing cannoli and remove it from the map
+			currentCannoli.stop();
+			delete this.runningCannolis[activeFilePath];
+			new Notice(`Stopped Cannoli on ${activeFilePath}`);
+		} else {
+			// Start a new cannoli
+			console.log("Starting Cannoli...");
+			await new Promise((resolve) => setTimeout(resolve, 1500));
 
-		// Create a Cannoli object and initialize it
-		const cannoli = new CannoliGraph(
-			activeFile,
-			this.settings.openaiAPIKey,
-			this.app.vault
-		);
+			const cannoli = new CannoliGraph(
+				activeFile,
+				this.settings.openaiAPIKey,
+				this.app.vault
+			);
 
-		// Initialize the graph
-		await cannoli.initialize(true);
+			await cannoli.initialize(true);
+			cannoli.run();
 
-		// Run the graph
-		cannoli.run();
-
-		// Send notice containing active file name
-		new Notice(`Starting Cannoli on ${activeFile.path}`);
+			this.runningCannolis[activeFilePath] = cannoli; // Add the new cannoli to the map
+			new Notice(`Starting Cannoli on ${activeFilePath}`);
+		}
 	};
 }
 

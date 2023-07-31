@@ -33,6 +33,7 @@ export class CannoliGraph {
 	nodes: Record<string, CannoliNode>;
 	edges: Record<string, CannoliEdge>;
 	isStopped: boolean;
+	isComplete: boolean;
 	mock: boolean;
 
 	constructor(canvasFile: TFile, apiKey: string, vault: Vault) {
@@ -54,10 +55,20 @@ export class CannoliGraph {
 		this.limit = pLimit(10);
 
 		this.isStopped = false;
+
+		// Bind the nodeCompleted callback to this
+		this.nodeCompleted = this.nodeCompleted.bind(this);
 	}
 
 	stop() {
 		this.isStopped = true;
+
+		// Change the color of all processing nodes to red
+		for (const node of Object.values(this.nodes)) {
+			if (node.status === "processing") {
+				this.canvas.enqueueChangeNodeColor(node.id, "1");
+			}
+		}
 	}
 
 	async initialize(verbose = false) {
@@ -75,31 +86,40 @@ export class CannoliGraph {
 		this.validate();
 	}
 
+	nodeCompleted() {
+		// Check if all nodes are either complete or rejected
+		if (
+			Object.values(this.nodes).every(
+				(node) =>
+					node.status === "complete" || node.status === "rejected"
+			)
+		) {
+			if (!this.isComplete) {
+				this.isComplete = true;
+				if (this.mock) {
+					console.log("Mock run complete");
+				} else {
+					console.log("Run complete");
+				}
+			}
+			return;
+		}
+	}
+
 	mockRun() {
 		this.mock = true;
 
-		const nodeCompleted = () => {
-			// Check if all nodes are either complete or rejected
-			if (
-				Object.values(this.nodes).every(
-					(node) =>
-						node.status === "complete" || node.status === "rejected"
-				)
-			) {
-				console.log("Mock run complete");
-				return;
-			}
-		};
-
-		// Call attemptExecution() on all non floating nodes
+		// Call attemptExecution() on all non floating nodes with no incoming edges
 		for (const node of Object.values(this.nodes)) {
-			if (node.type !== "floating") {
-				node.attemptExecution(nodeCompleted);
+			if (node.type !== "floating" && node.incomingEdges.length === 0) {
+				node.attemptExecution(this.nodeCompleted);
 			}
 		}
 	}
 
 	async run() {
+		this.isComplete = false;
+
 		// Change the color of all call nodes to color 0 and status to "pending" for all non-floating nodes
 		for (const node of Object.values(this.nodes)) {
 			if (node.type === "call") {
@@ -123,23 +143,10 @@ export class CannoliGraph {
 
 		this.mock = false;
 
-		const nodeCompleted = () => {
-			// Check if all nodes are either complete or rejected
-			if (
-				Object.values(this.nodes).every(
-					(node) =>
-						node.status === "complete" || node.status === "rejected"
-				)
-			) {
-				console.log("Run complete");
-				return;
-			}
-		};
-
-		// Call attemptExecution() on all non floating nodes
+		// Call attemptExecution() on all non floating nodes with no incoming edges
 		for (const node of Object.values(this.nodes)) {
-			if (node.type !== "floating") {
-				node.attemptExecution(nodeCompleted);
+			if (node.type !== "floating" && node.incomingEdges.length === 0) {
+				node.attemptExecution(this.nodeCompleted);
 			}
 		}
 	}

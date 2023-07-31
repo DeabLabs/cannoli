@@ -1279,6 +1279,7 @@ export class Canvas {
 
 	nodeColorMap: Record<string, NodeType> = {
 		"0": "call",
+		"1": "call",
 		"3": "call",
 		"4": "call",
 		"6": "content",
