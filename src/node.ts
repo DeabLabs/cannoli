@@ -103,21 +103,12 @@ export class CannoliNode {
 		console.log(logString);
 	}
 
-	async execute(nodeCompleted: () => void) {
-		// Global execution
-
+	async execute() {
 		if (!this.cannoli.mock && this.type === "call") {
-			// Change status to processing
 			this.status = "processing";
-
-			// Change color to yellow
 			await this.cannoli.canvas.enqueueChangeNodeColor(this.id, "3");
 		}
 
-		// Execution code below...
-		// TESTING
-
-		// Wait a random amount of time between 0 and 3 seconds
 		switch (this.type) {
 			case "call":
 				await this.executeCall();
@@ -127,11 +118,9 @@ export class CannoliNode {
 				break;
 			case "floating":
 				break;
-
 			default:
 				throw new Error(`Node type ${this.type} not recognized`);
 		}
-		// ... after execution, change status to complete
 
 		if (this.cannoli.isStopped) {
 			return;
@@ -141,46 +130,54 @@ export class CannoliNode {
 		console.log(`Node with this content completed:\n"${this.content}"`);
 
 		if (!this.cannoli.mock && this.type === "call") {
-			// Change color to green
 			await this.cannoli.canvas.enqueueChangeNodeColor(this.id, "4");
 		}
 
-		// Attempt execution of nodes at all outgoing edges
-		this.outgoingEdges.forEach((edge) => {
-			edge.target.attemptExecution(nodeCompleted);
-		});
+		if (this.group) {
+			const edgePromises = this.outgoingEdges.map(async (edge) => {
+				if (
+					edge.crossingGroups.find(
+						(group) =>
+							group.group === this.group && !group.isEntering
+					)
+				) {
+					const groupPromises = edge.crossingGroups
+						.filter((group) => !group.isEntering)
+						.map((group) => group.group.attemptLoop());
+					await Promise.all(groupPromises);
+				} else {
+					await edge.target.attemptExecution();
+				}
+			});
+			await Promise.all(edgePromises);
+		} else {
+			const edgePromises = this.outgoingEdges.map((edge) =>
+				edge.target.attemptExecution()
+			);
+			await Promise.all(edgePromises);
+		}
 
-		// Call nodeCompleted callback
-		nodeCompleted();
+		await this.cannoli.nodeCompleted();
 	}
 
-	attemptExecution(nodeCompleted: () => void) {
-		// If there are incoming edges and not all are complete, return early
+	async attemptExecution() {
 		if (
-			this.incomingEdges.length !== 0 &&
-			!this.incomingEdges.every(
-				(edge) => edge.source.status === "complete"
-			)
+			this.type === "floating" ||
+			(this.incomingEdges.length !== 0 &&
+				!this.incomingEdges.every(
+					(edge) => edge.source.status === "complete"
+				)) ||
+			["processing", "complete", "rejected"].includes(this.status)
 		) {
 			return;
 		}
 
-		// If the node is processing, complete, or rejected, return early
-		if (
-			this.status === "processing" ||
-			this.status === "complete" ||
-			this.status === "rejected"
-		) {
-			return;
-		}
-
-		// All conditions pass, execute
-		this.execute(nodeCompleted);
+		await this.execute();
 	}
 
 	async executeCall() {
 		if (!this.cannoli.mock) {
-			const waitTime = Math.random() * 3000;
+			const waitTime = Math.random() * 3000 + 1000;
 			await new Promise((resolve) => setTimeout(resolve, waitTime));
 		}
 	}
@@ -192,6 +189,21 @@ export class CannoliNode {
 				"ayyy lmao"
 			);
 		}
+	}
+
+	async reset() {
+		// Reset status to pending
+		this.status = "pending";
+
+		// If its a call node, reset the color to grey
+		if (this.type === "call") {
+			await this.cannoli.canvas.enqueueChangeNodeColor(this.id, "0");
+		}
+
+		// Reset all outgoing edges
+		this.outgoingEdges.forEach((edge) => {
+			edge.reset();
+		});
 	}
 
 	async render(): Promise<string> {

@@ -37,6 +37,9 @@ export class CannoliGraph {
 	mock: boolean;
 	private onCompleteCallback: () => void;
 
+	// Create an empty promise to use as a lock.
+	nodeCompletedLock: Promise<void>;
+
 	constructor(canvasFile: TFile, apiKey: string, vault: Vault) {
 		this.canvas = new Canvas(canvasFile, this);
 		this.apiKey = apiKey;
@@ -59,6 +62,9 @@ export class CannoliGraph {
 
 		// Bind the nodeCompleted callback to this
 		this.nodeCompleted = this.nodeCompleted.bind(this);
+
+		// Create an empty promise to use as a lock.
+		this.nodeCompletedLock = Promise.resolve();
 	}
 
 	setOnCompleteCallback(callback: () => void) {
@@ -91,73 +97,88 @@ export class CannoliGraph {
 		this.validate();
 	}
 
-	nodeCompleted() {
-		// Check if all nodes are either complete or rejected
-		if (
-			Object.values(this.nodes).every(
-				(node) =>
-					node.status === "complete" || node.status === "rejected"
-			)
-		) {
-			if (!this.isComplete) {
-				this.isComplete = true;
-				if (this.mock) {
-					console.log("Mock run complete");
-				} else {
-					console.log("Run complete");
-				}
+	async nodeCompleted() {
+		this.nodeCompletedLock = this.nodeCompletedLock
+			.catch(() => {})
+			.then(async () => {
+				// Check if all nodes are either complete or rejected
+				if (
+					Object.values(this.nodes).every(
+						(node) =>
+							node.status === "complete" ||
+							node.status === "rejected"
+					)
+				) {
+					if (!this.isComplete) {
+						this.isComplete = true;
+						if (this.mock) {
+							console.log("Mock run complete");
+						} else {
+							console.log("Run complete");
+						}
 
-				// Remove the cannoli from the running cannolis map
-				if (this.onCompleteCallback) {
-					this.onCompleteCallback();
+						// Remove the cannoli from the running cannolis map
+						if (this.onCompleteCallback) {
+							this.onCompleteCallback();
+						}
+					}
 				}
-			}
-			return;
-		}
+			});
+
+		return this.nodeCompletedLock;
 	}
 
-	mockRun() {
+	async mockRun() {
+		this.isComplete = false;
 		this.mock = true;
 
-		// Call attemptExecution() on all non floating nodes with no incoming edges
+		await this.reset();
+
+		// Call attemptExecution() on all nodes with no incoming edges
+		const mockRunPromises = [];
 		for (const node of Object.values(this.nodes)) {
-			if (node.type !== "floating" && node.incomingEdges.length === 0) {
-				node.attemptExecution(this.nodeCompleted);
+			if (node.incomingEdges.length === 0) {
+				mockRunPromises.push(node.attemptExecution());
 			}
 		}
+
+		await Promise.all(mockRunPromises);
+
+		console.log("Mock run complete");
+	}
+
+	async realRun() {
+		this.isComplete = false;
+		this.mock = false;
+
+		await this.reset();
+
+		// Call attemptExecution() on all nodes with no incoming edges
+		const realRunPromises = [];
+		for (const node of Object.values(this.nodes)) {
+			if (node.incomingEdges.length === 0) {
+				realRunPromises.push(node.attemptExecution());
+			}
+		}
+
+		await Promise.all(realRunPromises);
+
+		console.log("Run complete");
 	}
 
 	async run() {
-		this.isComplete = false;
+		await this.mockRun();
+		await this.realRun();
+	}
 
-		// Change the color of all call nodes to color 0 and status to "pending" for all non-floating nodes
+	async reset() {
+		// Reset all nodes and groups (nodes reset their outgoing edges)
 		for (const node of Object.values(this.nodes)) {
-			if (node.type === "call") {
-				await this.canvas.enqueueChangeNodeColor(node.id, "0");
-			}
-
-			if (node.type !== "floating") {
-				node.status = "pending";
-			}
+			await node.reset();
 		}
 
-		// Mock run first
-		this.mockRun();
-
-		// Set all the nodes to pending again
-		for (const node of Object.values(this.nodes)) {
-			if (node.type !== "floating") {
-				node.status = "pending";
-			}
-		}
-
-		this.mock = false;
-
-		// Call attemptExecution() on all non floating nodes with no incoming edges
-		for (const node of Object.values(this.nodes)) {
-			if (node.type !== "floating" && node.incomingEdges.length === 0) {
-				node.attemptExecution(this.nodeCompleted);
-			}
+		for (const group of Object.values(this.groups)) {
+			group.reset();
 		}
 	}
 

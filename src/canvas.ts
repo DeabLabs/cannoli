@@ -511,19 +511,21 @@ export class Canvas {
 			type = "list";
 		}
 
-		// If the group has a label
+		let potentialMaxLoops = 0;
+
 		if (group.label) {
-			// If the label's first character maps to type "list" on the edge prefix map, check if everything after the first character is an integer. If it is, it's the maxLoops
-			if (
-				this.edgePrefixMap[group.label[0]] === "list" &&
-				parseInt(group.label.slice(1))
-			) {
-				maxLoops = parseInt(group.label.slice(1));
-			} else if (
-				// If the label is an integer, it's the maxLoops
-				parseInt(group.label)
-			)
-				console.log(`Max Loops:` + maxLoops);
+			if (this.edgePrefixMap[group.label[0]] === "list") {
+				potentialMaxLoops = parseInt(group.label.slice(1));
+				if (Number.isInteger(potentialMaxLoops)) {
+					maxLoops = potentialMaxLoops;
+				}
+			} else {
+				potentialMaxLoops = parseInt(group.label);
+				if (Number.isInteger(potentialMaxLoops)) {
+					maxLoops = potentialMaxLoops;
+				}
+			}
+			console.log(`Max Loops:` + maxLoops);
 		}
 
 		return { maxLoops, type };

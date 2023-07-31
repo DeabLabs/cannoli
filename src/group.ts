@@ -10,6 +10,7 @@ export class CannoliGroup {
 	incomingEdges: CannoliEdge[];
 	outgoingEdges: CannoliEdge[];
 	maxLoops: number;
+	currentLoop: number;
 	type: GroupType;
 	childGroupIds: string[];
 	parentGroups: CannoliGroup[]; // ordered set of groups, from bottom level (smallest) to top level (biggest)
@@ -43,6 +44,8 @@ export class CannoliGroup {
 		this.maxLoops = maxLoops;
 		this.type = type;
 		this.childGroupIds = childGroupIds;
+
+		this.currentLoop = 0;
 	}
 
 	logGroupDetails() {
@@ -114,6 +117,49 @@ export class CannoliGroup {
 		const logString = `[::] Group: MaxLoops: ${this.maxLoops}, (Type: ${this.type}), ${nodesFormat}, ${incomingEdgesFormat}, ${outgoingEdgesFormat}, ${parentGroupsFormat}, ${childGroupsFormat}`;
 
 		console.log(logString);
+	}
+
+	reset() {
+		this.currentLoop = 0;
+	}
+
+	async loop() {
+		this.currentLoop++;
+
+		if (this.currentLoop >= this.maxLoops) {
+			const edgePromises = this.outgoingEdges.map((edge) =>
+				edge.target.attemptExecution()
+			);
+			await Promise.all(edgePromises);
+		} else {
+			const nodePromises = this.nodes.map((node) => node.reset());
+			await Promise.all(nodePromises);
+
+			for (const node of this.nodes) {
+				if (
+					node.incomingEdges.every((edge) =>
+						this.incomingEdges.includes(edge)
+					) ||
+					node.incomingEdges.length === 0
+				) {
+					await node.attemptExecution();
+				}
+			}
+		}
+	}
+
+	async attemptLoop() {
+		if (this.currentLoop >= this.maxLoops) {
+			return;
+		}
+
+		if (
+			this.outgoingEdges.every(
+				(edge) => edge.source.status === "complete"
+			)
+		) {
+			await this.loop();
+		}
 	}
 
 	setChildGroups(groups: Record<string, CannoliGroup>) {

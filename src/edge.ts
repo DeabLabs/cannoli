@@ -68,7 +68,7 @@ export class CannoliEdge {
 	chatHistory: ChatCompletionRequestMessage[];
 	variables: Variable[];
 	choiceOption: string | null;
-	unnamedContent: string;
+	unnamedContent: string | null;
 	copies: CannoliEdge[];
 	cannoli: CannoliGraph;
 
@@ -389,6 +389,19 @@ export class CannoliEdge {
 		}
 	}
 
+	reset() {
+		// Reset the variables
+		for (const variable of this.variables) {
+			variable.value = undefined;
+		}
+
+		// Reset the chat history
+		this.chatHistory = [];
+
+		// Reset the unnamed content
+		this.unnamedContent = null;
+	}
+
 	logEdgeDetails() {
 		const sourceFormat = this.source
 			? `"${this.source.content.substring(0, 20)}..."`
@@ -405,7 +418,7 @@ export class CannoliEdge {
 									group.group.label
 										? group.group.label.substring(0, 20)
 										: "No Label"
-								}..."`
+								}..." (isEntering: ${group.isEntering})`
 						)
 						.join("")
 				: "\n\tCrossing Groups: None";
