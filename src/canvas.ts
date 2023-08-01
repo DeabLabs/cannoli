@@ -54,11 +54,26 @@ export class Canvas {
 
 	async fetchData() {
 		const fileContent = await this.canvasFile.vault.read(this.canvasFile);
-		const parsedContent = JSON.parse(fileContent);
+		const parsedContent = JSON.parse(fileContent) as CanvasData;
+
+		// Search for any nodes with type "group" and text "cannoli"
+		for (const node of parsedContent.nodes) {
+			if (
+				node.type === "group" &&
+				(node.label === "cannoli" || node.label === "Cannoli")
+			) {
+				this.subCanvasGroupId = node.id;
+				break;
+			}
+		}
+
+		this.canvasData = parsedContent;
 
 		// If the subcanvas group id is set, filter the canvas data to only include the nodes and edges in the group
 		if (this.subCanvasGroupId) {
-			const subCanvasGroup = parsedContent.groups[this.subCanvasGroupId];
+			const subCanvasGroup = parsedContent.nodes.find(
+				(node) => node.id === this.subCanvasGroupId
+			) as CanvasGroupData;
 			if (!subCanvasGroup) {
 				throw new Error(
 					`Group with id ${this.subCanvasGroupId} not found.`
@@ -74,9 +89,14 @@ export class Canvas {
 			parsedContent.edges = parsedContent.edges.filter(
 				(edge: { id: string }) => edgeIds.includes(edge.id)
 			);
+
+			// log out stringified version of the filtered canvas data
+			console.log(JSON.stringify(parsedContent, null, 2));
+
+			this.canvasData = parsedContent;
 		}
 
-		this.canvasData = parsedContent;
+		// Search for any nodes with type "group" and text "cannoli"
 	}
 
 	private async readCanvasData(): Promise<CanvasData> {
@@ -211,8 +231,8 @@ export class Canvas {
 		// Loop over all edges in canvasData and check which edges are fully within the given group
 		for (const edge of this.canvasData.edges) {
 			if (
-				nodeIds.includes(edge.source) &&
-				nodeIds.includes(edge.target)
+				nodeIds.includes(edge.fromNode) &&
+				nodeIds.includes(edge.toNode)
 			) {
 				edgeIds.push(edge.id);
 			}
