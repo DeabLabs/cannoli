@@ -454,6 +454,28 @@ export class CannoliGraph {
 	}
 }
 
+export class CannoliEdge extends CannoliObject {
+	source: CannoliVertex;
+	target: CannoliVertex;
+
+	constructor(
+		id: string,
+		text: string,
+		source: CannoliVertex,
+		target: CannoliVertex
+	) {
+		super(id, text);
+		this.source = source;
+		this.target = target;
+
+		// When creating an edge, it should automatically be added to the outgoing and incoming edges of the source and target vertices respectively
+		source.addOutgoingEdge(this);
+		target.addIncomingEdge(this);
+	}
+
+	// Add any specific methods related to Edge functionality here
+}
+
 // export async function startCannoli(
 // 	canvasFile: TFile,
 // 	apiKey: string,
