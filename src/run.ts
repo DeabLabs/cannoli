@@ -1,7 +1,5 @@
-import { CannoliObject } from "./models";
-
-class Run {
-	id: string;
+export class Run {
+	isMock: boolean;
 	usage: {
 		[model: string]: {
 			promptTokens: number;
@@ -9,5 +7,9 @@ class Run {
 			apiCalls: number;
 		};
 	};
-	graph: CannoliObject;
+
+	constructor(isMock: boolean) {
+		this.isMock = isMock;
+		this.usage = {};
+	}
 }

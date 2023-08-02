@@ -95,8 +95,6 @@ export class Canvas {
 
 			this.canvasData = parsedContent;
 		}
-
-		// Search for any nodes with type "group" and text "cannoli"
 	}
 
 	private async readCanvasData(): Promise<CanvasData> {
