@@ -12,22 +12,25 @@ export class CannoliFactory {
 	vault: Vault;
 	parse(canvas: CanvasData): Record<string, CannoliObject> {
 		// Create initial objects
-		const initialGraph = this.initialParse(canvas);
+		const edgesAndVertices = this.initialParse(canvas);
+
+		// Assign enclosing groups to vertices
+		this.setAllGroups(edgesAndVertices);
 
 		// Assign edges to vertices
-		this.setAllIncomingAndOutgoingEdges(initialGraph);
-
-		// Assign parent groups to vertices
-		this.setAllParentGroups(initialGraph);
+		this.setAllIncomingAndOutgoingEdges(edgesAndVertices);
 
 		// Create nodes and groups
-		const secondVersion = this.createNodesAndGroups(initialGraph);
+		const edgesNodesGroups = this.createNodesAndGroups(edgesAndVertices);
 
-		// Set group children
-		this.setAllGroupChildren(secondVersion);
+		// Set group members
+		this.setAllGroupMembers(edgesNodesGroups);
+
+		// Set crossing groups
+		this.setAllCrossingGroups(edgesNodesGroups);
 
 		// Categorize edges
-		const thirdVersion = this.categorizeEdges(secondVersion);
+		const thirdVersion = this.createTypedEdges(edgesNodesGroups);
 
 		return initialObjects;
 	}
@@ -74,15 +77,15 @@ export class CannoliFactory {
 	setAllIncomingAndOutgoingEdges(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
 			if (object instanceof CannoliEdge) {
-				object.setIncomingAndOutgoingEdges(graph);
+				object.setIncomingAndOutgoingEdges();
 			}
 		}
 	}
 
-	setAllParentGroups(graph: Record<string, CannoliObject>) {
+	setAllGroups(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
 			if (object instanceof CannoliVertex) {
-				object.setParentGroups(graph);
+				object.setGroups();
 			}
 		}
 	}
@@ -117,10 +120,18 @@ export class CannoliFactory {
 		return newGraph;
 	}
 
-	setAllGroupChildren(graph: Record<string, CannoliObject>) {
+	setAllGroupMembers(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
 			if (object instanceof CannoliGroup) {
-				object.setChildren(graph);
+				object.setMembers();
+			}
+		}
+	}
+
+	setAllCrossingGroups(graph: Record<string, CannoliObject>) {
+		for (const object of Object.values(graph)) {
+			if (object instanceof CannoliEdge) {
+				object.setCrossingGroups();
 			}
 		}
 	}

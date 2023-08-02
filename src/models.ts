@@ -1,6 +1,7 @@
 import { EventEmitter } from "events";
 import { Run } from "./run";
 import { AllCanvasNodeData, CanvasEdgeData } from "obsidian/canvas";
+import { ChatCompletionRequestMessage } from "openai";
 
 export enum CannoliObjectStatus {
 	Pending = "pending",
@@ -219,9 +220,9 @@ export class CannoliObject extends EventEmitter {
 
 export class CannoliVertex extends CannoliObject {
 	canvasData: AllCanvasNodeData;
-	outgoingEdges: string[];
-	incomingEdges: string[];
-	parentGroups: string[];
+	outgoingEdges: { id: string; isReflexive: boolean }[];
+	incomingEdges: { id: string; isReflexive: boolean }[];
+	groups: string[]; // Sorted from immediate parent to most distant
 
 	constructor(
 		id: string,
@@ -235,24 +236,26 @@ export class CannoliVertex extends CannoliObject {
 		this.incomingEdges = [];
 	}
 
-	addIncomingEdge(edge: string) {
-		this.incomingEdges.push(edge);
-		this.addDependency(edge);
+	addIncomingEdge(id: string, isReflexive: boolean) {
+		this.incomingEdges.push({ id, isReflexive });
+		if (!isReflexive) {
+			this.addDependency(id);
+		}
 	}
 
-	addOutgoingEdge(edge: string) {
-		this.outgoingEdges.push(edge);
+	addOutgoingEdge(id: string, isReflexive: boolean) {
+		this.outgoingEdges.push({ id, isReflexive });
 	}
 
 	getOutgoingEdges(): CannoliEdge[] {
 		return this.outgoingEdges.map(
-			(edge) => this.graph[edge] as CannoliEdge
+			(edge) => this.graph[edge.id] as CannoliEdge
 		);
 	}
 
 	getIncomingEdges(): CannoliEdge[] {
 		return this.incomingEdges.map(
-			(edge) => this.graph[edge] as CannoliEdge
+			(edge) => this.graph[edge.id] as CannoliEdge
 		);
 	}
 
@@ -289,8 +292,8 @@ export class CannoliVertex extends CannoliObject {
 		return overlap && !this.encloses(a, b) && !this.encloses(b, a);
 	}
 
-	setParentGroups(graph: Record<string, CannoliObject>): CannoliGroup[] {
-		const parentGroups: CannoliGroup[] = [];
+	setGroups() {
+		const groups: CannoliGroup[] = [];
 		const currentVertexRectangle = this.createRectangle(
 			this.canvasData.x,
 			this.canvasData.y,
@@ -299,8 +302,8 @@ export class CannoliVertex extends CannoliObject {
 		);
 
 		// Iterate through all vertices
-		for (const object in graph) {
-			const vertex = graph[object];
+		for (const object in this.graph) {
+			const vertex = this.graph[object];
 
 			// Ensure vertex is of type CannoliGroup before processing further
 			if (!(vertex instanceof CannoliGroup)) {
@@ -314,28 +317,31 @@ export class CannoliVertex extends CannoliObject {
 				vertex.canvasData.height
 			);
 
-			// If the group encloses the current vertex, add it to the parent groups
+			// If the group encloses the current vertex, add it to the groups
 			if (this.encloses(groupRectangle, currentVertexRectangle)) {
-				parentGroups.push(vertex as CannoliGroup); // Type cast as CannoliGroup for clarity
+				groups.push(vertex as CannoliGroup); // Type cast as CannoliGroup for clarity
 			}
 		}
 
-		// Sort the parent groups from smallest to largest (from immediate parent to most distant)
-		parentGroups.sort((a, b) => {
+		// Sort the groups from smallest to largest (from immediate parent to most distant)
+		groups.sort((a, b) => {
 			const aArea = a.canvasData.width * a.canvasData.height;
 			const bArea = b.canvasData.width * b.canvasData.height;
 
 			return aArea - bArea;
 		});
 
-		return parentGroups;
+		this.groups = groups.map((group) => group.id);
 	}
 }
 
 export class CannoliEdge extends CannoliObject {
 	source: string;
 	target: string;
+	crossingInGroups: string[];
+	crossingOutGroups: string[];
 	canvasData: CanvasEdgeData;
+	content: string | Record<string, string>;
 
 	constructor(
 		id: string,
@@ -362,24 +368,67 @@ export class CannoliEdge extends CannoliObject {
 		return this.graph[this.target] as CannoliVertex;
 	}
 
-	setIncomingAndOutgoingEdges(graph: Record<string, CannoliObject>) {
-		const source = graph[this.source];
-		const target = graph[this.target];
+	setIncomingAndOutgoingEdges() {
+		const source = this.getSource();
+		const target = this.getTarget();
 
 		if (
 			source instanceof CannoliVertex &&
 			target instanceof CannoliVertex
 		) {
-			source.addOutgoingEdge(this.id);
-			target.addIncomingEdge(this.id);
+			if (
+				source.groups.includes(this.target) ||
+				target.groups.includes(this.source)
+			) {
+				source.addIncomingEdge(this.id, true);
+				target.addOutgoingEdge(this.id, true);
+			} else {
+				source.addOutgoingEdge(this.id, false);
+				target.addIncomingEdge(this.id, false);
+			}
 		}
 	}
+
+	setCrossingGroups() {
+		// Get the source and target vertices
+		const source = this.getSource();
+		const target = this.getTarget();
+
+		// Find the first shared group
+		const sharedGroup = source.groups.find((group) =>
+			target.groups.includes(group)
+		);
+
+		// Handle case where no shared group is found
+		if (sharedGroup === undefined) {
+			this.crossingOutGroups = [...source.groups];
+			this.crossingInGroups = [...target.groups].reverse();
+		} else {
+			// Set crossingOutGroups
+			const sourceIndex = source.groups.indexOf(sharedGroup);
+			this.crossingOutGroups = source.groups.slice(0, sourceIndex);
+
+			// Set crossingInGroups
+			const targetIndex = target.groups.indexOf(sharedGroup);
+			const tempCrossingInGroups = target.groups.slice(0, targetIndex);
+			this.crossingInGroups = tempCrossingInGroups.reverse();
+		}
+
+		// Add the crossingOut groups to this edge's dependencies
+		this.crossingOutGroups.forEach((group) => this.addDependency(group));
+	}
+
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {}
 }
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];
-	crossingInEdges: string[];
-	crossingOutEdges: string[];
 
 	constructor(
 		id: string,
@@ -390,14 +439,24 @@ export class CannoliGroup extends CannoliVertex {
 		super(id, text, graph, canvasData);
 	}
 
-	setChildren(graph: Record<string, CannoliObject>) {
+	setMembers() {
 		// Iterate through all vertices
-		for (const object in graph) {
-			const vertex = graph[object];
-			if (vertex instanceof CannoliVertex) {
-				// If the current group is a parent of the vertex
-				if (vertex.parentGroups.includes(this.id)) {
-					this.members.push(vertex.id);
+		for (const objectId in this.graph) {
+			const object = this.graph[objectId];
+			if (object instanceof CannoliVertex) {
+				// If the current group contains the vertex
+				if (object.groups.includes(this.id)) {
+					this.members.push(object.id);
+
+					// Make the member vertex a dependency of the group
+					this.addDependency(object.id);
+
+					// Make all non-reflexive incoming edges dependencies of the member vertex
+					for (const edge of object.incomingEdges) {
+						if (!edge.isReflexive) {
+							object.addDependency(edge.id);
+						}
+					}
 				}
 			}
 		}
@@ -414,3 +473,229 @@ export class CannoliNode extends CannoliVertex {
 		super(id, text, graph, canvasData);
 	}
 }
+
+export class ProvideEdge extends CannoliEdge {
+	name: string | null;
+	messages: ChatCompletionRequestMessage[];
+	addMessages: boolean;
+
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string,
+		name: string | null,
+		addMessages: boolean
+	) {
+		super(id, text, graph, canvasData, source, target);
+		this.name = name;
+		this.addMessages = addMessages;
+	}
+}
+
+export class ChatEdge extends ProvideEdge {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string
+	) {
+		super(id, text, graph, canvasData, source, target, null, true);
+	}
+
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {
+		if (messages !== undefined) {
+			this.messages = messages;
+		} else {
+			throw new Error(
+				`Error on Chat edge ${this.id}: messages is undefined.`
+			);
+		}
+
+		if (content !== undefined) {
+			throw new Error(
+				`Error on Chat edge ${this.id}: cannot load content.`
+			);
+		}
+	}
+}
+
+export class SystemMessageEdge extends ProvideEdge {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string
+	) {
+		super(id, text, graph, canvasData, source, target, null, true);
+	}
+
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {
+		if (content !== undefined) {
+			this.messages = [
+				{
+					role: "system",
+					content: content as string,
+				},
+			];
+		} else {
+			throw new Error(
+				`Error on SystemMessage edge ${this.id}: content is undefined.`
+			);
+		}
+
+		if (messages !== undefined) {
+			throw new Error(
+				`Error on SystemMessage edge ${this.id}: cannot load messages.`
+			);
+		}
+	}
+}
+
+export class WriteEdge extends CannoliEdge {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string
+	) {
+		super(id, text, graph, canvasData, source, target);
+	}
+
+	load({
+		content,
+		chatHistory,
+	}: {
+		content?: string | Record<string, string>;
+		chatHistory?: ChatCompletionRequestMessage[];
+	}): void {
+		if (content !== undefined) {
+			this.content = content;
+		} else {
+			throw new Error(
+				`Error on Write edge ${this.id}: content is undefined.`
+			);
+		}
+
+		if (chatHistory !== undefined) {
+			throw new Error(
+				`Error on Write edge ${this.id}: cannot load chatHistory.`
+			);
+		}
+	}
+}
+
+export class LoggingEdge extends WriteEdge {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string
+	) {
+		super(id, text, graph, canvasData, source, target);
+	}
+
+	load({
+		content,
+		chatHistory,
+	}: {
+		content?: string | Record<string, string>;
+		chatHistory?: ChatCompletionRequestMessage[];
+	}): void {
+		if (content !== undefined) {
+			this.content = content;
+		} else {
+			throw new Error(
+				`Error on Logging edge ${this.id}: content is undefined.`
+			);
+		}
+
+		if (chatHistory !== undefined) {
+			// Append the chatHistory to the content as a string
+			this.content = `${this.content}\n${JSON.stringify(
+				chatHistory,
+				null,
+				2
+			)}`;
+		}
+	}
+}
+
+export enum ConfigEdgeSetting {
+	Config = "config",
+	Model = "model",
+	MaxTokens = "max_tokens",
+	Temperature = "temperature",
+	TopP = "top_p",
+	FrequencyPenalty = "frequency_penalty",
+	PresencePenalty = "presence_penalty",
+	Stop = "stop",
+}
+
+export class ConfigEdge extends CannoliEdge {
+	setting: string;
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string
+	) {
+		super(id, text, graph, canvasData, source, target);
+	}
+
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {
+		if (content === undefined) {
+			throw new Error(
+				`Error on Config edge ${this.id}: content is undefined.`
+			);
+		} else {
+			this.content = content;
+		}
+
+		if (messages !== undefined) {
+			throw new Error(
+				`Error on Config edge ${this.id}: cannot load chatHistory.`
+			);
+		}
+	}
+}
+
+export class VariableEdge extends ProvideEdge {}
+
+export class ListEdge extends VariableEdge {}
+
+export class ChoiceEdge extends VariableEdge {}
+
+export class VaultEdge extends VariableEdge {}
+
+export class FunctionEdge extends VariableEdge {}
