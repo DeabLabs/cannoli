@@ -16,18 +16,22 @@ export class CannoliObject extends EventEmitter {
 	status: CannoliObjectStatus;
 	dependencies: (string | string[])[];
 	graph: Record<string, CannoliObject>;
+	isClone: boolean;
 
 	constructor(
 		id: string,
 		text: string,
-		graph: Record<string, CannoliObject>
+		graph: Record<string, CannoliObject>,
+		isClone: boolean
 	) {
 		super();
 		this.id = id;
 		this.text = text;
+		this.graph = graph;
 		this.status = CannoliObjectStatus.Pending;
 		this.dependencies = [];
 		this.graph = {};
+		this.isClone = isClone;
 	}
 
 	addDependency(dependency: string | string[]) {
@@ -201,19 +205,24 @@ export class CannoliObject extends EventEmitter {
 
 	// All of the following must be implemented by subclasses
 
-	reset() {
+	reset(run: Run) {
 		this.status = CannoliObjectStatus.Pending;
+		this.emit("update", this, CannoliObjectStatus.Pending, run);
+	}
+
+	dependencyRejected(dependency: CannoliObject, run: Run) {
+		this.tryReject(run);
 	}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run) {}
-
-	dependencyRejected(dependency: CannoliObject, run: Run) {}
 
 	async run() {}
 
 	async mockRun() {}
 
-	logDetails() {}
+	logDetails(): string {
+		return "";
+	}
 
 	validate() {}
 }
@@ -228,9 +237,10 @@ export class CannoliVertex extends CannoliObject {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: AllCanvasNodeData
 	) {
-		super(id, text, graph);
+		super(id, text, graph, isClone);
 		this.canvasData = canvasData;
 		this.outgoingEdges = [];
 		this.incomingEdges = [];
@@ -238,9 +248,9 @@ export class CannoliVertex extends CannoliObject {
 
 	addIncomingEdge(id: string, isReflexive: boolean) {
 		this.incomingEdges.push({ id, isReflexive });
-		if (!isReflexive) {
-			this.addDependency(id);
-		}
+		// if (!isReflexive) {
+		// 	this.addDependency(id);
+		// }
 	}
 
 	addOutgoingEdge(id: string, isReflexive: boolean) {
@@ -341,21 +351,24 @@ export class CannoliEdge extends CannoliObject {
 	crossingInGroups: string[];
 	crossingOutGroups: string[];
 	canvasData: CanvasEdgeData;
-	content: string | Record<string, string>;
+	content: string | Record<string, string> | undefined;
+	isLoaded: boolean;
 
 	constructor(
 		id: string,
 		text: string,
-
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string
 	) {
-		super(id, text, graph);
+		super(id, text, graph, isClone);
 		this.source = source;
 		this.target = target;
 		this.canvasData = canvasData;
+
+		this.isLoaded = false;
 
 		this.addDependency(source);
 	}
@@ -424,7 +437,78 @@ export class CannoliEdge extends CannoliObject {
 	}: {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
-	}): void {}
+	}): void {
+		// We should never be calling the base class load method
+		throw new Error(
+			`Error on edge ${
+				this.id
+			}: load is not implemented. Attempted to load content "${content}" and messages "${JSON.stringify(
+				messages,
+				null,
+				2
+			)}".`
+		);
+	}
+
+	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+		if (this.allDependenciesComplete()) {
+			this.execute(run);
+		}
+	}
+
+	async run() {
+		if (!this.isLoaded) {
+			throw new Error(
+				`Error on edge ${this.id}: edge is being run but has not been loaded.`
+			);
+		}
+	}
+
+	async mockRun() {
+		if (!this.isLoaded) {
+			throw new Error(
+				`Error on edge ${this.id}: edge is being run but has not been loaded.`
+			);
+		}
+	}
+
+	logDetails(): string {
+		// Build crossing groups string of the text of the crossing groups
+		let crossingGroupsString = "";
+		crossingGroupsString += `Crossing Out Groups: `;
+		for (const group of this.crossingOutGroups) {
+			crossingGroupsString += `\t-"${ensureStringLength(
+				this.graph[group].text,
+				15
+			)}`;
+		}
+		crossingGroupsString += `\nCrossing In Groups: `;
+		for (const group of this.crossingInGroups) {
+			crossingGroupsString += `\t-"${ensureStringLength(
+				this.graph[group].text,
+				15
+			)}`;
+		}
+
+		return (
+			super.logDetails() +
+			`---> Edge ${this.id} Text: "(${
+				this.text
+			})"\nSource: "${ensureStringLength(
+				this.getSource().text,
+				15
+			)}\nTarget: "${ensureStringLength(
+				this.getTarget().text,
+				15
+			)}"\n${crossingGroupsString}\n`
+		);
+	}
+
+	reset(run: Run) {
+		super.reset(run);
+		this.isLoaded = false;
+		this.content = undefined;
+	}
 }
 
 export class CannoliGroup extends CannoliVertex {
@@ -434,9 +518,10 @@ export class CannoliGroup extends CannoliVertex {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: AllCanvasNodeData
 	) {
-		super(id, text, graph, canvasData);
+		super(id, text, graph, isClone, canvasData);
 	}
 
 	setMembers() {
@@ -468,30 +553,166 @@ export class CannoliNode extends CannoliVertex {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: AllCanvasNodeData
 	) {
-		super(id, text, graph, canvasData);
+		super(id, text, graph, isClone, canvasData);
+	}
+
+	buildRenderFunction(): (
+		variables: {
+			name: string;
+			content: string;
+		}[]
+	) => Promise<string> {
+		throw new Error(
+			`Error on node ${this.id}: buildRenderFunction is not implemented.`
+		);
+	}
+
+	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+		if (this.allDependenciesComplete()) {
+			this.execute(run);
+		}
+	}
+}
+
+export class CallNode extends CannoliNode {
+	renderFunction: (
+		variables: { name: string; content: string }[]
+	) => Promise<string>;
+
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: AllCanvasNodeData
+	) {
+		super(id, text, graph, isClone, canvasData);
+
+		this.renderFunction = this.buildRenderFunction();
+	}
+
+	async run() {
+		// TEST VERSION (sleep for random time between 0 and 3 seconds)
+		console.log(`Running call node with text "${this.text}"`);
+		const sleepTime = Math.random() * 3000;
+		await new Promise((resolve) => setTimeout(resolve, sleepTime));
+	}
+
+	async mockRun() {
+		console.log(`Mock running call node with text "${this.text}"`);
+	}
+}
+
+export class ContentNode extends CannoliNode {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: AllCanvasNodeData
+	) {
+		super(id, text, graph, isClone, canvasData);
+	}
+
+	async run() {
+		// TEST VERSION (write a random string to the text field)
+		console.log(`Running content node with text "${this.text}"`);
+		this.text = Math.random().toString(36).substring(7);
+	}
+
+	async mockRun() {
+		console.log(`Mock running content node with text "${this.text}"`);
+	}
+}
+
+export class FloatingNode extends CannoliNode {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: AllCanvasNodeData
+	) {
+		super(id, text, graph, isClone, canvasData);
+	}
+
+	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+		return;
+	}
+
+	dependencyRejected(dependency: CannoliObject, run: Run): void {
+		return;
+	}
+
+	async run() {
+		// We should never run a floating node, it shouldn't have any dependencies
+		throw new Error(
+			`Error on floating node ${this.id}: run is not implemented.`
+		);
+	}
+
+	async mockRun() {
+		// We should never run a floating node, it shouldn't have any dependencies
+		throw new Error(
+			`Error on floating node ${this.id}: mockRun is not implemented.`
+		);
+	}
+
+	getName(): string {
+		const firstLine = this.text.split("\n")[0];
+		// Take the first and last characters off the first line
+		return firstLine.substring(1, firstLine.length - 1);
+	}
+
+	// Content is everything after the first line
+	getContent(): string {
+		const firstLine = this.text.split("\n")[0];
+		return this.text.substring(firstLine.length + 1);
+	}
+
+	editContent(newContent: string): void {
+		const firstLine = this.text.split("\n")[0];
+		this.text = `${firstLine}\n${newContent}`;
+
+		// Emit an update event
+		this.emit("update", this, this.status, null);
+	}
+
+	logDetails(): string {
+		return (
+			super.logDetails() +
+			`Type: Floating\nName: ${this.getName()}\nContent: ${this.getContent()}\n`
+		);
 	}
 }
 
 export class ProvideEdge extends CannoliEdge {
 	name: string | null;
-	messages: ChatCompletionRequestMessage[];
+	messages: ChatCompletionRequestMessage[] | undefined;
 	addMessages: boolean;
 
 	constructor(
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
 		name: string | null,
 		addMessages: boolean
 	) {
-		super(id, text, graph, canvasData, source, target);
+		super(id, text, graph, isClone, canvasData, source, target);
 		this.name = name;
 		this.addMessages = addMessages;
+	}
+
+	reset(run: Run): void {
+		super.reset(run);
+		this.messages = [];
 	}
 }
 
@@ -500,11 +721,12 @@ export class ChatEdge extends ProvideEdge {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string
 	) {
-		super(id, text, graph, canvasData, source, target, null, true);
+		super(id, text, graph, isClone, canvasData, source, target, null, true);
 	}
 
 	load({
@@ -528,6 +750,10 @@ export class ChatEdge extends ProvideEdge {
 			);
 		}
 	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: Chat ${this.id}`;
+	}
 }
 
 export class SystemMessageEdge extends ProvideEdge {
@@ -535,11 +761,12 @@ export class SystemMessageEdge extends ProvideEdge {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string
 	) {
-		super(id, text, graph, canvasData, source, target, null, true);
+		super(id, text, graph, isClone, canvasData, source, target, null, true);
 	}
 
 	load({
@@ -568,6 +795,10 @@ export class SystemMessageEdge extends ProvideEdge {
 			);
 		}
 	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: SystemMessage\n`;
+	}
 }
 
 export class WriteEdge extends CannoliEdge {
@@ -575,33 +806,44 @@ export class WriteEdge extends CannoliEdge {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string
 	) {
-		super(id, text, graph, canvasData, source, target);
+		super(id, text, graph, isClone, canvasData, source, target);
 	}
 
 	load({
 		content,
-		chatHistory,
+		messages,
 	}: {
 		content?: string | Record<string, string>;
-		chatHistory?: ChatCompletionRequestMessage[];
+		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		if (content !== undefined) {
-			this.content = content;
+		if (typeof content === "string") {
+			if (content !== undefined) {
+				this.content = content;
+			} else {
+				throw new Error(
+					`Error on Write edge ${this.id}: content is undefined.`
+				);
+			}
+
+			if (messages !== undefined) {
+				throw new Error(
+					`Error on Write edge ${this.id}: cannot load messages.`
+				);
+			}
 		} else {
 			throw new Error(
-				`Error on Write edge ${this.id}: content is undefined.`
+				`Error on Write edge ${this.id}: content is a Record.`
 			);
 		}
+	}
 
-		if (chatHistory !== undefined) {
-			throw new Error(
-				`Error on Write edge ${this.id}: cannot load chatHistory.`
-			);
-		}
+	logDetails(): string {
+		return super.logDetails() + `Type: Write\n`;
 	}
 }
 
@@ -610,19 +852,20 @@ export class LoggingEdge extends WriteEdge {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string
 	) {
-		super(id, text, graph, canvasData, source, target);
+		super(id, text, graph, isClone, canvasData, source, target);
 	}
 
 	load({
 		content,
-		chatHistory,
+		messages,
 	}: {
 		content?: string | Record<string, string>;
-		chatHistory?: ChatCompletionRequestMessage[];
+		messages?: ChatCompletionRequestMessage[];
 	}): void {
 		if (content !== undefined) {
 			this.content = content;
@@ -632,14 +875,18 @@ export class LoggingEdge extends WriteEdge {
 			);
 		}
 
-		if (chatHistory !== undefined) {
+		if (messages !== undefined) {
 			// Append the chatHistory to the content as a string
 			this.content = `${this.content}\n${JSON.stringify(
-				chatHistory,
+				messages,
 				null,
 				2
 			)}`;
 		}
+	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: Logging\n`;
 	}
 }
 
@@ -660,11 +907,14 @@ export class ConfigEdge extends CannoliEdge {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
+		isClone: boolean,
 		canvasData: CanvasEdgeData,
 		source: string,
-		target: string
+		target: string,
+		setting: string
 	) {
-		super(id, text, graph, canvasData, source, target);
+		super(id, text, graph, isClone, canvasData, source, target);
+		this.setting = setting;
 	}
 
 	load({
@@ -684,18 +934,182 @@ export class ConfigEdge extends CannoliEdge {
 
 		if (messages !== undefined) {
 			throw new Error(
-				`Error on Config edge ${this.id}: cannot load chatHistory.`
+				`Error on Config edge ${this.id}: cannot load messages.`
 			);
 		}
 	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: Config\nSetting: ${this.setting}\n`;
+	}
 }
 
-export class VariableEdge extends ProvideEdge {}
+export enum SingleVariableEdgeType {
+	ListItem = "listItem",
+	Choice = "choice",
+	Vault = "vault",
+}
 
-export class ListEdge extends VariableEdge {}
+export class SingleVariableEdge extends ProvideEdge {
+	type: SingleVariableEdgeType;
 
-export class ChoiceEdge extends VariableEdge {}
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string,
+		name: string | null,
+		addMessages: boolean,
+		type: SingleVariableEdgeType
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			canvasData,
+			source,
+			target,
+			name,
+			addMessages
+		);
+		this.type = type;
+	}
 
-export class VaultEdge extends VariableEdge {}
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {
+		if (typeof content === "string") {
+			if (content !== undefined) {
+				this.content = content;
+			} else {
+				throw new Error(
+					`Error on SingleVariable edge ${this.id}: content is undefined.`
+				);
+			}
 
-export class FunctionEdge extends VariableEdge {}
+			if (this.addMessages) {
+				if (messages !== undefined) {
+					this.messages = messages;
+				} else {
+					throw new Error(
+						`Error on SingleVariable edge ${this.id}: messages undefined.`
+					);
+				}
+			} else {
+				if (messages !== undefined) {
+					throw new Error(
+						`Error on SingleVariable edge ${this.id}: cannot load chatHistory.`
+					);
+				}
+			}
+		} else {
+			throw new Error(
+				`Error on SingleVariable edge ${this.id}: content is a Record.`
+			);
+		}
+	}
+
+	logDetails(): string {
+		return (
+			super.logDetails() +
+			`Type: SingleVariable\nName: ${this.name}\nSubtype: ${this.type}\nAddMessages: ${this.addMessages}\n`
+		);
+	}
+}
+
+export enum MultipleVariableEdgeType {
+	List = "list",
+	Category = "category",
+	Function = "function",
+}
+
+export class MultipleVariableEdge extends ProvideEdge {
+	type: MultipleVariableEdgeType;
+
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string,
+		name: string,
+		addMessages: boolean,
+		type: MultipleVariableEdgeType
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			canvasData,
+			source,
+			target,
+			name,
+			addMessages
+		);
+		this.type = type;
+	}
+
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {
+		if (typeof content === "object") {
+			if (content !== undefined) {
+				this.content = content;
+			} else {
+				throw new Error(
+					`Error on MultipleVariable edge ${this.id}: content is undefined.`
+				);
+			}
+
+			if (this.addMessages) {
+				if (messages !== undefined) {
+					this.messages = messages;
+				} else {
+					throw new Error(
+						`Error on MultipleVariable edge ${this.id}: messages undefined.`
+					);
+				}
+			} else {
+				if (messages !== undefined) {
+					throw new Error(
+						`Error on MultipleVariable edge ${this.id}: cannot load messages.`
+					);
+				}
+			}
+		} else {
+			throw new Error(
+				`Error on MultipleVariable edge ${this.id}: content is a string.`
+			);
+		}
+	}
+
+	logDetails(): string {
+		return (
+			super.logDetails() +
+			`Type: MultipleVariable\nName: ${this.name}\nSubtype: ${this.type}\nAddMessages: ${this.addMessages}\n`
+		);
+	}
+}
+
+function ensureStringLength(str: string, maxLength: number): string {
+	if (str.length > maxLength) {
+		return str.substring(0, maxLength - 3) + "...";
+	} else {
+		return str;
+	}
+}
