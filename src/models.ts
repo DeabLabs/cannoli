@@ -546,8 +546,145 @@ export class CannoliGroup extends CannoliVertex {
 			}
 		}
 	}
+
+	getMembers(): CannoliVertex[] {
+		return this.members.map(
+			(member) => this.graph[member] as CannoliVertex
+		);
+	}
+
+	allMembersCompleteOrRejected(): boolean {
+		// For each member
+		for (const member of this.members) {
+			// If it's not complete, return false
+			if (
+				this.graph[member].status !== CannoliObjectStatus.Complete &&
+				this.graph[member].status !== CannoliObjectStatus.Rejected
+			) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	allEdgeDependenciesComplete(): boolean {
+		// If all the dependencies that are edges are complete, execute
+		for (const dependency of this.dependencies) {
+			// If the dependency is an array of edges, check if at least one is complete
+			if (Array.isArray(dependency)) {
+				if (
+					dependency.some(
+						(dep) =>
+							this.graph[dep].status ===
+							CannoliObjectStatus.Complete
+					) &&
+					dependency.every(
+						(dep) => this.graph[dep] instanceof CannoliEdge
+					)
+				) {
+					continue;
+				} else {
+					return false;
+				}
+			} else {
+				if (
+					this.graph[dependency].status ===
+						CannoliObjectStatus.Complete &&
+					this.graph[dependency] instanceof CannoliEdge
+				) {
+					continue;
+				} else {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	membersFinished(run: Run) {}
+
+	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+		// Switch on status of this group
+		switch (this.status) {
+			case CannoliObjectStatus.Pending:
+				// If all edge dependencies are complete, execute
+				if (this.allEdgeDependenciesComplete()) {
+					this.execute(run);
+				}
+				break;
+			case CannoliObjectStatus.Executing:
+				// If all members are complete or rejected, call membersFinished
+				if (this.allMembersCompleteOrRejected()) {
+					this.membersFinished(run);
+				}
+				break;
+			default:
+				break;
+		}
+	}
 }
 
+export class ListGroup extends CannoliGroup {
+	copyId: string;
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: AllCanvasNodeData,
+		copyId: string
+	) {
+		super(id, text, graph, isClone, canvasData);
+		this.copyId = copyId;
+	}
+
+	clone() {}
+}
+
+export class RepeatGroup extends CannoliGroup {
+	maxLoops: number;
+	currentLoop: number;
+
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: AllCanvasNodeData,
+		maxLoops: number
+	) {
+		super(id, text, graph, isClone, canvasData);
+		this.maxLoops = maxLoops;
+	}
+
+	loop() {
+		this.currentLoop++;
+	}
+
+	resetMembers(run: Run) {
+		// For each member
+		for (const member of this.getMembers()) {
+			// Reset the member
+			member.reset(run);
+			// Reset the member's outgoing edges
+
+			for (const edge of member.outgoingEdges) {
+				this.graph[edge.id].reset(run);
+			}
+		}
+	}
+
+	membersFinished(run: Run): void {
+		if (this.currentLoop < this.maxLoops) {
+			this.loop();
+			this.resetMembers(run);
+		} else {
+			this.status = CannoliObjectStatus.Complete;
+			this.emit("update", this, CannoliObjectStatus.Complete, run);
+		}
+	}
+}
 export class CannoliNode extends CannoliVertex {
 	constructor(
 		id: string,
