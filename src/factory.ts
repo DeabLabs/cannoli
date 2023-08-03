@@ -1,53 +1,9 @@
 import { CanvasData } from "obsidian/canvas";
-import {
-	CallNode,
-	CannoliEdge,
-	CannoliGroup,
-	CannoliNode,
-	CannoliObject,
-	CannoliVertex,
-	ChatEdge,
-	ConfigEdge,
-	ContentNode,
-	FloatingNode,
-	ListGroup,
-	LoggingEdge,
-	MultipleVariableEdge,
-	MultipleVariableEdgeType,
-	RepeatGroup,
-	SingleVariableEdge,
-	SingleVariableEdgeType,
-	SystemMessageEdge,
-	WriteEdge,
-} from "./models";
 import { Vault } from "obsidian";
-
-export enum NodeType {
-	Call,
-	Content,
-	Floating,
-}
-
-export enum GroupType {
-	Repeat,
-	List,
-}
-
-export enum EdgeType {
-	Standard,
-	Write,
-	Logging,
-	Config,
-	Chat,
-	SystemMessage,
-	List,
-	Category,
-	Function,
-	ListItem,
-	Choice,
-	Vault,
-	SingleVariable,
-}
+import { CannoliObject, CannoliVertex } from "./models/object";
+import { CannoliEdge } from "./models/edge";
+import { CannoliGroup } from "./models/group";
+import { CannoliNode } from "./models/node";
 
 export class CannoliFactory {
 	vault: Vault;
@@ -70,16 +26,17 @@ export class CannoliFactory {
 		// Set crossing groups
 		this.setAllCrossingGroups(edgesNodesGroups);
 
-		// Categorize nodes and group types
-		const edgesAndTypedVertices =
-			this.createTypedVertices(edgesNodesGroups);
+		// Create typed objects
+		const typedObjects = this.createTypedObjects(edgesNodesGroups);
 
-		// Categorize edges
-		const typedEdgesAndVertices = this.createTypedEdges(
-			edgesAndTypedVertices
-		);
+		// This is where we would make copies of list groups
+		// this.makeListCopies(typedObjects);
 
-		return initialObjects;
+		// Set listener functions
+		this.setAllListeners(typedObjects);
+
+		// Return typed objects
+		return typedObjects;
 	}
 
 	constructor(vault: Vault) {
@@ -96,6 +53,7 @@ export class CannoliFactory {
 					node.content,
 					graph,
 					false,
+					this.vault,
 					node
 				);
 			} else if (node.type === "group") {
@@ -104,6 +62,7 @@ export class CannoliFactory {
 					node.label ?? "",
 					graph,
 					false,
+					this.vault,
 					node
 				);
 			}
@@ -115,8 +74,8 @@ export class CannoliFactory {
 				edge.text,
 				graph,
 				false,
+				this.vault,
 				edge,
-
 				edge.fromNode,
 				edge.toNode
 			);
@@ -151,6 +110,7 @@ export class CannoliFactory {
 						object.text,
 						graph,
 						false,
+						this.vault,
 						object.canvasData
 					);
 					newGraph[object.id] = group;
@@ -163,6 +123,7 @@ export class CannoliFactory {
 						object.text,
 						graph,
 						false,
+						this.vault,
 						object.canvasData
 					);
 					newGraph[object.id] = node;
@@ -189,268 +150,22 @@ export class CannoliFactory {
 		}
 	}
 
-	createTypedVertices(
+	createTypedObjects(
 		graph: Record<string, CannoliObject>
 	): Record<string, CannoliObject> {
 		const newGraph: Record<string, CannoliObject> = {};
 		Object.values(graph).forEach((object) => {
-			// If object is a node, categorize it
-			if (object instanceof CannoliNode) {
-				const type = object.decideType();
-				switch (type) {
-					case NodeType.Call:
-						newGraph[object.id] = new CallNode(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData
-						);
-						break;
-					case NodeType.Content:
-						newGraph[object.id] = new ContentNode(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData
-						);
-						break;
-					case NodeType.Floating:
-						newGraph[object.id] = new FloatingNode(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData
-						);
-						break;
-
-					default:
-						break;
-				}
-			} else if (object instanceof CannoliGroup) {
-				const type = object.decideType();
-
-				switch (type) {
-					case GroupType.Repeat: {
-						const maxLoops = object.getLabelNumber();
-
-						if (maxLoops) {
-							newGraph[object.id] = new RepeatGroup(
-								object.id,
-								object.text,
-								graph,
-								false,
-								object.canvasData,
-								maxLoops
-							);
-						}
-						break;
-					}
-					case GroupType.List: {
-						const numberOfVersions = object.getLabelNumber();
-
-						if (numberOfVersions) {
-							newGraph[object.id] = new ListGroup(
-								object.id,
-								object.text,
-								graph,
-								false,
-								object.canvasData,
-								numberOfVersions,
-								0
-							);
-						}
-						break;
-					}
-
-					default:
-						break;
-				}
-			} else if (object instanceof CannoliEdge) {
-				// Same edge
-				newGraph[object.id] = object;
+			const typedObject = object.createTyped(newGraph);
+			if (typedObject) {
+				newGraph[object.id] = typedObject;
 			}
 		});
-
 		return newGraph;
 	}
 
-	createTypedEdges(
-		graph: Record<string, CannoliObject>
-	): Record<string, CannoliObject> {
-		const newGraph: Record<string, CannoliObject> = {};
-		Object.values(graph).forEach((object) => {
-			// If object is a node, categorize it
-			if (object instanceof CannoliEdge) {
-				const type = object.decideType();
-				switch (type) {
-					case EdgeType.Write:
-						newGraph[object.id] = new WriteEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target
-						);
-						break;
-					case EdgeType.Logging:
-						newGraph[object.id] = new LoggingEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target
-						);
-						break;
-					case EdgeType.Config: {
-						const setting = object.getVariableInfo();
-						newGraph[object.id] = new ConfigEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target,
-							setting.name
-						);
-						break;
-					}
-					case EdgeType.Chat: {
-						newGraph[object.id] = new ChatEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target
-						);
-						break;
-					}
-					case EdgeType.SystemMessage:
-						newGraph[object.id] = new SystemMessageEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target
-						);
-						break;
-					case EdgeType.ListItem: {
-						const itemInfo = object.getVariableInfo();
-						newGraph[object.id] = new SingleVariableEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target,
-							itemInfo.name,
-							itemInfo.chatOverride,
-							SingleVariableEdgeType.ListItem
-						);
-						break;
-					}
-					case EdgeType.Category: {
-						const catInfo = object.getVariableInfo();
-						newGraph[object.id] = new MultipleVariableEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target,
-							catInfo.name,
-							catInfo.chatOverride,
-							MultipleVariableEdgeType.Category
-						);
-						break;
-					}
-					case EdgeType.Function: {
-						const funcInfo = object.getVariableInfo();
-						newGraph[object.id] = new MultipleVariableEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target,
-							funcInfo.name,
-							funcInfo.chatOverride,
-							MultipleVariableEdgeType.Function
-						);
-						break;
-					}
-					case EdgeType.List: {
-						const listInfo = object.getVariableInfo();
-						newGraph[object.id] = new MultipleVariableEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target,
-							listInfo.name,
-							listInfo.chatOverride,
-							MultipleVariableEdgeType.List
-						);
-						break;
-					}
-					case EdgeType.Choice: {
-						const choiceInfo = object.getVariableInfo();
-						newGraph[object.id] = new SingleVariableEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target,
-							choiceInfo.name,
-							choiceInfo.chatOverride,
-							SingleVariableEdgeType.Choice
-						);
-						break;
-					}
-					case EdgeType.Vault: {
-						const vaultInfo = object.getVariableInfo();
-
-						newGraph[object.id] = new SingleVariableEdge(
-							object.id,
-							object.text,
-							graph,
-							false,
-							object.canvasData,
-							object.source,
-							object.target,
-							vaultInfo.name,
-							vaultInfo.chatOverride,
-							SingleVariableEdgeType.Vault
-						);
-						break;
-					}
-					default:
-						break;
-				}
-			} else {
-				// Same node/group
-				newGraph[object.id] = object;
-			}
-		});
-
-		return newGraph;
+	setAllListeners(graph: Record<string, CannoliObject>) {
+		for (const object of Object.values(graph)) {
+			object.setupListeners();
+		}
 	}
 }
