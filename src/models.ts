@@ -626,6 +626,7 @@ export class CannoliGroup extends CannoliVertex {
 }
 
 export class ListGroup extends CannoliGroup {
+	numberOfVersions: number;
 	copyId: string;
 	constructor(
 		id: string,
@@ -633,9 +634,11 @@ export class ListGroup extends CannoliGroup {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		canvasData: AllCanvasNodeData,
+		numberOfVersions: number,
 		copyId: string
 	) {
 		super(id, text, graph, isClone, canvasData);
+		this.numberOfVersions = numberOfVersions;
 		this.copyId = copyId;
 	}
 
@@ -658,10 +661,6 @@ export class RepeatGroup extends CannoliGroup {
 		this.maxLoops = maxLoops;
 	}
 
-	loop() {
-		this.currentLoop++;
-	}
-
 	resetMembers(run: Run) {
 		// For each member
 		for (const member of this.getMembers()) {
@@ -677,12 +676,17 @@ export class RepeatGroup extends CannoliGroup {
 
 	membersFinished(run: Run): void {
 		if (this.currentLoop < this.maxLoops) {
-			this.loop();
+			this.currentLoop++;
 			this.resetMembers(run);
 		} else {
 			this.status = CannoliObjectStatus.Complete;
 			this.emit("update", this, CannoliObjectStatus.Complete, run);
 		}
+	}
+
+	reset(run: Run): void {
+		super.reset(run);
+		this.currentLoop = 0;
 	}
 }
 export class CannoliNode extends CannoliVertex {
