@@ -1,16 +1,90 @@
 import { EventEmitter } from "events";
 import { AllCanvasNodeData } from "obsidian/canvas";
 import { Run } from "src/run";
-import { CannoliEdge, IndicatedEdgeType, EdgeType } from "./edge";
-import { CannoliGroup, GroupType, IndicatedGroupType } from "./group";
-import { IndicatedNodeType, NodeType } from "./node";
+import type { CannoliEdge } from "./edge";
+import type { CannoliGroup } from "./group";
 import { Vault } from "obsidian";
+
+export enum IndicatedNodeType {
+	Call = "call",
+	Content = "content",
+	Floating = "floating",
+	NonLogic = "non-logic",
+}
+
+export enum NodeType {
+	Choice,
+	List,
+	StandardCall,
+	Formatter,
+	Input,
+	Display,
+	Vault,
+	Reference,
+	Floating,
+	NonLogic,
+}
+
+export type ReferenceType = "page" | "floating";
+
+export interface Reference {
+	name: string;
+	type: ReferenceType;
+}
+
+export enum IndicatedGroupType {
+	Repeat = "repeat",
+	List = "list",
+	Basic = "basic",
+	NonLogic = "non-logic",
+}
+
+export enum GroupType {
+	Repeat,
+	List,
+	Basic,
+	NonLogic,
+}
 
 export enum CannoliObjectStatus {
 	Pending = "pending",
 	Executing = "executing",
 	Complete = "complete",
 	Rejected = "rejected",
+}
+
+export enum EdgeType {
+	Write,
+	Logging,
+	Config,
+	Chat,
+	SystemMessage,
+	List,
+	Function,
+	ListItem,
+	Select,
+	Branch,
+	Category,
+	Vault,
+	SingleVariable,
+	NonLogic,
+}
+
+export enum IndicatedEdgeType {
+	Blank,
+	Variable,
+	List,
+	Choice,
+	Config,
+	Function,
+	Vault,
+	Logging,
+}
+
+export enum CannoliObjectKind {
+	Node,
+	Edge,
+	Group,
 }
 
 export class CannoliObject extends EventEmitter {
@@ -21,6 +95,7 @@ export class CannoliObject extends EventEmitter {
 	graph: Record<string, CannoliObject>;
 	isClone: boolean;
 	vault: Vault;
+	kind: CannoliObjectKind;
 
 	constructor(
 		id: string,
@@ -35,7 +110,7 @@ export class CannoliObject extends EventEmitter {
 		this.graph = graph;
 		this.status = CannoliObjectStatus.Pending;
 		this.dependencies = [];
-		this.graph = {};
+		this.graph = graph;
 		this.isClone = isClone;
 		this.vault = vault;
 	}
@@ -274,6 +349,7 @@ export class CannoliVertex extends CannoliObject {
 		this.canvasData = canvasData;
 		this.outgoingEdges = [];
 		this.incomingEdges = [];
+		this.groups = [];
 	}
 
 	addIncomingEdge(id: string, isReflexive: boolean) {
@@ -345,8 +421,12 @@ export class CannoliVertex extends CannoliObject {
 		for (const object in this.graph) {
 			const vertex = this.graph[object];
 
+			if (!(vertex instanceof CannoliVertex)) {
+				continue;
+			}
+
 			// Ensure vertex is of type CannoliGroup before processing further
-			if (!(vertex instanceof CannoliGroup)) {
+			if (!(vertex.canvasData.type === "group")) {
 				continue;
 			}
 
@@ -360,6 +440,7 @@ export class CannoliVertex extends CannoliObject {
 			// If the group encloses the current vertex, add it to the groups
 			if (this.encloses(groupRectangle, currentVertexRectangle)) {
 				groups.push(vertex as CannoliGroup); // Type cast as CannoliGroup for clarity
+				console.log(`Group ${vertex.id} encloses vertex ${this.id}`);
 			}
 		}
 

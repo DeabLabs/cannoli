@@ -81,35 +81,43 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		const activeFilePath = activeFile.path;
-		const currentCannoli = this.runningCannolis[activeFilePath];
+		const cannoli = new CannoliGraph(
+			activeFile,
+			this.settings.openaiAPIKey,
+			this.app.vault
+		);
 
-		if (currentCannoli) {
-			// Stop the existing cannoli and remove it from the map
-			currentCannoli.stop();
-			delete this.runningCannolis[activeFilePath];
-			new Notice(`Stopped Cannoli on ${activeFilePath}`);
-		} else {
-			// Start a new cannoli
-			console.log("Starting Cannoli...");
-			await new Promise((resolve) => setTimeout(resolve, 1500));
+		await cannoli.initialize(true);
 
-			const cannoli = new CannoliGraph(
-				activeFile,
-				this.settings.openaiAPIKey,
-				this.app.vault
-			);
+		// const activeFilePath = activeFile.path;
+		// const currentCannoli = this.runningCannolis[activeFilePath];
 
-			cannoli.setOnCompleteCallback(() => {
-				delete this.runningCannolis[activeFilePath];
-			});
+		// if (currentCannoli) {
+		// 	// Stop the existing cannoli and remove it from the map
+		// 	currentCannoli.stop();
+		// 	delete this.runningCannolis[activeFilePath];
+		// 	new Notice(`Stopped Cannoli on ${activeFilePath}`);
+		// } else {
+		// 	// Start a new cannoli
+		// 	console.log("Starting Cannoli...");
+		// 	await new Promise((resolve) => setTimeout(resolve, 1500));
 
-			await cannoli.initialize(true);
-			cannoli.run();
+		// 	const cannoli = new CannoliGraph(
+		// 		activeFile,
+		// 		this.settings.openaiAPIKey,
+		// 		this.app.vault
+		// 	);
 
-			this.runningCannolis[activeFilePath] = cannoli;
-			new Notice(`Starting Cannoli on ${activeFilePath}`);
-		}
+		// 	cannoli.setOnCompleteCallback(() => {
+		// 		delete this.runningCannolis[activeFilePath];
+		// 	});
+
+		// 	await cannoli.initialize(true);
+		// 	cannoli.run();
+
+		// 	this.runningCannolis[activeFilePath] = cannoli;
+		// 	new Notice(`Starting Cannoli on ${activeFilePath}`);
+		// }
 	};
 }
 

@@ -1,23 +1,18 @@
 import { AllCanvasNodeData } from "obsidian/canvas";
-import { CannoliObject, CannoliObjectStatus, CannoliVertex } from "./object";
-import { CannoliEdge, EdgeType, IndicatedEdgeType } from "./edge";
+import {
+	CannoliObject,
+	CannoliObjectKind,
+	CannoliObjectStatus,
+	CannoliVertex,
+	EdgeType,
+	GroupType,
+	IndicatedEdgeType,
+	IndicatedGroupType,
+	IndicatedNodeType,
+	NodeType,
+} from "./object";
 import { Run } from "src/run";
-import { IndicatedNodeType, NodeType } from "./node";
 import { Vault } from "obsidian";
-
-export enum IndicatedGroupType {
-	Repeat = "repeat",
-	List = "list",
-	Basic = "basic",
-	NonLogic = "non-logic",
-}
-
-export enum GroupType {
-	Repeat,
-	List,
-	Basic,
-	NonLogic,
-}
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];
@@ -39,6 +34,10 @@ export class CannoliGroup extends CannoliVertex {
 		canvasData: AllCanvasNodeData
 	) {
 		super(id, text, graph, isClone, vault, canvasData);
+
+		this.kind = CannoliObjectKind.Group;
+
+		console.log(`New group with content ${this.text} created.`);
 	}
 
 	setMembers() {
@@ -96,7 +95,7 @@ export class CannoliGroup extends CannoliVertex {
 							CannoliObjectStatus.Complete
 					) &&
 					dependency.every(
-						(dep) => this.graph[dep] instanceof CannoliEdge
+						(dep) => this.graph[dep].kind === CannoliObjectKind.Edge
 					)
 				) {
 					continue;
@@ -107,7 +106,7 @@ export class CannoliGroup extends CannoliVertex {
 				if (
 					this.graph[dependency].status ===
 						CannoliObjectStatus.Complete &&
-					this.graph[dependency] instanceof CannoliEdge
+					this.graph[dependency].kind === CannoliObjectKind.Edge
 				) {
 					continue;
 				} else {

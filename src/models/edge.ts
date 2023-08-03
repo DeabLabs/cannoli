@@ -1,38 +1,16 @@
 import { CanvasEdgeData } from "obsidian/canvas";
-import { CannoliObject, CannoliVertex } from "./object";
+import {
+	CannoliObject,
+	CannoliObjectKind,
+	CannoliVertex,
+	EdgeType,
+	IndicatedEdgeType,
+	IndicatedGroupType,
+	IndicatedNodeType,
+} from "./object";
 import { ChatCompletionRequestMessage } from "openai";
 import { Run } from "src/run";
-import { IndicatedNodeType } from "./node";
-import { CannoliGroup, IndicatedGroupType } from "./group";
 import { Vault } from "obsidian";
-
-export enum EdgeType {
-	Write,
-	Logging,
-	Config,
-	Chat,
-	SystemMessage,
-	List,
-	Function,
-	ListItem,
-	Select,
-	Branch,
-	Category,
-	Vault,
-	SingleVariable,
-	NonLogic,
-}
-
-export enum IndicatedEdgeType {
-	Blank,
-	Variable,
-	List,
-	Choice,
-	Config,
-	Function,
-	Vault,
-	Logging,
-}
 
 export class CannoliEdge extends CannoliObject {
 	source: string;
@@ -77,6 +55,8 @@ export class CannoliEdge extends CannoliObject {
 		this.isLoaded = false;
 
 		this.addDependency(source);
+
+		this.kind = CannoliObjectKind.Edge;
 	}
 
 	getSource(): CannoliVertex {
@@ -288,7 +268,7 @@ export class CannoliEdge extends CannoliObject {
 		if (sourceType === IndicatedNodeType.Call) {
 			// If the target is a group or a call node
 			if (
-				this.getTarget() instanceof CannoliGroup ||
+				this.getTarget().kind === CannoliObjectKind.Group ||
 				targetType === IndicatedNodeType.Call
 			) {
 				return EdgeType.Chat;
@@ -307,7 +287,7 @@ export class CannoliEdge extends CannoliObject {
 		} else if (sourceType === IndicatedNodeType.Content) {
 			// If the target is a group or a call node
 			if (
-				this.getTarget() instanceof CannoliGroup ||
+				this.getTarget().kind === CannoliObjectKind.Group ||
 				targetType === IndicatedNodeType.Call
 			) {
 				return EdgeType.SystemMessage;
@@ -372,7 +352,7 @@ export class CannoliEdge extends CannoliObject {
 	decideChoiceType(): EdgeType {
 		// If the target is a list group, return category
 		if (
-			this.getTarget() instanceof CannoliGroup &&
+			this.getTarget().kind === CannoliObjectKind.Group &&
 			this.getTarget().getIndicatedType() === IndicatedGroupType.List
 		) {
 			return EdgeType.Category;

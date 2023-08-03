@@ -26,6 +26,9 @@ export class CannoliFactory {
 		// Set crossing groups
 		this.setAllCrossingGroups(edgesNodesGroups);
 
+		// Log all objects
+		this.logAll(edgesNodesGroups);
+
 		// Create typed objects
 		const typedObjects = this.createTypedObjects(edgesNodesGroups);
 
@@ -50,7 +53,7 @@ export class CannoliFactory {
 			if (node.type === "text" || node.type === "link") {
 				graph[node.id] = new CannoliVertex(
 					node.id,
-					node.content,
+					node.text,
 					graph,
 					false,
 					this.vault,
@@ -71,7 +74,7 @@ export class CannoliFactory {
 		canvas.edges.forEach((edge) => {
 			graph[edge.id] = new CannoliEdge(
 				edge.id,
-				edge.text,
+				edge.label ?? "",
 				graph,
 				false,
 				this.vault,
@@ -108,7 +111,7 @@ export class CannoliFactory {
 					const group = new CannoliGroup(
 						object.id,
 						object.text,
-						graph,
+						newGraph,
 						false,
 						this.vault,
 						object.canvasData
@@ -121,13 +124,25 @@ export class CannoliFactory {
 					const node = new CannoliNode(
 						object.id,
 						object.text,
-						graph,
+						newGraph,
 						false,
 						this.vault,
 						object.canvasData
 					);
 					newGraph[object.id] = node;
 				}
+			} else if (object instanceof CannoliEdge) {
+				const edge = new CannoliEdge(
+					object.id,
+					object.text,
+					newGraph,
+					false,
+					this.vault,
+					object.canvasData,
+					object.source,
+					object.target
+				);
+				newGraph[object.id] = edge;
 			}
 		});
 
@@ -166,6 +181,13 @@ export class CannoliFactory {
 	setAllListeners(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
 			object.setupListeners();
+		}
+	}
+
+	logAll(graph: Record<string, CannoliObject>) {
+		for (const object of Object.values(graph)) {
+			console.log(object.constructor.name);
+			console.log(object.logDetails());
 		}
 	}
 }

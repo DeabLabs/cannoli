@@ -1,36 +1,18 @@
 import { AllCanvasNodeData } from "obsidian/canvas";
-import { CannoliObject, CannoliVertex } from "./object";
-import { Run } from "src/run";
-import { EdgeType, IndicatedEdgeType } from "./edge";
-import { GroupType, IndicatedGroupType } from "./group";
-import { Vault } from "obsidian";
-
-export enum IndicatedNodeType {
-	Call = "call",
-	Content = "content",
-	Floating = "floating",
-	NonLogic = "non-logic",
-}
-
-export enum NodeType {
-	Choice,
-	List,
-	StandardCall,
-	Formatter,
-	Input,
-	Display,
-	Vault,
+import {
+	CannoliObject,
+	CannoliObjectKind,
+	CannoliVertex,
+	EdgeType,
+	GroupType,
+	IndicatedEdgeType,
+	IndicatedGroupType,
+	IndicatedNodeType,
+	NodeType,
 	Reference,
-	Floating,
-	NonLogic,
-}
-
-type ReferenceType = "page" | "floating";
-
-interface Reference {
-	name: string;
-	type: ReferenceType;
-}
+} from "./object";
+import { Run } from "src/run";
+import { Vault } from "obsidian";
 
 export class CannoliNode extends CannoliVertex {
 	NodePrefixMap: Record<string, IndicatedNodeType> = {
@@ -54,6 +36,8 @@ export class CannoliNode extends CannoliVertex {
 		canvasData: AllCanvasNodeData
 	) {
 		super(id, text, graph, isClone, vault, canvasData);
+
+		this.kind = CannoliObjectKind.Node;
 	}
 
 	buildRenderFunction(): (
