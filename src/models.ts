@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import { Run } from "./run";
 import { AllCanvasNodeData, CanvasEdgeData } from "obsidian/canvas";
 import { ChatCompletionRequestMessage } from "openai";
+import { EdgeType, GroupType, NodeType } from "./factory";
 
 export enum CannoliObjectStatus {
 	Pending = "pending",
@@ -354,6 +355,23 @@ export class CannoliEdge extends CannoliObject {
 	content: string | Record<string, string> | undefined;
 	isLoaded: boolean;
 
+	EdgePrefixMap: Record<string, EdgeType> = {
+		"*": EdgeType.Config,
+		"?": EdgeType.Choice,
+		"<": EdgeType.List,
+		"=": EdgeType.Function,
+		"^": EdgeType.Vault,
+	};
+
+	EdgeColorMap: Record<string, EdgeType> = {
+		"0": EdgeType.Standard,
+		"2": EdgeType.Config,
+		"3": EdgeType.Choice,
+		"4": EdgeType.Function,
+		"5": EdgeType.List,
+		"6": EdgeType.Vault,
+	};
+
 	constructor(
 		id: string,
 		text: string,
@@ -509,7 +527,106 @@ export class CannoliEdge extends CannoliObject {
 		this.isLoaded = false;
 		this.content = undefined;
 	}
+
+	decideType(): EdgeType | null {
+		let type = EdgeType.Standard;
+
+		// Check if the first character is in the prefix map
+		const firstCharacter = this.text[0];
+		if (firstCharacter in this.EdgePrefixMap) {
+			type = this.EdgePrefixMap[firstCharacter];
+		} // If not, check the color map
+		else {
+			const color = this.canvasData.color;
+			if (!color) {
+				type = EdgeType.Standard;
+			} else if (color in this.EdgeColorMap) {
+				type = this.EdgeColorMap[color];
+			} else {
+				type = EdgeType.Standard;
+			}
+		}
+
+		// Switch on initial typing
+		switch (type) {
+			case EdgeType.Standard: {
+				const standInfo = this.getVariableInfo();
+				if (standInfo.name === "") {
+					return EdgeType.Chat;
+				} else {
+					// If text is not empty, return SingleVariable
+					return EdgeType.SingleVariable;
+				}
+			}
+			case EdgeType.Config: {
+				// If text is empty, return Logging
+				const configInfo = this.getVariableInfo();
+				if (configInfo.name === "") {
+					return EdgeType.Logging;
+				} else {
+					// If text is not empty, return Config
+					return EdgeType.Config;
+				}
+			}
+			case EdgeType.Choice:
+				// If the target is a group, return Category
+				if (this.graph[this.target] instanceof CannoliGroup) {
+					return EdgeType.Category;
+				}
+				// If the target is a node, return Choice
+				else {
+					return EdgeType.Choice;
+				}
+			case EdgeType.List:
+				// If the target is a group, return List
+				if (this.graph[this.target] instanceof CannoliGroup) {
+					return EdgeType.List;
+				}
+				// If the target is a node, return ListItem
+				else {
+					return EdgeType.ListItem;
+				}
+			case EdgeType.Function:
+				// Return Function
+				return EdgeType.Function;
+			case EdgeType.Vault:
+				// Return Vault
+				return EdgeType.Vault;
+			default:
+				return null;
+		}
+
+		// If not, return null
+		return null;
+	}
+
+	getVariableInfo(): { name: string; chatOverride: boolean } {
+		let name = this.text;
+
+		// If the first character is in the edge prefix map, remove it
+		const firstCharacter = this.text[0];
+		if (firstCharacter in this.EdgePrefixMap) {
+			name = name.slice(1);
+		}
+
+		// If the last character is a "|", it's a chat override, remove it
+		if (name[name.length - 1] === "|") {
+			name = name.slice(0, -1);
+			return { name, chatOverride: true };
+		} else {
+			return { name, chatOverride: false };
+		}
+	}
 }
+
+export const GroupPrefixMap: Record<string, GroupType> = {
+	"<": GroupType.List,
+};
+
+export const GroupColorMap: Record<string, GroupType> = {
+	"0": GroupType.Repeat,
+	"3": GroupType.List,
+};
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];
@@ -623,11 +740,48 @@ export class CannoliGroup extends CannoliVertex {
 				break;
 		}
 	}
+
+	decideType(): GroupType | null {
+		// Check if the first character is in the prefix map
+		const firstCharacter = this.text[0];
+		if (firstCharacter in GroupPrefixMap) {
+			return GroupPrefixMap[firstCharacter];
+		}
+
+		// If not, check the color map
+		const color = this.canvasData.color;
+		if (!color) {
+			return GroupType.Repeat;
+		}
+
+		if (color in GroupColorMap) {
+			return GroupColorMap[color];
+		}
+
+		// If not, return null
+		return null;
+	}
+
+	getLabelNumber(): number | null {
+		let label = this.text;
+
+		// If the first character of the group label is in the group prefix map, remove it
+		if (label[0] in GroupPrefixMap) {
+			label = label.slice(1);
+		}
+
+		// If the remaining label is a positive integer, use it as the maxLoops
+		const maxLoops = parseInt(label);
+		if (isNaN(maxLoops)) {
+			return null;
+		}
+		return maxLoops;
+	}
 }
 
 export class ListGroup extends CannoliGroup {
 	numberOfVersions: number;
-	copyId: string;
+	copyId: number;
 	constructor(
 		id: string,
 		text: string,
@@ -635,7 +789,7 @@ export class ListGroup extends CannoliGroup {
 		isClone: boolean,
 		canvasData: AllCanvasNodeData,
 		numberOfVersions: number,
-		copyId: string
+		copyId: number
 	) {
 		super(id, text, graph, isClone, canvasData);
 		this.numberOfVersions = numberOfVersions;
@@ -689,6 +843,19 @@ export class RepeatGroup extends CannoliGroup {
 		this.currentLoop = 0;
 	}
 }
+
+export const NodePrefixMap: Record<string, NodeType> = {
+	$: NodeType.Call,
+};
+
+export const NodeColorMap: Record<string, NodeType> = {
+	"0": NodeType.Call,
+	"1": NodeType.Call,
+	"3": NodeType.Call,
+	"4": NodeType.Call,
+	"6": NodeType.Content,
+};
+
 export class CannoliNode extends CannoliVertex {
 	constructor(
 		id: string,
@@ -715,6 +882,40 @@ export class CannoliNode extends CannoliVertex {
 		if (this.allDependenciesComplete()) {
 			this.execute(run);
 		}
+	}
+
+	decideType(): NodeType | null {
+		// If the node has no incoming or outgoing edges
+		if (
+			this.incomingEdges.length === 0 &&
+			this.outgoingEdges.length === 0
+		) {
+			// Check the first line of its text
+			const firstLine = this.text.split("\n")[0];
+			// If it starts with [ and ends with ], it's a floating node
+			if (firstLine.startsWith("[") && firstLine.endsWith("]")) {
+				return NodeType.Floating;
+			}
+		}
+
+		// Check if the first line is a single character, and if it's in the prefix map
+		const firstLine = this.text.split("\n")[0];
+		if (firstLine.length === 1 && firstLine in NodePrefixMap) {
+			return NodePrefixMap[firstLine];
+		}
+
+		// If not, check the color map
+		const color = this.canvasData.color;
+		if (!color) {
+			return NodeType.Content;
+		}
+
+		if (color in NodeColorMap) {
+			return NodeColorMap[color];
+		}
+
+		// If not, return null
+		return null;
 	}
 }
 
