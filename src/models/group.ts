@@ -321,6 +321,20 @@ export class CannoliGroup extends CannoliVertex {
 			`[::] Group ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n${membersString}\n`
 		);
 	}
+
+	validate(): void {
+		// Groups can't have outgoing edges that aren't of type list
+		for (const edge of this.outgoingEdges) {
+			if (
+				this.graph[edge.id].kind === CannoliObjectKind.Edge &&
+				this.graph[edge.id].type !== EdgeType.List
+			) {
+				throw new Error(
+					`Error on object ${this.id}: group has outgoing edge ${edge.id} that is not of type list.`
+				);
+			}
+		}
+	}
 }
 
 export class ListGroup extends CannoliGroup {
@@ -354,6 +368,8 @@ export class ListGroup extends CannoliGroup {
 		);
 		this.numberOfVersions = numberOfVersions;
 		this.copyId = copyId;
+
+		this.type = GroupType.List;
 	}
 
 	clone() {}
@@ -363,6 +379,35 @@ export class ListGroup extends CannoliGroup {
 			super.logDetails() +
 			`Type: List\nNumber of Versions: ${this.numberOfVersions}\n`
 		);
+	}
+
+	validate(): void {
+		super.validate();
+
+		// List groups must have one and only one edge of type either list or category
+		const listOrCategoryEdges = this.outgoingEdges.filter(
+			(edge) =>
+				this.graph[edge.id].type === EdgeType.List ||
+				this.graph[edge.id].type === EdgeType.Category
+		);
+
+		if (listOrCategoryEdges.length !== 1) {
+			this.error(
+				`List groups must have one and only one edge of type list or category.`
+			);
+		}
+
+		// List groups can't have outgoing edges that aren't of type list
+		for (const edge of this.outgoingEdges) {
+			if (
+				this.graph[edge.id].kind === CannoliObjectKind.Edge &&
+				this.graph[edge.id].type !== EdgeType.List
+			) {
+				this.error(
+					`List groups can't have outgoing edges that aren't of type list.`
+				);
+			}
+		}
 	}
 }
 
@@ -396,6 +441,9 @@ export class RepeatGroup extends CannoliGroup {
 			members
 		);
 		this.maxLoops = maxLoops;
+		this.currentLoop = 0;
+
+		this.type = GroupType.Repeat;
 	}
 
 	resetMembers(run: Run) {
@@ -430,5 +478,27 @@ export class RepeatGroup extends CannoliGroup {
 		return (
 			super.logDetails() + `Type: Repeat\nMax Loops: ${this.maxLoops}\n`
 		);
+	}
+
+	validate(): void {
+		super.validate();
+
+		// Repeat groups can't have incoming edges of type list or category
+		const listOrCategoryEdges = this.incomingEdges.filter(
+			(edge) =>
+				this.graph[edge.id].type === EdgeType.List ||
+				this.graph[edge.id].type === EdgeType.Category
+		);
+
+		if (listOrCategoryEdges.length !== 0) {
+			this.error(
+				`Repeat groups can't have incoming edges of type list or category.`
+			);
+		}
+
+		// Repeat groups can't have any outgoing edges
+		if (this.outgoingEdges.length !== 0) {
+			this.error(`Repeat groups can't have any outgoing edges.`);
+		}
 	}
 }

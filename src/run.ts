@@ -1,3 +1,5 @@
+import { CannoliGraph } from "./cannoli";
+
 export class Run {
 	isMock: boolean;
 	usage: {
@@ -7,9 +9,11 @@ export class Run {
 			apiCalls: number;
 		};
 	};
+	cannoli: CannoliGraph | null;
 
-	constructor(isMock: boolean) {
+	constructor(isMock: boolean, cannoli?: CannoliGraph) {
 		this.isMock = isMock;
+		this.cannoli = cannoli ?? null;
 		this.usage = {};
 	}
 }

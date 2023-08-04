@@ -11,10 +11,19 @@ import {
 	IndicatedNodeType,
 	NodeType,
 	Reference,
+	ReferenceType,
 } from "./object";
 import { Run } from "src/run";
 import { Vault } from "obsidian";
-import { ChatEdge, SingleVariableEdge } from "./edge";
+import {
+	CannoliEdge,
+	ChatEdge,
+	ConfigEdge,
+	ProvideEdge,
+	SingleVariableEdge,
+} from "./edge";
+import { ChatCompletionRequestMessage } from "openai";
+import { CannoliGroup } from "./group";
 
 export class CannoliNode extends CannoliVertex {
 	NodePrefixMap: Record<string, IndicatedNodeType> = {
@@ -170,8 +179,8 @@ export class CannoliNode extends CannoliVertex {
 			return NodeType.Formatter;
 		}
 
-		// If the result of getReference is not null, it's a reference node
-		if (this.getReference() !== null) {
+		// If the result of getNoteOrFloatingReference is not null, it's a reference node
+		if (this.getNoteOrFloatingReference() !== null) {
 			return NodeType.Reference;
 		}
 
@@ -194,20 +203,28 @@ export class CannoliNode extends CannoliVertex {
 		return NodeType.Display;
 	}
 
-	getReference(): Reference | null {
-		const pagePattern = /^>\[\[([^\]]+)\]\]$/;
+	getNoteOrFloatingReference(): Reference | null {
+		const notePattern = /^>\[\[([^\]]+)\]\]$/;
 		const floatingPattern = /^>\[([^\]]+)\]$/;
 
 		const strippedText = this.text.trim();
 
-		let match = strippedText.match(pagePattern);
+		let match = strippedText.match(notePattern);
 		if (match) {
-			return { name: match[1], type: "page" };
+			return {
+				name: match[1],
+				type: ReferenceType.Note,
+				shouldExtract: false,
+			};
 		}
 
 		match = strippedText.match(floatingPattern);
 		if (match) {
-			return { name: match[1], type: "floating" };
+			return {
+				name: match[1],
+				type: ReferenceType.Floating,
+				shouldExtract: false,
+			};
 		}
 
 		return null;
@@ -364,12 +381,111 @@ export class CannoliNode extends CannoliVertex {
 			`[] Node ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n`
 		);
 	}
+
+	validate(): void {
+		super.validate();
+
+		// All special outgoing edges must be homogeneous
+		if (!this.specialOutgoingEdgesAreHomogeneous()) {
+			this.error(
+				`If a call node has an outgoing variable edge, all outgoing variable edges must be of the same type. (Custom function edges are an exception.)`
+			);
+		}
+
+		// If there are any incoming list edges, there must only be one
+		if (
+			this.incomingEdges.filter(
+				(edge) => this.graph[edge.id].type === EdgeType.List
+			).length > 1
+		) {
+			this.error(`Nodes can only have one incoming list edge.`);
+		}
+	}
+
+	getSpecialOutgoingEdges(): CannoliEdge[] {
+		// Get all special outgoing edges
+		const specialOutgoingEdges = this.getOutgoingEdges().filter((edge) => {
+			return (
+				edge.type === EdgeType.ListItem ||
+				edge.type === EdgeType.Branch ||
+				edge.type === EdgeType.Category ||
+				edge.type === EdgeType.Select ||
+				edge.type === EdgeType.List ||
+				edge.type === EdgeType.SingleVariable
+			);
+		});
+
+		return specialOutgoingEdges;
+	}
+
+	specialOutgoingEdgesAreHomogeneous(): boolean {
+		const specialOutgoingEdges = this.getSpecialOutgoingEdges();
+
+		// Log out the text and type of each special outgoing edge
+		let specialEdgeLog = "Special Outgoing Edges:\n";
+
+		for (const edge of specialOutgoingEdges) {
+			specialEdgeLog += `\t"${this.graph[edge.id].text}" (${
+				edge.type
+			})\n`;
+		}
+
+		console.log(specialEdgeLog);
+
+		if (specialOutgoingEdges.length === 0) {
+			return true;
+		}
+
+		const firstEdgeType = specialOutgoingEdges[0].type;
+
+		for (const edge of specialOutgoingEdges) {
+			if (edge.type !== firstEdgeType) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	getAllAvailableProvideEdges(): ProvideEdge[] {
+		const availableEdges: CannoliEdge[] = [];
+
+		// Get the incoming edges of all groups
+		for (const group of this.groups) {
+			const groupObject = this.graph[group];
+			if (!(groupObject instanceof CannoliVertex)) {
+				throw new Error(
+					`Error on node ${this.id}: group is not a vertex.`
+				);
+			}
+
+			const groupIncomingEdges = groupObject.getIncomingEdges();
+
+			availableEdges.push(...groupIncomingEdges);
+		}
+
+		// Get the incoming edges of this node
+		const nodeIncomingEdges = this.getIncomingEdges();
+
+		availableEdges.push(...nodeIncomingEdges);
+
+		// Filter out all logging and write edges
+		const filteredEdges = availableEdges.filter(
+			(edge) =>
+				edge.type !== EdgeType.Logging &&
+				edge.type !== EdgeType.Write &&
+				edge.type !== EdgeType.Config
+		);
+
+		return filteredEdges as ProvideEdge[];
+	}
 }
 
 export class CallNode extends CannoliNode {
 	renderFunction: (
 		variables: { name: string; content: string }[]
 	) => Promise<string>;
+	references: Reference[];
 
 	constructor(
 		id: string,
@@ -397,28 +513,224 @@ export class CallNode extends CannoliNode {
 		this.renderFunction = this.buildRenderFunction();
 	}
 
-	async run() {
+	getPrependedMessages(): ChatCompletionRequestMessage[] {
+		const messages: ChatCompletionRequestMessage[] = [];
+
+		// Get all available provide edges
+		const availableEdges = this.getAllAvailableProvideEdges();
+
+		for (const edge of availableEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (!(edgeObject instanceof ProvideEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a provide edge.`
+				);
+			}
+
+			const edgeMessages = edgeObject.messages;
+
+			if (edgeMessages) {
+				// If its a system message, add it to the beginning of the array
+				if (edge.type === EdgeType.SystemMessage) {
+					messages.unshift(edgeMessages[0]);
+				} else {
+					messages.push(...edgeMessages);
+				}
+			}
+		}
+
+		return messages;
+	}
+
+	getVariableValues(): { name: string; content: string }[] {
+		const variableValues: { name: string; content: string }[] = [];
+
+		// Get all available provide edges
+		const availableEdges = this.getAllAvailableProvideEdges();
+
+		for (const edge of availableEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (!(edgeObject instanceof ProvideEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a provide edge.`
+				);
+			}
+
+			// If the edge isn't complete, skip it
+			if (!(edgeObject.status === CannoliObjectStatus.Complete)) {
+				continue;
+			}
+
+			if (!edgeObject.content) {
+				continue;
+			}
+
+			if (typeof edgeObject.content === "string" && edgeObject.name) {
+				const variableValue = {
+					name: edgeObject.name,
+					content: edgeObject.content,
+				};
+
+				variableValues.push(variableValue);
+			} else if (
+				typeof edgeObject.content === "object" &&
+				!Array.isArray(edgeObject.content)
+			) {
+				const multipleVariableValues = [];
+
+				for (const name in edgeObject.content) {
+					const variableValue = {
+						name: name,
+						content: edgeObject.content[name],
+					};
+
+					multipleVariableValues.push(variableValue);
+				}
+
+				variableValues.push(...multipleVariableValues);
+			} else {
+				continue;
+			}
+		}
+
+		return variableValues;
+	}
+
+	getNewMessage(): ChatCompletionRequestMessage {
+		const variables = this.getVariableValues();
+
+		this.renderFunction(variables);
+
+		return {
+			role: "user",
+			content: this.text,
+		};
+	}
+
+	getConfig(): Record<string, string> {
+		const config: Record<string, string> = {
+			// Default config values
+			model: "gpt-3.5-turbo",
+		};
+
+		// Starting at the last group in groups and working backward
+		for (let i = this.groups.length - 1; i >= 0; i--) {
+			const group = this.graph[this.groups[i]];
+			if (group instanceof CannoliGroup) {
+				const configEdges = group.getIncomingEdges().filter((edge) => {
+					return edge.type === EdgeType.Config;
+				});
+
+				// If the setting of the config edge is a key in the config object, overwrite it
+				for (const edge of configEdges) {
+					const edgeObject = this.graph[edge.id];
+					if (!(edgeObject instanceof ConfigEdge)) {
+						throw new Error(
+							`Error on object ${edgeObject.id}: object is not a config edge.`
+						);
+					}
+
+					const content = edgeObject.content;
+
+					if (typeof content === "string") {
+						if (edgeObject.setting in config) {
+							config[edgeObject.setting] = content;
+						}
+					} else if (typeof content === "object") {
+						for (const key in content) {
+							if (key in config) {
+								config[key] = content[key];
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Then do the same for the node itself
+		const configEdges = this.getIncomingEdges().filter((edge) => {
+			return edge.type === EdgeType.Config;
+		});
+
+		// If the setting of the config edge is a key in the config object, overwrite it
+		for (const edge of configEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (!(edgeObject instanceof ConfigEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a config edge.`
+				);
+			}
+
+			const content = edgeObject.content;
+
+			if (typeof content === "string") {
+				if (edgeObject.setting in config) {
+					config[edgeObject.setting] = content;
+				}
+			} else if (typeof content === "object") {
+				for (const key in content) {
+					if (key in config) {
+						config[key] = content[key];
+					}
+				}
+			}
+		}
+
+		return config;
+	}
+
+	async callLLM(
+		run: Run
+	): Promise<{ content: string; messages: ChatCompletionRequestMessage[] }> {
+		console.log(`Calling LLM with text "${this.text}"`);
+
+		const config = this.getConfig();
+
+		const messages = this.getPrependedMessages();
+
+		messages.push(this.getNewMessage());
+
+		const response = await run.cannoli?.llmCall({
+			messages: messages,
+			model: config["model"],
+			mock: run.isMock,
+			verbose: true,
+		});
+
+		console.log(response?.message.content);
+
+		if (response && response.message && response.message.content) {
+			messages.push(response.message);
+			const responseContent = response.message.content;
+
+			return {
+				content: responseContent,
+				messages: messages,
+			};
+		} else {
+			this.error(`LLM call failed.`);
+			throw new Error(`LLM call failed.`);
+		}
+	}
+
+	async run(run: Run) {
 		console.log(`Running call node with text "${this.text}"`);
 
 		// TEST VERSION (sleep for random time between 0 and 3 seconds)
-		const sleepTime = Math.random() * 3000;
-		await new Promise((resolve) => setTimeout(resolve, sleepTime));
+		// const sleepTime = Math.random() * 3000;
+		// await new Promise((resolve) => setTimeout(resolve, sleepTime));
+
+		const { content, messages } = await this.callLLM(run);
+
+		console.log(`LLM call returned content "${content}"`);
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge.id];
-			if (edgeObject instanceof SingleVariableEdge) {
+			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
-					content: "testing",
-				});
-			} else if (edgeObject instanceof ChatEdge) {
-				edgeObject.load({
-					messages: [
-						{
-							role: "user",
-							content: "testing",
-						},
-					],
+					content: content,
+					messages: messages,
 				});
 			}
 		}
@@ -426,7 +738,7 @@ export class CallNode extends CannoliNode {
 		console.log(`Finished running call node with text "${this.text}"`);
 	}
 
-	async mockRun() {
+	async mockRun(run: Run) {
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge.id];
@@ -450,17 +762,249 @@ export class CallNode extends CannoliNode {
 	logDetails(): string {
 		return super.logDetails() + `Type: Call\n`;
 	}
-}
 
-export class ListNode extends CannoliNode {
-	logDetails(): string {
-		return super.logDetails() + `Subtype: List\n`;
+	validate() {
+		super.validate();
+
+		// There must not be more than one incoming edge of type Chat
+		if (
+			this.getIncomingEdges().filter(
+				(edge) => edge.type === EdgeType.Chat
+			).length > 1
+		) {
+			this.error(`Call nodes can only have one incoming chat edge.`);
+		}
 	}
 }
 
-export class ChoiceNode extends CannoliNode {
+export enum ListNodeType {
+	ListItem = "ListItem",
+	List = "List",
+}
+
+export class ListNode extends CannoliNode {
+	listNodeType: ListNodeType;
+
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		vault: Vault,
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[]
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
+	}
+
+	setSpecialType() {
+		// If there are any outgoing list item edges, it's a list item node
+		if (
+			this.getSpecialOutgoingEdges().some(
+				(edge) => edge.type === EdgeType.ListItem
+			)
+		) {
+			this.listNodeType = ListNodeType.ListItem;
+		} else {
+			this.listNodeType = ListNodeType.List;
+		}
+	}
+
 	logDetails(): string {
-		return super.logDetails() + `Subtype: Choice\n`;
+		return (
+			super.logDetails() +
+			`Subtype: List\nList Type: ${this.listNodeType}\n`
+		);
+	}
+
+	validate() {
+		super.validate();
+
+		const specialOutgoingEdges = this.getSpecialOutgoingEdges();
+
+		// If there are no special outgoing edges, it's an error
+		if (specialOutgoingEdges.length === 0) {
+			this.error(`List nodes must have at least one outgoing list edge.`);
+		}
+
+		// Switch on the type of the first special outgoing edge
+		switch (this.listNodeType) {
+			case ListNodeType.ListItem:
+				this.validateList(specialOutgoingEdges);
+				break;
+			case ListNodeType.List:
+				this.validateListItem(specialOutgoingEdges);
+				break;
+			default:
+				this.error(
+					`All special outgoing edges must be list edges or list item edges.`
+				);
+		}
+	}
+
+	validateListItem(specialOutgoingEdges: CannoliEdge[]) {
+		return;
+	}
+
+	validateList(specialOutgoingEdges: CannoliEdge[]) {
+		// // All list edges must point to list groups or choice nodes
+		// for (const edge of specialOutgoingEdges) {
+		// 	const edgeObject = this.graph[edge.id];
+
+		// 	if (!(edgeObject instanceof CannoliEdge)) {
+		// 		throw new Error(
+		// 			`Error on object ${edgeObject.id}: object is not an edge.`
+		// 		);
+		// 	}
+
+		// 	const target = edgeObject.getTarget();
+
+		// 	if (
+		// 		!(target instanceof ListGroup) &&
+		// 		!(
+		// 			target instanceof ChoiceNode &&
+		// 			(target.choiceNodeType === ChoiceNodeType.Category ||
+		// 				target.choiceNodeType === ChoiceNodeType.Select)
+		// 		)
+		// 	) {
+		// 		this.error(
+		// 			`All list edges with multiple items in them must point to list groups or choice nodes.`
+		// 		);
+		// 	}
+		// }
+		return;
+	}
+}
+
+export enum ChoiceNodeType {
+	Branch = "Branch",
+	Category = "Category",
+	Select = "Select",
+}
+
+export class ChoiceNode extends CannoliNode {
+	choiceNodeType: ChoiceNodeType;
+
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		vault: Vault,
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[]
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
+	}
+
+	setSpecialType() {
+		// If there are any branch edges in the special outgoing edges, it's a branch node
+		if (
+			this.getSpecialOutgoingEdges().some(
+				(edge) => edge.type === EdgeType.Branch
+			)
+		) {
+			this.choiceNodeType = ChoiceNodeType.Branch;
+		} else if (
+			this.getSpecialOutgoingEdges().some(
+				(edge) => edge.type === EdgeType.Select
+			)
+		) {
+			this.choiceNodeType = ChoiceNodeType.Select;
+		} else {
+			this.choiceNodeType = ChoiceNodeType.Category;
+		}
+	}
+
+	logDetails(): string {
+		return (
+			super.logDetails() +
+			`Subtype: Choice\nChoice Type: ${this.choiceNodeType}\n`
+		);
+	}
+
+	validate() {
+		super.validate();
+
+		const specialOutgoingEdges = this.getSpecialOutgoingEdges();
+
+		// If there are no special outgoing edges, it's an error
+		if (specialOutgoingEdges.length === 0) {
+			this.error(
+				`Choice nodes must have at least one outgoing choice edge.`
+			);
+		}
+
+		// Switch on the type of the first special outgoing edge
+		switch (this.choiceNodeType) {
+			case ChoiceNodeType.Category:
+				this.validateCategory(specialOutgoingEdges);
+				break;
+			case ChoiceNodeType.Branch:
+				this.validateBranch(specialOutgoingEdges);
+				break;
+			case ChoiceNodeType.Select:
+				this.validateSelect(specialOutgoingEdges);
+				break;
+			default:
+				this.error(
+					`All outgoing choice edges must be branch edges or category edges.`
+				);
+		}
+	}
+
+	validateBranch(specialOutgoingEdges: CannoliEdge[]) {
+		return;
+	}
+
+	validateCategory(specialOutgoingEdges: CannoliEdge[]) {
+		// All category edges must point to list groups
+		// for (const edge of specialOutgoingEdges) {
+		// 	const edgeObject = this.graph[edge.id];
+
+		// 	if (!(edgeObject instanceof CannoliEdge)) {
+		// 		throw new Error(
+		// 			`Error on object ${edgeObject.id}: object is not an edge.`
+		// 		);
+		// 	}
+
+		// 	const target = edgeObject.getTarget();
+
+		// 	if (!(target.type === GroupType.List)) {
+		// 		this.error(
+		// 			`All choice edges with multiple items in them must point to list groups or choice nodes.`
+		// 		);
+		// 	}
+		// }
+		return;
+	}
+
+	validateSelect(specialOutgoingEdges: CannoliEdge[]) {
+		return;
 	}
 }
 
@@ -489,18 +1033,48 @@ export class ContentNode extends CannoliNode {
 		);
 	}
 
-	async run() {
+	async run(run: Run) {
 		// TEST VERSION (write a random string to the text field)
 		console.log(`Running content node with text "${this.text}"`);
 		this.text = Math.random().toString(36).substring(7);
 	}
 
-	async mockRun() {
+	async mockRun(run: Run) {
 		console.log(`Mock running content node with text "${this.text}"`);
 	}
 
 	logDetails(): string {
 		return super.logDetails() + `Type: Content\n`;
+	}
+
+	validate(): void {
+		super.validate();
+
+		// There must not be more than one incoming edge of type write
+		if (
+			this.getIncomingEdges().filter(
+				(edge) => edge.type === EdgeType.Write
+			).length > 1
+		) {
+			this.error(`Content nodes can only have one incoming write edge.`);
+		}
+
+		// Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
+		if (
+			this.getOutgoingEdges().some(
+				(edge) =>
+					edge.type === EdgeType.ListItem ||
+					edge.type === EdgeType.List ||
+					edge.type === EdgeType.Category ||
+					edge.type === EdgeType.Select ||
+					edge.type === EdgeType.Branch ||
+					edge.type === EdgeType.Function
+			)
+		) {
+			this.error(
+				`Content nodes cannot have any outgoing list, choice, or function edges.`
+			);
+		}
 	}
 }
 
@@ -532,6 +1106,22 @@ export class VaultNode extends CannoliNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Vault\n`;
 	}
+
+	validate(): void {
+		// Vault nodes cant have incoming edges of type category, list, or function
+		if (
+			this.getIncomingEdges().some(
+				(edge) =>
+					edge.type === EdgeType.Category ||
+					edge.type === EdgeType.List ||
+					edge.type === EdgeType.Function
+			)
+		) {
+			this.error(
+				`Vault nodes cannot have incoming category, list, or function edges.`
+			);
+		}
+	}
 }
 
 export class ReferenceNode extends CannoliNode {
@@ -560,7 +1150,7 @@ export class ReferenceNode extends CannoliNode {
 			groups
 		);
 
-		const reference = this.getReference();
+		const reference = this.getNoteOrFloatingReference();
 
 		if (reference === null) {
 			throw new Error(
@@ -572,7 +1162,7 @@ export class ReferenceNode extends CannoliNode {
 	}
 
 	async getContent(): Promise<string> {
-		if (this.reference.type === "page") {
+		if (this.reference.type === ReferenceType.Note) {
 			const file = this.vault
 				.getFiles()
 				.find((file) => file.basename === this.reference.name);
@@ -598,7 +1188,7 @@ export class ReferenceNode extends CannoliNode {
 	}
 
 	editContent(newContent: string, run: Run): void {
-		if (this.reference.type === "page") {
+		if (this.reference.type === ReferenceType.Note) {
 			const file = this.vault
 				.getFiles()
 				.find((file) => file.basename === this.reference.name);
@@ -630,9 +1220,43 @@ export class ReferenceNode extends CannoliNode {
 			`Subtype: Reference\nReference name: ${this.reference.name}\n`
 		);
 	}
+
+	validate(): void {
+		super.validate();
+
+		// Reference nodes cant have incoming edges of type category, list, or function
+		if (
+			this.getIncomingEdges().some(
+				(edge) =>
+					edge.type === EdgeType.Category ||
+					edge.type === EdgeType.List ||
+					edge.type === EdgeType.Function
+			)
+		) {
+			this.error(
+				`Reference nodes cannot have incoming category, list, or function edges.`
+			);
+		}
+
+		// If there are more than one incoming edges, there must only be one non-config edge
+		if (
+			this.getIncomingEdges().filter(
+				(edge) => edge.type !== EdgeType.Config
+			).length > 1
+		) {
+			this.error(
+				`Reference nodes can only have one incoming edge that is not of type config.`
+			);
+		}
+	}
 }
 
 export class FormatterNode extends CannoliNode {
+	renderFunction: (
+		variables: { name: string; content: string }[]
+	) => Promise<string>;
+	references: Reference[];
+
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Formatter\n`;
 	}
@@ -647,6 +1271,35 @@ export class InputNode extends CannoliNode {
 export class DisplayNode extends CannoliNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Display\n`;
+	}
+
+	validate(): void {
+		super.validate();
+
+		// If there are more than one incoming edges, there must only be one non-config edge
+		if (
+			this.getIncomingEdges().filter(
+				(edge) => edge.type !== EdgeType.Config
+			).length > 1
+		) {
+			this.error(
+				`Reference nodes can only have one incoming edge that is not of type config.`
+			);
+		}
+
+		// Display nodes cant have incoming edges of type category, list, or function
+		if (
+			this.getIncomingEdges().some(
+				(edge) =>
+					edge.type === EdgeType.Category ||
+					edge.type === EdgeType.List ||
+					edge.type === EdgeType.Function
+			)
+		) {
+			this.error(
+				`Display nodes cannot have incoming category, list, or function edges.`
+			);
+		}
 	}
 }
 
@@ -675,14 +1328,14 @@ export class FloatingNode extends CannoliNode {
 		return;
 	}
 
-	async run() {
+	async run(run: Run) {
 		// We should never run a floating node, it shouldn't have any dependencies
 		throw new Error(
 			`Error on floating node ${this.id}: run is not implemented.`
 		);
 	}
 
-	async mockRun() {
+	async mockRun(run: Run) {
 		// We should never run a floating node, it shouldn't have any dependencies
 		throw new Error(
 			`Error on floating node ${this.id}: mockRun is not implemented.`

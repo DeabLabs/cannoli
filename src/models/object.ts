@@ -13,23 +13,28 @@ export enum IndicatedNodeType {
 }
 
 export enum NodeType {
-	Choice,
-	List,
-	StandardCall,
-	Formatter,
-	Input,
-	Display,
-	Vault,
-	Reference,
-	Floating,
-	NonLogic,
+	Choice = "choice",
+	List = "list",
+	StandardCall = "standard-call",
+	Formatter = "formatter",
+	Input = "input",
+	Display = "display",
+	Vault = "vault",
+	Reference = "reference",
+	Floating = "floating",
+	NonLogic = "non-logic",
 }
 
-export type ReferenceType = "page" | "floating";
+export enum ReferenceType {
+	Variable = "variable",
+	Floating = "floating",
+	Note = "note",
+}
 
 export interface Reference {
 	name: string;
 	type: ReferenceType;
+	shouldExtract: boolean;
 }
 
 export enum IndicatedGroupType {
@@ -40,10 +45,10 @@ export enum IndicatedGroupType {
 }
 
 export enum GroupType {
-	Repeat,
-	List,
-	Basic,
-	NonLogic,
+	Repeat = "repeat",
+	List = "list",
+	Basic = "basic",
+	NonLogic = "non-logic",
 }
 
 export enum CannoliObjectStatus {
@@ -51,23 +56,25 @@ export enum CannoliObjectStatus {
 	Executing = "executing",
 	Complete = "complete",
 	Rejected = "rejected",
+	Error = "error",
 }
 
 export enum EdgeType {
-	Write,
-	Logging,
-	Config,
-	Chat,
-	SystemMessage,
-	List,
-	Function,
-	ListItem,
-	Select,
-	Branch,
-	Category,
-	Vault,
-	SingleVariable,
-	NonLogic,
+	Write = "write",
+	Logging = "logging",
+	Config = "config",
+	Chat = "chat",
+	SystemMessage = "system-message",
+	List = "list",
+	Function = "function",
+	ListItem = "list-item",
+	Select = "select",
+	Branch = "branch",
+	Category = "category",
+	Vault = "vault",
+	SingleVariable = "single-variable",
+	NonLogic = "non-logic",
+	Untyped = "untyped",
 }
 
 export enum IndicatedEdgeType {
@@ -82,9 +89,9 @@ export enum IndicatedEdgeType {
 }
 
 export enum CannoliObjectKind {
-	Node,
-	Edge,
-	Group,
+	Node = "node",
+	Edge = "edge",
+	Group = "group",
 }
 
 export class CannoliObject extends EventEmitter {
@@ -96,6 +103,7 @@ export class CannoliObject extends EventEmitter {
 	isClone: boolean;
 	vault: Vault;
 	kind: CannoliObjectKind;
+	type: EdgeType | NodeType | GroupType;
 
 	constructor(
 		id: string,
@@ -232,9 +240,9 @@ export class CannoliObject extends EventEmitter {
 		this.emit("update", this, CannoliObjectStatus.Executing, run);
 
 		if (run.isMock) {
-			await this.mockRun();
+			await this.mockRun(run);
 		} else {
-			await this.run();
+			await this.run(run);
 		}
 
 		this.status = CannoliObjectStatus.Complete;
@@ -292,6 +300,10 @@ export class CannoliObject extends EventEmitter {
 		}
 	}
 
+	setSpecialType() {
+		return;
+	}
+
 	// All of the following must be implemented by subclasses
 
 	getIndicatedType():
@@ -320,9 +332,9 @@ export class CannoliObject extends EventEmitter {
 
 	dependencyCompleted(dependency: CannoliObject, run: Run) {}
 
-	async run() {}
+	async run(run: Run) {}
 
-	async mockRun() {}
+	async mockRun(run: Run) {}
 
 	logDetails(): string {
 		let dependenciesString = "";
@@ -341,7 +353,14 @@ export class CannoliObject extends EventEmitter {
 		return `Dependencies:\n${dependenciesString}\n`;
 	}
 
-	validate() {}
+	validate() {
+		// If the id is empty, error
+		if (this.id === "") {
+			throw new Error(
+				`Error on object ${this.id}: id cannot be an empty string.`
+			);
+		}
+	}
 
 	setDependencies() {}
 }
@@ -487,6 +506,22 @@ export class CannoliVertex extends CannoliObject {
 					this.addDependency(edge.id);
 				}
 			}
+		}
+	}
+
+	error(message: string) {
+		const run = new Run(false);
+		this.status = CannoliObjectStatus.Error;
+		this.emit("update", this, CannoliObjectStatus.Error, run, message);
+		throw new Error(message);
+	}
+
+	validate() {
+		super.validate();
+
+		// If the canvasData is null, error
+		if (!this.canvasData) {
+			this.error(`Error: canvasData cannot be null.`);
 		}
 	}
 }

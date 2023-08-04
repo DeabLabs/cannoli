@@ -38,6 +38,9 @@ export class CannoliFactory {
 		// Set listener functions
 		this.setAllListeners(typedObjects);
 
+		// Set special types
+		this.setAllSpecialTypes(typedObjects);
+
 		// Return typed objects
 		return typedObjects;
 	}
@@ -216,6 +219,12 @@ export class CannoliFactory {
 	setAllDependencies(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
 			object.setDependencies();
+		}
+	}
+
+	setAllSpecialTypes(graph: Record<string, CannoliObject>) {
+		for (const object of Object.values(graph)) {
+			object.setSpecialType();
 		}
 	}
 }

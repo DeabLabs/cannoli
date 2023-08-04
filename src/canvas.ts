@@ -9,10 +9,13 @@ import {
 } from "obsidian/canvas.d";
 import { CannoliGraph } from "./cannoli";
 import { v4 as uuidv4 } from "uuid";
-import { CannoliObject, CannoliObjectStatus } from "./models/object";
+import {
+	CannoliObject,
+	CannoliVertex,
+	CannoliObjectStatus,
+} from "./models/object";
 import { Run } from "./run";
 import { CallNode, DisplayNode, FloatingNode, VaultNode } from "./models/node";
-import { RepeatGroup } from "./models/group";
 
 export class Canvas {
 	canvasFile: TFile;
@@ -177,15 +180,9 @@ export class Canvas {
 	setListeners(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
 			// Only set listeners for the following objects
-			if (
-				object instanceof CallNode ||
-				object instanceof DisplayNode ||
-				object instanceof VaultNode ||
-				object instanceof FloatingNode ||
-				object instanceof RepeatGroup
-			) {
-				object.on("update", (obj, status, run) => {
-					this.onObjectUpdate(obj, status, run);
+			if (object instanceof CannoliVertex) {
+				object.on("update", (obj, status, run, message) => {
+					this.onObjectUpdate(obj, status, run, message);
 				});
 			}
 		}
@@ -194,7 +191,8 @@ export class Canvas {
 	onObjectUpdate(
 		object: CannoliObject,
 		status: CannoliObjectStatus,
-		run: Run
+		run: Run,
+		message?: string
 	) {
 		if (run.isMock) {
 			return;
@@ -209,6 +207,9 @@ export class Canvas {
 				break;
 			case CannoliObjectStatus.Pending:
 				this.onObjectPending(object);
+				break;
+			case CannoliObjectStatus.Error:
+				this.onObjectError(object, message);
 				break;
 			default:
 				break;
@@ -239,6 +240,17 @@ export class Canvas {
 		}
 	}
 
+	onObjectError(object: CannoliObject, message?: string) {
+		console.log(`Error: ${message}`);
+		if (object instanceof CannoliVertex && message) {
+			this.enqueueAddErrorNode(object.id, message);
+		} else {
+			throw new Error(
+				`Error: Object ${object.id} is not a CannoliVertex or error is undefined.`
+			);
+		}
+	}
+
 	private changeNodeColor(
 		data: CanvasData,
 		nodeId: string,
@@ -251,18 +263,22 @@ export class Canvas {
 		return data;
 	}
 
-	private addErrorNode(data: CanvasData, nodeId: string): CanvasData {
+	private addErrorNode(
+		data: CanvasData,
+		nodeId: string,
+		error: string
+	): CanvasData {
 		const node = data.nodes.find((node) => node.id === nodeId);
 		if (node) {
 			const newNodeId = this.generateNewId();
 			const errorNode: CanvasTextData = {
 				id: newNodeId,
-				x: node.x + 100,
+				x: node.x + node.width + 50,
 				y: node.y,
-				width: node.width,
-				height: node.height,
+				width: 500,
+				height: 150,
 				color: "1",
-				text: "Error",
+				text: `<u>Error:</u>\n` + error,
 				type: "text", // Add the 'type' property
 			};
 			const newEdge: CanvasEdgeData = {
@@ -271,6 +287,8 @@ export class Canvas {
 				fromSide: "right",
 				toNode: newNodeId,
 				toSide: "left",
+				fromEnd: "none",
+				toEnd: "none",
 				color: "1", // red color
 			};
 			data.nodes.push(errorNode);
@@ -300,10 +318,10 @@ export class Canvas {
 		return this.editQueue;
 	}
 
-	async enqueueAddErrorNode(nodeId: string) {
+	async enqueueAddErrorNode(nodeId: string, message: string) {
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
-			const newData = this.addErrorNode(data, nodeId);
+			const newData = this.addErrorNode(data, nodeId, message);
 			await this.writeCanvasData(newData);
 		});
 		return this.editQueue;

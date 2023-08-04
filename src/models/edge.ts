@@ -151,7 +151,7 @@ export class CannoliEdge extends CannoliObject {
 		}
 	}
 
-	async run() {
+	async run(run: Run) {
 		if (!this.isLoaded) {
 			throw new Error(
 				`Error on edge ${this.id}: edge is being run but has not been loaded.`
@@ -159,7 +159,7 @@ export class CannoliEdge extends CannoliObject {
 		}
 	}
 
-	async mockRun() {
+	async mockRun(run: Run) {
 		if (!this.isLoaded) {
 			throw new Error(
 				`Error on edge ${this.id}: edge is being run but has not been loaded.`
@@ -392,8 +392,6 @@ export class CannoliEdge extends CannoliObject {
 			}
 		});
 
-		console.log(`Outgoing choice edge names: ${outgoingChoiceEdgeNames}`);
-
 		// If they're all the same, return Select
 		if (
 			outgoingChoiceEdgeNames.every(
@@ -516,7 +514,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					SingleVariableEdgeType.ListItem
+					EdgeType.ListItem
 				);
 			}
 			case EdgeType.Category: {
@@ -533,7 +531,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					MultipleVariableEdgeType.Category
+					EdgeType.Category
 				);
 			}
 			case EdgeType.Function: {
@@ -550,7 +548,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					MultipleVariableEdgeType.Function
+					EdgeType.Function
 				);
 			}
 			case EdgeType.List: {
@@ -567,7 +565,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					MultipleVariableEdgeType.List
+					EdgeType.List
 				);
 			}
 			case EdgeType.Branch: {
@@ -584,7 +582,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					SingleVariableEdgeType.Branch
+					EdgeType.Branch
 				);
 			}
 			case EdgeType.Select: {
@@ -601,7 +599,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					SingleVariableEdgeType.Select
+					EdgeType.Select
 				);
 			}
 			case EdgeType.Vault: {
@@ -618,7 +616,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					SingleVariableEdgeType.Vault
+					EdgeType.Vault
 				);
 			}
 			case EdgeType.SingleVariable: {
@@ -635,7 +633,7 @@ export class CannoliEdge extends CannoliObject {
 					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					SingleVariableEdgeType.Standard
+					EdgeType.SingleVariable
 				);
 			}
 			case EdgeType.NonLogic: {
@@ -692,6 +690,8 @@ export class ProvideEdge extends CannoliEdge {
 		);
 		this.name = name;
 		this.addMessages = addMessages;
+
+		this.type = EdgeType.Untyped;
 	}
 
 	reset(run: Run): void {
@@ -727,6 +727,8 @@ export class ChatEdge extends ProvideEdge {
 			null,
 			true
 		);
+
+		this.type = EdgeType.Chat;
 	}
 
 	load({
@@ -741,12 +743,6 @@ export class ChatEdge extends ProvideEdge {
 		} else {
 			throw new Error(
 				`Error on Chat edge ${this.id}: messages is undefined.`
-			);
-		}
-
-		if (content !== undefined) {
-			throw new Error(
-				`Error on Chat edge ${this.id}: cannot load content.`
 			);
 		}
 
@@ -785,6 +781,8 @@ export class SystemMessageEdge extends ProvideEdge {
 			null,
 			true
 		);
+
+		this.type = EdgeType.SystemMessage;
 	}
 
 	load({
@@ -804,12 +802,6 @@ export class SystemMessageEdge extends ProvideEdge {
 		} else {
 			throw new Error(
 				`Error on SystemMessage edge ${this.id}: content is undefined.`
-			);
-		}
-
-		if (messages !== undefined) {
-			throw new Error(
-				`Error on SystemMessage edge ${this.id}: cannot load messages.`
 			);
 		}
 
@@ -846,6 +838,8 @@ export class WriteEdge extends CannoliEdge {
 			crossingInGroups,
 			crossingOutGroups
 		);
+
+		this.type = EdgeType.Write;
 	}
 
 	load({
@@ -861,12 +855,6 @@ export class WriteEdge extends CannoliEdge {
 			} else {
 				throw new Error(
 					`Error on Write edge ${this.id}: content is undefined.`
-				);
-			}
-
-			if (messages !== undefined) {
-				throw new Error(
-					`Error on Write edge ${this.id}: cannot load messages.`
 				);
 			}
 		} else {
@@ -908,6 +896,8 @@ export class LoggingEdge extends WriteEdge {
 			crossingInGroups,
 			crossingOutGroups
 		);
+
+		this.type = EdgeType.Logging;
 	}
 
 	load({
@@ -981,6 +971,7 @@ export class ConfigEdge extends CannoliEdge {
 			crossingOutGroups
 		);
 		this.setting = setting;
+		this.type = EdgeType.Config;
 	}
 
 	load({
@@ -998,12 +989,6 @@ export class ConfigEdge extends CannoliEdge {
 			this.content = content;
 		}
 
-		if (messages !== undefined) {
-			throw new Error(
-				`Error on Config edge ${this.id}: cannot load messages.`
-			);
-		}
-
 		this.isLoaded = true;
 	}
 
@@ -1012,17 +997,7 @@ export class ConfigEdge extends CannoliEdge {
 	}
 }
 
-export enum SingleVariableEdgeType {
-	ListItem = "listItem",
-	Branch = "branch",
-	Select = "select",
-	Vault = "vault",
-	Standard = "standard",
-}
-
 export class SingleVariableEdge extends ProvideEdge {
-	type: SingleVariableEdgeType;
-
 	constructor(
 		id: string,
 		text: string,
@@ -1036,7 +1011,7 @@ export class SingleVariableEdge extends ProvideEdge {
 		crossingOutGroups: string[],
 		name: string | null,
 		addMessages: boolean,
-		type: SingleVariableEdgeType
+		type: EdgeType
 	) {
 		super(
 			id,
@@ -1079,12 +1054,6 @@ export class SingleVariableEdge extends ProvideEdge {
 						`Error on SingleVariable edge ${this.id}: messages undefined.`
 					);
 				}
-			} else {
-				if (messages !== undefined) {
-					throw new Error(
-						`Error on SingleVariable edge ${this.id}: cannot load chatHistory.`
-					);
-				}
 			}
 		} else {
 			throw new Error(
@@ -1103,15 +1072,7 @@ export class SingleVariableEdge extends ProvideEdge {
 	}
 }
 
-export enum MultipleVariableEdgeType {
-	List = "list",
-	Category = "category",
-	Function = "function",
-}
-
 export class MultipleVariableEdge extends ProvideEdge {
-	type: MultipleVariableEdgeType;
-
 	constructor(
 		id: string,
 		text: string,
@@ -1125,7 +1086,7 @@ export class MultipleVariableEdge extends ProvideEdge {
 		crossingOutGroups: string[],
 		name: string,
 		addMessages: boolean,
-		type: MultipleVariableEdgeType
+		type: EdgeType
 	) {
 		super(
 			id,
@@ -1166,12 +1127,6 @@ export class MultipleVariableEdge extends ProvideEdge {
 				} else {
 					throw new Error(
 						`Error on MultipleVariable edge ${this.id}: messages undefined.`
-					);
-				}
-			} else {
-				if (messages !== undefined) {
-					throw new Error(
-						`Error on MultipleVariable edge ${this.id}: cannot load messages.`
 					);
 				}
 			}

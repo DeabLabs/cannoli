@@ -62,10 +62,9 @@ export class CannoliGraph {
 			this.logGraph();
 		}
 
-		// Validate the graph
-		// this.validate();
-
 		this.canvas.setListeners(this.graph);
+
+		this.validate();
 
 		this.setCompleteListeners();
 
@@ -103,13 +102,13 @@ export class CannoliGraph {
 	}
 
 	async mockRun() {
-		const mockRun = new Run(true);
+		const mockRun = new Run(true, this);
 		this.executeRootObjects(mockRun);
 		await this.runCompletedPromise; // Wait for the run to complete
 	}
 
 	async liveRun() {
-		const liveRun = new Run(false);
+		const liveRun = new Run(false, this);
 		this.executeRootObjects(liveRun);
 		await this.runCompletedPromise; // Wait for the run to complete
 	}
@@ -153,7 +152,12 @@ export class CannoliGraph {
 		});
 	}
 
-	validate() {}
+	validate() {
+		// Call validate on each object
+		for (const object of Object.values(this.graph)) {
+			object.validate();
+		}
+	}
 
 	logGraph() {
 		for (const node of Object.values(this.graph)) {
@@ -302,6 +306,8 @@ export class CannoliGraph {
 		promptTokens: number;
 		completionTokens: number;
 	}> {
+		console.log("llmCall");
+
 		if (mock) {
 			const enc = encoding_for_model(model as TiktokenModel);
 
