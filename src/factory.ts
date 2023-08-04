@@ -3,7 +3,7 @@ import { Vault } from "obsidian";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import { CannoliEdge } from "./models/edge";
 import { CannoliGroup } from "./models/group";
-import { CannoliNode } from "./models/node";
+import { CannoliNode, FloatingNode } from "./models/node";
 
 export class CannoliFactory {
 	vault: Vault;
@@ -27,7 +27,7 @@ export class CannoliFactory {
 		this.setAllCrossingGroups(edgesNodesGroups);
 
 		// Log all objects
-		this.logAll(edgesNodesGroups);
+		// this.logAll(edgesNodesGroups);
 
 		// Create typed objects
 		const typedObjects = this.createTypedObjects(edgesNodesGroups);
@@ -36,7 +36,7 @@ export class CannoliFactory {
 		// this.makeListCopies(typedObjects);
 
 		// Set listener functions
-		this.setAllListeners(typedObjects);
+		// this.setAllListeners(typedObjects);
 
 		// Return typed objects
 		return typedObjects;
@@ -53,7 +53,7 @@ export class CannoliFactory {
 			if (node.type === "text" || node.type === "link") {
 				graph[node.id] = new CannoliVertex(
 					node.id,
-					node.text,
+					node.text ?? "",
 					graph,
 					false,
 					this.vault,
@@ -114,21 +114,44 @@ export class CannoliFactory {
 						newGraph,
 						false,
 						this.vault,
-						object.canvasData
+						object.canvasData,
+						object.outgoingEdges,
+						object.incomingEdges,
+						object.groups
 					);
 					newGraph[object.id] = group;
 				} else if (
 					object.canvasData.type === "text" ||
 					object.canvasData.type === "link"
 				) {
-					const node = new CannoliNode(
-						object.id,
-						object.text,
-						newGraph,
-						false,
-						this.vault,
-						object.canvasData
-					);
+					let node;
+
+					// Check if its floating
+					if (
+						object.outgoingEdges.length === 0 &&
+						object.incomingEdges.length === 0
+					) {
+						node = new FloatingNode(
+							object.id,
+							object.text,
+							newGraph,
+							false,
+							this.vault,
+							object.canvasData
+						);
+					} else {
+						node = new CannoliNode(
+							object.id,
+							object.text,
+							newGraph,
+							false,
+							this.vault,
+							object.canvasData,
+							object.outgoingEdges,
+							object.incomingEdges,
+							object.groups
+						);
+					}
 					newGraph[object.id] = node;
 				}
 			} else if (object instanceof CannoliEdge) {
@@ -186,7 +209,6 @@ export class CannoliFactory {
 
 	logAll(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
-			console.log(object.constructor.name);
 			console.log(object.logDetails());
 		}
 	}

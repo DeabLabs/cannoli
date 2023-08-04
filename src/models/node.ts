@@ -33,9 +33,25 @@ export class CannoliNode extends CannoliVertex {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		vault: Vault,
-		canvasData: AllCanvasNodeData
+		canvasData: AllCanvasNodeData,
+		outgoingEdges?: { id: string; isReflexive: boolean }[],
+		incomingEdges?: { id: string; isReflexive: boolean }[],
+		groups?: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
+		incomingEdges = incomingEdges || [];
+		outgoingEdges = outgoingEdges || [];
+		groups = groups || [];
 
 		this.kind = CannoliObjectKind.Node;
 	}
@@ -46,9 +62,10 @@ export class CannoliNode extends CannoliVertex {
 			content: string;
 		}[]
 	) => Promise<string> {
-		throw new Error(
-			`Error on node ${this.id}: buildRenderFunction is not implemented.`
-		);
+		console.error(`Need to implement buildRenderFunction`);
+		return async () => {
+			return "Implement render function";
+		};
 	}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run): void {
@@ -201,7 +218,10 @@ export class CannoliNode extends CannoliVertex {
 					graph,
 					false,
 					this.vault,
-					this.canvasData
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
 				);
 			case NodeType.List:
 				return new ListNode(
@@ -210,7 +230,10 @@ export class CannoliNode extends CannoliVertex {
 					graph,
 					false,
 					this.vault,
-					this.canvasData
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
 				);
 
 			case NodeType.Choice:
@@ -220,7 +243,10 @@ export class CannoliNode extends CannoliVertex {
 					graph,
 					false,
 					this.vault,
-					this.canvasData
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
 				);
 			case NodeType.Display:
 			case NodeType.Floating:
@@ -241,6 +267,40 @@ export class CannoliNode extends CannoliVertex {
 				);
 		}
 	}
+
+	logDetails(): string {
+		let groupsString = "";
+		groupsString += `Groups: `;
+		for (const group of this.groups) {
+			groupsString += `\n\t-"${this.ensureStringLength(
+				this.graph[group].text,
+				15
+			)}"`;
+		}
+
+		let incomingEdgesString = "";
+		incomingEdgesString += `Incoming Edges: `;
+		for (const edge of this.incomingEdges) {
+			incomingEdgesString += `\n\t-"${this.ensureStringLength(
+				this.graph[edge.id].text,
+				15
+			)}"`;
+		}
+
+		let outgoingEdgesString = "";
+		outgoingEdgesString += `Outgoing Edges: `;
+		for (const edge of this.outgoingEdges) {
+			outgoingEdgesString += `\n\t-"${this.ensureStringLength(
+				this.graph[edge.id].text,
+				15
+			)}"`;
+		}
+
+		return (
+			super.logDetails() +
+			`[] Node ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n`
+		);
+	}
 }
 
 export class CallNode extends CannoliNode {
@@ -254,9 +314,22 @@ export class CallNode extends CannoliNode {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		vault: Vault,
-		canvasData: AllCanvasNodeData
+		canvasData: AllCanvasNodeData,
+		outgoingEdges?: { id: string; isReflexive: boolean }[],
+		incomingEdges?: { id: string; isReflexive: boolean }[],
+		groups?: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
 
 		this.renderFunction = this.buildRenderFunction();
 	}
@@ -271,11 +344,23 @@ export class CallNode extends CannoliNode {
 	async mockRun() {
 		console.log(`Mock running call node with text "${this.text}"`);
 	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: Call\n`;
+	}
 }
 
-export class ListNode extends CannoliNode {}
+export class ListNode extends CannoliNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: List\n`;
+	}
+}
 
-export class ChoiceNode extends CannoliNode {}
+export class ChoiceNode extends CannoliNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Choice\n`;
+	}
+}
 
 export class ContentNode extends CannoliNode {
 	constructor(
@@ -284,9 +369,22 @@ export class ContentNode extends CannoliNode {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		vault: Vault,
-		canvasData: AllCanvasNodeData
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
 	}
 
 	async run() {
@@ -298,6 +396,10 @@ export class ContentNode extends CannoliNode {
 	async mockRun() {
 		console.log(`Mock running content node with text "${this.text}"`);
 	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: Content\n`;
+	}
 }
 
 export class VaultNode extends CannoliNode {
@@ -307,9 +409,26 @@ export class VaultNode extends CannoliNode {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		vault: Vault,
-		canvasData: AllCanvasNodeData
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
+	}
+
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Vault\n`;
 	}
 }
 
@@ -322,9 +441,22 @@ export class ReferenceNode extends CannoliNode {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		vault: Vault,
-		canvasData: AllCanvasNodeData
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
 
 		const reference = this.getReference();
 
@@ -389,13 +521,32 @@ export class ReferenceNode extends CannoliNode {
 			}
 		}
 	}
+
+	logDetails(): string {
+		return (
+			super.logDetails() +
+			`Subtype: Reference\nReference name: ${this.reference.name}\n`
+		);
+	}
 }
 
-export class FormatterNode extends CannoliNode {}
+export class FormatterNode extends CannoliNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Formatter\n`;
+	}
+}
 
-export class InputNode extends CannoliNode {}
+export class InputNode extends CannoliNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Input\n`;
+	}
+}
 
-export class DisplayNode extends CannoliNode {}
+export class DisplayNode extends CannoliNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Display\n`;
+	}
+}
 
 export class FloatingNode extends CannoliNode {
 	constructor(

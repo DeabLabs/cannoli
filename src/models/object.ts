@@ -343,13 +343,16 @@ export class CannoliVertex extends CannoliObject {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		vault: Vault,
-		canvasData: AllCanvasNodeData
+		canvasData: AllCanvasNodeData,
+		outgoingEdges?: { id: string; isReflexive: boolean }[],
+		incomingEdges?: { id: string; isReflexive: boolean }[],
+		groups?: string[]
 	) {
 		super(id, text, graph, isClone, vault);
 		this.canvasData = canvasData;
-		this.outgoingEdges = [];
-		this.incomingEdges = [];
-		this.groups = [];
+		this.outgoingEdges = outgoingEdges || [];
+		this.incomingEdges = incomingEdges || [];
+		this.groups = groups || [];
 	}
 
 	addIncomingEdge(id: string, isReflexive: boolean) {
@@ -421,12 +424,13 @@ export class CannoliVertex extends CannoliObject {
 		for (const object in this.graph) {
 			const vertex = this.graph[object];
 
-			if (!(vertex instanceof CannoliVertex)) {
-				continue;
-			}
-
-			// Ensure vertex is of type CannoliGroup before processing further
-			if (!(vertex.canvasData.type === "group")) {
+			if (
+				!(
+					vertex instanceof CannoliVertex &&
+					vertex.kind !== CannoliObjectKind.Edge &&
+					vertex.id !== this.id
+				)
+			) {
 				continue;
 			}
 
@@ -440,7 +444,6 @@ export class CannoliVertex extends CannoliObject {
 			// If the group encloses the current vertex, add it to the groups
 			if (this.encloses(groupRectangle, currentVertexRectangle)) {
 				groups.push(vertex as CannoliGroup); // Type cast as CannoliGroup for clarity
-				console.log(`Group ${vertex.id} encloses vertex ${this.id}`);
 			}
 		}
 

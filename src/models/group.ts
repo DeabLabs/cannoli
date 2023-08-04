@@ -22,7 +22,7 @@ export class CannoliGroup extends CannoliVertex {
 	};
 
 	GroupColorMap: Record<string, IndicatedGroupType> = {
-		"3": IndicatedGroupType.List,
+		"5": IndicatedGroupType.List,
 	};
 
 	constructor(
@@ -31,13 +31,27 @@ export class CannoliGroup extends CannoliVertex {
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
 		vault: Vault,
-		canvasData: AllCanvasNodeData
+		canvasData: AllCanvasNodeData,
+		outgoingEdges?: { id: string; isReflexive: boolean }[],
+		incomingEdges?: { id: string; isReflexive: boolean }[],
+		groups?: string[],
+		members?: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
+
+		this.members = members || [];
 
 		this.kind = CannoliObjectKind.Group;
-
-		console.log(`New group with content ${this.text} created.`);
 	}
 
 	setMembers() {
@@ -45,7 +59,7 @@ export class CannoliGroup extends CannoliVertex {
 		for (const objectId in this.graph) {
 			const object = this.graph[objectId];
 			if (object instanceof CannoliVertex) {
-				// If the current group contains the vertex
+				// If the current group contains the vertex and the vertex is not a floating node
 				if (object.groups.includes(this.id)) {
 					this.members.push(object.id);
 
@@ -53,7 +67,7 @@ export class CannoliGroup extends CannoliVertex {
 					this.addDependency(object.id);
 
 					// Make all non-reflexive incoming edges dependencies of the member vertex
-					for (const edge of object.incomingEdges) {
+					for (const edge of this.incomingEdges) {
 						if (!edge.isReflexive) {
 							object.addDependency(edge.id);
 						}
@@ -215,6 +229,10 @@ export class CannoliGroup extends CannoliVertex {
 					this.isClone,
 					this.vault,
 					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups,
+					this.members,
 					labelNumber
 				);
 			case GroupType.List:
@@ -230,6 +248,10 @@ export class CannoliGroup extends CannoliVertex {
 					this.isClone,
 					this.vault,
 					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups,
+					this.members,
 					labelNumber,
 					0
 				);
@@ -266,6 +288,49 @@ export class CannoliGroup extends CannoliVertex {
 		}
 		return maxLoops;
 	}
+
+	logDetails(): string {
+		let groupsString = "";
+		groupsString += `Groups: `;
+		for (const group of this.groups) {
+			groupsString += `\n\t-"${this.ensureStringLength(
+				this.graph[group].text,
+				15
+			)}"`;
+		}
+
+		let membersString = "";
+		membersString += `Members: `;
+		for (const member of this.members) {
+			membersString += `\n\t-"${this.ensureStringLength(
+				this.graph[member].text,
+				15
+			)}"`;
+		}
+
+		let incomingEdgesString = "";
+		incomingEdgesString += `Incoming Edges: `;
+		for (const edge of this.incomingEdges) {
+			incomingEdgesString += `\n\t-"${this.ensureStringLength(
+				this.graph[edge.id].text,
+				15
+			)}"`;
+		}
+
+		let outgoingEdgesString = "";
+		outgoingEdgesString += `Outgoing Edges: `;
+		for (const edge of this.outgoingEdges) {
+			outgoingEdgesString += `\n\t-"${this.ensureStringLength(
+				this.graph[edge.id].text,
+				15
+			)}"`;
+		}
+
+		return (
+			super.logDetails() +
+			`[::] Group ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n${membersString}\n`
+		);
+	}
 }
 
 export class ListGroup extends CannoliGroup {
@@ -278,15 +343,37 @@ export class ListGroup extends CannoliGroup {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[],
+		members: string[],
 		numberOfVersions: number,
 		copyId: number
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups,
+			members
+		);
 		this.numberOfVersions = numberOfVersions;
 		this.copyId = copyId;
 	}
 
 	clone() {}
+
+	logDetails(): string {
+		return (
+			super.logDetails() +
+			`Type: List\nNumber of Versions: ${this.numberOfVersions}\n`
+		);
+	}
 }
 
 export class RepeatGroup extends CannoliGroup {
@@ -300,9 +387,24 @@ export class RepeatGroup extends CannoliGroup {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[],
+		members: string[],
 		maxLoops: number
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups,
+			members
+		);
 		this.maxLoops = maxLoops;
 	}
 
@@ -332,5 +434,11 @@ export class RepeatGroup extends CannoliGroup {
 	reset(run: Run): void {
 		super.reset(run);
 		this.currentLoop = 0;
+	}
+
+	logDetails(): string {
+		return (
+			super.logDetails() + `Type: Repeat\nMax Loops: ${this.maxLoops}\n`
+		);
 	}
 }

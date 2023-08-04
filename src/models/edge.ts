@@ -45,12 +45,16 @@ export class CannoliEdge extends CannoliObject {
 		vault: Vault,
 		canvasData: CanvasEdgeData,
 		source: string,
-		target: string
+		target: string,
+		crossingInGroups?: string[],
+		crossingOutGroups?: string[]
 	) {
 		super(id, text, graph, isClone, vault);
 		this.source = source;
 		this.target = target;
 		this.canvasData = canvasData;
+		this.crossingInGroups = crossingInGroups || [];
+		this.crossingOutGroups = crossingOutGroups || [];
 
 		this.isLoaded = false;
 
@@ -163,27 +167,27 @@ export class CannoliEdge extends CannoliObject {
 		let crossingGroupsString = "";
 		crossingGroupsString += `Crossing Out Groups: `;
 		for (const group of this.crossingOutGroups) {
-			crossingGroupsString += `\t-"${this.ensureStringLength(
+			crossingGroupsString += `\n\t-"${this.ensureStringLength(
 				this.graph[group].text,
 				15
-			)}`;
+			)}"`;
 		}
 		crossingGroupsString += `\nCrossing In Groups: `;
 		for (const group of this.crossingInGroups) {
-			crossingGroupsString += `\t-"${this.ensureStringLength(
+			crossingGroupsString += `\n\t-"${this.ensureStringLength(
 				this.graph[group].text,
 				15
-			)}`;
+			)}"`;
 		}
 
 		return (
 			super.logDetails() +
-			`---> Edge ${this.id} Text: "(${
+			`--> Edge ${this.id} Text: "${
 				this.text
-			})"\nSource: "${this.ensureStringLength(
+			}"\n"${this.ensureStringLength(
 				this.getSource().text,
 				15
-			)}\nTarget: "${this.ensureStringLength(
+			)}--->"${this.ensureStringLength(
 				this.getTarget().text,
 				15
 			)}"\n${crossingGroupsString}\n`
@@ -383,6 +387,8 @@ export class CannoliEdge extends CannoliObject {
 			}
 		});
 
+		console.log(`Outgoing choice edge names: ${outgoingChoiceEdgeNames}`);
+
 		// If they're all the same, return Select
 		if (
 			outgoingChoiceEdgeNames.every(
@@ -429,7 +435,9 @@ export class CannoliEdge extends CannoliObject {
 					this.vault,
 					this.canvasData,
 					this.source,
-					this.target
+					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups
 				);
 
 			case EdgeType.Logging:
@@ -441,7 +449,9 @@ export class CannoliEdge extends CannoliObject {
 					this.vault,
 					this.canvasData,
 					this.source,
-					this.target
+					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups
 				);
 
 			case EdgeType.Config: {
@@ -454,6 +464,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName
 				);
 			}
@@ -466,7 +478,9 @@ export class CannoliEdge extends CannoliObject {
 					this.vault,
 					this.canvasData,
 					this.source,
-					this.target
+					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups
 				);
 			}
 			case EdgeType.SystemMessage:
@@ -478,7 +492,9 @@ export class CannoliEdge extends CannoliObject {
 					this.vault,
 					this.canvasData,
 					this.source,
-					this.target
+					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups
 				);
 
 			case EdgeType.ListItem: {
@@ -491,6 +507,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
 					SingleVariableEdgeType.ListItem
@@ -506,6 +524,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
 					MultipleVariableEdgeType.Category
@@ -521,6 +541,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
 					MultipleVariableEdgeType.Function
@@ -536,6 +558,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
 					MultipleVariableEdgeType.List
@@ -551,6 +575,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
 					SingleVariableEdgeType.Branch
@@ -566,9 +592,11 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
-					SingleVariableEdgeType.Branch
+					SingleVariableEdgeType.Select
 				);
 			}
 			case EdgeType.Vault: {
@@ -581,6 +609,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
 					SingleVariableEdgeType.Vault
@@ -596,6 +626,8 @@ export class CannoliEdge extends CannoliObject {
 					this.canvasData,
 					this.source,
 					this.target,
+					this.crossingInGroups,
+					this.crossingOutGroups,
 					varName,
 					chatOverride,
 					SingleVariableEdgeType.Standard
@@ -626,10 +658,23 @@ export class ProvideEdge extends CannoliEdge {
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[],
 		name: string | null,
 		addMessages: boolean
 	) {
-		super(id, text, graph, isClone, vault, canvasData, source, target);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			source,
+			target,
+			crossingInGroups,
+			crossingOutGroups
+		);
 		this.name = name;
 		this.addMessages = addMessages;
 	}
@@ -649,7 +694,9 @@ export class ChatEdge extends ProvideEdge {
 		vault: Vault,
 		canvasData: CanvasEdgeData,
 		source: string,
-		target: string
+		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[]
 	) {
 		super(
 			id,
@@ -660,6 +707,8 @@ export class ChatEdge extends ProvideEdge {
 			canvasData,
 			source,
 			target,
+			crossingInGroups,
+			crossingOutGroups,
 			null,
 			true
 		);
@@ -688,7 +737,7 @@ export class ChatEdge extends ProvideEdge {
 	}
 
 	logDetails(): string {
-		return super.logDetails() + `Type: Chat ${this.id}`;
+		return super.logDetails() + `Type: Chat\n`;
 	}
 }
 
@@ -701,7 +750,9 @@ export class SystemMessageEdge extends ProvideEdge {
 		vault: Vault,
 		canvasData: CanvasEdgeData,
 		source: string,
-		target: string
+		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[]
 	) {
 		super(
 			id,
@@ -712,6 +763,8 @@ export class SystemMessageEdge extends ProvideEdge {
 			canvasData,
 			source,
 			target,
+			crossingInGroups,
+			crossingOutGroups,
 			null,
 			true
 		);
@@ -758,9 +811,22 @@ export class WriteEdge extends CannoliEdge {
 		vault: Vault,
 		canvasData: CanvasEdgeData,
 		source: string,
-		target: string
+		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData, source, target);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			source,
+			target,
+			crossingInGroups,
+			crossingOutGroups
+		);
 	}
 
 	load({
@@ -805,9 +871,22 @@ export class LoggingEdge extends WriteEdge {
 		vault: Vault,
 		canvasData: CanvasEdgeData,
 		source: string,
-		target: string
+		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[]
 	) {
-		super(id, text, graph, isClone, vault, canvasData, source, target);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			source,
+			target,
+			crossingInGroups,
+			crossingOutGroups
+		);
 	}
 
 	load({
@@ -862,9 +941,22 @@ export class ConfigEdge extends CannoliEdge {
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[],
 		setting: string
 	) {
-		super(id, text, graph, isClone, vault, canvasData, source, target);
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			source,
+			target,
+			crossingInGroups,
+			crossingOutGroups
+		);
 		this.setting = setting;
 	}
 
@@ -915,6 +1007,8 @@ export class SingleVariableEdge extends ProvideEdge {
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[],
 		name: string | null,
 		addMessages: boolean,
 		type: SingleVariableEdgeType
@@ -928,6 +1022,8 @@ export class SingleVariableEdge extends ProvideEdge {
 			canvasData,
 			source,
 			target,
+			crossingInGroups,
+			crossingOutGroups,
 			name,
 			addMessages
 		);
@@ -998,6 +1094,8 @@ export class MultipleVariableEdge extends ProvideEdge {
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[],
 		name: string,
 		addMessages: boolean,
 		type: MultipleVariableEdgeType
@@ -1011,6 +1109,8 @@ export class MultipleVariableEdge extends ProvideEdge {
 			canvasData,
 			source,
 			target,
+			crossingInGroups,
+			crossingOutGroups,
 			name,
 			addMessages
 		);
