@@ -84,7 +84,7 @@ export class CannoliNode extends CannoliVertex {
 			this.outgoingEdges.length === 0
 		) {
 			// Check the first line of its text
-			const firstLine = this.text.split("\n")[0];
+			const firstLine = this.text.split("\n")[0].trim();
 			// If it starts with [ and ends with ], it's a floating node
 			if (firstLine.startsWith("[") && firstLine.endsWith("]")) {
 				return IndicatedNodeType.Floating;
@@ -162,15 +162,10 @@ export class CannoliNode extends CannoliVertex {
 		const codeBlockPattern = /^```[\s\S]*```$/;
 
 		if (
-			formatPattern.test(this.text) &&
-			!codeBlockPattern.test(this.text)
+			formatPattern.test(this.text.trim()) &&
+			!codeBlockPattern.test(this.text.trim())
 		) {
 			return NodeType.Formatter;
-		}
-
-		// If there are no incoming edges, it's an input node
-		if (this.incomingEdges.length === 0) {
-			return NodeType.Input;
 		}
 
 		// If the result of getReference is not null, it's a reference node
@@ -189,19 +184,26 @@ export class CannoliNode extends CannoliVertex {
 			return NodeType.Vault;
 		}
 
+		// If there are no incoming edges, it's an input node
+		if (this.incomingEdges.length === 0) {
+			return NodeType.Input;
+		}
+
 		return NodeType.Display;
 	}
 
 	getReference(): Reference | null {
-		const pagePattern = /^>\[\[([^\]]+)\]\]$/; // Matches >[[page]]
-		const floatingPattern = /^>\[([^\]]+)\]$/; // Matches >[variable]
+		const pagePattern = /^>\[\[([^\]]+)\]\]$/;
+		const floatingPattern = /^>\[([^\]]+)\]$/;
 
-		let match = this.text.match(pagePattern);
+		const strippedText = this.text.trim();
+
+		let match = strippedText.match(pagePattern);
 		if (match) {
 			return { name: match[1], type: "page" };
 		}
 
-		match = this.text.match(floatingPattern);
+		match = strippedText.match(floatingPattern);
 		if (match) {
 			return { name: match[1], type: "floating" };
 		}
@@ -249,6 +251,65 @@ export class CannoliNode extends CannoliVertex {
 					this.groups
 				);
 			case NodeType.Display:
+				return new DisplayNode(
+					this.id,
+					this.text,
+					graph,
+					false,
+					this.vault,
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
+				);
+			case NodeType.Input:
+				return new InputNode(
+					this.id,
+					this.text,
+					graph,
+					false,
+					this.vault,
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
+				);
+			case NodeType.Formatter:
+				return new FormatterNode(
+					this.id,
+					this.text,
+					graph,
+					false,
+					this.vault,
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
+				);
+			case NodeType.Reference:
+				return new ReferenceNode(
+					this.id,
+					this.text,
+					graph,
+					false,
+					this.vault,
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
+				);
+			case NodeType.Vault:
+				return new VaultNode(
+					this.id,
+					this.text,
+					graph,
+					false,
+					this.vault,
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups
+				);
 			case NodeType.Floating:
 				return new FloatingNode(
 					this.id,
@@ -583,7 +644,7 @@ export class FloatingNode extends CannoliNode {
 	}
 
 	getName(): string {
-		const firstLine = this.text.split("\n")[0];
+		const firstLine = this.text.split("\n")[0].trim();
 		// Take the first and last characters off the first line
 		return firstLine.substring(1, firstLine.length - 1);
 	}
