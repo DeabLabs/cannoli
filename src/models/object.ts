@@ -325,10 +325,25 @@ export class CannoliObject extends EventEmitter {
 	async mockRun() {}
 
 	logDetails(): string {
-		return "";
+		let dependenciesString = "";
+		for (const dependency of this.dependencies) {
+			if (Array.isArray(dependency)) {
+				dependenciesString += "\t[";
+				for (const element of dependency) {
+					dependenciesString += `"${this.graph[element].text}", `;
+				}
+				dependenciesString += "]\n";
+			} else {
+				dependenciesString += `\t"${this.graph[dependency].text}"\n`;
+			}
+		}
+
+		return `Dependencies:\n${dependenciesString}\n`;
 	}
 
 	validate() {}
+
+	setDependencies() {}
 }
 
 export class CannoliVertex extends CannoliObject {
@@ -357,9 +372,6 @@ export class CannoliVertex extends CannoliObject {
 
 	addIncomingEdge(id: string, isReflexive: boolean) {
 		this.incomingEdges.push({ id, isReflexive });
-		// if (!isReflexive) {
-		// 	this.addDependency(id);
-		// }
 	}
 
 	addOutgoingEdge(id: string, isReflexive: boolean) {
@@ -456,5 +468,25 @@ export class CannoliVertex extends CannoliObject {
 		});
 
 		this.groups = groups.map((group) => group.id);
+	}
+
+	setDependencies(): void {
+		// Make all incoming edges that aren't reflexive dependencies
+		for (const edge of this.incomingEdges) {
+			if (!edge.isReflexive) {
+				this.addDependency(edge.id);
+			}
+		}
+
+		// Make all incoming edges of all groups that aren't reflexive dependencies
+		for (const group of this.groups) {
+			const groupObject = this.graph[group] as CannoliGroup;
+
+			for (const edge of groupObject.incomingEdges) {
+				if (!edge.isReflexive) {
+					this.addDependency(edge.id);
+				}
+			}
+		}
 	}
 }

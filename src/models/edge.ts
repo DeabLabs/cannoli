@@ -58,8 +58,6 @@ export class CannoliEdge extends CannoliObject {
 
 		this.isLoaded = false;
 
-		this.addDependency(source);
-
 		this.kind = CannoliObjectKind.Edge;
 	}
 
@@ -117,8 +115,15 @@ export class CannoliEdge extends CannoliObject {
 			this.crossingInGroups = tempCrossingInGroups.reverse();
 		}
 
-		// Add the crossingOut groups to this edge's dependencies
-		this.crossingOutGroups.forEach((group) => this.addDependency(group));
+		// Check if the target is a member of the source group, if so remove the first group from crossingInGroups
+		if (target.groups.includes(source.id)) {
+			this.crossingInGroups.shift();
+		}
+
+		// Check if the source is a member of the target group, if so remove the last group from crossingOutGroups
+		if (source.groups.includes(target.id)) {
+			this.crossingOutGroups.pop();
+		}
 	}
 
 	load({
@@ -642,6 +647,16 @@ export class CannoliEdge extends CannoliObject {
 				);
 		}
 	}
+
+	setDependencies(): void {
+		// Make the source vertex a dependency
+		this.addDependency(this.source);
+
+		// Make all crossingOutGroups dependencies
+		for (const group of this.crossingOutGroups) {
+			this.addDependency(group);
+		}
+	}
 }
 
 export class ProvideEdge extends CannoliEdge {
@@ -734,6 +749,8 @@ export class ChatEdge extends ProvideEdge {
 				`Error on Chat edge ${this.id}: cannot load content.`
 			);
 		}
+
+		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -795,6 +812,8 @@ export class SystemMessageEdge extends ProvideEdge {
 				`Error on SystemMessage edge ${this.id}: cannot load messages.`
 			);
 		}
+
+		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -855,6 +874,8 @@ export class WriteEdge extends CannoliEdge {
 				`Error on Write edge ${this.id}: content is a Record.`
 			);
 		}
+
+		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -912,6 +933,8 @@ export class LoggingEdge extends WriteEdge {
 				2
 			)}`;
 		}
+
+		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -980,6 +1003,8 @@ export class ConfigEdge extends CannoliEdge {
 				`Error on Config edge ${this.id}: cannot load messages.`
 			);
 		}
+
+		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -1066,6 +1091,8 @@ export class SingleVariableEdge extends ProvideEdge {
 				`Error on SingleVariable edge ${this.id}: content is a Record.`
 			);
 		}
+
+		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -1153,6 +1180,8 @@ export class MultipleVariableEdge extends ProvideEdge {
 				`Error on MultipleVariable edge ${this.id}: content is a string.`
 			);
 		}
+
+		this.isLoaded = true;
 	}
 
 	logDetails(): string {

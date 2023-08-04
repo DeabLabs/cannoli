@@ -2,6 +2,7 @@ import { AllCanvasNodeData } from "obsidian/canvas";
 import {
 	CannoliObject,
 	CannoliObjectKind,
+	CannoliObjectStatus,
 	CannoliVertex,
 	EdgeType,
 	GroupType,
@@ -13,6 +14,7 @@ import {
 } from "./object";
 import { Run } from "src/run";
 import { Vault } from "obsidian";
+import { ChatEdge, SingleVariableEdge } from "./edge";
 
 export class CannoliNode extends CannoliVertex {
 	NodePrefixMap: Record<string, IndicatedNodeType> = {
@@ -396,14 +398,53 @@ export class CallNode extends CannoliNode {
 	}
 
 	async run() {
-		// TEST VERSION (sleep for random time between 0 and 3 seconds)
 		console.log(`Running call node with text "${this.text}"`);
+
+		// TEST VERSION (sleep for random time between 0 and 3 seconds)
 		const sleepTime = Math.random() * 3000;
 		await new Promise((resolve) => setTimeout(resolve, sleepTime));
+
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof SingleVariableEdge) {
+				edgeObject.load({
+					content: "testing",
+				});
+			} else if (edgeObject instanceof ChatEdge) {
+				edgeObject.load({
+					messages: [
+						{
+							role: "user",
+							content: "testing",
+						},
+					],
+				});
+			}
+		}
+
+		console.log(`Finished running call node with text "${this.text}"`);
 	}
 
 	async mockRun() {
-		console.log(`Mock running call node with text "${this.text}"`);
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof SingleVariableEdge) {
+				edgeObject.load({
+					content: "testing",
+				});
+			} else if (edgeObject instanceof ChatEdge) {
+				edgeObject.load({
+					messages: [
+						{
+							role: "user",
+							content: "testing",
+						},
+					],
+				});
+			}
+		}
 	}
 
 	logDetails(): string {
@@ -556,7 +597,7 @@ export class ReferenceNode extends CannoliNode {
 		return `Could not find reference ${this.reference.name}`;
 	}
 
-	editContent(newContent: string): void {
+	editContent(newContent: string, run: Run): void {
 		if (this.reference.type === "page") {
 			const file = this.vault
 				.getFiles()
@@ -576,7 +617,7 @@ export class ReferenceNode extends CannoliNode {
 					object instanceof FloatingNode &&
 					object.getName() === this.reference.name
 				) {
-					object.editContent(newContent);
+					object.editContent(newContent, run);
 					return;
 				}
 			}
@@ -619,6 +660,7 @@ export class FloatingNode extends CannoliNode {
 		canvasData: AllCanvasNodeData
 	) {
 		super(id, text, graph, isClone, vault, canvasData);
+		this.status = CannoliObjectStatus.Complete;
 	}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run): void {
@@ -626,6 +668,10 @@ export class FloatingNode extends CannoliNode {
 	}
 
 	dependencyRejected(dependency: CannoliObject, run: Run): void {
+		return;
+	}
+
+	async execute(run: Run) {
 		return;
 	}
 
@@ -655,12 +701,12 @@ export class FloatingNode extends CannoliNode {
 		return this.text.substring(firstLine.length + 1);
 	}
 
-	editContent(newContent: string): void {
+	editContent(newContent: string, run: Run): void {
 		const firstLine = this.text.split("\n")[0];
 		this.text = `${firstLine}\n${newContent}`;
 
 		// Emit an update event
-		this.emit("update", this, this.status, null);
+		this.emit("update", this, this.status, run);
 	}
 
 	logDetails(): string {

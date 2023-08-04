@@ -5,8 +5,9 @@ import { Canvas } from "./canvas";
 
 import pLimit from "p-limit";
 import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
-import { CannoliObject } from "./models/object";
+import { CannoliObject, CannoliObjectStatus } from "./models/object";
 import { CannoliFactory } from "./factory";
+import { Run } from "./run";
 
 interface Limit {
 	(
@@ -31,8 +32,8 @@ export class CannoliGraph {
 	vault: Vault;
 	graph: Record<string, CannoliObject>;
 
-	// Create an empty promise to use as a lock.
-	nodeCompletedLock: Promise<void>;
+	runCompletedPromise: Promise<void>;
+	resolveRunCompleted: () => void;
 
 	constructor(canvasFile: TFile, apiKey: string, vault: Vault) {
 		this.canvas = new Canvas(canvasFile, this);
@@ -63,20 +64,94 @@ export class CannoliGraph {
 
 		// Validate the graph
 		// this.validate();
+
+		this.canvas.setListeners(this.graph);
+
+		this.setCompleteListeners();
+
+		// Set the promise for the first run
+		this.createRunPromise();
 	}
 
-	async nodeCompleted() {}
+	setCompleteListeners() {
+		for (const object of Object.values(this.graph)) {
+			object.on("update", (object, status, run) => {
+				if (status === CannoliObjectStatus.Complete) {
+					this.nodeCompleted();
+				}
+			});
+		}
+	}
 
-	async mockRun() {}
+	nodeCompleted() {
+		// Check if all objects are complete or rejected
+		for (const object of Object.values(this.graph)) {
+			if (
+				object.status !== CannoliObjectStatus.Complete &&
+				object.status !== CannoliObjectStatus.Rejected
+			) {
+				return;
+			}
+		}
 
-	async realRun() {}
+		// If all objects are complete or rejected, call runCompleted
+		this.runCompleted();
+	}
+
+	runCompleted() {
+		this.resolveRunCompleted();
+	}
+
+	async mockRun() {
+		const mockRun = new Run(true);
+		this.executeRootObjects(mockRun);
+		await this.runCompletedPromise; // Wait for the run to complete
+	}
+
+	async liveRun() {
+		const liveRun = new Run(false);
+		this.executeRootObjects(liveRun);
+		await this.runCompletedPromise; // Wait for the run to complete
+	}
 
 	async run() {
 		await this.mockRun();
-		await this.realRun();
+
+		console.log("Mock run completed");
+
+		await this.reset();
+
+		await this.liveRun();
+
+		console.log("Live run completed");
 	}
 
-	async reset() {}
+	executeRootObjects(run: Run) {
+		for (const object of Object.values(this.graph)) {
+			if (object.dependencies.length === 0) {
+				object.execute(run);
+			}
+		}
+	}
+
+	async reset() {
+		// Create a run
+		const run = new Run(false);
+
+		// Reset the promise for this run
+		this.createRunPromise();
+
+		// Reset the status of all objects
+		for (const object of Object.values(this.graph)) {
+			object.reset(run);
+		}
+	}
+
+	createRunPromise() {
+		this.runCompletedPromise = new Promise((resolve) => {
+			this.resolveRunCompleted = resolve;
+		});
+	}
 
 	validate() {}
 

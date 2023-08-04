@@ -62,16 +62,6 @@ export class CannoliGroup extends CannoliVertex {
 				// If the current group contains the vertex and the vertex is not a floating node
 				if (object.groups.includes(this.id)) {
 					this.members.push(object.id);
-
-					// Make the member vertex a dependency of the group
-					this.addDependency(object.id);
-
-					// Make all non-reflexive incoming edges dependencies of the member vertex
-					for (const edge of this.incomingEdges) {
-						if (!edge.isReflexive) {
-							object.addDependency(edge.id);
-						}
-					}
 				}
 			}
 		}

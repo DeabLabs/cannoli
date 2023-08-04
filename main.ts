@@ -89,6 +89,8 @@ export default class Cannoli extends Plugin {
 
 		await cannoli.initialize(true);
 
+		cannoli.run();
+
 		// const activeFilePath = activeFile.path;
 		// const currentCannoli = this.runningCannolis[activeFilePath];
 

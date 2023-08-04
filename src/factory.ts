@@ -26,17 +26,17 @@ export class CannoliFactory {
 		// Set crossing groups
 		this.setAllCrossingGroups(edgesNodesGroups);
 
-		// Log all objects
-		// this.logAll(edgesNodesGroups);
-
 		// Create typed objects
 		const typedObjects = this.createTypedObjects(edgesNodesGroups);
 
 		// This is where we would make copies of list groups
 		// this.makeListCopies(typedObjects);
 
+		// Set dependencies
+		this.setAllDependencies(typedObjects);
+
 		// Set listener functions
-		// this.setAllListeners(typedObjects);
+		this.setAllListeners(typedObjects);
 
 		// Return typed objects
 		return typedObjects;
@@ -210,6 +210,12 @@ export class CannoliFactory {
 	logAll(graph: Record<string, CannoliObject>) {
 		for (const object of Object.values(graph)) {
 			console.log(object.logDetails());
+		}
+	}
+
+	setAllDependencies(graph: Record<string, CannoliObject>) {
+		for (const object of Object.values(graph)) {
+			object.setDependencies();
 		}
 	}
 }

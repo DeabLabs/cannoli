@@ -9,6 +9,10 @@ import {
 } from "obsidian/canvas.d";
 import { CannoliGraph } from "./cannoli";
 import { v4 as uuidv4 } from "uuid";
+import { CannoliObject, CannoliObjectStatus } from "./models/object";
+import { Run } from "./run";
+import { CallNode, DisplayNode, FloatingNode, VaultNode } from "./models/node";
+import { RepeatGroup } from "./models/group";
 
 export class Canvas {
 	canvasFile: TFile;
@@ -168,6 +172,71 @@ export class Canvas {
 	private async writeCanvasData(data: CanvasData) {
 		const newContent = JSON.stringify(data);
 		await this.canvasFile.vault.modify(this.canvasFile, newContent);
+	}
+
+	setListeners(graph: Record<string, CannoliObject>) {
+		for (const object of Object.values(graph)) {
+			// Only set listeners for the following objects
+			if (
+				object instanceof CallNode ||
+				object instanceof DisplayNode ||
+				object instanceof VaultNode ||
+				object instanceof FloatingNode ||
+				object instanceof RepeatGroup
+			) {
+				object.on("update", (obj, status, run) => {
+					this.onObjectUpdate(obj, status, run);
+				});
+			}
+		}
+	}
+
+	onObjectUpdate(
+		object: CannoliObject,
+		status: CannoliObjectStatus,
+		run: Run
+	) {
+		if (run.isMock) {
+			return;
+		}
+
+		switch (status) {
+			case CannoliObjectStatus.Complete:
+				this.onObjectComplete(object);
+				break;
+			case CannoliObjectStatus.Executing:
+				this.onObjectExecuting(object);
+				break;
+			case CannoliObjectStatus.Pending:
+				this.onObjectPending(object);
+				break;
+			default:
+				break;
+		}
+	}
+
+	onObjectComplete(object: CannoliObject) {
+		if (object instanceof CallNode) {
+			this.enqueueChangeNodeColor(object.id, "4");
+		} else if (
+			object instanceof DisplayNode ||
+			object instanceof VaultNode ||
+			object instanceof FloatingNode
+		) {
+			this.enqueueChangeNodeText(object.id, object.text);
+		}
+	}
+
+	onObjectExecuting(object: CannoliObject) {
+		if (object instanceof CallNode) {
+			this.enqueueChangeNodeColor(object.id, "3");
+		}
+	}
+
+	onObjectPending(object: CannoliObject) {
+		if (object instanceof CallNode) {
+			this.enqueueChangeNodeColor(object.id, "0");
+		}
 	}
 
 	private changeNodeColor(
