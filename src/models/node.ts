@@ -15,13 +15,7 @@ import {
 } from "./object";
 import { Run } from "src/run";
 import { Vault } from "obsidian";
-import {
-	CannoliEdge,
-	ChatEdge,
-	ConfigEdge,
-	ProvideEdge,
-	SingleVariableEdge,
-} from "./edge";
+import { CannoliEdge, ConfigEdge, ProvideEdge } from "./edge";
 import { ChatCompletionRequestMessage } from "openai";
 import { CannoliGroup } from "./group";
 
@@ -37,6 +31,11 @@ export class CannoliNode extends CannoliVertex {
 		"4": IndicatedNodeType.Call,
 		"6": IndicatedNodeType.Content,
 	};
+
+	references: Reference[] = [];
+	renderFunction: (
+		variables: { name: string; content: string }[]
+	) => Promise<string>;
 
 	constructor(
 		id: string,
@@ -77,6 +76,158 @@ export class CannoliNode extends CannoliVertex {
 		return async () => {
 			return "Implement render function";
 		};
+	}
+
+	parseReferencesInText(): {
+		references: Reference[];
+		renderFunction: (
+			variables: { name: string; content: string }[]
+		) => Promise<string>;
+	} {
+		const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|{{(.+?)}}|{(.+?)}/g;
+		let match: RegExpExecArray | null;
+		const references: Reference[] = [];
+		let textCopy = this.text;
+
+		while ((match = regex.exec(textCopy)) !== null) {
+			let name = "";
+			let type: ReferenceType = ReferenceType.Variable;
+			let shouldExtract = false;
+
+			if (match[1]) {
+				type = ReferenceType.Note;
+				name = match[1];
+			} else if (match[2]) {
+				type = ReferenceType.Floating;
+				name = match[2];
+			} else if (match[3] || match[4]) {
+				name = match[3] || match[4];
+				shouldExtract = !!match[3];
+			}
+
+			const reference: Reference = {
+				name,
+				type,
+				shouldExtract,
+			};
+			references.push(reference);
+			textCopy = textCopy.replace(match[0], `{${references.length - 1}}`);
+		}
+
+		const renderFunction = async (
+			variables: { name: string; content: string }[]
+		) => {
+			const varMap = new Map(variables.map((v) => [v.name, v.content]));
+			return textCopy.replace(/\{(\d+)\}/g, (match, index) => {
+				const reference = references[Number(index)];
+				return varMap.get(reference.name) || "{invalid reference}";
+			});
+		};
+
+		return { references, renderFunction };
+	}
+
+	async getContentFromNote(name: string): Promise<string> {
+		const note = this.vault
+			.getMarkdownFiles()
+			.find((file) => file.basename === name);
+		if (!note) {
+			throw new Error(`Note ${name} not found`);
+		}
+		const content = await this.vault.read(note);
+		return content;
+	}
+
+	getContentFromFloatingNode(name: string): string {
+		for (const object of Object.values(this.graph)) {
+			if (object instanceof FloatingNode && object.getName() === name) {
+				return object.getContent();
+			}
+		}
+		throw new Error(`Floating node ${name} not found`);
+	}
+
+	async processReferences() {
+		const variableValues = this.getVariableValues();
+		const resolvedReferences = await Promise.all(
+			this.references.map(async (reference) => {
+				let content = "{invalid reference}";
+				const { name } = reference;
+
+				if (reference.type === ReferenceType.Variable) {
+					const variable = variableValues.find(
+						(variable) => variable.name === reference.name
+					);
+					content = variable ? variable.content : content;
+				} else if (reference.type === ReferenceType.Note) {
+					content = reference.shouldExtract
+						? await this.getContentFromNote(reference.name)
+						: `[[${reference.name}]]`;
+				} else if (reference.type === ReferenceType.Floating) {
+					content = reference.shouldExtract
+						? this.getContentFromFloatingNode(reference.name)
+						: `[${reference.name}]`;
+				}
+
+				return { name, content };
+			})
+		);
+
+		return this.renderFunction(resolvedReferences);
+	}
+
+	getVariableValues(): { name: string; content: string }[] {
+		const variableValues: { name: string; content: string }[] = [];
+
+		// Get all available provide edges
+		const availableEdges = this.getAllAvailableProvideEdges();
+
+		for (const edge of availableEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (!(edgeObject instanceof ProvideEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a provide edge.`
+				);
+			}
+
+			// If the edge isn't complete, skip it
+			if (!(edgeObject.status === CannoliObjectStatus.Complete)) {
+				continue;
+			}
+
+			if (!edgeObject.content) {
+				continue;
+			}
+
+			if (typeof edgeObject.content === "string" && edgeObject.name) {
+				const variableValue = {
+					name: edgeObject.name,
+					content: edgeObject.content,
+				};
+
+				variableValues.push(variableValue);
+			} else if (
+				typeof edgeObject.content === "object" &&
+				!Array.isArray(edgeObject.content)
+			) {
+				const multipleVariableValues = [];
+
+				for (const name in edgeObject.content) {
+					const variableValue = {
+						name: name,
+						content: edgeObject.content[name],
+					};
+
+					multipleVariableValues.push(variableValue);
+				}
+
+				variableValues.push(...multipleVariableValues);
+			} else {
+				continue;
+			}
+		}
+
+		return variableValues;
 	}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run): void {
@@ -510,7 +661,9 @@ export class CallNode extends CannoliNode {
 			groups
 		);
 
-		this.renderFunction = this.buildRenderFunction();
+		const { renderFunction, references } = this.parseReferencesInText();
+		this.renderFunction = renderFunction;
+		this.references = references;
 	}
 
 	getPrependedMessages(): ChatCompletionRequestMessage[] {
@@ -542,68 +695,12 @@ export class CallNode extends CannoliNode {
 		return messages;
 	}
 
-	getVariableValues(): { name: string; content: string }[] {
-		const variableValues: { name: string; content: string }[] = [];
-
-		// Get all available provide edges
-		const availableEdges = this.getAllAvailableProvideEdges();
-
-		for (const edge of availableEdges) {
-			const edgeObject = this.graph[edge.id];
-			if (!(edgeObject instanceof ProvideEdge)) {
-				throw new Error(
-					`Error on object ${edgeObject.id}: object is not a provide edge.`
-				);
-			}
-
-			// If the edge isn't complete, skip it
-			if (!(edgeObject.status === CannoliObjectStatus.Complete)) {
-				continue;
-			}
-
-			if (!edgeObject.content) {
-				continue;
-			}
-
-			if (typeof edgeObject.content === "string" && edgeObject.name) {
-				const variableValue = {
-					name: edgeObject.name,
-					content: edgeObject.content,
-				};
-
-				variableValues.push(variableValue);
-			} else if (
-				typeof edgeObject.content === "object" &&
-				!Array.isArray(edgeObject.content)
-			) {
-				const multipleVariableValues = [];
-
-				for (const name in edgeObject.content) {
-					const variableValue = {
-						name: name,
-						content: edgeObject.content[name],
-					};
-
-					multipleVariableValues.push(variableValue);
-				}
-
-				variableValues.push(...multipleVariableValues);
-			} else {
-				continue;
-			}
-		}
-
-		return variableValues;
-	}
-
-	getNewMessage(): ChatCompletionRequestMessage {
-		const variables = this.getVariableValues();
-
-		this.renderFunction(variables);
+	async getNewMessage(): Promise<ChatCompletionRequestMessage> {
+		const content = await this.processReferences();
 
 		return {
 			role: "user",
-			content: this.text,
+			content: content,
 		};
 	}
 
@@ -688,7 +785,7 @@ export class CallNode extends CannoliNode {
 
 		const messages = this.getPrependedMessages();
 
-		messages.push(this.getNewMessage());
+		messages.push(await this.getNewMessage());
 
 		const response = await run.cannoli?.llmCall({
 			messages: messages,
@@ -742,16 +839,13 @@ export class CallNode extends CannoliNode {
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge.id];
-			if (edgeObject instanceof SingleVariableEdge) {
+			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
-					content: "testing",
-				});
-			} else if (edgeObject instanceof ChatEdge) {
-				edgeObject.load({
+					content: "mock",
 					messages: [
 						{
 							role: "user",
-							content: "testing",
+							content: "mock",
 						},
 					],
 				});
@@ -1033,18 +1127,41 @@ export class ContentNode extends CannoliNode {
 		);
 	}
 
-	async run(run: Run) {
-		// TEST VERSION (write a random string to the text field)
-		console.log(`Running content node with text "${this.text}"`);
-		this.text = Math.random().toString(36).substring(7);
-	}
-
-	async mockRun(run: Run) {
-		console.log(`Mock running content node with text "${this.text}"`);
-	}
-
 	logDetails(): string {
 		return super.logDetails() + `Type: Content\n`;
+	}
+
+	getWriteOrLoggingContent(): string | null {
+		// Get all incoming edges
+		const incomingEdges = this.getIncomingEdges();
+
+		// Filter out all non-write and non-logging edges
+		const filteredEdges = incomingEdges.filter(
+			(edge) =>
+				edge.type === EdgeType.Write || edge.type === EdgeType.Logging
+		);
+
+		if (filteredEdges.length === 0) {
+			return null;
+		}
+
+		// If there are write or logging edges, return the content of the first one
+		const firstEdge = filteredEdges[0];
+		const firstEdgeObject = this.graph[firstEdge.id];
+		if (firstEdgeObject instanceof CannoliEdge) {
+			if (
+				firstEdgeObject.content &&
+				typeof firstEdgeObject.content === "string"
+			) {
+				return firstEdgeObject.content;
+			}
+		} else {
+			throw new Error(
+				`Error on object ${firstEdgeObject.id}: object is not an edge.`
+			);
+		}
+
+		return null;
 	}
 
 	validate(): void {
@@ -1124,7 +1241,7 @@ export class VaultNode extends CannoliNode {
 	}
 }
 
-export class ReferenceNode extends CannoliNode {
+export class ReferenceNode extends ContentNode {
 	reference: Reference;
 
 	constructor(
@@ -1158,6 +1275,50 @@ export class ReferenceNode extends CannoliNode {
 			);
 		} else {
 			this.reference = reference;
+		}
+	}
+
+	async run(run: Run): Promise<void> {
+		let content = this.getWriteOrLoggingContent();
+
+		if (!content) {
+			const variableValues = this.getVariableValues();
+			content = variableValues[0].content;
+		}
+
+		if (content) {
+			this.editContent(content, run);
+		}
+
+		const fetchedContent = await this.getContent();
+
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: fetchedContent,
+				});
+			}
+		}
+	}
+
+	async mockRun(run: Run): Promise<void> {
+		let content = this.getWriteOrLoggingContent();
+
+		if (!content) {
+			const variableValues = this.getVariableValues();
+			content = variableValues[0].content;
+		}
+
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: content,
+				});
+			}
 		}
 	}
 
@@ -1257,8 +1418,68 @@ export class FormatterNode extends CannoliNode {
 	) => Promise<string>;
 	references: Reference[];
 
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		vault: Vault,
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: { id: string; isReflexive: boolean }[],
+		incomingEdges: { id: string; isReflexive: boolean }[],
+		groups: string[]
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
+
+		const { renderFunction, references } = this.parseReferencesInText();
+		this.renderFunction = renderFunction;
+		this.references = references;
+	}
+
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Formatter\n`;
+	}
+
+	async run(run: Run) {
+		const content = await this.processReferences();
+
+		console.log(`Formatter node returned content "${content}"`);
+
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: content,
+				});
+			}
+		}
+
+		console.log(`Finished running formatter node with text "${this.text}"`);
+	}
+
+	async mockRun(run: Run) {
+		const content = await this.processReferences();
+
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: content,
+				});
+			}
+		}
 	}
 }
 
@@ -1266,9 +1487,33 @@ export class InputNode extends CannoliNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Input\n`;
 	}
+
+	async run(run: Run) {
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: this.text,
+				});
+			}
+		}
+	}
+
+	async mockRun(run: Run) {
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: this.text,
+				});
+			}
+		}
+	}
 }
 
-export class DisplayNode extends CannoliNode {
+export class DisplayNode extends ContentNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Display\n`;
 	}
@@ -1299,6 +1544,46 @@ export class DisplayNode extends CannoliNode {
 			this.error(
 				`Display nodes cannot have incoming category, list, or function edges.`
 			);
+		}
+	}
+
+	async run(run: Run): Promise<void> {
+		let content = this.getWriteOrLoggingContent();
+
+		if (!content) {
+			const variableValues = this.getVariableValues();
+			content = variableValues[0].content;
+		}
+
+		this.text = content;
+
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: this.text,
+				});
+			}
+		}
+	}
+
+	async mockRun(run: Run): Promise<void> {
+		let content = this.getWriteOrLoggingContent();
+
+		if (!content) {
+			const variableValues = this.getVariableValues();
+			content = variableValues[0].content;
+		}
+
+		// Load all outgoing edges
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: content,
+				});
+			}
 		}
 	}
 }
