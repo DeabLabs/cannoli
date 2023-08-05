@@ -306,8 +306,6 @@ export class CannoliGraph {
 		promptTokens: number;
 		completionTokens: number;
 	}> {
-		console.log("llmCall");
-
 		if (mock) {
 			const enc = encoding_for_model(model as TiktokenModel);
 

@@ -67,6 +67,19 @@ export class CannoliGroup extends CannoliVertex {
 		}
 	}
 
+	setDependencies(): void {
+		// All members and non-reflexive incoming edges are dependencies
+		for (const member of this.members) {
+			this.dependencies.push(member);
+		}
+
+		for (const edge of this.incomingEdges) {
+			if (!edge.isReflexive) {
+				this.dependencies.push(edge.id);
+			}
+		}
+	}
+
 	getMembers(): CannoliVertex[] {
 		return this.members.map(
 			(member) => this.graph[member] as CannoliVertex
@@ -88,38 +101,48 @@ export class CannoliGroup extends CannoliVertex {
 	}
 
 	allEdgeDependenciesComplete(): boolean {
-		// If all the dependencies that are edges are complete, execute
-		for (const dependency of this.dependencies) {
-			// If the dependency is an array of edges, check if at least one is complete
-			if (Array.isArray(dependency)) {
-				if (
-					dependency.some(
-						(dep) =>
-							this.graph[dep].status ===
-							CannoliObjectStatus.Complete
-					) &&
-					dependency.every(
-						(dep) => this.graph[dep].kind === CannoliObjectKind.Edge
-					)
-				) {
-					continue;
-				} else {
-					return false;
-				}
-			} else {
-				if (
-					this.graph[dependency].status ===
-						CannoliObjectStatus.Complete &&
-					this.graph[dependency].kind === CannoliObjectKind.Edge
-				) {
-					continue;
-				} else {
-					return false;
-				}
-			}
-		}
+		// Get two arrays: one of all dependencies that are arrays, and one of all dependencies that are not arrays
+		const arrayDependencies = this.dependencies.filter((dependency) =>
+			Array.isArray(dependency)
+		) as string[][];
 
-		return true;
+		const nonArrayDependencies = this.dependencies.filter(
+			(dependency) => !Array.isArray(dependency)
+		) as string[];
+
+		// Filter out the array dependencies that contain non-edges
+		const edgeArrayDependencies = arrayDependencies.filter((dependency) =>
+			dependency.every((dep) => this.graph[dep].kind === "edge")
+		);
+
+		// Filter out the non-array dependencies that are not edges
+		const edgeNonArrayDependencies = nonArrayDependencies.filter(
+			(dependency) => this.graph[dependency].kind === "edge"
+		);
+
+		// For each edge dependency, check if it's complete or at least one is complete, respectively
+		const edgeArrayDependenciesComplete = edgeArrayDependencies.every(
+			(dependency) =>
+				dependency.some(
+					(dep) =>
+						this.graph[dep].status === CannoliObjectStatus.Complete
+				)
+		);
+
+		const edgeNonArrayDependenciesComplete = edgeNonArrayDependencies.every(
+			(dependency) =>
+				this.graph[dependency].status === CannoliObjectStatus.Complete
+		);
+
+		// Return true if all edge dependencies are complete or at least one is complete, respectively
+		return (
+			edgeArrayDependenciesComplete && edgeNonArrayDependenciesComplete
+		);
+	}
+
+	async execute(run: Run): Promise<void> {
+		this.status = CannoliObjectStatus.Executing;
+		this.emit("update", this, CannoliObjectStatus.Executing, run);
 	}
 
 	membersFinished(run: Run) {}
@@ -441,7 +464,7 @@ export class RepeatGroup extends CannoliGroup {
 			members
 		);
 		this.maxLoops = maxLoops;
-		this.currentLoop = 0;
+		this.currentLoop = 1;
 
 		this.type = GroupType.Repeat;
 	}
@@ -462,16 +485,45 @@ export class RepeatGroup extends CannoliGroup {
 	membersFinished(run: Run): void {
 		if (this.currentLoop < this.maxLoops) {
 			this.currentLoop++;
-			this.resetMembers(run);
+
+			// Sleep for 20ms to allow complete color to render
+			setTimeout(() => {
+				this.resetMembers(run);
+				this.executeMembers(run);
+			}, 20);
 		} else {
 			this.status = CannoliObjectStatus.Complete;
 			this.emit("update", this, CannoliObjectStatus.Complete, run);
 		}
 	}
 
+	executeMembers(run: Run): void {
+		// For each member
+		for (const member of this.getMembers()) {
+			const incomingEdges = member.getIncomingEdges();
+
+			// If the member has no incoming edges, execute it
+			if (incomingEdges.length === 0) {
+				member.execute(run);
+			} else {
+				// Otherwise, check if all incoming edges are complete
+				if (
+					incomingEdges.every(
+						(edge) =>
+							this.graph[edge.id].status ===
+							CannoliObjectStatus.Complete
+					)
+				) {
+					// If so, execute the member
+					member.execute(run);
+				}
+			}
+		}
+	}
+
 	reset(run: Run): void {
 		super.reset(run);
-		this.currentLoop = 0;
+		this.currentLoop = 1;
 	}
 
 	logDetails(): string {

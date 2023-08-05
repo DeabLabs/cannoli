@@ -779,8 +779,6 @@ export class CallNode extends CannoliNode {
 	async callLLM(
 		run: Run
 	): Promise<{ content: string; messages: ChatCompletionRequestMessage[] }> {
-		console.log(`Calling LLM with text "${this.text}"`);
-
 		const config = this.getConfig();
 
 		const messages = this.getPrependedMessages();
@@ -793,8 +791,6 @@ export class CallNode extends CannoliNode {
 			mock: run.isMock,
 			verbose: true,
 		});
-
-		console.log(response?.message.content);
 
 		if (response && response.message && response.message.content) {
 			messages.push(response.message);
@@ -811,15 +807,11 @@ export class CallNode extends CannoliNode {
 	}
 
 	async run(run: Run) {
-		console.log(`Running call node with text "${this.text}"`);
-
 		// TEST VERSION (sleep for random time between 0 and 3 seconds)
 		// const sleepTime = Math.random() * 3000;
 		// await new Promise((resolve) => setTimeout(resolve, sleepTime));
 
 		const { content, messages } = await this.callLLM(run);
-
-		console.log(`LLM call returned content "${content}"`);
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
@@ -831,8 +823,6 @@ export class CallNode extends CannoliNode {
 				});
 			}
 		}
-
-		console.log(`Finished running call node with text "${this.text}"`);
 	}
 
 	async mockRun(run: Run) {
