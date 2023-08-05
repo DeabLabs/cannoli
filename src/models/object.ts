@@ -189,6 +189,26 @@ export class CannoliObject extends EventEmitter {
 		);
 	}
 
+	getAllDependencies(): CannoliObject[] {
+		const dependencies: CannoliObject[] = [];
+
+		// For each dependency
+		for (const dependency of this.dependencies) {
+			// If it's an array, add each element to the list of dependencies
+			if (Array.isArray(dependency)) {
+				for (const element of dependency) {
+					dependencies.push(this.graph[element]);
+				}
+			}
+			// If it's not an array, add it to the list of dependencies
+			else {
+				dependencies.push(this.graph[dependency]);
+			}
+		}
+
+		return dependencies;
+	}
+
 	dependencyUpdated(
 		dependency: CannoliObject,
 		status: CannoliObjectStatus,

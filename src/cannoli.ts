@@ -5,10 +5,19 @@ import { Canvas } from "./canvas";
 
 import pLimit from "p-limit";
 import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
-import { CannoliObject, CannoliObjectStatus } from "./models/object";
+import {
+	CannoliObject,
+	CannoliObjectStatus,
+	CannoliVertex,
+} from "./models/object";
 import { CannoliFactory } from "./factory";
 import { Run } from "./run";
 
+enum DagCheckState {
+	UNVISITED,
+	VISITING,
+	VISITED,
+}
 interface Limit {
 	(
 		fn: () => Promise<{
@@ -153,6 +162,17 @@ export class CannoliGraph {
 	}
 
 	validate() {
+		// Check if the graph is a DAG
+		if (!this.isDAG(this.graph)) {
+			// Find a node and call error on it
+			for (const object of Object.values(this.graph)) {
+				if (object instanceof CannoliVertex)
+					object.error(
+						"Cycle detected in graph. Please make sure the graph is a DAG.\n(exception: edges between groups and their members)"
+					);
+			}
+		}
+
 		// Call validate on each object
 		for (const object of Object.values(this.graph)) {
 			object.validate();
@@ -385,54 +405,38 @@ export class CannoliGraph {
 		}
 	}
 
-	// isDAG(nodes: Record<string, CannoliNode>): boolean {
-	// 	const visited = new Set<CannoliNode>();
-	// 	const recursionStack = new Set<CannoliNode>();
+	isDAG(objects: Record<string, CannoliObject>): boolean {
+		const states = new Map<CannoliObject, DagCheckState>();
 
-	// 	for (const node of Object.values(nodes)) {
-	// 		// Skip the node if it is of type 'floating'
-	// 		if (node.type === "floating") {
-	// 			continue;
-	// 		}
+		function visit(obj: CannoliObject): boolean {
+			if (states.get(obj) === DagCheckState.VISITING) {
+				return false; // Cycle detected
+			}
 
-	// 		if (!visited.has(node)) {
-	// 			if (this.isDAGHelper(node, visited, recursionStack, nodes)) {
-	// 				return true;
-	// 			}
-	// 		}
-	// 	}
+			if (states.get(obj) === DagCheckState.VISITED) {
+				return true; // Already visited
+			}
 
-	// 	return false;
-	// }
+			states.set(obj, DagCheckState.VISITING);
 
-	// isDAGHelper(
-	// 	node: CannoliNode,
-	// 	visited: Set<CannoliNode>,
-	// 	recursionStack: Set<CannoliNode>,
-	// 	nodes: Record<string, CannoliNode>
-	// ): boolean {
-	// 	visited.add(node);
-	// 	recursionStack.add(node);
+			for (const dependency of obj.getAllDependencies()) {
+				if (!visit(dependency)) {
+					return false; // Cycle detected in one of the dependencies
+				}
+			}
 
-	// 	for (const edge of node.outgoingEdges) {
-	// 		const adjacentNode = edge.target;
-	// 		if (!visited.has(adjacentNode)) {
-	// 			if (
-	// 				this.isDAGHelper(
-	// 					adjacentNode,
-	// 					visited,
-	// 					recursionStack,
-	// 					nodes
-	// 				)
-	// 			) {
-	// 				return true;
-	// 			}
-	// 		} else if (recursionStack.has(adjacentNode)) {
-	// 			return true;
-	// 		}
-	// 	}
+			states.set(obj, DagCheckState.VISITED);
+			return true;
+		}
 
-	// 	recursionStack.delete(node);
-	// 	return false;
-	// }
+		for (const obj of Object.values(objects)) {
+			if (states.get(obj) !== DagCheckState.VISITED) {
+				if (!visit(obj)) {
+					return false; // Cycle detected
+				}
+			}
+		}
+
+		return true;
+	}
 }

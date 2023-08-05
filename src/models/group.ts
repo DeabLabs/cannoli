@@ -486,11 +486,16 @@ export class RepeatGroup extends CannoliGroup {
 		if (this.currentLoop < this.maxLoops) {
 			this.currentLoop++;
 
-			// Sleep for 20ms to allow complete color to render
-			setTimeout(() => {
+			if (!run.isMock) {
+				// Sleep for 20ms to allow complete color to render
+				setTimeout(() => {
+					this.resetMembers(run);
+					this.executeMembers(run);
+				}, 20);
+			} else {
 				this.resetMembers(run);
 				this.executeMembers(run);
-			}, 20);
+			}
 		} else {
 			this.status = CannoliObjectStatus.Complete;
 			this.emit("update", this, CannoliObjectStatus.Complete, run);

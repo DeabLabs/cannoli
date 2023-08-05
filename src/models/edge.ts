@@ -77,16 +77,8 @@ export class CannoliEdge extends CannoliObject {
 			source instanceof CannoliVertex &&
 			target instanceof CannoliVertex
 		) {
-			// if (
-			// 	source.groups.includes(this.target) ||
-			// 	target.groups.includes(this.source)
-			// ) {
-			// 	source.addIncomingEdge(this.id, true);
-			// 	target.addOutgoingEdge(this.id, true);
-			// } else {
 			source.addOutgoingEdge(this.id, false);
 			target.addIncomingEdge(this.id, false);
-			// }
 		}
 	}
 

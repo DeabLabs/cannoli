@@ -572,17 +572,6 @@ export class CannoliNode extends CannoliVertex {
 	specialOutgoingEdgesAreHomogeneous(): boolean {
 		const specialOutgoingEdges = this.getSpecialOutgoingEdges();
 
-		// Log out the text and type of each special outgoing edge
-		let specialEdgeLog = "Special Outgoing Edges:\n";
-
-		for (const edge of specialOutgoingEdges) {
-			specialEdgeLog += `\t"${this.graph[edge.id].text}" (${
-				edge.type
-			})\n`;
-		}
-
-		console.log(specialEdgeLog);
-
 		if (specialOutgoingEdges.length === 0) {
 			return true;
 		}
