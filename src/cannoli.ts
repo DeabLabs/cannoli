@@ -123,9 +123,9 @@ export class CannoliGraph {
 	}
 
 	async run() {
-		await this.mockRun();
+		// await this.mockRun();
 
-		console.log("Mock run completed");
+		// console.log("Mock run completed");
 
 		await this.reset();
 

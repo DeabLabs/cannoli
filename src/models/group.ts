@@ -345,7 +345,44 @@ export class CannoliGroup extends CannoliVertex {
 		);
 	}
 
+	checkOverlap(): void {
+		const currentGroupRectangle = this.createRectangle(
+			this.canvasData.x,
+			this.canvasData.y,
+			this.canvasData.width,
+			this.canvasData.height
+		);
+
+		// Iterate through all objects in the graph
+		for (const objectKey in this.graph) {
+			const object = this.graph[objectKey];
+
+			if (object instanceof CannoliVertex) {
+				// Skip the current group to avoid self-comparison
+				if (object === this) continue;
+
+				const objectRectangle = this.createRectangle(
+					object.canvasData.x,
+					object.canvasData.y,
+					object.canvasData.width,
+					object.canvasData.height
+				);
+
+				// Check if the object overlaps with the current group
+				if (this.overlaps(objectRectangle, currentGroupRectangle)) {
+					this.error(
+						`This group overlaps with another object. Please ensure objects fully enclose their members.`
+					);
+					return; // Exit the method after the first error is found
+				}
+			}
+		}
+	}
+
 	validate(): void {
+		// Check overlap
+		this.checkOverlap();
+
 		// Groups can't have outgoing edges that aren't of type list
 		for (const edge of this.outgoingEdges) {
 			if (
