@@ -2,6 +2,7 @@ import { CanvasEdgeData } from "obsidian/canvas";
 import {
 	CannoliObject,
 	CannoliObjectKind,
+	CannoliObjectStatus,
 	CannoliVertex,
 	EdgeType,
 	IndicatedEdgeType,
@@ -173,8 +174,10 @@ export class CannoliEdge extends CannoliObject {
 	}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run): void {
-		if (this.allDependenciesComplete()) {
-			this.execute(run);
+		if (this.status !== CannoliObjectStatus.Rejected) {
+			if (this.allDependenciesComplete()) {
+				this.execute(run);
+			}
 		}
 	}
 

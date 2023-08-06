@@ -15,8 +15,13 @@ import {
 } from "./object";
 import { Run } from "src/run";
 import { Vault } from "obsidian";
-import { CannoliEdge, ConfigEdge, ProvideEdge } from "./edge";
-import { ChatCompletionRequestMessage } from "openai";
+import {
+	CannoliEdge,
+	ConfigEdge,
+	ProvideEdge,
+	SingleVariableEdge,
+} from "./edge";
+import { ChatCompletionFunctions, ChatCompletionRequestMessage } from "openai";
 import { CannoliGroup } from "./group";
 
 type VariableValue = { name: string; content: string; edgeId: string };
@@ -197,14 +202,18 @@ export class CannoliNode extends CannoliVertex {
 				continue;
 			}
 
+			let content: string;
+
 			if (!edgeObject.content) {
-				continue;
+				content = "";
 			}
 
 			if (typeof edgeObject.content === "string" && edgeObject.name) {
+				content = edgeObject.content;
+
 				const variableValue = {
 					name: edgeObject.name,
-					content: edgeObject.content,
+					content: content,
 					edgeId: edgeObject.id,
 				};
 
@@ -276,6 +285,21 @@ export class CannoliNode extends CannoliVertex {
 		}
 
 		return finalVariables;
+	}
+
+	loadAllOutgoingEdges(
+		content: string,
+		messages: ChatCompletionRequestMessage[]
+	) {
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge];
+			if (edgeObject instanceof CannoliEdge) {
+				edgeObject.load({
+					content: content,
+					messages: messages,
+				});
+			}
+		}
 	}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run): void {
@@ -822,8 +846,14 @@ export class CallNode extends CannoliNode {
 	}
 
 	async callLLM(
-		run: Run
+		run: Run,
+		functions?: ChatCompletionFunctions[],
+		functionSetting?: string
 	): Promise<{ content: string; messages: ChatCompletionRequestMessage[] }> {
+		if (!run.cannoli) {
+			throw new Error(`Cannoli not initialized`);
+		}
+
 		const config = this.getConfig();
 
 		const messages = this.getPrependedMessages();
@@ -849,14 +879,21 @@ export class CallNode extends CannoliNode {
 				model: config["model"],
 				mock: run.isMock,
 				verbose: true,
+				functions: functions,
+				functionSetting: "enter_choice",
 			});
 		} catch (e) {
 			this.error(`LLM call failed with the error:\n"${e}"`);
 		}
 
-		if (response && response.message && response.message.content) {
+		if (response && response.message) {
+			let responseContent = response.message.content;
+
+			if (!responseContent) {
+				responseContent = "";
+			}
+
 			messages.push(response.message);
-			const responseContent = response.message.content;
 
 			return {
 				content: responseContent,
@@ -876,33 +913,17 @@ export class CallNode extends CannoliNode {
 		const { content, messages } = await this.callLLM(run);
 
 		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: content,
-					messages: messages,
-				});
-			}
-		}
+		this.loadAllOutgoingEdges(content, messages);
 	}
 
 	async mockRun(run: Run) {
 		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: "mock",
-					messages: [
-						{
-							role: "user",
-							content: "mock",
-						},
-					],
-				});
-			}
-		}
+		this.loadAllOutgoingEdges("mock", [
+			{
+				role: "user",
+				content: "mock",
+			},
+		]);
 	}
 
 	logDetails(): string {
@@ -1040,7 +1061,7 @@ export enum ChoiceNodeType {
 	Select = "Select",
 }
 
-export class ChoiceNode extends CannoliNode {
+export class ChoiceNode extends CallNode {
 	choiceNodeType: ChoiceNodeType;
 
 	constructor(
@@ -1065,6 +1086,82 @@ export class ChoiceNode extends CannoliNode {
 			incomingEdges,
 			groups
 		);
+	}
+
+	async run(run: Run) {
+		if (!run.cannoli) {
+			throw new Error(`Cannoli not initialized`);
+		}
+
+		const choices = this.getBranchChoices();
+
+		// Create choice function
+		const choiceFunc = run.cannoli.createChoiceFunction(choices);
+
+		console.log(`Choice Function:\n${JSON.stringify(choiceFunc, null, 2)}`);
+
+		const functions: ChatCompletionFunctions[] = [choiceFunc];
+
+		const { content, messages } = await this.callLLM(
+			run,
+			functions,
+			choiceFunc.name
+		);
+
+		// Get the selected variable from the last message
+		const lastMessage = messages[messages.length - 1];
+
+		let selectedParameter;
+
+		if (lastMessage.function_call?.arguments) {
+			selectedParameter = lastMessage.function_call?.arguments;
+		} else {
+			throw new Error(`No last message`);
+		}
+
+		const parsedVariable = JSON.parse(selectedParameter);
+
+		console.log(`Selected Variable: ${parsedVariable.choice}`);
+
+		// Call reject on any outgoing edges that aren't the selected one
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge];
+			if (edgeObject.type === EdgeType.Branch) {
+				const branchEdge = edgeObject as SingleVariableEdge;
+				if (branchEdge.name !== parsedVariable.choice) {
+					branchEdge.reject(run);
+				}
+			}
+		}
+
+		// Load all outgoing edges
+		this.loadAllOutgoingEdges(content, messages);
+	}
+
+	getBranchChoices(): string[] {
+		// Get the unique names of all outgoing choice edges
+		const outgoingChoiceEdges = this.getOutgoingEdges().filter((edge) => {
+			return edge.type === EdgeType.Branch;
+		});
+
+		const uniqueNames = new Set<string>();
+
+		for (const edge of outgoingChoiceEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (!(edgeObject instanceof SingleVariableEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a branch edge.`
+				);
+			}
+
+			const name = edgeObject.name;
+
+			if (name) {
+				uniqueNames.add(name);
+			}
+		}
+
+		return Array.from(uniqueNames);
 	}
 
 	setSpecialType() {

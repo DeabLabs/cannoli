@@ -1,4 +1,9 @@
-import { ChatCompletionRequestMessage, Configuration, OpenAIApi } from "openai";
+import {
+	ChatCompletionFunctions,
+	ChatCompletionRequestMessage,
+	Configuration,
+	OpenAIApi,
+} from "openai";
 // import { ErrorModal } from "main";
 import { Vault, TFile } from "obsidian";
 import { Canvas } from "./canvas";
@@ -18,6 +23,23 @@ enum DagCheckState {
 	VISITING,
 	VISITED,
 }
+
+// Parameter type for individual parameters
+interface Parameter {
+	type: string;
+	description?: string;
+	enum?: string[];
+}
+
+// Parameters type for the function
+interface FunctionParameters {
+	type: string;
+	properties: Record<string, Parameter>;
+	required?: string[];
+}
+
+// Function type to define a complete function
+
 interface Limit {
 	(
 		fn: () => Promise<{
@@ -315,6 +337,8 @@ export class CannoliGraph {
 		temperature = 0.8,
 		verbose = false,
 		mock = false,
+		functions,
+		functionSetting,
 	}: {
 		messages: ChatCompletionRequestMessage[];
 		model?: string;
@@ -323,6 +347,8 @@ export class CannoliGraph {
 		temperature?: number;
 		verbose?: boolean;
 		mock?: boolean;
+		functions?: ChatCompletionFunctions[];
+		functionSetting?: string;
 	}): Promise<{
 		message: ChatCompletionRequestMessage;
 		promptTokens: number;
@@ -365,15 +391,36 @@ export class CannoliGraph {
 						);
 					}
 
-					const chatResponse = await this.openai.createChatCompletion(
-						{
+					let chatResponse;
+
+					if (!functions) {
+						chatResponse = await this.openai.createChatCompletion({
 							messages,
 							model,
 							max_tokens,
 							temperature,
 							n,
+						});
+					} else {
+						let functionCall: string | { name: string };
+						if (!functionSetting || functionSetting === "auto") {
+							functionCall = "auto";
+						} else if (functionSetting === "none") {
+							functionCall = "none";
+						} else {
+							functionCall = { name: functionSetting };
 						}
-					);
+
+						chatResponse = await this.openai.createChatCompletion({
+							messages,
+							model,
+							max_tokens,
+							temperature,
+							n,
+							functions,
+							function_call: functionCall,
+						});
+					}
 
 					if (verbose) {
 						console.log(
@@ -405,6 +452,58 @@ export class CannoliGraph {
 				}
 			);
 		}
+	}
+
+	defineFunction(
+		name: string,
+		description: string,
+		parameters: FunctionParameters
+	): ChatCompletionFunctions {
+		return {
+			name,
+			description,
+			parameters,
+		};
+	}
+
+	// handleFunctionResponse(
+	// 	responseMessage: ChatCompletionRequestMessage,
+	// 	availableFunctions: ChatCompletionFunctions[]
+	// ) {
+	// 	if (responseMessage.function_call) {
+	// 		const functionName = responseMessage.function_call.name;
+	// 		if (responseMessage.function_call.arguments && functionName) {
+	// 			const functionArgs = JSON.parse(
+	// 				responseMessage.function_call.arguments
+	// 			);
+	// 			const functionToCall = availableFunctions.find(
+	// 				(func) => func.name === functionName
+	// 			);
+	// 			return functionToCall ? functionToCall(functionArgs) : null;
+	// 		} else {
+	// 			throw new Error(
+	// 				"Function call does not have arguments or a name"
+	// 			);
+	// 		}
+	// 	}
+	// 	return null;
+	// }
+
+	createChoiceFunction(choices: string[]): ChatCompletionFunctions {
+		return {
+			name: "enter_choice",
+			description: "Use this function to enter your choice.",
+			parameters: {
+				type: "object",
+				properties: {
+					choice: {
+						type: "string",
+						enum: choices,
+					},
+				},
+				required: ["option"],
+			},
+		};
 	}
 
 	isDAG(objects: Record<string, CannoliObject>): boolean {

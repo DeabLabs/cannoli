@@ -272,6 +272,12 @@ export class CannoliObject extends EventEmitter {
 		this.emit("update", this, CannoliObjectStatus.Complete, run);
 	}
 
+	reject(run: Run) {
+		this.status = CannoliObjectStatus.Rejected;
+		this.emit("update", this, CannoliObjectStatus.Rejected, run);
+		console.log(`Rejected ${this.text}`);
+	}
+
 	tryReject(run: Run) {
 		// Check all dependencies
 		this.dependencies.every((dependency) => {
