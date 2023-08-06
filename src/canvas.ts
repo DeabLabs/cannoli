@@ -268,12 +268,16 @@ export class Canvas {
 		error: string
 	): CanvasData {
 		const node = data.nodes.find((node) => node.id === nodeId);
+
+		// Find the node's vertical center
+		const nodeCenterY = node ? node.y + node.height / 2 : 0;
+
 		if (node) {
 			const newNodeId = this.generateNewId();
 			const errorNode: CanvasTextData = {
 				id: newNodeId,
 				x: node.x + node.width + 50,
-				y: node.y,
+				y: nodeCenterY - 75,
 				width: 500,
 				height: 150,
 				color: "1",
@@ -293,6 +297,32 @@ export class Canvas {
 			data.nodes.push(errorNode);
 			data.edges.push(newEdge);
 		}
+		return data;
+	}
+
+	private removeAllErrorNodes(data: CanvasData): CanvasData {
+		// Find all error nodes (nodes that are red and have text starting with "<u>Error:</u>\n")
+		const errorNodes = data.nodes.filter(
+			(node) =>
+				node.color === "1" && node.text?.startsWith("<u>Error:</u>\n")
+		);
+
+		// Collect all the IDs of the edges connected to error nodes
+		const errorEdgeIds = new Set<string>();
+		errorNodes.forEach((node) => {
+			data.edges.forEach((edge) => {
+				if (edge.fromNode === node.id || edge.toNode === node.id) {
+					errorEdgeIds.add(edge.id);
+				}
+			});
+		});
+
+		// Remove all error edges
+		data.edges = data.edges.filter((edge) => !errorEdgeIds.has(edge.id));
+
+		// Remove all error nodes
+		data.nodes = data.nodes.filter((node) => !errorNodes.includes(node));
+
 		return data;
 	}
 
@@ -330,6 +360,15 @@ export class Canvas {
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
 			const newData = this.changeNodeText(data, nodeId, newText);
+			await this.writeCanvasData(newData);
+		});
+		return this.editQueue;
+	}
+
+	async enqueueRemoveAllErrorNodes() {
+		this.editQueue = this.editQueue.then(async () => {
+			const data = await this.readCanvasData();
+			const newData = this.removeAllErrorNodes(data);
 			await this.writeCanvasData(newData);
 		});
 		return this.editQueue;

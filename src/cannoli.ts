@@ -65,6 +65,8 @@ export class CannoliGraph {
 	async initialize(verbose = false) {
 		await this.canvas.fetchData();
 
+		await this.canvas.enqueueRemoveAllErrorNodes();
+
 		this.graph = this.factory.parse(this.canvas.getCanvasData());
 
 		if (verbose) {
