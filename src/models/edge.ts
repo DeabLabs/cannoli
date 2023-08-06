@@ -285,7 +285,7 @@ export class CannoliEdge extends CannoliObject {
 				);
 			}
 			// If the source is a content node
-		} else if (sourceType === IndicatedNodeType.Content) {
+		} else {
 			// If the target is a group or a call node
 			if (
 				this.getTarget().kind === CannoliObjectKind.Group ||
@@ -304,12 +304,6 @@ export class CannoliEdge extends CannoliObject {
 					`Error on blank edge ${this.id}: invalid target for blank edge coming from content node.`
 				);
 			}
-		}
-		// If the source is a group, error
-		else {
-			throw new Error(
-				`Error on blank edge ${this.id}: source is a group.`
-			);
 		}
 	}
 

@@ -221,6 +221,9 @@ export class CannoliObject extends EventEmitter {
 			case CannoliObjectStatus.Rejected:
 				this.dependencyRejected(dependency, run);
 				break;
+			case CannoliObjectStatus.Executing:
+				this.dependencyExecuting(dependency, run);
+				break;
 			default:
 				break;
 		}
@@ -352,6 +355,8 @@ export class CannoliObject extends EventEmitter {
 
 	dependencyCompleted(dependency: CannoliObject, run: Run) {}
 
+	dependencyExecuting(dependency: CannoliObject, run: Run) {}
+
 	async run(run: Run) {}
 
 	async mockRun(run: Run) {}
@@ -427,6 +432,10 @@ export class CannoliVertex extends CannoliObject {
 		return this.incomingEdges.map(
 			(edge) => this.graph[edge.id] as CannoliEdge
 		);
+	}
+
+	getGroups(): CannoliGroup[] {
+		return this.groups.map((group) => this.graph[group] as CannoliGroup);
 	}
 
 	createRectangle(x: number, y: number, width: number, height: number) {

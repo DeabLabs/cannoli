@@ -162,6 +162,11 @@ export class CannoliGraph {
 	}
 
 	validate() {
+		// Call validate on each object
+		for (const object of Object.values(this.graph)) {
+			object.validate();
+		}
+
 		// Check if the graph is a DAG
 		if (!this.isDAG(this.graph)) {
 			// Find a node and call error on it
@@ -171,11 +176,6 @@ export class CannoliGraph {
 						"Cycle detected in graph. Please make sure the graph is a DAG.\n(exception: edges between groups and their members)"
 					);
 			}
-		}
-
-		// Call validate on each object
-		for (const object of Object.values(this.graph)) {
-			object.validate();
 		}
 	}
 

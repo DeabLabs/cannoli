@@ -148,22 +148,17 @@ export class CannoliGroup extends CannoliVertex {
 	membersFinished(run: Run) {}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run): void {
-		// Switch on status of this group
-		switch (this.status) {
-			case CannoliObjectStatus.Pending:
-				// If all edge dependencies are complete, execute
-				if (this.allEdgeDependenciesComplete()) {
-					this.execute(run);
-				}
-				break;
-			case CannoliObjectStatus.Executing:
-				// If all members are complete or rejected, call membersFinished
-				if (this.allMembersCompleteOrRejected()) {
-					this.membersFinished(run);
-				}
-				break;
-			default:
-				break;
+		if (this.status === CannoliObjectStatus.Executing) {
+			// If all members are complete or rejected, call membersFinished
+			if (this.allMembersCompleteOrRejected()) {
+				this.membersFinished(run);
+			}
+		}
+	}
+
+	dependencyExecuting(dependency: CannoliObject, run: Run): void {
+		if (this.status === CannoliObjectStatus.Pending) {
+			this.execute(run);
 		}
 	}
 
@@ -379,7 +374,45 @@ export class CannoliGroup extends CannoliVertex {
 		}
 	}
 
+	validateExitingAndReenteringPaths(): void {
+		const visited = new Set<CannoliVertex>();
+
+		const dfs = (vertex: CannoliVertex, hasLeftGroup: boolean) => {
+			visited.add(vertex);
+			for (const edge of vertex.getOutgoingEdges()) {
+				const targetVertex = edge.getTarget();
+				const isTargetInsideGroup = targetVertex
+					.getGroups()
+					.includes(this);
+
+				if (hasLeftGroup && isTargetInsideGroup) {
+					this.error(
+						`A path leaving this group and re-enters it, this would cause deadlock.`
+					);
+					return;
+				}
+
+				if (!visited.has(targetVertex)) {
+					dfs(targetVertex, hasLeftGroup || !isTargetInsideGroup);
+				}
+			}
+		};
+
+		const members = this.getMembers();
+
+		for (const member of members) {
+			if (!visited.has(member)) {
+				dfs(member, false);
+			}
+		}
+	}
+
 	validate(): void {
+		super.validate();
+
+		// Check for exiting and re-entering paths
+		this.validateExitingAndReenteringPaths();
+
 		// Check overlap
 		this.checkOverlap();
 
@@ -389,8 +422,8 @@ export class CannoliGroup extends CannoliVertex {
 				this.graph[edge.id].kind === CannoliObjectKind.Edge &&
 				this.graph[edge.id].type !== EdgeType.List
 			) {
-				throw new Error(
-					`Error on object ${this.id}: group has outgoing edge ${edge.id} that is not of type list.`
+				this.error(
+					`Groups can't have outgoing edges that aren't of type list.`
 				);
 			}
 		}
@@ -501,14 +534,20 @@ export class RepeatGroup extends CannoliGroup {
 			members
 		);
 		this.maxLoops = maxLoops;
-		this.currentLoop = 1;
+		this.currentLoop = 0;
 
 		this.type = GroupType.Repeat;
 	}
 
 	resetMembers(run: Run) {
+		console.log("resetting members");
+
 		// For each member
 		for (const member of this.getMembers()) {
+			console.log(
+				`resetting member ${member.id}. Its current status is ${member.status}`
+			);
+
 			// Reset the member
 			member.reset(run);
 			// Reset the member's outgoing edges
@@ -520,7 +559,9 @@ export class RepeatGroup extends CannoliGroup {
 	}
 
 	membersFinished(run: Run): void {
-		if (this.currentLoop < this.maxLoops) {
+		console.log("members finished");
+
+		if (this.currentLoop < this.maxLoops - 1) {
 			this.currentLoop++;
 
 			if (!run.isMock) {
@@ -565,7 +606,7 @@ export class RepeatGroup extends CannoliGroup {
 
 	reset(run: Run): void {
 		super.reset(run);
-		this.currentLoop = 1;
+		this.currentLoop = 0;
 	}
 
 	logDetails(): string {

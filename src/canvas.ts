@@ -235,17 +235,12 @@ export class Canvas {
 	}
 
 	onObjectPending(object: CannoliObject) {
-		console.log(
-			`Object with text ${object.text} has pending color enqueued.`
-		);
-
 		if (object instanceof CallNode) {
 			this.enqueueChangeNodeColor(object.id, "0");
 		}
 	}
 
 	onObjectError(object: CannoliObject, message?: string) {
-		console.log(`Error: ${message}`);
 		if (object instanceof CannoliVertex && message) {
 			this.enqueueAddErrorNode(object.id, message);
 		} else {

@@ -53,6 +53,11 @@ export class CannoliFactory {
 		const graph: Record<string, CannoliObject> = {};
 
 		canvas.nodes.forEach((node) => {
+			// Ignore red ("1") objects
+			if (node.color === "1") {
+				return;
+			}
+
 			if (node.type === "text" || node.type === "link") {
 				graph[node.id] = new CannoliVertex(
 					node.id,
@@ -75,6 +80,11 @@ export class CannoliFactory {
 		});
 
 		canvas.edges.forEach((edge) => {
+			// Ignore red ("1") objects
+			if (edge.color === "1") {
+				return;
+			}
+
 			graph[edge.id] = new CannoliEdge(
 				edge.id,
 				edge.label ?? "",
