@@ -20,6 +20,7 @@ export class CannoliEdge extends CannoliObject {
 	canvasData: CanvasEdgeData;
 	content: string | Record<string, string> | undefined;
 	isLoaded: boolean;
+	isReflexive: boolean;
 
 	EdgePrefixMap: Record<string, IndicatedEdgeType> = {
 		"*": IndicatedEdgeType.Config,
@@ -59,6 +60,8 @@ export class CannoliEdge extends CannoliObject {
 		this.isLoaded = false;
 
 		this.kind = CannoliObjectKind.Edge;
+
+		this.isReflexive = this.setIsReflexive();
 	}
 
 	getSource(): CannoliVertex {
@@ -69,6 +72,38 @@ export class CannoliEdge extends CannoliObject {
 		return this.graph[this.target] as CannoliVertex;
 	}
 
+	setIsReflexive(): boolean {
+		// An edge is reflexive if it is attatched to a group and a member of that group
+		const source = this.getSource();
+		const target = this.getTarget();
+
+		// If neither the source nor the target are groups, or both are groups, return false
+		if (
+			(source.kind !== CannoliObjectKind.Group &&
+				target.kind !== CannoliObjectKind.Group) ||
+			(source.kind === CannoliObjectKind.Group &&
+				target.kind === CannoliObjectKind.Group)
+		) {
+			return false;
+		}
+		// If the source is a group and the target is a member of that group, return true
+		else if (
+			source.kind === CannoliObjectKind.Group &&
+			target.groups.includes(source.id)
+		) {
+			return true;
+		}
+		// If the target is a group and the source is a member of that group, return true
+		else if (
+			target.kind === CannoliObjectKind.Group &&
+			source.groups.includes(target.id)
+		) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
 	setIncomingAndOutgoingEdges() {
 		const source = this.getSource();
 		const target = this.getTarget();
@@ -77,8 +112,8 @@ export class CannoliEdge extends CannoliObject {
 			source instanceof CannoliVertex &&
 			target instanceof CannoliVertex
 		) {
-			source.addOutgoingEdge(this.id, false);
-			target.addIncomingEdge(this.id, false);
+			source.addOutgoingEdge(this.id);
+			target.addIncomingEdge(this.id);
 		}
 	}
 
@@ -178,7 +213,6 @@ export class CannoliEdge extends CannoliObject {
 		}
 
 		return (
-			super.logDetails() +
 			`--> Edge ${this.id} Text: "${
 				this.text
 			}"\n"${this.ensureStringLength(
@@ -187,7 +221,8 @@ export class CannoliEdge extends CannoliObject {
 			)}--->"${this.ensureStringLength(
 				this.getTarget().text,
 				15
-			)}"\n${crossingGroupsString}\n`
+			)}"\n${crossingGroupsString}\nisReflexive: ${this.isReflexive}\n` +
+			super.logDetails()
 		);
 	}
 
@@ -311,7 +346,7 @@ export class CannoliEdge extends CannoliObject {
 		// Filter for all outgoing list edges from the source
 		const outgoingListEdges = this.getSource().outgoingEdges.filter(
 			(edge) => {
-				const edgeObject = this.graph[edge.id];
+				const edgeObject = this.graph[edge];
 				if (edgeObject instanceof CannoliEdge) {
 					return (
 						edgeObject.getIndicatedType() === IndicatedEdgeType.List
@@ -324,7 +359,7 @@ export class CannoliEdge extends CannoliObject {
 
 		// Call get variable on all outgoing list edges
 		const outgoingListEdgeNames = outgoingListEdges.map((edge) => {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				return edgeObject.getVariableInfo().name;
 			} else {
@@ -356,7 +391,7 @@ export class CannoliEdge extends CannoliObject {
 		// Fliter for all outgoing choice edges from the source
 		const outgoingChoiceEdges = this.getSource().outgoingEdges.filter(
 			(edge) => {
-				const edgeObject = this.graph[edge.id];
+				const edgeObject = this.graph[edge];
 				if (edgeObject instanceof CannoliEdge) {
 					return (
 						edgeObject.getIndicatedType() ===
@@ -370,7 +405,7 @@ export class CannoliEdge extends CannoliObject {
 
 		// Call get variable on all outgoing choice edges
 		const outgoingChoiceEdgeNames = outgoingChoiceEdges.map((edge) => {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				return edgeObject.getVariableInfo().name;
 			} else {

@@ -392,8 +392,8 @@ export class CannoliObject extends EventEmitter {
 
 export class CannoliVertex extends CannoliObject {
 	canvasData: AllCanvasNodeData;
-	outgoingEdges: { id: string; isReflexive: boolean }[];
-	incomingEdges: { id: string; isReflexive: boolean }[];
+	outgoingEdges: string[];
+	incomingEdges: string[];
 	groups: string[]; // Sorted from immediate parent to most distant
 
 	constructor(
@@ -403,8 +403,8 @@ export class CannoliVertex extends CannoliObject {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges?: { id: string; isReflexive: boolean }[],
-		incomingEdges?: { id: string; isReflexive: boolean }[],
+		outgoingEdges?: string[],
+		incomingEdges?: string[],
 		groups?: string[]
 	) {
 		super(id, text, graph, isClone, vault);
@@ -414,23 +414,23 @@ export class CannoliVertex extends CannoliObject {
 		this.groups = groups || [];
 	}
 
-	addIncomingEdge(id: string, isReflexive: boolean) {
-		this.incomingEdges.push({ id, isReflexive });
+	addIncomingEdge(id: string) {
+		this.incomingEdges.push(id);
 	}
 
-	addOutgoingEdge(id: string, isReflexive: boolean) {
-		this.outgoingEdges.push({ id, isReflexive });
+	addOutgoingEdge(id: string) {
+		this.outgoingEdges.push(id);
 	}
 
 	getOutgoingEdges(): CannoliEdge[] {
 		return this.outgoingEdges.map(
-			(edge) => this.graph[edge.id] as CannoliEdge
+			(edge) => this.graph[edge] as CannoliEdge
 		);
 	}
 
 	getIncomingEdges(): CannoliEdge[] {
 		return this.incomingEdges.map(
-			(edge) => this.graph[edge.id] as CannoliEdge
+			(edge) => this.graph[edge] as CannoliEdge
 		);
 	}
 
@@ -521,8 +521,10 @@ export class CannoliVertex extends CannoliObject {
 	setDependencies(): void {
 		// Make all incoming edges that aren't reflexive dependencies
 		for (const edge of this.incomingEdges) {
-			if (!edge.isReflexive) {
-				this.addDependency(edge.id);
+			const edgeObject = this.graph[edge] as CannoliEdge;
+
+			if (!edgeObject.isReflexive) {
+				this.addDependency(edge);
 			}
 		}
 
@@ -531,8 +533,10 @@ export class CannoliVertex extends CannoliObject {
 			const groupObject = this.graph[group] as CannoliGroup;
 
 			for (const edge of groupObject.incomingEdges) {
-				if (!edge.isReflexive) {
-					this.addDependency(edge.id);
+				const edgeObject = this.graph[edge] as CannoliEdge;
+
+				if (!edgeObject.isReflexive) {
+					this.addDependency(edge);
 				}
 			}
 		}

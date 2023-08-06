@@ -13,6 +13,7 @@ import {
 } from "./object";
 import { Run } from "src/run";
 import { Vault } from "obsidian";
+import { CannoliEdge } from "./edge";
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];
@@ -32,8 +33,8 @@ export class CannoliGroup extends CannoliVertex {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges?: { id: string; isReflexive: boolean }[],
-		incomingEdges?: { id: string; isReflexive: boolean }[],
+		outgoingEdges?: string[],
+		incomingEdges?: string[],
 		groups?: string[],
 		members?: string[]
 	) {
@@ -74,8 +75,10 @@ export class CannoliGroup extends CannoliVertex {
 		}
 
 		for (const edge of this.incomingEdges) {
-			if (!edge.isReflexive) {
-				this.dependencies.push(edge.id);
+			const edgeObject = this.graph[edge] as CannoliEdge;
+
+			if (!edgeObject.isReflexive) {
+				this.dependencies.push(edge);
 			}
 		}
 	}
@@ -264,7 +267,7 @@ export class CannoliGroup extends CannoliVertex {
 					0
 				);
 			case GroupType.Basic:
-				return new CannoliGroup(
+				return new BasicGroup(
 					this.id,
 					this.text,
 					graph,
@@ -320,7 +323,7 @@ export class CannoliGroup extends CannoliVertex {
 		incomingEdgesString += `Incoming Edges: `;
 		for (const edge of this.incomingEdges) {
 			incomingEdgesString += `\n\t-"${this.ensureStringLength(
-				this.graph[edge.id].text,
+				this.graph[edge].text,
 				15
 			)}"`;
 		}
@@ -329,7 +332,7 @@ export class CannoliGroup extends CannoliVertex {
 		outgoingEdgesString += `Outgoing Edges: `;
 		for (const edge of this.outgoingEdges) {
 			outgoingEdgesString += `\n\t-"${this.ensureStringLength(
-				this.graph[edge.id].text,
+				this.graph[edge].text,
 				15
 			)}"`;
 		}
@@ -419,14 +422,21 @@ export class CannoliGroup extends CannoliVertex {
 		// Groups can't have outgoing edges that aren't of type list
 		for (const edge of this.outgoingEdges) {
 			if (
-				this.graph[edge.id].kind === CannoliObjectKind.Edge &&
-				this.graph[edge.id].type !== EdgeType.List
+				this.graph[edge].kind === CannoliObjectKind.Edge &&
+				this.graph[edge].type !== EdgeType.List
 			) {
 				this.error(
 					`Groups can't have outgoing edges that aren't of type list.`
 				);
 			}
 		}
+	}
+}
+
+export class BasicGroup extends CannoliGroup {
+	async execute(run: Run): Promise<void> {
+		this.status = CannoliObjectStatus.Complete;
+		this.emit("update", this, CannoliObjectStatus.Complete, run);
 	}
 }
 
@@ -440,8 +450,8 @@ export class ListGroup extends CannoliGroup {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[],
 		members: string[],
 		numberOfVersions: number,
@@ -480,8 +490,8 @@ export class ListGroup extends CannoliGroup {
 		// List groups must have one and only one edge of type either list or category
 		const listOrCategoryEdges = this.outgoingEdges.filter(
 			(edge) =>
-				this.graph[edge.id].type === EdgeType.List ||
-				this.graph[edge.id].type === EdgeType.Category
+				this.graph[edge].type === EdgeType.List ||
+				this.graph[edge].type === EdgeType.Category
 		);
 
 		if (listOrCategoryEdges.length !== 1) {
@@ -493,8 +503,8 @@ export class ListGroup extends CannoliGroup {
 		// List groups can't have outgoing edges that aren't of type list
 		for (const edge of this.outgoingEdges) {
 			if (
-				this.graph[edge.id].kind === CannoliObjectKind.Edge &&
-				this.graph[edge.id].type !== EdgeType.List
+				this.graph[edge].kind === CannoliObjectKind.Edge &&
+				this.graph[edge].type !== EdgeType.List
 			) {
 				this.error(
 					`List groups can't have outgoing edges that aren't of type list.`
@@ -515,8 +525,8 @@ export class RepeatGroup extends CannoliGroup {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[],
 		members: string[],
 		maxLoops: number
@@ -550,17 +560,19 @@ export class RepeatGroup extends CannoliGroup {
 
 			// Reset the member
 			member.reset(run);
-			// Reset the member's outgoing edges
+			// Reset the member's outgoing edges whose target isn't this group
 
 			for (const edge of member.outgoingEdges) {
-				this.graph[edge.id].reset(run);
+				const edgeObject = this.graph[edge] as CannoliEdge;
+
+				if (edgeObject.getTarget() !== this) {
+					edgeObject.reset(run);
+				}
 			}
 		}
 	}
 
 	membersFinished(run: Run): void {
-		console.log("members finished");
-
 		if (this.currentLoop < this.maxLoops - 1) {
 			this.currentLoop++;
 
@@ -621,8 +633,8 @@ export class RepeatGroup extends CannoliGroup {
 		// Repeat groups can't have incoming edges of type list or category
 		const listOrCategoryEdges = this.incomingEdges.filter(
 			(edge) =>
-				this.graph[edge.id].type === EdgeType.List ||
-				this.graph[edge.id].type === EdgeType.Category
+				this.graph[edge].type === EdgeType.List ||
+				this.graph[edge].type === EdgeType.Category
 		);
 
 		if (listOrCategoryEdges.length !== 0) {

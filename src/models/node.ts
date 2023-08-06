@@ -19,6 +19,8 @@ import { CannoliEdge, ConfigEdge, ProvideEdge } from "./edge";
 import { ChatCompletionRequestMessage } from "openai";
 import { CannoliGroup } from "./group";
 
+type VariableValue = { name: string; content: string; edgeId: string };
+
 export class CannoliNode extends CannoliVertex {
 	NodePrefixMap: Record<string, IndicatedNodeType> = {
 		$: IndicatedNodeType.Call,
@@ -44,8 +46,8 @@ export class CannoliNode extends CannoliVertex {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges?: { id: string; isReflexive: boolean }[],
-		incomingEdges?: { id: string; isReflexive: boolean }[],
+		outgoingEdges?: string[],
+		incomingEdges?: string[],
 		groups?: string[]
 	) {
 		super(
@@ -176,8 +178,8 @@ export class CannoliNode extends CannoliVertex {
 		return this.renderFunction(resolvedReferences);
 	}
 
-	getVariableValues(): { name: string; content: string }[] {
-		const variableValues: { name: string; content: string }[] = [];
+	getVariableValues(): VariableValue[] {
+		const variableValues: VariableValue[] = [];
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
@@ -203,6 +205,7 @@ export class CannoliNode extends CannoliVertex {
 				const variableValue = {
 					name: edgeObject.name,
 					content: edgeObject.content,
+					edgeId: edgeObject.id,
 				};
 
 				variableValues.push(variableValue);
@@ -216,6 +219,7 @@ export class CannoliNode extends CannoliVertex {
 					const variableValue = {
 						name: name,
 						content: edgeObject.content[name],
+						edgeId: edgeObject.id,
 					};
 
 					multipleVariableValues.push(variableValue);
@@ -227,7 +231,51 @@ export class CannoliNode extends CannoliVertex {
 			}
 		}
 
-		return variableValues;
+		// Resolve variable conflicts
+		const resolvedVariableValues =
+			this.resolveVariableConflicts(variableValues);
+
+		return resolvedVariableValues;
+	}
+
+	resolveVariableConflicts(variableValues: VariableValue[]): VariableValue[] {
+		const finalVariables: VariableValue[] = [];
+		const groupedByName: Record<string, VariableValue[]> = {};
+
+		// Group the variable values by name
+		for (const variable of variableValues) {
+			if (!groupedByName[variable.name]) {
+				groupedByName[variable.name] = [];
+			}
+			groupedByName[variable.name].push(variable);
+		}
+
+		// Iterate through the grouped names
+		for (const name in groupedByName) {
+			// Get all the variable values for this name
+			const variables = groupedByName[name];
+
+			let selectedVariable = variables[0]; // Start with the first variable
+
+			// Iterate through the variables, preferring the reflexive edge if found
+			for (const variable of variables) {
+				const edgeObject = this.graph[variable.edgeId];
+
+				// Check if edgeObject is an instance of CannoliEdge (or another specific subtype that has the isReflexive property)
+				if (
+					edgeObject instanceof CannoliEdge &&
+					edgeObject.isReflexive
+				) {
+					selectedVariable = variable;
+					break; // Exit the loop once a reflexive edge is found
+				}
+			}
+
+			// Add the selected variable to the final array
+			finalVariables.push(selectedVariable);
+		}
+
+		return finalVariables;
 	}
 
 	dependencyCompleted(dependency: CannoliObject, run: Run): void {
@@ -297,7 +345,7 @@ export class CannoliNode extends CannoliVertex {
 		if (
 			this.outgoingEdges.some(
 				(edge) =>
-					this.graph[edge.id].getIndicatedType() ===
+					this.graph[edge].getIndicatedType() ===
 					IndicatedEdgeType.Choice
 			)
 		) {
@@ -308,7 +356,7 @@ export class CannoliNode extends CannoliVertex {
 		else if (
 			this.outgoingEdges.some(
 				(edge) =>
-					this.graph[edge.id].getIndicatedType() ===
+					this.graph[edge].getIndicatedType() ===
 					IndicatedEdgeType.List
 			)
 		) {
@@ -339,7 +387,7 @@ export class CannoliNode extends CannoliVertex {
 		if (
 			this.incomingEdges.some(
 				(edge) =>
-					this.graph[edge.id].getIndicatedType() ===
+					this.graph[edge].getIndicatedType() ===
 					IndicatedEdgeType.Vault
 			)
 		) {
@@ -513,7 +561,7 @@ export class CannoliNode extends CannoliVertex {
 		incomingEdgesString += `Incoming Edges: `;
 		for (const edge of this.incomingEdges) {
 			incomingEdgesString += `\n\t-"${this.ensureStringLength(
-				this.graph[edge.id].text,
+				this.graph[edge].text,
 				15
 			)}"`;
 		}
@@ -522,7 +570,7 @@ export class CannoliNode extends CannoliVertex {
 		outgoingEdgesString += `Outgoing Edges: `;
 		for (const edge of this.outgoingEdges) {
 			outgoingEdgesString += `\n\t-"${this.ensureStringLength(
-				this.graph[edge.id].text,
+				this.graph[edge].text,
 				15
 			)}"`;
 		}
@@ -546,7 +594,7 @@ export class CannoliNode extends CannoliVertex {
 		// If there are any incoming list edges, there must only be one
 		if (
 			this.incomingEdges.filter(
-				(edge) => this.graph[edge.id].type === EdgeType.List
+				(edge) => this.graph[edge].type === EdgeType.List
 			).length > 1
 		) {
 			this.error(`Nodes can only have one incoming list edge.`);
@@ -634,8 +682,8 @@ export class CallNode extends CannoliNode {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges?: { id: string; isReflexive: boolean }[],
-		incomingEdges?: { id: string; isReflexive: boolean }[],
+		outgoingEdges?: string[],
+		incomingEdges?: string[],
 		groups?: string[]
 	) {
 		super(
@@ -774,12 +822,29 @@ export class CallNode extends CannoliNode {
 
 		messages.push(await this.getNewMessage());
 
-		const response = await run.cannoli?.llmCall({
-			messages: messages,
-			model: config["model"],
-			mock: run.isMock,
-			verbose: true,
-		});
+		// Log out stringified messages
+		console.log(JSON.stringify(messages));
+
+		let response:
+			| {
+					message: ChatCompletionRequestMessage;
+					promptTokens: number;
+					completionTokens: number;
+					// eslint-disable-next-line no-mixed-spaces-and-tabs
+			  }
+			| undefined;
+
+		// Catch any errors
+		try {
+			response = await run.cannoli?.llmCall({
+				messages: messages,
+				model: config["model"],
+				mock: run.isMock,
+				verbose: true,
+			});
+		} catch (e) {
+			this.error(`LLM call failed with the error:\n"${e}"`);
+		}
 
 		if (response && response.message && response.message.content) {
 			messages.push(response.message);
@@ -804,7 +869,7 @@ export class CallNode extends CannoliNode {
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: content,
@@ -817,7 +882,7 @@ export class CallNode extends CannoliNode {
 	async mockRun(run: Run) {
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: "mock",
@@ -865,8 +930,8 @@ export class ListNode extends CannoliNode {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[]
 	) {
 		super(
@@ -977,8 +1042,8 @@ export class ChoiceNode extends CannoliNode {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[]
 	) {
 		super(
@@ -1089,8 +1154,8 @@ export class ContentNode extends CannoliNode {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[]
 	) {
 		super(
@@ -1182,8 +1247,8 @@ export class VaultNode extends CannoliNode {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[]
 	) {
 		super(
@@ -1230,8 +1295,8 @@ export class ReferenceNode extends ContentNode {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[]
 	) {
 		super(
@@ -1273,7 +1338,7 @@ export class ReferenceNode extends ContentNode {
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: fetchedContent,
@@ -1292,7 +1357,7 @@ export class ReferenceNode extends ContentNode {
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: content,
@@ -1404,8 +1469,8 @@ export class FormatterNode extends CannoliNode {
 		isClone: boolean,
 		vault: Vault,
 		canvasData: AllCanvasNodeData,
-		outgoingEdges: { id: string; isReflexive: boolean }[],
-		incomingEdges: { id: string; isReflexive: boolean }[],
+		outgoingEdges: string[],
+		incomingEdges: string[],
 		groups: string[]
 	) {
 		super(
@@ -1436,7 +1501,7 @@ export class FormatterNode extends CannoliNode {
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: content,
@@ -1452,7 +1517,7 @@ export class FormatterNode extends CannoliNode {
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: content,
@@ -1470,7 +1535,7 @@ export class InputNode extends CannoliNode {
 	async run(run: Run) {
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: this.text,
@@ -1482,7 +1547,7 @@ export class InputNode extends CannoliNode {
 	async mockRun(run: Run) {
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: this.text,
@@ -1538,7 +1603,7 @@ export class DisplayNode extends ContentNode {
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: this.text,
@@ -1557,7 +1622,7 @@ export class DisplayNode extends ContentNode {
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge.id];
+			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: content,
