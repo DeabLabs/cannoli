@@ -719,6 +719,14 @@ export class CallNode extends CannoliNode {
 
 			const edgeMessages = edgeObject.messages;
 
+			if (!edgeMessages) {
+				continue;
+			}
+
+			if (edgeMessages.length < 1) {
+				continue;
+			}
+
 			if (edgeMessages) {
 				// If its a system message, add it to the beginning of the array
 				if (edge.type === EdgeType.SystemMessage) {
