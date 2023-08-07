@@ -231,6 +231,17 @@ export class CannoliGroup extends CannoliVertex {
 		| IndicatedEdgeType
 		| IndicatedNodeType
 		| IndicatedGroupType {
+		// If the group has no members that arent of type NonLogic, return NonLogic
+		if (
+			!this.getMembers().some(
+				(member) =>
+					member.getIndicatedType() !== IndicatedNodeType.NonLogic ||
+					member.getIndicatedType() !== IndicatedGroupType.NonLogic
+			)
+		) {
+			return IndicatedGroupType.NonLogic;
+		}
+
 		// Check if the first character is in the prefix map
 		const firstCharacter = this.text[0];
 		if (firstCharacter in this.GroupPrefixMap) {
@@ -250,17 +261,6 @@ export class CannoliGroup extends CannoliVertex {
 		const labelNumber = this.getLabelNumber();
 		if (labelNumber !== null) {
 			return IndicatedGroupType.Repeat;
-		}
-
-		// If the group has all NonLogic members, return NonLogic
-		if (
-			this.getMembers().every(
-				(member) =>
-					member.getIndicatedType() === IndicatedNodeType.NonLogic ||
-					member.getIndicatedType() === IndicatedGroupType.NonLogic
-			)
-		) {
-			return IndicatedGroupType.NonLogic;
 		} else {
 			// Otherwise, return Basic
 			return IndicatedGroupType.Basic;

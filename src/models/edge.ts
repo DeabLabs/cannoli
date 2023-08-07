@@ -12,6 +12,7 @@ import {
 import { ChatCompletionRequestMessage } from "openai";
 import { Run } from "src/run";
 import { Vault } from "obsidian";
+import { RepeatGroup } from "./group";
 
 export class CannoliEdge extends CannoliObject {
 	source: string;
@@ -939,24 +940,119 @@ export class LoggingEdge extends WriteEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
+		// Get the current loop number of any repeat type groups that the edge is crossing out of
+		const repeatLoopNumbers = this.getLoopNumbers();
+
 		if (content !== undefined) {
-			this.content = content;
+			const loopHeader = this.formatLoopHeader(repeatLoopNumbers);
+			if (repeatLoopNumbers.length > 0) {
+				this.content = `${loopHeader}\n`;
+			} else {
+				this.content = content || "No additional content available.";
+			}
+
+			if (messages !== undefined) {
+				this.content = `${
+					this.content
+				}\n\n${this.formatInteractionHeaders(messages)}`;
+			}
 		} else {
 			throw new Error(
 				`Error on Logging edge ${this.id}: content is undefined.`
 			);
 		}
 
-		if (messages !== undefined) {
-			// Append the chatHistory to the content as a string
-			this.content = `${this.content}\n${JSON.stringify(
-				messages,
-				null,
-				2
-			)}`;
-		}
-
 		this.isLoaded = true;
+	}
+
+	getLoopNumbers(): number[] {
+		// Get the current loop number of any repeat type groups that the edge is crossing out of
+		const repeatLoopNumbers: number[] = [];
+
+		this.crossingOutGroups.forEach((group) => {
+			const groupObject = this.graph[group];
+			if (groupObject instanceof RepeatGroup) {
+				repeatLoopNumbers.push(groupObject.currentLoop);
+			}
+		});
+
+		// Reverse the array
+		repeatLoopNumbers.reverse();
+
+		return repeatLoopNumbers;
+	}
+
+	formatInteraction(messages: ChatCompletionRequestMessage[]): string {
+		let table =
+			"| Role      | Message | Function Call |\n|-----------|---------|----------------|\n";
+		messages.forEach((message) => {
+			const content = message.content || " ";
+			const functionCall = message.function_call
+				? `${message.function_call.name}: ${message.function_call.arguments}`
+				: " ";
+			table += `| ${message.role} | ${content} | ${functionCall} |\n`;
+		});
+		return table;
+	}
+
+	formatInteractionOrdered(messages: ChatCompletionRequestMessage[]): string {
+		let formattedString = "";
+		messages.forEach((message, index) => {
+			const role = message.role;
+			const content = message.content
+				? message.content.replace("\n", " ")
+				: "Function Call";
+			formattedString += `${index + 1}. **${
+				role.charAt(0).toUpperCase() + role.slice(1)
+			}**: ${content}\n`;
+		});
+		return formattedString;
+	}
+
+	formatInteractionQuote(messages: ChatCompletionRequestMessage[]): string {
+		let formattedString = "";
+		messages.forEach((message) => {
+			const role = message.role;
+			const content = message.content
+				? message.content.replace("\n", " ")
+				: "Function Call";
+			formattedString += `> **${
+				role.charAt(0).toUpperCase() + role.slice(1)
+			}**: ${content}\n`;
+		});
+		return formattedString;
+	}
+
+	formatInteractionHeaders(messages: ChatCompletionRequestMessage[]): string {
+		let formattedString = "";
+		messages.forEach((message) => {
+			const role = message.role;
+			let content = message.content
+				? message.content.replace("\n", " ")
+				: "";
+			if (message.function_call) {
+				content = `Function Call: **${message.function_call.name}**\nArguments:\n\`\`\`json\n${message.function_call.arguments}\n\`\`\``;
+			}
+			formattedString += `#### <u>${
+				role.charAt(0).toUpperCase() + role.slice(1)
+			}</u>\n${content}\n`;
+		});
+		return formattedString;
+	}
+
+	formatLoopHeader(loopNumbers: number[]): string {
+		let loopString = "## Loop ";
+		loopNumbers.forEach((loopNumber) => {
+			loopString += `${loopNumber + 1}.`;
+		});
+		return loopString.slice(0, -1);
+	}
+
+	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+		// If the dependency is the source node, execute
+		if (dependency.id === this.source) {
+			this.execute(run);
+		}
 	}
 
 	logDetails(): string {

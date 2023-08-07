@@ -1759,7 +1759,16 @@ export class DisplayNode extends ContentNode {
 			content = variableValues[0].content;
 		}
 
-		this.text = content;
+		// If the incoming edge is a logging edge, append the content to this node's text rather than replacing it
+		if (
+			this.getIncomingEdges().some(
+				(edge) => edge.type === EdgeType.Logging
+			)
+		) {
+			this.text = `${this.text}\n${content}`;
+		} else {
+			this.text = content;
+		}
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
@@ -1789,6 +1798,11 @@ export class DisplayNode extends ContentNode {
 				});
 			}
 		}
+	}
+
+	reset(run: Run): void {
+		super.reset(run);
+		this.text = "";
 	}
 }
 
