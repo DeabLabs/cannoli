@@ -860,9 +860,6 @@ export class CallNode extends CannoliNode {
 
 		messages.push(await this.getNewMessage());
 
-		// Log out stringified messages
-		console.log(JSON.stringify(messages));
-
 		let response:
 			| {
 					message: ChatCompletionRequestMessage;
@@ -880,7 +877,7 @@ export class CallNode extends CannoliNode {
 				mock: run.isMock,
 				verbose: true,
 				functions: functions,
-				functionSetting: "enter_choice",
+				functionSetting: functionSetting,
 			});
 		} catch (e) {
 			this.error(`LLM call failed with the error:\n"${e}"`);
@@ -1089,6 +1086,24 @@ export class ChoiceNode extends CallNode {
 	}
 
 	async run(run: Run) {
+		switch (this.choiceNodeType) {
+			case ChoiceNodeType.Branch:
+				await this.runBranch(run);
+				break;
+			case ChoiceNodeType.Category:
+				await this.runCategory(run);
+				break;
+			case ChoiceNodeType.Select:
+				await this.runSelect(run);
+				break;
+			default:
+				throw new Error(
+					`Error on node ${this.id}: could not run choice node.`
+				);
+		}
+	}
+
+	async runBranch(run: Run) {
 		if (!run.cannoli) {
 			throw new Error(`Cannoli not initialized`);
 		}
@@ -1121,21 +1136,34 @@ export class ChoiceNode extends CallNode {
 
 		const parsedVariable = JSON.parse(selectedParameter);
 
-		console.log(`Selected Variable: ${parsedVariable.choice}`);
+		const choice = parsedVariable.choice;
 
+		// Reject all unselected options
+		this.rejectUnselectedOptions(choice, run);
+
+		// Load all outgoing edges
+		this.loadAllOutgoingEdges(content, messages);
+	}
+
+	async runCategory(run: Run) {
+		throw new Error(`Not implemented`);
+	}
+
+	async runSelect(run: Run) {
+		throw new Error(`Not implemented`);
+	}
+
+	rejectUnselectedOptions(choice: string, run: Run) {
 		// Call reject on any outgoing edges that aren't the selected one
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject.type === EdgeType.Branch) {
 				const branchEdge = edgeObject as SingleVariableEdge;
-				if (branchEdge.name !== parsedVariable.choice) {
+				if (branchEdge.name !== choice) {
 					branchEdge.reject(run);
 				}
 			}
 		}
-
-		// Load all outgoing edges
-		this.loadAllOutgoingEdges(content, messages);
 	}
 
 	getBranchChoices(): string[] {
@@ -1602,19 +1630,18 @@ export class FormatterNode extends CannoliNode {
 	async run(run: Run) {
 		const content = await this.processReferences();
 
-		console.log(`Formatter node returned content "${content}"`);
+		// Take off the first and last characters (the backticks)
+		const processedContent = content.slice(1, -1);
 
 		// Load all outgoing edges
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
-					content: content,
+					content: processedContent,
 				});
 			}
 		}
-
-		console.log(`Finished running formatter node with text "${this.text}"`);
 	}
 
 	async mockRun(run: Run) {

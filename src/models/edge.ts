@@ -73,6 +73,14 @@ export class CannoliEdge extends CannoliObject {
 		return this.graph[this.target] as CannoliVertex;
 	}
 
+	isProvideEdge(): boolean {
+		if (this instanceof ProvideEdge) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
 	setIsReflexive(): boolean {
 		// An edge is reflexive if it is attatched to a group and a member of that group
 		const source = this.getSource();

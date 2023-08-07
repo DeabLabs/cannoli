@@ -20,10 +20,12 @@ export class CannoliGroup extends CannoliVertex {
 
 	GroupPrefixMap: Record<string, IndicatedGroupType> = {
 		"<": IndicatedGroupType.List,
+		"?": IndicatedGroupType.While,
 	};
 
 	GroupColorMap: Record<string, IndicatedGroupType> = {
 		"5": IndicatedGroupType.List,
+		"3": IndicatedGroupType.While,
 	};
 
 	constructor(
@@ -165,6 +167,66 @@ export class CannoliGroup extends CannoliVertex {
 		}
 	}
 
+	dependencyRejected(dependency: CannoliObject, run: Run) {
+		if (this.noEdgeDependenciesRejected()) {
+			return;
+		} else {
+			this.reject(run);
+		}
+	}
+
+	noEdgeDependenciesRejected(): boolean {
+		// For each dependency
+		for (const dependency of this.dependencies) {
+			// If it's an array, check if all elements are complete
+			if (Array.isArray(dependency)) {
+				// If its an array of edges
+				if (
+					dependency.every((dep) => this.graph[dep].kind === "edge")
+				) {
+					// If all elements are rejected, return false
+					if (
+						dependency.every(
+							(dep) =>
+								this.graph[dep].status ===
+								CannoliObjectStatus.Rejected
+						)
+					) {
+						return false;
+					}
+				}
+			}
+			// If it's not an array, check if it's rejected
+			else {
+				// If its an edge
+				if (this.graph[dependency].kind === "edge") {
+					if (
+						this.graph[dependency].status ===
+						CannoliObjectStatus.Rejected
+					) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+
+	anyReflexiveEdgesRejected(): boolean {
+		// For each incoming edge
+		for (const edge of this.incomingEdges) {
+			const edgeObject = this.graph[edge] as CannoliEdge;
+			// If it's reflexive and rejected, return true
+			if (
+				edgeObject.isReflexive &&
+				edgeObject.status === CannoliObjectStatus.Rejected
+			) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	getIndicatedType():
 		| IndicatedEdgeType
 		| IndicatedNodeType
@@ -210,6 +272,8 @@ export class CannoliGroup extends CannoliVertex {
 		switch (indicatedType) {
 			case IndicatedGroupType.Repeat:
 				return GroupType.Repeat;
+			case IndicatedGroupType.While:
+				return GroupType.While;
 			case IndicatedGroupType.List:
 				return GroupType.List;
 			case IndicatedGroupType.Basic:
@@ -225,14 +289,8 @@ export class CannoliGroup extends CannoliVertex {
 
 	createTyped(graph: Record<string, CannoliObject>): CannoliObject | null {
 		const type = this.decideType();
-		const labelNumber = this.getLabelNumber();
 		switch (type) {
 			case GroupType.Repeat:
-				if (labelNumber === null) {
-					throw new Error(
-						`Error on object ${this.id}: repeat group must have a positive integer label.`
-					);
-				}
 				return new RepeatGroup(
 					this.id,
 					this.text,
@@ -243,15 +301,22 @@ export class CannoliGroup extends CannoliVertex {
 					this.outgoingEdges,
 					this.incomingEdges,
 					this.groups,
-					this.members,
-					labelNumber
+					this.members
+				);
+			case GroupType.While:
+				return new WhileGroup(
+					this.id,
+					this.text,
+					graph,
+					this.isClone,
+					this.vault,
+					this.canvasData,
+					this.outgoingEdges,
+					this.incomingEdges,
+					this.groups,
+					this.members
 				);
 			case GroupType.List:
-				if (labelNumber === null) {
-					throw new Error(
-						`Error on object ${this.id}: list group must have a positive integer label.`
-					);
-				}
 				return new ListGroup(
 					this.id,
 					this.text,
@@ -263,7 +328,6 @@ export class CannoliGroup extends CannoliVertex {
 					this.incomingEdges,
 					this.groups,
 					this.members,
-					labelNumber,
 					0
 				);
 			case GroupType.Basic:
@@ -441,7 +505,7 @@ export class BasicGroup extends CannoliGroup {
 }
 
 export class ListGroup extends CannoliGroup {
-	numberOfVersions: number;
+	numberOfVersions: number | null;
 	copyId: number;
 	constructor(
 		id: string,
@@ -454,7 +518,6 @@ export class ListGroup extends CannoliGroup {
 		incomingEdges: string[],
 		groups: string[],
 		members: string[],
-		numberOfVersions: number,
 		copyId: number
 	) {
 		super(
@@ -469,10 +532,12 @@ export class ListGroup extends CannoliGroup {
 			groups,
 			members
 		);
-		this.numberOfVersions = numberOfVersions;
+
 		this.copyId = copyId;
 
 		this.type = GroupType.List;
+
+		this.numberOfVersions = this.getLabelNumber();
 	}
 
 	clone() {}
@@ -486,6 +551,13 @@ export class ListGroup extends CannoliGroup {
 
 	validate(): void {
 		super.validate();
+
+		// List groups must have a valid label number
+		if (this.numberOfVersions === null) {
+			this.error(
+				`List groups must have a valid number in their label. Please ensure the label is a positive integer.`
+			);
+		}
 
 		// List groups must have one and only one edge of type either list or category
 		const listOrCategoryEdges = this.outgoingEdges.filter(
@@ -515,7 +587,7 @@ export class ListGroup extends CannoliGroup {
 }
 
 export class RepeatGroup extends CannoliGroup {
-	maxLoops: number;
+	maxLoops: number | null;
 	currentLoop: number;
 
 	constructor(
@@ -528,8 +600,7 @@ export class RepeatGroup extends CannoliGroup {
 		outgoingEdges: string[],
 		incomingEdges: string[],
 		groups: string[],
-		members: string[],
-		maxLoops: number
+		members: string[]
 	) {
 		super(
 			id,
@@ -543,21 +614,17 @@ export class RepeatGroup extends CannoliGroup {
 			groups,
 			members
 		);
-		this.maxLoops = maxLoops;
+
 		this.currentLoop = 0;
 
 		this.type = GroupType.Repeat;
+
+		this.maxLoops = this.getLabelNumber();
 	}
 
 	resetMembers(run: Run) {
-		console.log("resetting members");
-
 		// For each member
 		for (const member of this.getMembers()) {
-			console.log(
-				`resetting member ${member.id}. Its current status is ${member.status}`
-			);
-
 			// Reset the member
 			member.reset(run);
 			// Reset the member's outgoing edges whose target isn't this group
@@ -573,7 +640,8 @@ export class RepeatGroup extends CannoliGroup {
 	}
 
 	membersFinished(run: Run): void {
-		if (this.currentLoop < this.maxLoops - 1) {
+		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+		if (this.currentLoop < this.maxLoops! - 1) {
 			this.currentLoop++;
 
 			if (!run.isMock) {
@@ -630,6 +698,13 @@ export class RepeatGroup extends CannoliGroup {
 	validate(): void {
 		super.validate();
 
+		// Repeat groups must have a valid label number
+		if (this.maxLoops === null) {
+			this.error(
+				`Repeat groups and While loops must have a valid number in their label. Please ensure the label is a positive integer.`
+			);
+		}
+
 		// Repeat groups can't have incoming edges of type list or category
 		const listOrCategoryEdges = this.incomingEdges.filter(
 			(edge) =>
@@ -647,5 +722,78 @@ export class RepeatGroup extends CannoliGroup {
 		if (this.outgoingEdges.length !== 0) {
 			this.error(`Repeat groups can't have any outgoing edges.`);
 		}
+	}
+}
+
+class WhileGroup extends RepeatGroup {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		vault: Vault,
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: string[],
+		incomingEdges: string[],
+		groups: string[],
+		members: string[]
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			vault,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups,
+			members
+		);
+		this.type = GroupType.While;
+	}
+
+	membersFinished(run: Run): void {
+		// Check if any non-vertex dependencies are rejected and if the current loop is less than the max loops
+		if (
+			!this.anyReflexiveEdgesRejected() &&
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+			this.currentLoop < this.maxLoops! - 1
+		) {
+			this.currentLoop++;
+
+			if (!run.isMock) {
+				// Sleep for 20ms to allow complete color to render
+				setTimeout(() => {
+					this.resetMembers(run);
+					this.executeMembers(run);
+				}, 20);
+			} else {
+				this.resetMembers(run);
+				this.executeMembers(run);
+			}
+		} else {
+			this.status = CannoliObjectStatus.Complete;
+			this.emit("update", this, CannoliObjectStatus.Complete, run);
+		}
+	}
+
+	validate(): void {
+		super.validate();
+
+		// While groups must have at least one incoming edge that is reflexive and of type "branch"
+		// const branchEdges = this.getIncomingEdges().filter(
+		// 	(edge) => edge.type === EdgeType.Branch && edge.isReflexive
+		// );
+
+		// if (branchEdges.length === 0) {
+		// 	this.error(
+		// 		`While groups must have at least one incoming branch edge coming from a node in the group.`
+		// 	);
+		// }
+	}
+
+	logDetails(): string {
+		return super.logDetails() + `Subtype: While\n`;
 	}
 }

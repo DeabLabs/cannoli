@@ -147,9 +147,9 @@ export class CannoliGraph {
 	}
 
 	async run() {
-		// await this.mockRun();
+		await this.mockRun();
 
-		// console.log("Mock run completed");
+		console.log("Mock run completed");
 
 		await this.reset();
 
@@ -492,7 +492,8 @@ export class CannoliGraph {
 	createChoiceFunction(choices: string[]): ChatCompletionFunctions {
 		return {
 			name: "enter_choice",
-			description: "Use this function to enter your choice.",
+			description:
+				"Enter your answer to the question above using this function.",
 			parameters: {
 				type: "object",
 				properties: {
@@ -501,7 +502,7 @@ export class CannoliGraph {
 						enum: choices,
 					},
 				},
-				required: ["option"],
+				required: ["choice"],
 			},
 		};
 	}

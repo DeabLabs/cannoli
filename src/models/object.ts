@@ -4,6 +4,7 @@ import { Run } from "src/run";
 import type { CannoliEdge } from "./edge";
 import type { CannoliGroup } from "./group";
 import { Vault } from "obsidian";
+import { isProvideEdge } from "./identity";
 
 export enum IndicatedNodeType {
 	Call = "call",
@@ -41,6 +42,7 @@ export enum IndicatedGroupType {
 	Repeat = "repeat",
 	List = "list",
 	Basic = "basic",
+	While = "while",
 	NonLogic = "non-logic",
 }
 
@@ -48,6 +50,7 @@ export enum GroupType {
 	Repeat = "repeat",
 	List = "list",
 	Basic = "basic",
+	While = "while",
 	NonLogic = "non-logic",
 }
 
@@ -123,12 +126,49 @@ export class CannoliObject extends EventEmitter {
 		this.vault = vault;
 	}
 
-	addDependency(dependency: string | string[]) {
+	addDependency(dependency: string) {
 		// If the dependency is already in the list of dependencies, error
 		if (this.isDependency(dependency)) {
 			throw new Error(
 				`Error on object ${this.id}: duplicate variables must come from different choice branches. Check the choice nodes and make sure that only one of the duplicate variables can be activated at once.`
 			);
+		}
+
+		const dependencyObject = this.graph[dependency];
+
+		// If the dependency is a provide edge, check for duplicate names
+		if (isProvideEdge(dependencyObject)) {
+			for (const dep of this.dependencies) {
+				if (Array.isArray(dep)) {
+					for (const element of dep) {
+						const elementObject = this.graph[element];
+						if (isProvideEdge(elementObject)) {
+							if (elementObject.name === dependencyObject.name) {
+								dep.push(dependency);
+								return;
+							}
+						}
+					}
+				} else {
+					const elementObject = this.graph[dep];
+					if (isProvideEdge(elementObject)) {
+						if (elementObject.name === dependencyObject.name) {
+							// Create an array with the old dependency and the new dependency
+							const newDepArray = [dep, dependency];
+
+							// Remove the old dependency from the list of dependencies
+							this.dependencies.splice(
+								this.dependencies.indexOf(dep),
+								1
+							);
+
+							// Add the new dependency to the list of dependencies
+							this.dependencies.push(newDepArray);
+							return;
+						}
+					}
+				}
+			}
 		}
 
 		// Add the dependency to the list of dependencies
@@ -275,7 +315,6 @@ export class CannoliObject extends EventEmitter {
 	reject(run: Run) {
 		this.status = CannoliObjectStatus.Rejected;
 		this.emit("update", this, CannoliObjectStatus.Rejected, run);
-		console.log(`Rejected ${this.text}`);
 	}
 
 	tryReject(run: Run) {
