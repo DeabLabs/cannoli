@@ -180,6 +180,13 @@ export class CannoliNode extends CannoliVertex {
 			})
 		);
 
+		// Log out the resolved references, stringified nicely
+		console.log(
+			`Resolved references for node with text: ${
+				this.text
+			}: ${JSON.stringify(resolvedReferences, null, 2)}`
+		);
+
 		return this.renderFunction(resolvedReferences);
 	}
 
@@ -189,6 +196,14 @@ export class CannoliNode extends CannoliVertex {
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
 
+		const availableEdgeTexts = availableEdges.map((edge) => edge.text);
+
+		console.log(
+			`The node with text: ${
+				this.text
+			} has the following available provide edges: ${availableEdgeTexts.join()}`
+		);
+
 		for (const edge of availableEdges) {
 			const edgeObject = this.graph[edge.id];
 			if (!(edgeObject instanceof ProvideEdge)) {
@@ -197,9 +212,15 @@ export class CannoliNode extends CannoliVertex {
 				);
 			}
 
-			// If the edge isn't complete, skip it
+			// If the edge isn't complete, (MAYBE DEPRECATED) check if its a rejected reflexive edge with content, if not, continue
 			if (!(edgeObject.status === CannoliObjectStatus.Complete)) {
-				continue;
+				if (
+					!(edgeObject.status === CannoliObjectStatus.Rejected) ||
+					!edgeObject.isReflexive ||
+					!edgeObject.content
+				) {
+					continue;
+				}
 			}
 
 			let content: string;
@@ -240,6 +261,10 @@ export class CannoliNode extends CannoliVertex {
 			}
 		}
 
+		console.log(
+			`Unresolved Variable values: ${JSON.stringify(variableValues)}`
+		);
+
 		// Resolve variable conflicts
 		const resolvedVariableValues =
 			this.resolveVariableConflicts(variableValues);
@@ -253,6 +278,9 @@ export class CannoliNode extends CannoliVertex {
 
 		// Group the variable values by name
 		for (const variable of variableValues) {
+			console.log(
+				`Variable name: ${variable.name}. Variable content: ${variable.content}`
+			);
 			if (!groupedByName[variable.name]) {
 				groupedByName[variable.name] = [];
 			}
