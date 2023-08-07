@@ -954,7 +954,7 @@ export class LoggingEdge extends WriteEdge {
 			if (messages !== undefined) {
 				this.content = `${
 					this.content
-				}\n\n${this.formatInteractionHeaders(messages)}`;
+				}\n${this.formatInteractionHeaders(messages)}`;
 			}
 		} else {
 			throw new Error(
@@ -1035,13 +1035,13 @@ export class LoggingEdge extends WriteEdge {
 			}
 			formattedString += `#### <u>${
 				role.charAt(0).toUpperCase() + role.slice(1)
-			}</u>\n${content}\n`;
+			}</u>:\n${content}\n`;
 		});
 		return formattedString;
 	}
 
 	formatLoopHeader(loopNumbers: number[]): string {
-		let loopString = "## Loop ";
+		let loopString = "# Loop ";
 		loopNumbers.forEach((loopNumber) => {
 			loopString += `${loopNumber + 1}.`;
 		});

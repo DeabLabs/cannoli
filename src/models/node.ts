@@ -974,7 +974,7 @@ export enum ListNodeType {
 	List = "List",
 }
 
-export class ListNode extends CannoliNode {
+export class ListNode extends CallNode {
 	listNodeType: ListNodeType;
 
 	constructor(
@@ -999,6 +999,130 @@ export class ListNode extends CannoliNode {
 			incomingEdges,
 			groups
 		);
+	}
+
+	async run(run: Run) {
+		switch (this.listNodeType) {
+			case ListNodeType.ListItem:
+				await this.runListItem(run);
+				break;
+			case ListNodeType.List:
+				await this.runList(run);
+				break;
+			default:
+				throw new Error(
+					`Error on node ${this.id}: could not run node.`
+				);
+		}
+	}
+
+	async runListItem(run: Run) {
+		if (!run.cannoli) {
+			throw new Error(`Cannoli not initialized`);
+		}
+
+		// Get the name of the list items
+		const listItems = this.getListItems();
+
+		// If there are no list items, error
+		if (listItems.length === 0) {
+			this.error(`List item nodes must have at least one list item.`);
+		}
+
+		// Generate the list function
+		const listFunc = run.cannoli.createListFunction(listItems);
+
+		console.log(`List Function:\n${JSON.stringify(listFunc, null, 2)}`);
+
+		const functions: ChatCompletionFunctions[] = [listFunc];
+
+		// Call LLM
+		const { content, messages } = await this.callLLM(
+			run,
+			functions,
+			listFunc.name
+		);
+
+		// Load all outgoing edges
+		this.loadAllOutgoingEdgesAndListItems(content, messages);
+	}
+
+	async runList(run: Run) {
+		throw new Error(`List nodes are not yet implemented.`);
+	}
+
+	getListItems(): string[] {
+		// Get the unique names of all outgoing listitem edges
+		const outgoingListItemEdges = this.getOutgoingEdges().filter((edge) => {
+			return edge.type === EdgeType.ListItem;
+		});
+
+		const uniqueNames = new Set<string>();
+
+		for (const edge of outgoingListItemEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (!(edgeObject instanceof SingleVariableEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a list item edge.`
+				);
+			}
+
+			const name = edgeObject.name;
+
+			if (name) {
+				uniqueNames.add(name);
+			}
+		}
+
+		return Array.from(uniqueNames);
+	}
+
+	loadAllOutgoingEdgesAndListItems(
+		content: string,
+		messages: ChatCompletionRequestMessage[]
+	): void {
+		// Get the list items from the last message
+		const lastMessage = messages[messages.length - 1];
+
+		const listFunctionArgs = lastMessage.function_call?.arguments;
+
+		if (!listFunctionArgs) {
+			throw new Error(
+				`Error on node ${this.id}: list function call has no arguments.`
+			);
+		}
+
+		// Parse the list items from the arguments
+		const listItems = JSON.parse(listFunctionArgs);
+
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge];
+			if (edgeObject instanceof CannoliEdge) {
+				// If the edge is a list item edge, load it with the content of the corresponding list item name
+				if (
+					edgeObject instanceof SingleVariableEdge &&
+					edgeObject.type === EdgeType.ListItem
+				) {
+					const name = edgeObject.name;
+
+					if (name) {
+						const listItemContent = listItems[name];
+
+						if (listItemContent) {
+							edgeObject.load({
+								content: listItemContent,
+								messages: messages,
+							});
+						}
+					}
+				} else {
+					edgeObject.load({
+						content: content,
+						messages: messages,
+					});
+				}
+			}
+		}
 	}
 
 	setSpecialType() {

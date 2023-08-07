@@ -466,29 +466,6 @@ export class CannoliGraph {
 		};
 	}
 
-	// handleFunctionResponse(
-	// 	responseMessage: ChatCompletionRequestMessage,
-	// 	availableFunctions: ChatCompletionFunctions[]
-	// ) {
-	// 	if (responseMessage.function_call) {
-	// 		const functionName = responseMessage.function_call.name;
-	// 		if (responseMessage.function_call.arguments && functionName) {
-	// 			const functionArgs = JSON.parse(
-	// 				responseMessage.function_call.arguments
-	// 			);
-	// 			const functionToCall = availableFunctions.find(
-	// 				(func) => func.name === functionName
-	// 			);
-	// 			return functionToCall ? functionToCall(functionArgs) : null;
-	// 		} else {
-	// 			throw new Error(
-	// 				"Function call does not have arguments or a name"
-	// 			);
-	// 		}
-	// 	}
-	// 	return null;
-	// }
-
 	createChoiceFunction(choices: string[]): ChatCompletionFunctions {
 		return {
 			name: "enter_choice",
@@ -503,6 +480,27 @@ export class CannoliGraph {
 					},
 				},
 				required: ["choice"],
+			},
+		};
+	}
+
+	createListFunction(tags: string[]): ChatCompletionFunctions {
+		const properties: Record<string, { type: string }> = {};
+
+		tags.forEach((tag) => {
+			properties[tag] = {
+				type: "string",
+			};
+		});
+
+		return {
+			name: "enter_multiple_answers",
+			description:
+				"Use this function to enter the requested information for each key.",
+			parameters: {
+				type: "object",
+				properties,
+				required: tags,
 			},
 		};
 	}
