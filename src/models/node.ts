@@ -134,7 +134,13 @@ export class CannoliNode extends CannoliVertex {
 			throw new Error(`Note ${name} not found`);
 		}
 		const content = await this.vault.read(note);
-		return content;
+
+		// Prepend the note's name as a header
+		const header = `# ${name}\n`;
+
+		const contentWithHeader = header + content;
+
+		return contentWithHeader;
 	}
 
 	getContentFromFloatingNode(name: string): string {
@@ -1724,11 +1730,19 @@ export class ReferenceNode extends ContentNode {
 				.getFiles()
 				.find((file) => file.basename === this.reference.name);
 			if (file) {
+				// If the first line is a header that matches the name of the reference, remove it
+				const lines = newContent.split("\n");
+				if (lines[0].startsWith("#")) {
+					const header = lines[0].slice(2);
+					if (header === this.reference.name) {
+						lines.shift();
+						newContent = lines.join("\n").trim();
+					}
+				}
+
 				this.vault.modify(file, newContent);
 			} else {
-				throw new Error(
-					`Error on reference node ${this.id}: could not find file.`
-				);
+				this.error(`Could not find file "${this.reference.name}"`);
 			}
 		} else {
 			// Search through all nodes for a floating node with the correct name

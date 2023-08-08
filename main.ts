@@ -5,6 +5,7 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	TFile,
 } from "obsidian";
 import { CannoliGraph } from "src/cannoli";
 
@@ -25,37 +26,27 @@ export default class Cannoli extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
+		this.createCannoliCommands();
+
+		// Rerun the createCannoliCommands function whenever a file is renamed to be a cannoli file
+		this.app.vault.on("rename", (file: TFile, oldPath: string) => {
+			if (file.name.includes(".cno.canvas")) {
+				this.createCannoliCommands();
+			}
+		});
+
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon(
 			"brain-circuit",
 			"Start/Stop this Cannoli",
-			this.startCannoli
+			this.startActiveCannoli
 		);
 
 		// Perform additional things with the ribbon
 		ribbonIconEl.addClass("my-plugin-ribbon-class");
 
-		// This adds a simple command that can be triggered anywhere
-		// this.addCommand({
-		// 	id: "run-active-cannoli",
-		// 	name: "Start Cannoli",
-		// 	callback: () => {
-		// 		new SampleModal(this.app).open();
-		// 	},
-		// });
-
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
-
-		// add a button to the dom to trigger cannoli
-		setTimeout(() => {
-			this.app.workspace.containerEl
-				.createEl("button", {
-					text: "Start Cannoli",
-					cls: "cannoli-button",
-				})
-				.addEventListener("click", this.startCannoli);
-		}, 250);
 	}
 
 	onunload() {}
@@ -72,7 +63,30 @@ export default class Cannoli extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	startCannoli = async () => {
+	createCannoliCommands = async () => {
+		// Sleep for 0.5s to give the vault time to load
+		await new Promise((resolve) => setTimeout(resolve, 500));
+
+		// Get all files that contain ".cno.canvas" in their name
+		const cannoliFiles = this.app.vault.getFiles().filter((file) => {
+			return file.name.includes(".cno.canvas");
+		});
+
+		console.log(`Found ${cannoliFiles.length} cannoli files.`);
+
+		// Create a command for each cannoli file
+		cannoliFiles.forEach((file) => {
+			this.addCommand({
+				id: `run-cannoli-${file.path}`,
+				name: `Run ${file.basename.slice(0, -4)}`,
+				callback: async () => {
+					this.startCannoli(file);
+				},
+			});
+		});
+	};
+
+	startActiveCannoli = async () => {
 		const activeFile = this.app.workspace.getActiveFile();
 
 		// Check if file is a .canvas file
@@ -81,15 +95,38 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
+		this.startCannoli(activeFile);
+	};
+
+	startCannoli = async (file: TFile) => {
 		const cannoli = new CannoliGraph(
-			activeFile,
+			file,
 			this.settings.openaiAPIKey,
 			this.app.vault
 		);
 
 		await cannoli.initialize(true);
 
-		cannoli.run();
+		// Create callback function to trigger notice
+		const onCompleteCallback = () => {
+			// If the file's basename ends with .cno, don't include the extension in the notice
+			if (file.basename.endsWith(".cno")) {
+				new Notice(`Cannoli Complete: ${file.basename.slice(0, -4)}`);
+			} else {
+				new Notice(`Cannoli Complete: ${file.basename}`);
+			}
+		};
+
+		// Create error callback function to trigger error notice
+		const onErrorCallback = (error: Error) => {
+			if (file.basename.endsWith(".cno")) {
+				new Notice(`Cannoli Failed: ${file.basename.slice(0, -4)}`);
+			} else {
+				new Notice(`Cannoli Failed: ${file.basename}`);
+			}
+		};
+
+		cannoli.run(onCompleteCallback, onErrorCallback);
 
 		// const activeFilePath = activeFile.path;
 		// const currentCannoli = this.runningCannolis[activeFilePath];

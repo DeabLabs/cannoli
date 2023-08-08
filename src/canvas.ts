@@ -41,7 +41,9 @@ export class Canvas {
 	}
 
 	async fetchData() {
-		const fileContent = await this.canvasFile.vault.read(this.canvasFile);
+		const fileContent = await this.canvasFile.vault.cachedRead(
+			this.canvasFile
+		);
 		const parsedContent = JSON.parse(fileContent) as CanvasData;
 
 		// Search for any nodes with type "group" and text "cannoli"

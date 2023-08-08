@@ -146,16 +146,22 @@ export class CannoliGraph {
 		await this.runCompletedPromise; // Wait for the run to complete
 	}
 
-	async run() {
-		await this.mockRun();
+	async run(onComplete: () => void, onError: (error: Error) => void) {
+		try {
+			await this.mockRun();
 
-		console.log("Mock run completed");
+			console.log("Mock run completed");
 
-		await this.reset();
+			await this.reset();
 
-		await this.liveRun();
+			await this.liveRun();
 
-		console.log("Live run completed");
+			console.log("Live run completed");
+
+			onComplete();
+		} catch (error) {
+			onError(error);
+		}
 	}
 
 	executeRootObjects(run: Run) {
