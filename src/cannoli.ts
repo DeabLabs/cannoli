@@ -494,7 +494,7 @@ export class CannoliGraph {
 		});
 
 		return {
-			name: "enter_multiple_answers",
+			name: "enter_answers",
 			description:
 				"Use this function to enter the requested information for each key.",
 			parameters: {

@@ -940,22 +940,22 @@ export class LoggingEdge extends WriteEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		// Get the current loop number of any repeat type groups that the edge is crossing out of
-		const repeatLoopNumbers = this.getLoopNumbers();
-
 		if (content !== undefined) {
+			// Get the current loop number of any repeat type groups that the edge is crossing out of
+			const repeatLoopNumbers = this.getLoopNumbers();
+			let logs = "";
+
 			const loopHeader = this.formatLoopHeader(repeatLoopNumbers);
+
 			if (repeatLoopNumbers.length > 0) {
-				this.content = `${loopHeader}\n`;
-			} else {
-				this.content = content || "No additional content available.";
+				logs = `${loopHeader}\n`;
 			}
 
 			if (messages !== undefined) {
-				this.content = `${
-					this.content
-				}\n${this.formatInteractionHeaders(messages)}`;
+				logs = `${logs}${this.formatInteractionHeaders(messages)}`;
 			}
+
+			this.content = logs;
 		} else {
 			throw new Error(
 				`Error on Logging edge ${this.id}: content is undefined.`
@@ -1027,9 +1027,7 @@ export class LoggingEdge extends WriteEdge {
 		let formattedString = "";
 		messages.forEach((message) => {
 			const role = message.role;
-			let content = message.content
-				? message.content.replace("\n", " ")
-				: "";
+			let content = message.content;
 			if (message.function_call) {
 				content = `Function Call: **${message.function_call.name}**\nArguments:\n\`\`\`json\n${message.function_call.arguments}\n\`\`\``;
 			}
@@ -1037,7 +1035,7 @@ export class LoggingEdge extends WriteEdge {
 				role.charAt(0).toUpperCase() + role.slice(1)
 			}</u>:\n${content}\n`;
 		});
-		return formattedString;
+		return formattedString.trim();
 	}
 
 	formatLoopHeader(loopNumbers: number[]): string {

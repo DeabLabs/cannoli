@@ -73,18 +73,6 @@ export class CannoliNode extends CannoliVertex {
 		this.kind = CannoliObjectKind.Node;
 	}
 
-	buildRenderFunction(): (
-		variables: {
-			name: string;
-			content: string;
-		}[]
-	) => Promise<string> {
-		console.error(`Need to implement buildRenderFunction`);
-		return async () => {
-			return "Implement render function";
-		};
-	}
-
 	parseReferencesInText(): {
 		references: Reference[];
 		renderFunction: (
@@ -104,9 +92,11 @@ export class CannoliNode extends CannoliVertex {
 			if (match[1]) {
 				type = ReferenceType.Note;
 				name = match[1];
+				shouldExtract = true;
 			} else if (match[2]) {
 				type = ReferenceType.Floating;
 				name = match[2];
+				shouldExtract = true;
 			} else if (match[3] || match[4]) {
 				name = match[3] || match[4];
 				shouldExtract = !!match[3];
@@ -135,6 +125,8 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	async getContentFromNote(name: string): Promise<string> {
+		console.log(`Getting content from note: ${name}`);
+
 		const note = this.vault
 			.getMarkdownFiles()
 			.find((file) => file.basename === name);
@@ -156,24 +148,62 @@ export class CannoliNode extends CannoliVertex {
 
 	async processReferences() {
 		const variableValues = this.getVariableValues();
+
+		// Log out the variable values, stringified nicely
+		console.log(
+			`Variable values for node with text: ${this.text}: ${JSON.stringify(
+				variableValues,
+				null,
+				2
+			)}`
+		);
+
+		// Log out the references, stringified nicely
+		console.log(
+			`References for node with text: ${this.text}: ${JSON.stringify(
+				this.references,
+				null,
+				2
+			)}`
+		);
+
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
 				let content = "{invalid reference}";
 				const { name } = reference;
 
-				if (reference.type === ReferenceType.Variable) {
+				if (
+					reference.type === ReferenceType.Variable &&
+					!reference.shouldExtract
+				) {
 					const variable = variableValues.find(
 						(variable) => variable.name === reference.name
 					);
-					content = variable ? variable.content : content;
+					content = variable
+						? variable.content
+						: `{${reference.name}}`;
+				} else if (
+					reference.type === ReferenceType.Variable &&
+					reference.shouldExtract
+				) {
+					const variable = variableValues.find(
+						(variable) => variable.name === reference.name
+					);
+					if (variable && variable.content) {
+						content = await this.getContentFromNote(
+							variable.content
+						);
+					} else {
+						content = `{{${reference.name}}}`;
+					}
 				} else if (reference.type === ReferenceType.Note) {
 					content = reference.shouldExtract
 						? await this.getContentFromNote(reference.name)
-						: `[[${reference.name}]]`;
+						: `{[[${reference.name}]]}`;
 				} else if (reference.type === ReferenceType.Floating) {
 					content = reference.shouldExtract
 						? this.getContentFromFloatingNode(reference.name)
-						: `[${reference.name}]`;
+						: `{[${reference.name}]}`;
 				}
 
 				return { name, content };
@@ -353,6 +383,11 @@ export class CannoliNode extends CannoliVertex {
 			} else {
 				return IndicatedNodeType.NonLogic;
 			}
+		}
+
+		// If the node's type in the canvas data is "file", its a reference node, so return Content regardless of the first line or color
+		if (this.canvasData.type === "file") {
+			return IndicatedNodeType.Content;
 		}
 
 		// Check if the first line is a single character, and if it's in the prefix map
@@ -1608,11 +1643,14 @@ export class ReferenceNode extends ContentNode {
 	}
 
 	async run(run: Run): Promise<void> {
-		let content = this.getWriteOrLoggingContent();
+		const writeOrLoggingContent = this.getWriteOrLoggingContent();
+		const variableValues = this.getVariableValues();
 
-		if (!content) {
-			const variableValues = this.getVariableValues();
-			content = variableValues[0].content;
+		let content = "";
+		if (variableValues.length > 0) {
+			content = variableValues[0].content || "";
+		} else if (writeOrLoggingContent) {
+			content = writeOrLoggingContent;
 		}
 
 		if (content) {
@@ -1633,11 +1671,14 @@ export class ReferenceNode extends ContentNode {
 	}
 
 	async mockRun(run: Run): Promise<void> {
-		let content = this.getWriteOrLoggingContent();
+		const writeOrLoggingContent = this.getWriteOrLoggingContent();
+		const variableValues = this.getVariableValues();
 
-		if (!content) {
-			const variableValues = this.getVariableValues();
-			content = variableValues[0].content;
+		let content = "";
+		if (variableValues.length > 0) {
+			content = variableValues[0].content || "";
+		} else if (writeOrLoggingContent) {
+			content = writeOrLoggingContent;
 		}
 
 		// Load all outgoing edges
@@ -1889,7 +1930,7 @@ export class DisplayNode extends ContentNode {
 				(edge) => edge.type === EdgeType.Logging
 			)
 		) {
-			this.text = `${this.text}\n${content}`;
+			this.text += (this.text.length > 0 ? "\n" : "") + content;
 		} else {
 			this.text = content;
 		}

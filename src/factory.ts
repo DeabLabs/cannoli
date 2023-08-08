@@ -58,7 +58,7 @@ export class CannoliFactory {
 				return;
 			}
 
-			if (node.type === "text" || node.type === "link") {
+			if (node.type === "text") {
 				graph[node.id] = new CannoliVertex(
 					node.id,
 					node.text ?? "",
@@ -67,7 +67,39 @@ export class CannoliFactory {
 					this.vault,
 					node
 				);
-			} else if (node.type === "group") {
+			} else if (node.type === "link") {
+				graph[node.id] = new CannoliVertex(
+					node.id,
+					node.url ?? "",
+					graph,
+					false,
+					this.vault,
+					node
+				);
+			} else if (node.type === "file") {
+				const filePath = node.file;
+
+				// Get file name
+				let fileName = filePath.split("/").pop() ?? "";
+
+				// If it's a markdown file, remove the extension, otherwise continue
+				if (fileName.endsWith(".md")) {
+					fileName = fileName.slice(0, -3);
+				} else {
+					return;
+				}
+
+				graph[node.id] = new CannoliVertex(
+					node.id,
+					`>[[${fileName}]]`,
+					graph,
+					false,
+					this.vault,
+					node
+				);
+			}
+			// Otherwise, it's a group
+			else {
 				graph[node.id] = new CannoliVertex(
 					node.id,
 					node.label ?? "",
@@ -135,7 +167,8 @@ export class CannoliFactory {
 					newGraph[object.id] = group;
 				} else if (
 					object.canvasData.type === "text" ||
-					object.canvasData.type === "link"
+					object.canvasData.type === "link" ||
+					object.canvasData.type === "file"
 				) {
 					let node;
 
