@@ -18,6 +18,7 @@ import {
 	BranchEdge,
 	CannoliEdge,
 	ConfigEdge,
+	LoggingEdge,
 	ProvideEdge,
 	SingleVariableEdge,
 } from "./edge";
@@ -1656,7 +1657,13 @@ export class DisplayNode extends ContentNode {
 
 		if (!content) {
 			const variableValues = this.getVariableValues();
-			content = variableValues[0].content;
+
+			// Get first variable value
+			if (variableValues.length > 0) {
+				content = variableValues[0].content || "";
+			} else {
+				content = "";
+			}
 		}
 
 		// If the incoming edge is a logging edge, append the content to this node's text rather than replacing it
@@ -1674,6 +1681,18 @@ export class DisplayNode extends ContentNode {
 		this.loadOutgoingEdges(content, []);
 
 		this.completed();
+	}
+
+	dependencyCompleted(dependency: CannoliObject): void {
+		// If the dependency is a logging edge, execute regardless of this node's status
+		if (dependency instanceof LoggingEdge) {
+			this.execute();
+		} else if (
+			this.allDependenciesComplete() &&
+			this.status === CannoliObjectStatus.Pending
+		) {
+			this.execute();
+		}
 	}
 
 	reset(): void {
