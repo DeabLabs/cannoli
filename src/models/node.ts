@@ -15,6 +15,7 @@ import {
 } from "./object";
 import { isValidKey, type OpenAIConfig, type Run } from "src/run";
 import {
+	BranchEdge,
 	CannoliEdge,
 	ConfigEdge,
 	ProvideEdge,
@@ -150,24 +151,6 @@ export class CannoliNode extends CannoliVertex {
 	async processReferences() {
 		const variableValues = this.getVariableValues();
 
-		// Log out the variable values, stringified nicely
-		console.log(
-			`Variable values for node with text: ${this.text}: ${JSON.stringify(
-				variableValues,
-				null,
-				2
-			)}`
-		);
-
-		// Log out the references, stringified nicely
-		console.log(
-			`References for node with text: ${this.text}: ${JSON.stringify(
-				this.references,
-				null,
-				2
-			)}`
-		);
-
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
 				let content = "{invalid reference}";
@@ -211,13 +194,6 @@ export class CannoliNode extends CannoliVertex {
 			})
 		);
 
-		// Log out the resolved references, stringified nicely
-		console.log(
-			`Resolved references for node with text: ${
-				this.text
-			}: ${JSON.stringify(resolvedReferences, null, 2)}`
-		);
-
 		return this.renderFunction(resolvedReferences);
 	}
 
@@ -226,14 +202,6 @@ export class CannoliNode extends CannoliVertex {
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
-
-		const availableEdgeTexts = availableEdges.map((edge) => edge.text);
-
-		console.log(
-			`The node with text: ${
-				this.text
-			} has the following available provide edges: ${availableEdgeTexts.join()}`
-		);
 
 		for (const edge of availableEdges) {
 			const edgeObject = this.graph[edge.id];
@@ -292,10 +260,6 @@ export class CannoliNode extends CannoliVertex {
 			}
 		}
 
-		console.log(
-			`Unresolved Variable values: ${JSON.stringify(variableValues)}`
-		);
-
 		// Resolve variable conflicts
 		const resolvedVariableValues =
 			this.resolveVariableConflicts(variableValues);
@@ -309,9 +273,6 @@ export class CannoliNode extends CannoliVertex {
 
 		// Group the variable values by name
 		for (const variable of variableValues) {
-			console.log(
-				`Variable name: ${variable.name}. Variable content: ${variable.content}`
-			);
 			if (!groupedByName[variable.name]) {
 				groupedByName[variable.name] = [];
 			}
@@ -353,7 +314,6 @@ export class CannoliNode extends CannoliVertex {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
-				console.log(`Loading edge ${edgeObject.id}`);
 				edgeObject.load({
 					content:
 						content && content.length > 0 ? content : undefined,
@@ -365,7 +325,10 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
-		if (this.allDependenciesComplete()) {
+		if (
+			this.allDependenciesComplete() &&
+			this.status === CannoliObjectStatus.Pending
+		) {
 			this.execute();
 		}
 	}
@@ -911,8 +874,6 @@ export class CallNode extends CannoliNode {
 	}
 
 	async execute() {
-		console.log(`Executing node with text: ${this.text}`);
-
 		this.executing();
 
 		const request = await this.createLLMRequest();
@@ -922,14 +883,12 @@ export class CallNode extends CannoliNode {
 			true
 		)) as ChatCompletionRequestMessage;
 
-		console.log(`LLM Response:\n${JSON.stringify(message, null, 2)}`);
-
 		if (message instanceof Error) {
 			this.error(`Error calling LLM:\n${message.message}`);
 			return;
 		}
 
-		if (!message || !message.content) {
+		if (!message) {
 			this.error(`Error calling LLM: no message returned.`);
 			return;
 		}
@@ -939,7 +898,7 @@ export class CallNode extends CannoliNode {
 
 		messages.push(message);
 
-		this.loadOutgoingEdges(message.content, messages);
+		this.loadOutgoingEdges(message.content ?? "", messages);
 
 		this.completed();
 	}
@@ -955,15 +914,17 @@ export class CallNode extends CannoliNode {
 
 		const functions = this.getFunctions();
 
+		const function_call =
+			functions && functions.length > 0
+				? { name: functions[0].name }
+				: undefined;
+
 		return {
 			messages: messages,
-			model: config.model,
+			...config,
 			functions:
 				functions && functions.length > 0 ? functions : undefined,
-			function_call:
-				functions && functions.length > 0
-					? functions[0].name
-					: undefined,
+			function_call: function_call ? function_call : undefined,
 		};
 	}
 
@@ -1171,8 +1132,6 @@ export class ChoiceNode extends CallNode {
 		// Create choice function
 		const choiceFunc = this.run.createChoiceFunction(choices);
 
-		console.log(`Choice Function:\n${JSON.stringify(choiceFunc, null, 2)}`);
-
 		return [choiceFunc];
 	}
 
@@ -1211,7 +1170,7 @@ export class ChoiceNode extends CallNode {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject.type === EdgeType.Branch) {
-				const branchEdge = edgeObject as SingleVariableEdge;
+				const branchEdge = edgeObject as BranchEdge;
 				if (branchEdge.name !== choice) {
 					branchEdge.reject();
 				}
@@ -1229,7 +1188,7 @@ export class ChoiceNode extends CallNode {
 
 		for (const edge of outgoingChoiceEdges) {
 			const edgeObject = this.graph[edge.id];
-			if (!(edgeObject instanceof SingleVariableEdge)) {
+			if (!(edgeObject instanceof BranchEdge)) {
 				throw new Error(
 					`Error on object ${edgeObject.id}: object is not a branch edge.`
 				);
@@ -1315,6 +1274,9 @@ export class ContentNode extends CannoliNode {
 		// Get all incoming edges
 		const incomingEdges = this.getIncomingEdges();
 
+		console.log(`Number of incoming edges: ${incomingEdges.length}`);
+		console.log(`Edge type: ${incomingEdges[0].type}`); // TODO: Remove
+
 		// Filter out all non-write and non-logging edges
 		const filteredEdges = incomingEdges.filter(
 			(edge) =>
@@ -1322,6 +1284,7 @@ export class ContentNode extends CannoliNode {
 		);
 
 		if (filteredEdges.length === 0) {
+			console.log(`No write or logging edges found.`); // TODO: Remove
 			return null;
 		}
 
@@ -1685,11 +1648,11 @@ export class DisplayNode extends ContentNode {
 	}
 
 	async execute(): Promise<void> {
-		console.log(`Executing node with text: ${this.text}`);
-
 		this.executing();
 
 		let content = this.getWriteOrLoggingContent();
+
+		console.log(`Content: ${content}`);
 
 		if (!content) {
 			const variableValues = this.getVariableValues();

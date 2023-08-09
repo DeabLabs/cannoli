@@ -123,7 +123,6 @@ export class CannoliObject extends EventEmitter {
 	}
 
 	setRun(run: Run) {
-		this.reset();
 		this.run = run;
 	}
 
@@ -386,7 +385,7 @@ export class CannoliObject extends EventEmitter {
 
 	dependencyExecuting(dependency: CannoliObject) {}
 
-	execute() {}
+	async execute() {}
 
 	logDetails(): string {
 		let dependenciesString = "";

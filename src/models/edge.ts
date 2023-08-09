@@ -10,7 +10,6 @@ import {
 	IndicatedNodeType,
 } from "./object";
 import { ChatCompletionRequestMessage } from "openai";
-import { Run } from "src/run";
 import { RepeatGroup } from "./group";
 
 export class CannoliEdge extends CannoliObject {
@@ -185,10 +184,11 @@ export class CannoliEdge extends CannoliObject {
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
-		if (this.status !== CannoliObjectStatus.Rejected) {
-			if (this.allDependenciesComplete()) {
-				this.execute();
-			}
+		if (
+			this.allDependenciesComplete() &&
+			this.status === CannoliObjectStatus.Pending
+		) {
+			this.execute();
 		}
 	}
 
@@ -454,7 +454,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -468,7 +467,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -482,7 +480,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -497,7 +494,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -511,7 +507,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -525,7 +520,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -542,7 +536,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -559,7 +552,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -576,7 +568,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -588,20 +579,18 @@ export class CannoliEdge extends CannoliObject {
 				);
 			}
 			case EdgeType.Branch: {
-				return new SingleVariableEdge(
+				return new BranchEdge(
 					this.id,
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
 					this.crossingInGroups,
 					this.crossingOutGroups,
 					varName,
-					chatOverride,
-					EdgeType.Branch
+					chatOverride
 				);
 			}
 			case EdgeType.Select: {
@@ -610,7 +599,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -627,7 +615,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -644,7 +631,6 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -686,7 +672,6 @@ export class ProvideEdge extends CannoliEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -708,7 +693,6 @@ export class ProvideEdge extends CannoliEdge {
 		);
 		this.name = name;
 		this.addMessages = addMessages;
-		this.run = run;
 
 		this.type = EdgeType.Untyped;
 	}
@@ -725,7 +709,6 @@ export class ChatEdge extends ProvideEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -737,7 +720,6 @@ export class ChatEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			run,
 			canvasData,
 			source,
 			target,
@@ -779,7 +761,6 @@ export class SystemMessageEdge extends ProvideEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -791,7 +772,6 @@ export class SystemMessageEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			run,
 			canvasData,
 			source,
 			target,
@@ -838,7 +818,6 @@ export class WriteEdge extends CannoliEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -856,7 +835,6 @@ export class WriteEdge extends CannoliEdge {
 			crossingInGroups,
 			crossingOutGroups
 		);
-		this.run = run;
 		this.type = EdgeType.Write;
 	}
 
@@ -895,7 +873,6 @@ export class LoggingEdge extends WriteEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -907,7 +884,6 @@ export class LoggingEdge extends WriteEdge {
 			text,
 			graph,
 			isClone,
-			run,
 			canvasData,
 			source,
 			target,
@@ -925,27 +901,23 @@ export class LoggingEdge extends WriteEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		if (content !== undefined) {
-			// Get the current loop number of any repeat type groups that the edge is crossing out of
-			const repeatLoopNumbers = this.getLoopNumbers();
-			let logs = "";
+		// Get the current loop number of any repeat type groups that the edge is crossing out of
+		const repeatLoopNumbers = this.getLoopNumbers();
+		let logs = "";
 
-			const loopHeader = this.formatLoopHeader(repeatLoopNumbers);
+		const loopHeader = this.formatLoopHeader(repeatLoopNumbers);
 
-			if (repeatLoopNumbers.length > 0) {
-				logs = `${loopHeader}\n`;
-			}
-
-			if (messages !== undefined) {
-				logs = `${logs}${this.formatInteractionHeaders(messages)}`;
-			}
-
-			this.content = logs;
-		} else {
-			throw new Error(
-				`Error on Logging edge ${this.id}: content is undefined.`
-			);
+		if (repeatLoopNumbers.length > 0) {
+			logs = `${loopHeader}\n`;
 		}
+
+		if (messages !== undefined) {
+			logs = `${logs}${this.formatInteractionHeaders(messages)}`;
+		}
+
+		this.content = logs;
+
+		console.log(`Logging edge ${this.id} content: ${this.content}`);
 
 		this.isLoaded = true;
 	}
@@ -1034,6 +1006,7 @@ export class LoggingEdge extends WriteEdge {
 	dependencyCompleted(dependency: CannoliObject): void {
 		// If the dependency is the source node, execute
 		if (dependency.id === this.source) {
+			console.log(`Executing logging edge ${this.id}`);
 			this.execute();
 		}
 	}
@@ -1061,7 +1034,6 @@ export class ConfigEdge extends CannoliEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -1080,7 +1052,6 @@ export class ConfigEdge extends CannoliEdge {
 			crossingInGroups,
 			crossingOutGroups
 		);
-		this.run = run;
 		this.setting = setting;
 		this.type = EdgeType.Config;
 	}
@@ -1108,13 +1079,61 @@ export class ConfigEdge extends CannoliEdge {
 	}
 }
 
+export class BranchEdge extends ProvideEdge {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: CanvasEdgeData,
+		source: string,
+		target: string,
+		crossingInGroups: string[],
+		crossingOutGroups: string[],
+		name: string,
+		addMessages: boolean
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			canvasData,
+			source,
+			target,
+			crossingInGroups,
+			crossingOutGroups,
+			name,
+			addMessages
+		);
+		this.type = EdgeType.Branch;
+	}
+
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {
+		if (messages !== undefined) {
+			this.messages = messages;
+		}
+
+		this.isLoaded = true;
+	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: Branch\n`;
+	}
+}
+
 export class SingleVariableEdge extends ProvideEdge {
 	constructor(
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -1129,7 +1148,6 @@ export class SingleVariableEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			run,
 			canvasData,
 			source,
 			target,
@@ -1148,28 +1166,22 @@ export class SingleVariableEdge extends ProvideEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		if (typeof content === "string") {
-			if (content !== undefined) {
-				this.content = content;
+		if (content !== undefined) {
+			this.content = content;
+		} else {
+			this.getSource().error(
+				`Error on outgoing variable edge. Content is undefined.`
+			);
+		}
+
+		if (this.addMessages) {
+			if (messages !== undefined) {
+				this.messages = messages;
 			} else {
-				throw new Error(
-					`Error on SingleVariable edge ${this.id}: content is undefined.`
+				this.getSource().error(
+					`Error on outgoing variable edge. Messages is undefined.`
 				);
 			}
-
-			if (this.addMessages) {
-				if (messages !== undefined) {
-					this.messages = messages;
-				} else {
-					throw new Error(
-						`Error on SingleVariable edge ${this.id}: messages undefined.`
-					);
-				}
-			}
-		} else {
-			throw new Error(
-				`Error on SingleVariable edge ${this.id}: content is a Record.`
-			);
 		}
 
 		this.isLoaded = true;
@@ -1189,7 +1201,6 @@ export class MultipleVariableEdge extends ProvideEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -1204,7 +1215,6 @@ export class MultipleVariableEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			run,
 			canvasData,
 			source,
 			target,

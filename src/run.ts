@@ -121,14 +121,18 @@ export class Run {
 	}
 
 	async start() {
-		// Log the graph
-		this.logGraph();
+		if (this.isMock) {
+			// Log the graph
+			this.logGraph();
+		}
+		// Setup listeners
+		this.setupListeners();
+
+		// Reset the graph
+		this.reset();
 
 		// Validate the graph
 		this.validate();
-
-		// Setup listeners
-		this.setupListeners();
 
 		// If we have a canvas, remove all error nodes
 		if (this.canvas) {
@@ -277,7 +281,7 @@ export class Run {
 	}
 
 	objectPending(object: CannoliObject) {
-		if (!this.isMock && this.canvas && object instanceof CallNode) {
+		if (this.canvas && object instanceof CallNode) {
 			this.canvas.enqueueChangeNodeColor(object.id, "0");
 		}
 	}
@@ -379,6 +383,39 @@ export class Run {
 
 					// this.usage[request.model].promptTokens += promptTokens;
 					// this.usage[request.model].apiCalls += 1;
+
+					// Find the choice function
+					const choiceFunction = request.functions?.find(
+						(fn) => fn.name === "enter_choice"
+					);
+
+					if (
+						choiceFunction &&
+						choiceFunction.parameters &&
+						choiceFunction.parameters.properties.choice.enum
+							.length > 0
+					) {
+						// Pick one of the choices randomly
+						const randomChoice =
+							choiceFunction.parameters.properties.choice.enum[
+								Math.floor(
+									Math.random() *
+										choiceFunction.parameters.properties
+											.choice.enum.length
+								)
+							];
+
+						return {
+							role: "assistant",
+							content: "Mock response",
+							function_call: {
+								name: "enter_choice",
+								arguments: `{
+									"choice" : "${randomChoice}"
+								}`,
+							},
+						};
+					}
 
 					return {
 						role: "assistant",
