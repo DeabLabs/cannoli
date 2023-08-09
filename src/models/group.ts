@@ -1,17 +1,19 @@
 import { AllCanvasNodeData } from "obsidian/canvas";
 import {
 	CannoliObject,
-	CannoliObjectKind,
-	CannoliObjectStatus,
 	CannoliVertex,
-	EdgeType,
-	GroupType,
 	IndicatedEdgeType,
 	IndicatedGroupType,
 	IndicatedNodeType,
-	NodeType,
 } from "./object";
 import { CannoliEdge } from "./edge";
+import {
+	CannoliObjectKind,
+	CannoliObjectStatus,
+	EdgeType,
+	GroupType,
+	NodeType,
+} from "./graph";
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];

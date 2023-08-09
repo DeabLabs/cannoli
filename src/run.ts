@@ -6,14 +6,11 @@ import {
 } from "openai";
 import { Canvas } from "./canvas";
 import { CallNode, DisplayNode, FloatingNode, VaultNode } from "./models/node";
-import {
-	CannoliObject,
-	CannoliObjectStatus,
-	CannoliVertex,
-} from "./models/object";
+import { CannoliObject, CannoliVertex } from "./models/object";
 import { Vault } from "obsidian";
 // import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
 import pLimit from "p-limit";
+import { CannoliObjectStatus } from "./models/graph";
 
 export type StoppageReason = "user" | "error" | "complete";
 

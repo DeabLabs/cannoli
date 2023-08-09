@@ -4,6 +4,13 @@ import type { CannoliEdge } from "./edge";
 import type { CannoliGroup } from "./group";
 import { isProvideEdge } from "./identity";
 import type { Run } from "src/run";
+import {
+	CannoliObjectKind,
+	CannoliObjectStatus,
+	EdgeType,
+	GroupType,
+	NodeType,
+} from "./graph";
 
 export enum IndicatedNodeType {
 	Call = "call",
@@ -12,71 +19,12 @@ export enum IndicatedNodeType {
 	NonLogic = "non-logic",
 }
 
-export enum NodeType {
-	Choice = "choice",
-	List = "list",
-	StandardCall = "standard-call",
-	Formatter = "formatter",
-	Input = "input",
-	Display = "display",
-	Vault = "vault",
-	Reference = "reference",
-	Floating = "floating",
-	NonLogic = "non-logic",
-}
-
-export enum ReferenceType {
-	Variable = "variable",
-	Floating = "floating",
-	Note = "note",
-}
-
-export interface Reference {
-	name: string;
-	type: ReferenceType;
-	shouldExtract: boolean;
-}
-
 export enum IndicatedGroupType {
 	Repeat = "repeat",
 	List = "list",
 	Basic = "basic",
 	While = "while",
 	NonLogic = "non-logic",
-}
-
-export enum GroupType {
-	Repeat = "repeat",
-	List = "list",
-	Basic = "basic",
-	While = "while",
-	NonLogic = "non-logic",
-}
-
-export enum CannoliObjectStatus {
-	Pending = "pending",
-	Executing = "executing",
-	Complete = "complete",
-	Rejected = "rejected",
-	Error = "error",
-}
-
-export enum EdgeType {
-	Write = "write",
-	Logging = "logging",
-	Config = "config",
-	Chat = "chat",
-	SystemMessage = "system-message",
-	List = "list",
-	Function = "function",
-	ListItem = "list-item",
-	Select = "select",
-	Branch = "branch",
-	Category = "category",
-	Vault = "vault",
-	SingleVariable = "single-variable",
-	NonLogic = "non-logic",
-	Untyped = "untyped",
 }
 
 export enum IndicatedEdgeType {
@@ -88,12 +36,6 @@ export enum IndicatedEdgeType {
 	Function,
 	Vault,
 	Logging,
-}
-
-export enum CannoliObjectKind {
-	Node = "node",
-	Edge = "edge",
-	Group = "group",
 }
 
 export class CannoliObject extends EventEmitter {

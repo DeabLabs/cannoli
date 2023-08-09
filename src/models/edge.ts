@@ -1,16 +1,14 @@
 import { CanvasEdgeData } from "obsidian/canvas";
 import {
 	CannoliObject,
-	CannoliObjectKind,
-	CannoliObjectStatus,
 	CannoliVertex,
-	EdgeType,
 	IndicatedEdgeType,
 	IndicatedGroupType,
 	IndicatedNodeType,
 } from "./object";
 import { ChatCompletionRequestMessage } from "openai";
 import { RepeatGroup } from "./group";
+import { CannoliObjectKind, CannoliObjectStatus, EdgeType } from "./graph";
 
 export class CannoliEdge extends CannoliObject {
 	source: string;

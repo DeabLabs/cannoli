@@ -1,17 +1,10 @@
 import { AllCanvasNodeData } from "obsidian/canvas";
 import {
 	CannoliObject,
-	CannoliObjectKind,
-	CannoliObjectStatus,
 	CannoliVertex,
-	EdgeType,
-	GroupType,
 	IndicatedEdgeType,
 	IndicatedGroupType,
 	IndicatedNodeType,
-	NodeType,
-	Reference,
-	ReferenceType,
 } from "./object";
 import { isValidKey, type OpenAIConfig, type Run } from "src/run";
 import {
@@ -28,6 +21,15 @@ import {
 	CreateChatCompletionRequest,
 } from "openai";
 import { CannoliGroup } from "./group";
+import {
+	CannoliObjectKind,
+	CannoliObjectStatus,
+	EdgeType,
+	GroupType,
+	NodeType,
+	Reference,
+	ReferenceType,
+} from "./graph";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
