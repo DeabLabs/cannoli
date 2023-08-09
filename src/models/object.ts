@@ -1,10 +1,9 @@
 import { EventEmitter } from "events";
 import { AllCanvasNodeData } from "obsidian/canvas";
-import { Run } from "src/run";
 import type { CannoliEdge } from "./edge";
 import type { CannoliGroup } from "./group";
-import { Vault } from "obsidian";
 import { isProvideEdge } from "./identity";
+import type { Run } from "src/run";
 
 export enum IndicatedNodeType {
 	Call = "call",
@@ -98,13 +97,13 @@ export enum CannoliObjectKind {
 }
 
 export class CannoliObject extends EventEmitter {
+	run: Run;
 	id: string;
 	text: string;
 	status: CannoliObjectStatus;
 	dependencies: (string | string[])[];
 	graph: Record<string, CannoliObject>;
 	isClone: boolean;
-	vault: Vault;
 	kind: CannoliObjectKind;
 	type: EdgeType | NodeType | GroupType;
 
@@ -112,8 +111,7 @@ export class CannoliObject extends EventEmitter {
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
-		isClone: boolean,
-		vault: Vault
+		isClone: boolean
 	) {
 		super();
 		this.id = id;
@@ -121,9 +119,12 @@ export class CannoliObject extends EventEmitter {
 		this.graph = graph;
 		this.status = CannoliObjectStatus.Pending;
 		this.dependencies = [];
-		this.graph = graph;
 		this.isClone = isClone;
-		this.vault = vault;
+	}
+
+	setRun(run: Run) {
+		this.reset();
+		this.run = run;
 	}
 
 	addDependency(dependency: string) {
@@ -195,19 +196,15 @@ export class CannoliObject extends EventEmitter {
 								);
 							}
 						}
-						this.dependencyUpdated(
-							this.graph[element],
-							status,
-							run
-						);
+						this.dependencyUpdated(this.graph[element], status);
 					});
 				}
 			}
 			// If its not an array, add listeners to the element
 			else {
 				// Set up a listener for the dependency's completion event
-				this.graph[dependency].on("update", (obj, status, run) => {
-					this.dependencyUpdated(obj, status, run);
+				this.graph[dependency].on("update", (obj, status) => {
+					this.dependencyUpdated(obj, status);
 				});
 			}
 		}
@@ -249,20 +246,16 @@ export class CannoliObject extends EventEmitter {
 		return dependencies;
 	}
 
-	dependencyUpdated(
-		dependency: CannoliObject,
-		status: CannoliObjectStatus,
-		run: Run
-	) {
+	dependencyUpdated(dependency: CannoliObject, status: CannoliObjectStatus) {
 		switch (status) {
 			case CannoliObjectStatus.Complete:
-				this.dependencyCompleted(dependency, run);
+				this.dependencyCompleted(dependency);
 				break;
 			case CannoliObjectStatus.Rejected:
-				this.dependencyRejected(dependency, run);
+				this.dependencyRejected(dependency);
 				break;
 			case CannoliObjectStatus.Executing:
-				this.dependencyExecuting(dependency, run);
+				this.dependencyExecuting(dependency);
 				break;
 			default:
 				break;
@@ -298,26 +291,27 @@ export class CannoliObject extends EventEmitter {
 		return true;
 	}
 
-	async execute(run: Run) {
+	executing() {
 		this.status = CannoliObjectStatus.Executing;
-		this.emit("update", this, CannoliObjectStatus.Executing, run);
+		this.emit("update", this, CannoliObjectStatus.Executing);
+	}
 
-		if (run.isMock) {
-			await this.mockRun(run);
-		} else {
-			await this.run(run);
-		}
-
+	completed() {
 		this.status = CannoliObjectStatus.Complete;
-		this.emit("update", this, CannoliObjectStatus.Complete, run);
+		this.emit("update", this, CannoliObjectStatus.Complete);
 	}
 
-	reject(run: Run) {
+	pending() {
+		this.status = CannoliObjectStatus.Pending;
+		this.emit("update", this, CannoliObjectStatus.Pending);
+	}
+
+	reject() {
 		this.status = CannoliObjectStatus.Rejected;
-		this.emit("update", this, CannoliObjectStatus.Rejected, run);
+		this.emit("update", this, CannoliObjectStatus.Rejected);
 	}
 
-	tryReject(run: Run) {
+	tryReject() {
 		// Check all dependencies
 		this.dependencies.every((dependency) => {
 			// If it's an array and all elements have status "rejected", return true, if not, continue
@@ -330,12 +324,7 @@ export class CannoliObject extends EventEmitter {
 					)
 				) {
 					this.status = CannoliObjectStatus.Rejected;
-					this.emit(
-						"update",
-						this,
-						CannoliObjectStatus.Rejected,
-						run
-					);
+					this.emit("update", this, CannoliObjectStatus.Rejected);
 					return true;
 				}
 			} else {
@@ -345,12 +334,7 @@ export class CannoliObject extends EventEmitter {
 					CannoliObjectStatus.Rejected
 				) {
 					this.status = CannoliObjectStatus.Rejected;
-					this.emit(
-						"update",
-						this,
-						CannoliObjectStatus.Rejected,
-						run
-					);
+					this.emit("update", this, CannoliObjectStatus.Rejected);
 					return true;
 				}
 			}
@@ -389,22 +373,20 @@ export class CannoliObject extends EventEmitter {
 		throw new Error("Method not implemented.");
 	}
 
-	reset(run: Run) {
+	reset() {
 		this.status = CannoliObjectStatus.Pending;
-		this.emit("update", this, CannoliObjectStatus.Pending, run);
+		this.emit("update", this, CannoliObjectStatus.Pending);
 	}
 
-	dependencyRejected(dependency: CannoliObject, run: Run) {
-		this.tryReject(run);
+	dependencyRejected(dependency: CannoliObject) {
+		this.tryReject();
 	}
 
-	dependencyCompleted(dependency: CannoliObject, run: Run) {}
+	dependencyCompleted(dependency: CannoliObject) {}
 
-	dependencyExecuting(dependency: CannoliObject, run: Run) {}
+	dependencyExecuting(dependency: CannoliObject) {}
 
-	async run(run: Run) {}
-
-	async mockRun(run: Run) {}
+	execute() {}
 
 	logDetails(): string {
 		let dependenciesString = "";
@@ -424,12 +406,7 @@ export class CannoliObject extends EventEmitter {
 	}
 
 	validate() {
-		// If the id is empty, error
-		if (this.id === "") {
-			throw new Error(
-				`Error on object ${this.id}: id cannot be an empty string.`
-			);
-		}
+		console.error("Validate method not implemented.");
 	}
 
 	setDependencies() {}
@@ -446,13 +423,12 @@ export class CannoliVertex extends CannoliObject {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges?: string[],
 		incomingEdges?: string[],
 		groups?: string[]
 	) {
-		super(id, text, graph, isClone, vault);
+		super(id, text, graph, isClone);
 		this.canvasData = canvasData;
 		this.outgoingEdges = outgoingEdges || [];
 		this.incomingEdges = incomingEdges || [];
@@ -588,10 +564,9 @@ export class CannoliVertex extends CannoliObject {
 	}
 
 	error(message: string) {
-		const run = new Run(false);
 		this.status = CannoliObjectStatus.Error;
-		this.emit("update", this, CannoliObjectStatus.Error, run, message);
-		throw new Error(message);
+		this.emit("update", this, CannoliObjectStatus.Error, message);
+		console.error(message);
 	}
 
 	validate() {

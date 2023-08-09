@@ -13,15 +13,18 @@ import {
 	Reference,
 	ReferenceType,
 } from "./object";
-import { Run } from "src/run";
-import { Vault } from "obsidian";
+import { isValidKey, type OpenAIConfig, type Run } from "src/run";
 import {
 	CannoliEdge,
 	ConfigEdge,
 	ProvideEdge,
 	SingleVariableEdge,
 } from "./edge";
-import { ChatCompletionFunctions, ChatCompletionRequestMessage } from "openai";
+import {
+	ChatCompletionFunctions,
+	ChatCompletionRequestMessage,
+	CreateChatCompletionRequest,
+} from "openai";
 import { CannoliGroup } from "./group";
 
 type VariableValue = { name: string; content: string; edgeId: string };
@@ -49,7 +52,6 @@ export class CannoliNode extends CannoliVertex {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges?: string[],
 		incomingEdges?: string[],
@@ -60,7 +62,6 @@ export class CannoliNode extends CannoliVertex {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -127,20 +128,14 @@ export class CannoliNode extends CannoliVertex {
 	async getContentFromNote(name: string): Promise<string> {
 		console.log(`Getting content from note: ${name}`);
 
-		const note = this.vault
-			.getMarkdownFiles()
-			.find((file) => file.basename === name);
+		const note = await this.run.getNote(name);
+
 		if (!note) {
-			throw new Error(`Note ${name} not found`);
+			this.error(`Note ${name} not found`);
+			return "";
 		}
-		const content = await this.vault.read(note);
 
-		// Prepend the note's name as a header
-		const header = `# ${name}\n`;
-
-		const contentWithHeader = header + content;
-
-		return contentWithHeader;
+		return note;
 	}
 
 	getContentFromFloatingNode(name: string): string {
@@ -351,24 +346,27 @@ export class CannoliNode extends CannoliVertex {
 		return finalVariables;
 	}
 
-	loadAllOutgoingEdges(
+	loadOutgoingEdges(
 		content: string,
 		messages: ChatCompletionRequestMessage[]
 	) {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
+				console.log(`Loading edge ${edgeObject.id}`);
 				edgeObject.load({
-					content: content,
-					messages: messages,
+					content:
+						content && content.length > 0 ? content : undefined,
+					messages:
+						messages && messages.length > 0 ? messages : undefined,
 				});
 			}
 		}
 	}
 
-	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+	dependencyCompleted(dependency: CannoliObject): void {
 		if (this.allDependenciesComplete()) {
-			this.execute(run);
+			this.execute();
 		}
 	}
 
@@ -530,7 +528,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -542,7 +539,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -555,7 +551,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -567,7 +562,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -579,7 +573,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -591,7 +584,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -603,7 +595,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -615,7 +606,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -627,7 +617,6 @@ export class CannoliNode extends CannoliVertex {
 					this.text,
 					graph,
 					false,
-					this.vault,
 					this.canvasData
 				);
 			case NodeType.NonLogic:
@@ -669,8 +658,8 @@ export class CannoliNode extends CannoliVertex {
 		}
 
 		return (
-			super.logDetails() +
-			`[] Node ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n`
+			`[] Node ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n` +
+			super.logDetails()
 		);
 	}
 
@@ -773,7 +762,6 @@ export class CallNode extends CannoliNode {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges?: string[],
 		incomingEdges?: string[],
@@ -784,7 +772,6 @@ export class CallNode extends CannoliNode {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -842,21 +829,44 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
-	getConfig(): Record<string, string> {
-		const config: Record<string, string> = {
-			// Default config values
-			model: "gpt-3.5-turbo",
+	getConfig(): OpenAIConfig {
+		const runConfig = this.run.getDefaultConfig();
+
+		const updateConfig = (
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			content: string | Record<string, any>,
+			setting?: string
+		) => {
+			if (typeof content === "string") {
+				if (setting && isValidKey(setting, runConfig)) {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					(runConfig as any)[setting] = content; // Using type assertion
+				} else {
+					this.error(
+						`"${setting}" is not a valid LLM config setting.`
+					);
+				}
+			} else if (typeof content === "object") {
+				for (const key in content) {
+					if (isValidKey(key, runConfig)) {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						(runConfig as any)[key] = content[key]; // Using type assertion
+					} else {
+						this.error(
+							`"${key}" is not a valid LLM config setting.`
+						);
+					}
+				}
+			}
 		};
 
 		// Starting at the last group in groups and working backward
 		for (let i = this.groups.length - 1; i >= 0; i--) {
 			const group = this.graph[this.groups[i]];
 			if (group instanceof CannoliGroup) {
-				const configEdges = group.getIncomingEdges().filter((edge) => {
-					return edge.type === EdgeType.Config;
-				});
-
-				// If the setting of the config edge is a key in the config object, overwrite it
+				const configEdges = group
+					.getIncomingEdges()
+					.filter((edge) => edge.type === EdgeType.Config);
 				for (const edge of configEdges) {
 					const edgeObject = this.graph[edge.id];
 					if (!(edgeObject instanceof ConfigEdge)) {
@@ -864,132 +874,101 @@ export class CallNode extends CannoliNode {
 							`Error on object ${edgeObject.id}: object is not a config edge.`
 						);
 					}
-
-					const content = edgeObject.content;
-
-					if (typeof content === "string") {
-						if (edgeObject.setting in config) {
-							config[edgeObject.setting] = content;
-						}
-					} else if (typeof content === "object") {
-						for (const key in content) {
-							if (key in config) {
-								config[key] = content[key];
-							}
-						}
+					if (
+						typeof edgeObject.content === "string" ||
+						typeof edgeObject.content === "object"
+					) {
+						updateConfig(edgeObject.content, edgeObject.setting);
+					} else {
+						this.error(`Config edge has invalid content.`);
 					}
+				}
+			}
+
+			// Then do the same for the node itself
+			const configEdges = this.getIncomingEdges().filter(
+				(edge) => edge.type === EdgeType.Config
+			);
+			for (const edge of configEdges) {
+				const edgeObject = this.graph[edge.id];
+				if (!(edgeObject instanceof ConfigEdge)) {
+					throw new Error(
+						`Error on object ${edgeObject.id}: object is not a config edge.`
+					);
+				}
+				if (
+					typeof edgeObject.content === "string" ||
+					typeof edgeObject.content === "object"
+				) {
+					updateConfig(edgeObject.content, edgeObject.setting);
+				} else {
+					this.error(`Config edge has invalid content.`);
 				}
 			}
 		}
 
-		// Then do the same for the node itself
-		const configEdges = this.getIncomingEdges().filter((edge) => {
-			return edge.type === EdgeType.Config;
-		});
-
-		// If the setting of the config edge is a key in the config object, overwrite it
-		for (const edge of configEdges) {
-			const edgeObject = this.graph[edge.id];
-			if (!(edgeObject instanceof ConfigEdge)) {
-				throw new Error(
-					`Error on object ${edgeObject.id}: object is not a config edge.`
-				);
-			}
-
-			const content = edgeObject.content;
-
-			if (typeof content === "string") {
-				if (edgeObject.setting in config) {
-					config[edgeObject.setting] = content;
-				}
-			} else if (typeof content === "object") {
-				for (const key in content) {
-					if (key in config) {
-						config[key] = content[key];
-					}
-				}
-			}
-		}
-
-		return config;
+		return runConfig;
 	}
 
-	async callLLM(
-		run: Run,
-		functions?: ChatCompletionFunctions[],
-		functionSetting?: string
-	): Promise<{ content: string; messages: ChatCompletionRequestMessage[] }> {
-		if (!run.cannoli) {
-			throw new Error(`Cannoli not initialized`);
+	async execute() {
+		console.log(`Executing node with text: ${this.text}`);
+
+		this.executing();
+
+		const request = await this.createLLMRequest();
+
+		const message = (await this.run.callLLM(
+			request,
+			true
+		)) as ChatCompletionRequestMessage;
+
+		console.log(`LLM Response:\n${JSON.stringify(message, null, 2)}`);
+
+		if (message instanceof Error) {
+			this.error(`Error calling LLM:\n${message.message}`);
+			return;
 		}
 
+		if (!message || !message.content) {
+			this.error(`Error calling LLM: no message returned.`);
+			return;
+		}
+
+		// Append the message to the end of the request messages
+		const messages = request.messages;
+
+		messages.push(message);
+
+		this.loadOutgoingEdges(message.content, messages);
+
+		this.completed();
+	}
+
+	async createLLMRequest(): Promise<CreateChatCompletionRequest> {
 		const config = this.getConfig();
 
 		const messages = this.getPrependedMessages();
 
-		messages.push(await this.getNewMessage());
+		const newMessage = await this.getNewMessage();
 
-		let response:
-			| {
-					message: ChatCompletionRequestMessage;
-					promptTokens: number;
-					completionTokens: number;
-					// eslint-disable-next-line no-mixed-spaces-and-tabs
-			  }
-			| undefined;
+		messages.push(newMessage);
 
-		// Catch any errors
-		try {
-			response = await run.cannoli?.llmCall({
-				messages: messages,
-				model: config["model"],
-				mock: run.isMock,
-				verbose: true,
-				functions: functions,
-				functionSetting: functionSetting,
-			});
-		} catch (e) {
-			this.error(`LLM call failed with the error:\n"${e}"`);
-		}
+		const functions = this.getFunctions();
 
-		if (response && response.message) {
-			let responseContent = response.message.content;
-
-			if (!responseContent) {
-				responseContent = "";
-			}
-
-			messages.push(response.message);
-
-			return {
-				content: responseContent,
-				messages: messages,
-			};
-		} else {
-			this.error(`LLM call failed.`);
-			throw new Error(`LLM call failed.`);
-		}
+		return {
+			messages: messages,
+			model: config.model,
+			functions:
+				functions && functions.length > 0 ? functions : undefined,
+			function_call:
+				functions && functions.length > 0
+					? functions[0].name
+					: undefined,
+		};
 	}
 
-	async run(run: Run) {
-		// TEST VERSION (sleep for random time between 0 and 3 seconds)
-		// const sleepTime = Math.random() * 3000;
-		// await new Promise((resolve) => setTimeout(resolve, sleepTime));
-
-		const { content, messages } = await this.callLLM(run);
-
-		// Load all outgoing edges
-		this.loadAllOutgoingEdges(content, messages);
-	}
-
-	async mockRun(run: Run) {
-		// Load all outgoing edges
-		this.loadAllOutgoingEdges("mock", [
-			{
-				role: "user",
-				content: "mock",
-			},
-		]);
+	getFunctions(): ChatCompletionFunctions[] {
+		return [];
 	}
 
 	logDetails(): string {
@@ -1016,14 +995,13 @@ export enum ListNodeType {
 }
 
 export class ListNode extends CallNode {
-	listNodeType: ListNodeType;
+	// listNodeType: ListNodeType;
 
 	constructor(
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -1034,7 +1012,6 @@ export class ListNode extends CallNode {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -1042,54 +1019,16 @@ export class ListNode extends CallNode {
 		);
 	}
 
-	async run(run: Run) {
-		switch (this.listNodeType) {
-			case ListNodeType.ListItem:
-				await this.runListItem(run);
-				break;
-			case ListNodeType.List:
-				await this.runList(run);
-				break;
-			default:
-				throw new Error(
-					`Error on node ${this.id}: could not run node.`
-				);
-		}
-	}
-
-	async runListItem(run: Run) {
-		if (!run.cannoli) {
-			throw new Error(`Cannoli not initialized`);
-		}
-
+	getFunctions(): ChatCompletionFunctions[] {
 		// Get the name of the list items
 		const listItems = this.getListItems();
 
-		// If there are no list items, error
-		if (listItems.length === 0) {
-			this.error(`List item nodes must have at least one list item.`);
-		}
-
 		// Generate the list function
-		const listFunc = run.cannoli.createListFunction(listItems);
+		const listFunc = this.run.createListFunction(listItems);
 
 		console.log(`List Function:\n${JSON.stringify(listFunc, null, 2)}`);
 
-		const functions: ChatCompletionFunctions[] = [listFunc];
-
-		// Call LLM
-		const { content, messages } = await this.callLLM(
-			run,
-			functions,
-			listFunc.name
-		);
-
-		// Load all outgoing edges
-		this.loadAllOutgoingEdgesAndListItems(content, messages);
-	}
-
-	async runList(run: Run) {
-		throw new Error(`List nodes are not yet implemented.`);
+		return [listFunc];
 	}
 
 	getListItems(): string[] {
@@ -1118,19 +1057,17 @@ export class ListNode extends CallNode {
 		return Array.from(uniqueNames);
 	}
 
-	loadAllOutgoingEdgesAndListItems(
+	loadOutgoingEdges(
 		content: string,
 		messages: ChatCompletionRequestMessage[]
 	): void {
 		// Get the list items from the last message
-		const lastMessage = messages[messages.length - 1];
-
-		const listFunctionArgs = lastMessage.function_call?.arguments;
+		const listFunctionArgs =
+			messages[messages.length - 1].function_call?.arguments;
 
 		if (!listFunctionArgs) {
-			throw new Error(
-				`Error on node ${this.id}: list function call has no arguments.`
-			);
+			this.error(`List function call has no arguments.`);
+			return;
 		}
 
 		// Parse the list items from the arguments
@@ -1166,82 +1103,34 @@ export class ListNode extends CallNode {
 		}
 	}
 
-	setSpecialType() {
-		// If there are any outgoing list item edges, it's a list item node
-		if (
-			this.getSpecialOutgoingEdges().some(
-				(edge) => edge.type === EdgeType.ListItem
-			)
-		) {
-			this.listNodeType = ListNodeType.ListItem;
-		} else {
-			this.listNodeType = ListNodeType.List;
-		}
-	}
+	// setSpecialType() {
+	// 	// If there are any outgoing list item edges, it's a list item node
+	// 	if (
+	// 		this.getSpecialOutgoingEdges().some(
+	// 			(edge) => edge.type === EdgeType.ListItem
+	// 		)
+	// 	) {
+	// 		this.listNodeType = ListNodeType.ListItem;
+	// 	} else {
+	// 		this.listNodeType = ListNodeType.List;
+	// 	}
+	// }
 
 	logDetails(): string {
-		return (
-			super.logDetails() +
-			`Subtype: List\nList Type: ${this.listNodeType}\n`
-		);
+		return super.logDetails() + `Subtype: List\n`;
 	}
 
 	validate() {
 		super.validate();
+		// If there are no outgoing list edges, error
 
-		const specialOutgoingEdges = this.getSpecialOutgoingEdges();
-
-		// If there are no special outgoing edges, it's an error
-		if (specialOutgoingEdges.length === 0) {
+		if (
+			!this.getOutgoingEdges().some(
+				(edge) => edge.type === EdgeType.ListItem
+			)
+		) {
 			this.error(`List nodes must have at least one outgoing list edge.`);
 		}
-
-		// Switch on the type of the first special outgoing edge
-		switch (this.listNodeType) {
-			case ListNodeType.ListItem:
-				this.validateList(specialOutgoingEdges);
-				break;
-			case ListNodeType.List:
-				this.validateListItem(specialOutgoingEdges);
-				break;
-			default:
-				this.error(
-					`All special outgoing edges must be list edges or list item edges.`
-				);
-		}
-	}
-
-	validateListItem(specialOutgoingEdges: CannoliEdge[]) {
-		return;
-	}
-
-	validateList(specialOutgoingEdges: CannoliEdge[]) {
-		// // All list edges must point to list groups or choice nodes
-		// for (const edge of specialOutgoingEdges) {
-		// 	const edgeObject = this.graph[edge.id];
-
-		// 	if (!(edgeObject instanceof CannoliEdge)) {
-		// 		throw new Error(
-		// 			`Error on object ${edgeObject.id}: object is not an edge.`
-		// 		);
-		// 	}
-
-		// 	const target = edgeObject.getTarget();
-
-		// 	if (
-		// 		!(target instanceof ListGroup) &&
-		// 		!(
-		// 			target instanceof ChoiceNode &&
-		// 			(target.choiceNodeType === ChoiceNodeType.Category ||
-		// 				target.choiceNodeType === ChoiceNodeType.Select)
-		// 		)
-		// 	) {
-		// 		this.error(
-		// 			`All list edges with multiple items in them must point to list groups or choice nodes.`
-		// 		);
-		// 	}
-		// }
-		return;
 	}
 }
 
@@ -1252,14 +1141,13 @@ export enum ChoiceNodeType {
 }
 
 export class ChoiceNode extends CallNode {
-	choiceNodeType: ChoiceNodeType;
+	// choiceNodeType: ChoiceNodeType;
 
 	constructor(
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -1270,7 +1158,6 @@ export class ChoiceNode extends CallNode {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -1278,64 +1165,37 @@ export class ChoiceNode extends CallNode {
 		);
 	}
 
-	async run(run: Run) {
-		switch (this.choiceNodeType) {
-			case ChoiceNodeType.Branch:
-				await this.runBranch(run);
-				break;
-			case ChoiceNodeType.Category:
-				await this.runCategory(run);
-				break;
-			case ChoiceNodeType.Select:
-				await this.runSelect(run);
-				break;
-			default:
-				throw new Error(
-					`Error on node ${this.id}: could not run choice node.`
-				);
-		}
-	}
-
-	async runBranch(run: Run) {
-		if (!run.cannoli) {
-			throw new Error(`Cannoli not initialized`);
-		}
-
+	getFunctions(): ChatCompletionFunctions[] {
 		const choices = this.getBranchChoices();
 
 		// Create choice function
-		const choiceFunc = run.cannoli.createChoiceFunction(choices);
+		const choiceFunc = this.run.createChoiceFunction(choices);
 
 		console.log(`Choice Function:\n${JSON.stringify(choiceFunc, null, 2)}`);
 
-		const functions: ChatCompletionFunctions[] = [choiceFunc];
+		return [choiceFunc];
+	}
 
-		const { content, messages } = await this.callLLM(
-			run,
-			functions,
-			choiceFunc.name
-		);
-
+	loadOutgoingEdges(
+		content: string,
+		messages: ChatCompletionRequestMessage[]
+	): void {
 		// Get the selected variable from the last message
-		const lastMessage = messages[messages.length - 1];
+		// Get the chosen variable from the last message
+		const choiceFunctionArgs =
+			messages[messages.length - 1].function_call?.arguments;
 
-		let selectedParameter;
-
-		if (lastMessage.function_call?.arguments) {
-			selectedParameter = lastMessage.function_call?.arguments;
-		} else {
-			throw new Error(`No last message`);
+		if (!choiceFunctionArgs) {
+			this.error(`Choice function call has no arguments.`);
+			return;
 		}
 
-		const parsedVariable = JSON.parse(selectedParameter);
-
-		const choice = parsedVariable.choice;
+		const parsedVariable = JSON.parse(choiceFunctionArgs);
 
 		// Reject all unselected options
-		this.rejectUnselectedOptions(choice, run);
+		this.rejectUnselectedOptions(parsedVariable.choice);
 
-		// Load all outgoing edges
-		this.loadAllOutgoingEdges(content, messages);
+		super.loadOutgoingEdges(content, messages);
 	}
 
 	async runCategory(run: Run) {
@@ -1346,14 +1206,14 @@ export class ChoiceNode extends CallNode {
 		throw new Error(`Not implemented`);
 	}
 
-	rejectUnselectedOptions(choice: string, run: Run) {
+	rejectUnselectedOptions(choice: string) {
 		// Call reject on any outgoing edges that aren't the selected one
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject.type === EdgeType.Branch) {
 				const branchEdge = edgeObject as SingleVariableEdge;
 				if (branchEdge.name !== choice) {
-					branchEdge.reject(run);
+					branchEdge.reject();
 				}
 			}
 		}
@@ -1385,90 +1245,42 @@ export class ChoiceNode extends CallNode {
 		return Array.from(uniqueNames);
 	}
 
-	setSpecialType() {
-		// If there are any branch edges in the special outgoing edges, it's a branch node
-		if (
-			this.getSpecialOutgoingEdges().some(
-				(edge) => edge.type === EdgeType.Branch
-			)
-		) {
-			this.choiceNodeType = ChoiceNodeType.Branch;
-		} else if (
-			this.getSpecialOutgoingEdges().some(
-				(edge) => edge.type === EdgeType.Select
-			)
-		) {
-			this.choiceNodeType = ChoiceNodeType.Select;
-		} else {
-			this.choiceNodeType = ChoiceNodeType.Category;
-		}
-	}
+	// setSpecialType() {
+	// 	// If there are any branch edges in the special outgoing edges, it's a branch node
+	// 	if (
+	// 		this.getSpecialOutgoingEdges().some(
+	// 			(edge) => edge.type === EdgeType.Branch
+	// 		)
+	// 	) {
+	// 		this.choiceNodeType = ChoiceNodeType.Branch;
+	// 	} else if (
+	// 		this.getSpecialOutgoingEdges().some(
+	// 			(edge) => edge.type === EdgeType.Select
+	// 		)
+	// 	) {
+	// 		this.choiceNodeType = ChoiceNodeType.Select;
+	// 	} else {
+	// 		this.choiceNodeType = ChoiceNodeType.Category;
+	// 	}
+	// }
 
 	logDetails(): string {
-		return (
-			super.logDetails() +
-			`Subtype: Choice\nChoice Type: ${this.choiceNodeType}\n`
-		);
+		return super.logDetails() + `Subtype: Choice\n`;
 	}
 
 	validate() {
 		super.validate();
 
-		const specialOutgoingEdges = this.getSpecialOutgoingEdges();
-
-		// If there are no special outgoing edges, it's an error
-		if (specialOutgoingEdges.length === 0) {
+		// If there are no branch edges, error
+		if (
+			!this.getOutgoingEdges().some(
+				(edge) => edge.type === EdgeType.Branch
+			)
+		) {
 			this.error(
-				`Choice nodes must have at least one outgoing choice edge.`
+				`Choice nodes must have at least one outgoing branch edge.`
 			);
 		}
-
-		// Switch on the type of the first special outgoing edge
-		switch (this.choiceNodeType) {
-			case ChoiceNodeType.Category:
-				this.validateCategory(specialOutgoingEdges);
-				break;
-			case ChoiceNodeType.Branch:
-				this.validateBranch(specialOutgoingEdges);
-				break;
-			case ChoiceNodeType.Select:
-				this.validateSelect(specialOutgoingEdges);
-				break;
-			default:
-				this.error(
-					`All outgoing choice edges must be branch edges or category edges.`
-				);
-		}
-	}
-
-	validateBranch(specialOutgoingEdges: CannoliEdge[]) {
-		return;
-	}
-
-	validateCategory(specialOutgoingEdges: CannoliEdge[]) {
-		// All category edges must point to list groups
-		// for (const edge of specialOutgoingEdges) {
-		// 	const edgeObject = this.graph[edge.id];
-
-		// 	if (!(edgeObject instanceof CannoliEdge)) {
-		// 		throw new Error(
-		// 			`Error on object ${edgeObject.id}: object is not an edge.`
-		// 		);
-		// 	}
-
-		// 	const target = edgeObject.getTarget();
-
-		// 	if (!(target.type === GroupType.List)) {
-		// 		this.error(
-		// 			`All choice edges with multiple items in them must point to list groups or choice nodes.`
-		// 		);
-		// 	}
-		// }
-		return;
-	}
-
-	validateSelect(specialOutgoingEdges: CannoliEdge[]) {
-		return;
 	}
 }
 
@@ -1478,7 +1290,6 @@ export class ContentNode extends CannoliNode {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -1489,7 +1300,6 @@ export class ContentNode extends CannoliNode {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -1565,13 +1375,12 @@ export class ContentNode extends CannoliNode {
 	}
 }
 
-export class VaultNode extends CannoliNode {
+export class VaultNode extends ContentNode {
 	constructor(
 		id: string,
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -1582,7 +1391,6 @@ export class VaultNode extends CannoliNode {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -1619,7 +1427,6 @@ export class ReferenceNode extends ContentNode {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -1630,7 +1437,6 @@ export class ReferenceNode extends ContentNode {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -1648,7 +1454,9 @@ export class ReferenceNode extends ContentNode {
 		}
 	}
 
-	async run(run: Run): Promise<void> {
+	async execute(): Promise<void> {
+		this.executing();
+
 		const writeOrLoggingContent = this.getWriteOrLoggingContent();
 		const variableValues = this.getVariableValues();
 
@@ -1660,54 +1468,20 @@ export class ReferenceNode extends ContentNode {
 		}
 
 		if (content) {
-			this.editContent(content, run);
+			this.editContent(content);
 		}
 
 		const fetchedContent = await this.getContent();
 
 		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: fetchedContent,
-				});
-			}
-		}
-	}
+		this.loadOutgoingEdges(fetchedContent, []);
 
-	async mockRun(run: Run): Promise<void> {
-		const writeOrLoggingContent = this.getWriteOrLoggingContent();
-		const variableValues = this.getVariableValues();
-
-		let content = "";
-		if (variableValues.length > 0) {
-			content = variableValues[0].content || "";
-		} else if (writeOrLoggingContent) {
-			content = writeOrLoggingContent;
-		}
-
-		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: content,
-				});
-			}
-		}
+		this.completed();
 	}
 
 	async getContent(): Promise<string> {
 		if (this.reference.type === ReferenceType.Note) {
-			const file = this.vault
-				.getFiles()
-				.find((file) => file.basename === this.reference.name);
-			if (file) {
-				return await this.vault.read(file);
-			} else {
-				return `Could not find file ${this.reference.name}`;
-			}
+			return this.getContentFromNote(this.reference.name);
 		} else {
 			// Search through all nodes for a floating node with the correct name
 			for (const objectId in this.graph) {
@@ -1724,25 +1498,17 @@ export class ReferenceNode extends ContentNode {
 		return `Could not find reference ${this.reference.name}`;
 	}
 
-	editContent(newContent: string, run: Run): void {
+	async editContent(newContent: string): Promise<void> {
 		if (this.reference.type === ReferenceType.Note) {
-			const file = this.vault
-				.getFiles()
-				.find((file) => file.basename === this.reference.name);
-			if (file) {
-				// If the first line is a header that matches the name of the reference, remove it
-				const lines = newContent.split("\n");
-				if (lines[0].startsWith("#")) {
-					const header = lines[0].slice(2);
-					if (header === this.reference.name) {
-						lines.shift();
-						newContent = lines.join("\n").trim();
-					}
-				}
+			const edit = await this.run.editNote(
+				this.reference.name,
+				newContent
+			);
 
-				this.vault.modify(file, newContent);
+			if (edit) {
+				return;
 			} else {
-				this.error(`Could not find file "${this.reference.name}"`);
+				this.error(`Could not edit note ${this.reference.name}`);
 			}
 		} else {
 			// Search through all nodes for a floating node with the correct name
@@ -1752,7 +1518,7 @@ export class ReferenceNode extends ContentNode {
 					object instanceof FloatingNode &&
 					object.getName() === this.reference.name
 				) {
-					object.editContent(newContent, run);
+					object.editContent(newContent);
 					return;
 				}
 			}
@@ -1796,7 +1562,7 @@ export class ReferenceNode extends ContentNode {
 	}
 }
 
-export class FormatterNode extends CannoliNode {
+export class FormatterNode extends ContentNode {
 	renderFunction: (
 		variables: { name: string; content: string }[]
 	) => Promise<string>;
@@ -1807,7 +1573,6 @@ export class FormatterNode extends CannoliNode {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -1818,7 +1583,6 @@ export class FormatterNode extends CannoliNode {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -1834,65 +1598,55 @@ export class FormatterNode extends CannoliNode {
 		return super.logDetails() + `Subtype: Formatter\n`;
 	}
 
-	async run(run: Run) {
+	async execute(): Promise<void> {
+		this.executing();
+
 		const content = await this.processReferences();
 
 		// Take off the first and last characters (the backticks)
 		const processedContent = content.slice(1, -1);
 
 		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: processedContent,
-				});
-			}
-		}
-	}
+		this.loadOutgoingEdges(processedContent, []);
 
-	async mockRun(run: Run) {
-		const content = await this.processReferences();
-
-		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: content,
-				});
-			}
-		}
+		this.completed();
 	}
 }
 
 export class InputNode extends CannoliNode {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: AllCanvasNodeData,
+		outgoingEdges: string[],
+		incomingEdges: string[],
+		groups: string[]
+	) {
+		super(
+			id,
+			text,
+			graph,
+			isClone,
+			canvasData,
+			outgoingEdges,
+			incomingEdges,
+			groups
+		);
+	}
+
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Input\n`;
 	}
 
-	async run(run: Run) {
-		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: this.text,
-				});
-			}
-		}
-	}
+	async execute(): Promise<void> {
+		this.executing();
 
-	async mockRun(run: Run) {
 		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: this.text,
-				});
-			}
-		}
+		this.loadOutgoingEdges(this.text, []);
+
+		this.completed();
 	}
 }
 
@@ -1930,7 +1684,11 @@ export class DisplayNode extends ContentNode {
 		}
 	}
 
-	async run(run: Run): Promise<void> {
+	async execute(): Promise<void> {
+		console.log(`Executing node with text: ${this.text}`);
+
+		this.executing();
+
 		let content = this.getWriteOrLoggingContent();
 
 		if (!content) {
@@ -1950,37 +1708,13 @@ export class DisplayNode extends ContentNode {
 		}
 
 		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: this.text,
-				});
-			}
-		}
+		this.loadOutgoingEdges(content, []);
+
+		this.completed();
 	}
 
-	async mockRun(run: Run): Promise<void> {
-		let content = this.getWriteOrLoggingContent();
-
-		if (!content) {
-			const variableValues = this.getVariableValues();
-			content = variableValues[0].content;
-		}
-
-		// Load all outgoing edges
-		for (const edge of this.outgoingEdges) {
-			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
-				edgeObject.load({
-					content: content,
-				});
-			}
-		}
-	}
-
-	reset(run: Run): void {
-		super.reset(run);
+	reset(): void {
+		super.reset();
 		this.text = "";
 	}
 }
@@ -1991,37 +1725,22 @@ export class FloatingNode extends CannoliNode {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData
 	) {
-		super(id, text, graph, isClone, vault, canvasData);
+		super(id, text, graph, isClone, canvasData);
 		this.status = CannoliObjectStatus.Complete;
 	}
 
-	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+	dependencyCompleted(dependency: CannoliObject): void {
 		return;
 	}
 
-	dependencyRejected(dependency: CannoliObject, run: Run): void {
+	dependencyRejected(dependency: CannoliObject): void {
 		return;
 	}
 
-	async execute(run: Run) {
+	async execute() {
 		return;
-	}
-
-	async run(run: Run) {
-		// We should never run a floating node, it shouldn't have any dependencies
-		throw new Error(
-			`Error on floating node ${this.id}: run is not implemented.`
-		);
-	}
-
-	async mockRun(run: Run) {
-		// We should never run a floating node, it shouldn't have any dependencies
-		throw new Error(
-			`Error on floating node ${this.id}: mockRun is not implemented.`
-		);
 	}
 
 	getName(): string {
@@ -2036,12 +1755,12 @@ export class FloatingNode extends CannoliNode {
 		return this.text.substring(firstLine.length + 1);
 	}
 
-	editContent(newContent: string, run: Run): void {
+	editContent(newContent: string): void {
 		const firstLine = this.text.split("\n")[0];
 		this.text = `${firstLine}\n${newContent}`;
 
 		// Emit an update event
-		this.emit("update", this, this.status, run);
+		this.emit("update", this, this.status);
 	}
 
 	logDetails(): string {

@@ -1,12 +1,10 @@
 import { CanvasData } from "obsidian/canvas";
-import { Vault } from "obsidian";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import { CannoliEdge } from "./models/edge";
 import { CannoliGroup } from "./models/group";
 import { CannoliNode, FloatingNode } from "./models/node";
 
 export class CannoliFactory {
-	vault: Vault;
 	parse(canvas: CanvasData): Record<string, CannoliObject> {
 		// Create initial objects
 		const edgesAndVertices = this.initialParse(canvas);
@@ -45,10 +43,6 @@ export class CannoliFactory {
 		return typedObjects;
 	}
 
-	constructor(vault: Vault) {
-		this.vault = vault;
-	}
-
 	initialParse(canvas: CanvasData): Record<string, CannoliObject> {
 		const graph: Record<string, CannoliObject> = {};
 
@@ -64,7 +58,7 @@ export class CannoliFactory {
 					node.text ?? "",
 					graph,
 					false,
-					this.vault,
+
 					node
 				);
 			} else if (node.type === "link") {
@@ -73,7 +67,6 @@ export class CannoliFactory {
 					node.url ?? "",
 					graph,
 					false,
-					this.vault,
 					node
 				);
 			} else if (node.type === "file") {
@@ -94,7 +87,6 @@ export class CannoliFactory {
 					`>[[${fileName}]]`,
 					graph,
 					false,
-					this.vault,
 					node
 				);
 			}
@@ -105,7 +97,6 @@ export class CannoliFactory {
 					node.label ?? "",
 					graph,
 					false,
-					this.vault,
 					node
 				);
 			}
@@ -122,7 +113,6 @@ export class CannoliFactory {
 				edge.label ?? "",
 				graph,
 				false,
-				this.vault,
 				edge,
 				edge.fromNode,
 				edge.toNode
@@ -158,7 +148,6 @@ export class CannoliFactory {
 						object.text,
 						newGraph,
 						false,
-						this.vault,
 						object.canvasData,
 						object.outgoingEdges,
 						object.incomingEdges,
@@ -182,7 +171,6 @@ export class CannoliFactory {
 							object.text,
 							newGraph,
 							false,
-							this.vault,
 							object.canvasData
 						);
 					} else {
@@ -191,7 +179,6 @@ export class CannoliFactory {
 							object.text,
 							newGraph,
 							false,
-							this.vault,
 							object.canvasData,
 							object.outgoingEdges,
 							object.incomingEdges,
@@ -206,7 +193,6 @@ export class CannoliFactory {
 					object.text,
 					newGraph,
 					false,
-					this.vault,
 					object.canvasData,
 					object.source,
 					object.target

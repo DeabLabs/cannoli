@@ -11,8 +11,6 @@ import {
 	IndicatedNodeType,
 	NodeType,
 } from "./object";
-import { Run } from "src/run";
-import { Vault } from "obsidian";
 import { CannoliEdge } from "./edge";
 
 export class CannoliGroup extends CannoliVertex {
@@ -33,7 +31,6 @@ export class CannoliGroup extends CannoliVertex {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges?: string[],
 		incomingEdges?: string[],
@@ -45,7 +42,6 @@ export class CannoliGroup extends CannoliVertex {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -145,33 +141,33 @@ export class CannoliGroup extends CannoliVertex {
 		);
 	}
 
-	async execute(run: Run): Promise<void> {
+	async execute(): Promise<void> {
 		this.status = CannoliObjectStatus.Executing;
-		this.emit("update", this, CannoliObjectStatus.Executing, run);
+		this.emit("update", this, CannoliObjectStatus.Executing);
 	}
 
-	membersFinished(run: Run) {}
+	membersFinished() {}
 
-	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+	dependencyCompleted(dependency: CannoliObject): void {
 		if (this.status === CannoliObjectStatus.Executing) {
 			// If all members are complete or rejected, call membersFinished
 			if (this.allMembersCompleteOrRejected()) {
-				this.membersFinished(run);
+				this.membersFinished();
 			}
 		}
 	}
 
-	dependencyExecuting(dependency: CannoliObject, run: Run): void {
+	dependencyExecuting(dependency: CannoliObject): void {
 		if (this.status === CannoliObjectStatus.Pending) {
-			this.execute(run);
+			this.execute();
 		}
 	}
 
-	dependencyRejected(dependency: CannoliObject, run: Run) {
+	dependencyRejected(dependency: CannoliObject) {
 		if (this.noEdgeDependenciesRejected()) {
 			return;
 		} else {
-			this.reject(run);
+			this.reject();
 		}
 	}
 
@@ -296,7 +292,6 @@ export class CannoliGroup extends CannoliVertex {
 					this.text,
 					graph,
 					this.isClone,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -309,7 +304,6 @@ export class CannoliGroup extends CannoliVertex {
 					this.text,
 					graph,
 					this.isClone,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -322,7 +316,6 @@ export class CannoliGroup extends CannoliVertex {
 					this.text,
 					graph,
 					this.isClone,
-					this.vault,
 					this.canvasData,
 					this.outgoingEdges,
 					this.incomingEdges,
@@ -336,7 +329,6 @@ export class CannoliGroup extends CannoliVertex {
 					this.text,
 					graph,
 					this.isClone,
-					this.vault,
 					this.canvasData
 				);
 			case GroupType.NonLogic:
@@ -402,8 +394,8 @@ export class CannoliGroup extends CannoliVertex {
 		}
 
 		return (
-			super.logDetails() +
-			`[::] Group ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n${membersString}\n`
+			`[::] Group ${this.id} Text: "${this.text}"\n${incomingEdgesString}\n${outgoingEdgesString}\n${groupsString}\n${membersString}\n` +
+			super.logDetails()
 		);
 	}
 
@@ -498,9 +490,25 @@ export class CannoliGroup extends CannoliVertex {
 }
 
 export class BasicGroup extends CannoliGroup {
-	async execute(run: Run): Promise<void> {
+	constructor(
+		id: string,
+		text: string,
+		graph: Record<string, CannoliObject>,
+		isClone: boolean,
+		canvasData: AllCanvasNodeData
+	) {
+		super(id, text, graph, isClone, canvasData);
+
+		this.type = GroupType.Basic;
+	}
+
+	async execute(): Promise<void> {
 		this.status = CannoliObjectStatus.Complete;
-		this.emit("update", this, CannoliObjectStatus.Complete, run);
+		this.emit("update", this, CannoliObjectStatus.Complete);
+	}
+
+	logDetails(): string {
+		return super.logDetails() + `Type: Basic\n`;
 	}
 }
 
@@ -512,7 +520,6 @@ export class ListGroup extends CannoliGroup {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -525,7 +532,6 @@ export class ListGroup extends CannoliGroup {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -595,7 +601,6 @@ export class RepeatGroup extends CannoliGroup {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -607,7 +612,6 @@ export class RepeatGroup extends CannoliGroup {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -622,52 +626,52 @@ export class RepeatGroup extends CannoliGroup {
 		this.maxLoops = this.getLabelNumber();
 	}
 
-	resetMembers(run: Run) {
+	resetMembers() {
 		// For each member
 		for (const member of this.getMembers()) {
 			// Reset the member
-			member.reset(run);
+			member.reset();
 			// Reset the member's outgoing edges whose target isn't this group
 
 			for (const edge of member.outgoingEdges) {
 				const edgeObject = this.graph[edge] as CannoliEdge;
 
 				if (edgeObject.getTarget() !== this) {
-					edgeObject.reset(run);
+					edgeObject.reset();
 				}
 			}
 		}
 	}
 
-	membersFinished(run: Run): void {
+	membersFinished(): void {
 		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 		if (this.currentLoop < this.maxLoops! - 1) {
 			this.currentLoop++;
 
-			if (!run.isMock) {
+			if (!this.run.isMock) {
 				// Sleep for 20ms to allow complete color to render
 				setTimeout(() => {
-					this.resetMembers(run);
-					this.executeMembers(run);
+					this.resetMembers();
+					this.executeMembers();
 				}, 20);
 			} else {
-				this.resetMembers(run);
-				this.executeMembers(run);
+				this.resetMembers();
+				this.executeMembers();
 			}
 		} else {
 			this.status = CannoliObjectStatus.Complete;
-			this.emit("update", this, CannoliObjectStatus.Complete, run);
+			this.emit("update", this, CannoliObjectStatus.Complete);
 		}
 	}
 
-	executeMembers(run: Run): void {
+	executeMembers(): void {
 		// For each member
 		for (const member of this.getMembers()) {
 			const incomingEdges = member.getIncomingEdges();
 
 			// If the member has no incoming edges, execute it
 			if (incomingEdges.length === 0) {
-				member.execute(run);
+				member.execute();
 			} else {
 				// Otherwise, check if all incoming edges are complete
 				if (
@@ -678,14 +682,14 @@ export class RepeatGroup extends CannoliGroup {
 					)
 				) {
 					// If so, execute the member
-					member.execute(run);
+					member.execute();
 				}
 			}
 		}
 	}
 
-	reset(run: Run): void {
-		super.reset(run);
+	reset(): void {
+		super.reset();
 		this.currentLoop = 0;
 	}
 
@@ -731,7 +735,6 @@ class WhileGroup extends RepeatGroup {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: AllCanvasNodeData,
 		outgoingEdges: string[],
 		incomingEdges: string[],
@@ -743,7 +746,6 @@ class WhileGroup extends RepeatGroup {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			outgoingEdges,
 			incomingEdges,
@@ -753,7 +755,7 @@ class WhileGroup extends RepeatGroup {
 		this.type = GroupType.While;
 	}
 
-	membersFinished(run: Run): void {
+	membersFinished(): void {
 		// Check if any non-vertex dependencies are rejected and if the current loop is less than the max loops
 		if (
 			!this.anyReflexiveEdgesRejected() &&
@@ -762,19 +764,19 @@ class WhileGroup extends RepeatGroup {
 		) {
 			this.currentLoop++;
 
-			if (!run.isMock) {
+			if (!this.run.isMock) {
 				// Sleep for 20ms to allow complete color to render
 				setTimeout(() => {
-					this.resetMembers(run);
-					this.executeMembers(run);
+					this.resetMembers();
+					this.executeMembers();
 				}, 20);
 			} else {
-				this.resetMembers(run);
-				this.executeMembers(run);
+				this.resetMembers();
+				this.executeMembers();
 			}
 		} else {
 			this.status = CannoliObjectStatus.Complete;
-			this.emit("update", this, CannoliObjectStatus.Complete, run);
+			this.emit("update", this, CannoliObjectStatus.Complete);
 		}
 	}
 

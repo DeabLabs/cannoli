@@ -7,31 +7,17 @@ import {
 	CanvasGroupData,
 	CanvasTextData,
 } from "obsidian/canvas.d";
-import { CannoliGraph } from "./cannoli";
 import { v4 as uuidv4 } from "uuid";
-import {
-	CannoliObject,
-	CannoliVertex,
-	CannoliObjectStatus,
-} from "./models/object";
-import { Run } from "./run";
-import { CallNode, DisplayNode, FloatingNode, VaultNode } from "./models/node";
 
 export class Canvas {
 	canvasFile: TFile;
 	canvasData: CanvasData;
 	subCanvasGroupId?: string;
-	cannoli: CannoliGraph;
 	editQueue: Promise<unknown>;
 
-	constructor(
-		canvasFile: TFile,
-		cannoli: CannoliGraph,
-		subCanvasGroupId?: string
-	) {
+	constructor(canvasFile: TFile, subCanvasGroupId?: string) {
 		this.canvasFile = canvasFile;
 		this.subCanvasGroupId = subCanvasGroupId;
-		this.cannoli = cannoli;
 
 		this.editQueue = Promise.resolve();
 	}
@@ -176,80 +162,14 @@ export class Canvas {
 
 	private async writeCanvasData(data: CanvasData) {
 		const newContent = JSON.stringify(data);
-		await this.canvasFile.vault.modify(this.canvasFile, newContent);
-	}
+		// await this.canvasFile.vault.modify(this.canvasFile, newContent);
 
-	setListeners(graph: Record<string, CannoliObject>) {
-		for (const object of Object.values(graph)) {
-			// Only set listeners for the following objects
-			if (object instanceof CannoliVertex) {
-				object.on("update", (obj, status, run, message) => {
-					this.onObjectUpdate(obj, status, run, message);
-				});
-			}
-		}
-	}
+		// Callback function of the type '(data: string) => string'. Called to edit the file contents.
+		const onEdit = (data: string) => {
+			return newContent;
+		};
 
-	onObjectUpdate(
-		object: CannoliObject,
-		status: CannoliObjectStatus,
-		run: Run,
-		message?: string
-	) {
-		if (run.isMock) {
-			return;
-		}
-
-		switch (status) {
-			case CannoliObjectStatus.Complete:
-				this.onObjectComplete(object);
-				break;
-			case CannoliObjectStatus.Executing:
-				this.onObjectExecuting(object);
-				break;
-			case CannoliObjectStatus.Pending:
-				this.onObjectPending(object);
-				break;
-			case CannoliObjectStatus.Error:
-				this.onObjectError(object, message);
-				break;
-			default:
-				break;
-		}
-	}
-
-	onObjectComplete(object: CannoliObject) {
-		if (object instanceof CallNode) {
-			this.enqueueChangeNodeColor(object.id, "4");
-		} else if (
-			object instanceof DisplayNode ||
-			object instanceof VaultNode ||
-			object instanceof FloatingNode
-		) {
-			this.enqueueChangeNodeText(object.id, object.text);
-		}
-	}
-
-	onObjectExecuting(object: CannoliObject) {
-		if (object instanceof CallNode) {
-			this.enqueueChangeNodeColor(object.id, "3");
-		}
-	}
-
-	onObjectPending(object: CannoliObject) {
-		if (object instanceof CallNode) {
-			this.enqueueChangeNodeColor(object.id, "0");
-		}
-	}
-
-	onObjectError(object: CannoliObject, message?: string) {
-		if (object instanceof CannoliVertex && message) {
-			this.enqueueAddErrorNode(object.id, message);
-		} else {
-			throw new Error(
-				`Error: Object ${object.id} is not a CannoliVertex or error is undefined.`
-			);
-		}
+		await this.canvasFile.vault.process(this.canvasFile, onEdit);
 	}
 
 	private changeNodeColor(

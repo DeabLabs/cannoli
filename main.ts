@@ -7,9 +7,10 @@ import {
 	Setting,
 	TFile,
 } from "obsidian";
-import { CannoliGraph } from "src/cannoli";
-
-// Remember to rename these classes and interfaces!
+import { Configuration, OpenAIApi } from "openai";
+import { Canvas } from "src/canvas";
+import { CannoliFactory } from "src/factory";
+import { Run, Stoppage } from "src/run";
 
 interface CannoliSettings {
 	openaiAPIKey: string;
@@ -21,7 +22,8 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
-	runningCannolis: { [key: string]: CannoliGraph } = {};
+	runningCannolis: { [key: string]: Run } = {};
+	openai: OpenAIApi;
 
 	async onload() {
 		await this.loadSettings();
@@ -39,7 +41,7 @@ export default class Cannoli extends Plugin {
 		const ribbonIconEl = this.addRibbonIcon(
 			"brain-circuit",
 			"Start/Stop this Cannoli",
-			this.startActiveCannoli
+			this.startOrStopCannoli
 		);
 
 		// Perform additional things with the ribbon
@@ -47,6 +49,15 @@ export default class Cannoli extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
+
+		// Create an instance of OpenAI
+		const configuration = new Configuration({
+			apiKey: this.settings.openaiAPIKey,
+		});
+		delete configuration.baseOptions.headers["User-Agent"];
+
+		// Create an instance of OpenAI
+		this.openai = new OpenAIApi(configuration);
 	}
 
 	onunload() {}
@@ -72,8 +83,6 @@ export default class Cannoli extends Plugin {
 			return file.name.includes(".cno.canvas");
 		});
 
-		console.log(`Found ${cannoliFiles.length} cannoli files.`);
-
 		// Create a command for each cannoli file
 		cannoliFiles.forEach((file) => {
 			this.addCommand({
@@ -86,7 +95,7 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
-	startActiveCannoli = async () => {
+	startOrStopCannoli = async () => {
 		const activeFile = this.app.workspace.getActiveFile();
 
 		// Check if file is a .canvas file
@@ -95,86 +104,83 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
+		// Check if the cannoli is already running
+		if (this.runningCannolis[activeFile.basename]) {
+			this.runningCannolis[activeFile.basename].stop();
+			delete this.runningCannolis[activeFile.basename];
+			return;
+		}
+
 		this.startCannoli(activeFile);
 	};
 
 	startCannoli = async (file: TFile) => {
-		const cannoli = new CannoliGraph(
-			file,
-			this.settings.openaiAPIKey,
-			this.app.vault
-		);
+		// Check if the cannoli is already running
+		if (this.runningCannolis[file.basename]) {
+			new Notice(`Cannoli: ${file.basename} is already running`);
+			return;
+		}
 
-		await cannoli.initialize(true);
+		const canvas = new Canvas(file);
+
+		await canvas.fetchData();
+
+		const factory = new CannoliFactory();
+
+		const graph = factory.parse(canvas.getCanvasData());
 
 		// Create callback function to trigger notice
-		const onCompleteCallback = () => {
+		const onFinished = (stoppage: Stoppage) => {
+			delete this.runningCannolis[file.basename];
+
 			// If the file's basename ends with .cno, don't include the extension in the notice
-			if (file.basename.endsWith(".cno")) {
-				new Notice(`Cannoli Complete: ${file.basename.slice(0, -4)}`);
+			const name = file.basename.endsWith(".cno")
+				? file.basename.slice(0, -4)
+				: file.basename;
+
+			if (stoppage.reason === "error") {
+				new Notice(
+					`Cannoli ${name} failed with the error: ${stoppage.message}`
+				);
+			} else if (stoppage.reason === "complete") {
+				new Notice(`Cannoli Complete: ${name}`);
 			} else {
-				new Notice(`Cannoli Complete: ${file.basename}`);
+				new Notice(`Cannoli Stopped: ${name}`);
 			}
 		};
 
-		// Create error callback function to trigger error notice
-		const onErrorCallback = (error: Error) => {
-			if (file.basename.endsWith(".cno")) {
-				new Notice(`Cannoli Failed: ${file.basename.slice(0, -4)}`);
-			} else {
-				new Notice(`Cannoli Failed: ${file.basename}`);
-			}
-		};
+		// Create validation run
+		const validationRun = new Run({
+			graph: graph,
+			isMock: true,
+			canvas: canvas,
+			vault: this.app.vault,
+			onFinish: onFinished,
+		});
 
-		cannoli.run(onCompleteCallback, onErrorCallback);
+		console.log("Starting validation run");
 
-		// const activeFilePath = activeFile.path;
-		// const currentCannoli = this.runningCannolis[activeFilePath];
+		await validationRun.start();
 
-		// if (currentCannoli) {
-		// 	// Stop the existing cannoli and remove it from the map
-		// 	currentCannoli.stop();
-		// 	delete this.runningCannolis[activeFilePath];
-		// 	new Notice(`Stopped Cannoli on ${activeFilePath}`);
-		// } else {
-		// 	// Start a new cannoli
-		// 	console.log("Starting Cannoli...");
-		// 	await new Promise((resolve) => setTimeout(resolve, 1500));
+		console.log("Validation run complete");
 
-		// 	const cannoli = new CannoliGraph(
-		// 		activeFile,
-		// 		this.settings.openaiAPIKey,
-		// 		this.app.vault
-		// 	);
+		validationRun.reset();
 
-		// 	cannoli.setOnCompleteCallback(() => {
-		// 		delete this.runningCannolis[activeFilePath];
-		// 	});
+		// Create live run
+		const run = new Run({
+			graph: graph,
+			openai: this.openai,
+			isMock: false,
+			canvas: canvas,
+			vault: this.app.vault,
+			onFinish: onFinished,
+		});
 
-		// 	await cannoli.initialize(true);
-		// 	cannoli.run();
+		this.runningCannolis[file.basename] = run;
 
-		// 	this.runningCannolis[activeFilePath] = cannoli;
-		// 	new Notice(`Starting Cannoli on ${activeFilePath}`);
-		// }
+		await run.start();
 	};
 }
-
-// class SampleModal extends Modal {
-// 	constructor(app: App) {
-// 		super(app);
-// 	}
-
-// 	onOpen() {
-// 		const { contentEl } = this;
-// 		contentEl.setText("Woah!");
-// 	}
-
-// 	onClose() {
-// 		const { contentEl } = this;
-// 		contentEl.empty();
-// 	}
-// }
 
 export class ErrorModal extends Modal {
 	error: string;

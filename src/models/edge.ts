@@ -11,7 +11,6 @@ import {
 } from "./object";
 import { ChatCompletionRequestMessage } from "openai";
 import { Run } from "src/run";
-import { Vault } from "obsidian";
 import { RepeatGroup } from "./group";
 
 export class CannoliEdge extends CannoliObject {
@@ -45,14 +44,13 @@ export class CannoliEdge extends CannoliObject {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
 		crossingInGroups?: string[],
 		crossingOutGroups?: string[]
 	) {
-		super(id, text, graph, isClone, vault);
+		super(id, text, graph, isClone);
 		this.source = source;
 		this.target = target;
 		this.canvasData = canvasData;
@@ -182,27 +180,15 @@ export class CannoliEdge extends CannoliObject {
 		);
 	}
 
-	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+	async execute(): Promise<void> {
+		this.completed();
+	}
+
+	dependencyCompleted(dependency: CannoliObject): void {
 		if (this.status !== CannoliObjectStatus.Rejected) {
 			if (this.allDependenciesComplete()) {
-				this.execute(run);
+				this.execute();
 			}
-		}
-	}
-
-	async run(run: Run) {
-		if (!this.isLoaded) {
-			throw new Error(
-				`Error on edge ${this.id}: edge is being run but has not been loaded.`
-			);
-		}
-	}
-
-	async mockRun(run: Run) {
-		if (!this.isLoaded) {
-			throw new Error(
-				`Error on edge ${this.id}: edge is being run but has not been loaded.`
-			);
 		}
 	}
 
@@ -238,8 +224,8 @@ export class CannoliEdge extends CannoliObject {
 		);
 	}
 
-	reset(run: Run) {
-		super.reset(run);
+	reset() {
+		super.reset();
 		this.isLoaded = false;
 		this.content = undefined;
 	}
@@ -468,7 +454,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -482,7 +468,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -496,7 +482,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -511,7 +497,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -525,7 +511,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -539,7 +525,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -556,7 +542,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -573,7 +559,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -590,7 +576,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -607,7 +593,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -624,7 +610,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -641,7 +627,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -658,7 +644,7 @@ export class CannoliEdge extends CannoliObject {
 					this.text,
 					graph,
 					false,
-					this.vault,
+					this.run,
 					this.canvasData,
 					this.source,
 					this.target,
@@ -700,7 +686,7 @@ export class ProvideEdge extends CannoliEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -714,7 +700,6 @@ export class ProvideEdge extends CannoliEdge {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			source,
 			target,
@@ -723,12 +708,13 @@ export class ProvideEdge extends CannoliEdge {
 		);
 		this.name = name;
 		this.addMessages = addMessages;
+		this.run = run;
 
 		this.type = EdgeType.Untyped;
 	}
 
-	reset(run: Run): void {
-		super.reset(run);
+	reset(): void {
+		super.reset();
 		this.messages = [];
 	}
 }
@@ -739,7 +725,7 @@ export class ChatEdge extends ProvideEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -751,7 +737,7 @@ export class ChatEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			vault,
+			run,
 			canvasData,
 			source,
 			target,
@@ -793,7 +779,7 @@ export class SystemMessageEdge extends ProvideEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -805,7 +791,7 @@ export class SystemMessageEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			vault,
+			run,
 			canvasData,
 			source,
 			target,
@@ -852,7 +838,7 @@ export class WriteEdge extends CannoliEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -864,14 +850,13 @@ export class WriteEdge extends CannoliEdge {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			source,
 			target,
 			crossingInGroups,
 			crossingOutGroups
 		);
-
+		this.run = run;
 		this.type = EdgeType.Write;
 	}
 
@@ -910,7 +895,7 @@ export class LoggingEdge extends WriteEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -922,7 +907,7 @@ export class LoggingEdge extends WriteEdge {
 			text,
 			graph,
 			isClone,
-			vault,
+			run,
 			canvasData,
 			source,
 			target,
@@ -1046,10 +1031,10 @@ export class LoggingEdge extends WriteEdge {
 		return loopString.slice(0, -1);
 	}
 
-	dependencyCompleted(dependency: CannoliObject, run: Run): void {
+	dependencyCompleted(dependency: CannoliObject): void {
 		// If the dependency is the source node, execute
 		if (dependency.id === this.source) {
-			this.execute(run);
+			this.execute();
 		}
 	}
 
@@ -1076,7 +1061,7 @@ export class ConfigEdge extends CannoliEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -1089,13 +1074,13 @@ export class ConfigEdge extends CannoliEdge {
 			text,
 			graph,
 			isClone,
-			vault,
 			canvasData,
 			source,
 			target,
 			crossingInGroups,
 			crossingOutGroups
 		);
+		this.run = run;
 		this.setting = setting;
 		this.type = EdgeType.Config;
 	}
@@ -1129,7 +1114,7 @@ export class SingleVariableEdge extends ProvideEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -1144,7 +1129,7 @@ export class SingleVariableEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			vault,
+			run,
 			canvasData,
 			source,
 			target,
@@ -1204,7 +1189,7 @@ export class MultipleVariableEdge extends ProvideEdge {
 		text: string,
 		graph: Record<string, CannoliObject>,
 		isClone: boolean,
-		vault: Vault,
+		run: Run,
 		canvasData: CanvasEdgeData,
 		source: string,
 		target: string,
@@ -1219,7 +1204,7 @@ export class MultipleVariableEdge extends ProvideEdge {
 			text,
 			graph,
 			isClone,
-			vault,
+			run,
 			canvasData,
 			source,
 			target,
