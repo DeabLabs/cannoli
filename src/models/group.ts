@@ -595,7 +595,7 @@ export class ListGroup extends CannoliGroup {
 }
 
 export class RepeatGroup extends CannoliGroup {
-	maxLoops: number | null;
+	maxLoops: number;
 	currentLoop: number;
 
 	constructor(
@@ -625,7 +625,7 @@ export class RepeatGroup extends CannoliGroup {
 
 		this.type = GroupType.Repeat;
 
-		this.maxLoops = this.getLabelNumber();
+		this.maxLoops = this.getLabelNumber() ?? 0;
 	}
 
 	resetMembers() {
@@ -667,26 +667,11 @@ export class RepeatGroup extends CannoliGroup {
 	}
 
 	executeMembers(): void {
+		// THIS SHOULD CALL A "TRY EXECUTE" METHOD ON EACH MEMBER
+
 		// For each member
 		for (const member of this.getMembers()) {
-			const incomingEdges = member.getIncomingEdges();
-
-			// If the member has no incoming edges, execute it
-			if (incomingEdges.length === 0) {
-				member.execute();
-			} else {
-				// Otherwise, check if all incoming edges are complete
-				if (
-					incomingEdges.every(
-						(edge) =>
-							this.graph[edge.id].status ===
-							CannoliObjectStatus.Complete
-					)
-				) {
-					// If so, execute the member
-					member.execute();
-				}
-			}
+			member.dependencyCompleted(this);
 		}
 	}
 

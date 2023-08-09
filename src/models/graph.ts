@@ -122,23 +122,23 @@ export interface CannoliNodeData extends CannoliData {
 }
 
 export interface CannoliCanvasFileData extends CanvasFileData {
-	cannoliData: CannoliNodeData;
+	cannoliData?: CannoliNodeData;
 }
 
 export interface CannoliCanvasTextData extends CanvasTextData {
-	cannoliData: CannoliNodeData;
+	cannoliData?: CannoliNodeData;
 }
 
 export interface CannoliCanvasLinkData extends CanvasLinkData {
-	cannoliData: CannoliNodeData;
+	cannoliData?: CannoliNodeData;
 }
 
 export interface CannoliCanvasGroupData extends CanvasGroupData {
-	cannoliData: CannoliGroupData;
+	cannoliData?: CannoliGroupData;
 }
 
 export interface CannoliCanvasEdgeData extends CanvasEdgeData {
-	cannoliData: CannoliEdgeData;
+	cannoliData?: CannoliEdgeData;
 }
 
 export type AllCannoliCanvasNodeData =
