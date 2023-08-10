@@ -137,45 +137,41 @@ export default class Cannoli extends Plugin {
 
 		// Create callback function to trigger notice
 		const onFinish = (stoppage: Stoppage) => {
-			console.log(`Cannoli ${file.basename} finished`);
 			delete this.runningCannolis[file.basename];
+
+			let costString = "";
+
+			// If the cost is less than 0.01, don't show the notice
+			if (stoppage.totalCost > 0.01) {
+				costString = `\n$${stoppage.totalCost.toFixed(2)}`;
+			}
 
 			if (stoppage.reason === "error") {
 				new Notice(
-					`Cannoli ${name} failed with the error:\n\n${
-						stoppage.message
-					}\n$${stoppage.totalCost.toFixed(4)}`
+					`Cannoli ${name} failed with the error:\n\n${stoppage.message}${costString}`
 				);
 			} else if (stoppage.reason === "complete") {
-				new Notice(
-					`Cannoli Complete: ${name}\n$${stoppage.totalCost.toFixed(
-						4
-					)}`
-				);
+				new Notice(`Cannoli Complete: ${name}${costString}`);
 			} else {
-				new Notice(
-					`Cannoli Stopped: ${name}\n$${stoppage.totalCost.toFixed(
-						4
-					)}`
-				);
+				new Notice(`Cannoli Stopped: ${name}${costString}`);
 			}
 
-			const onContinueCallback = async () => {
-				console.log("Continue selected");
-			};
+			console.log(`${name} finished with cost: ${stoppage.totalCost}`);
 
-			const onCancelCallback = async () => {
-				console.log("Cancel selected");
-			};
+			// const onContinueCallback = async () => {
+			// 	console.log("Continue selected");
+			// };
 
-			new RunPriceAlertModal(
-				this.app,
-				stoppage.usage,
-				onContinueCallback,
-				onCancelCallback
-			).open();
+			// const onCancelCallback = async () => {
+			// 	console.log("Cancel selected");
+			// };
 
-			console.log(JSON.stringify(stoppage.usage, null, 2));
+			// new RunPriceAlertModal(
+			// 	this.app,
+			// 	stoppage.usage,
+			// 	onContinueCallback,
+			// 	onCancelCallback
+			// ).open();
 		};
 
 		// // Create validation run

@@ -991,6 +991,8 @@ export class CallNode extends CannoliNode {
 
 		messages.push(message);
 
+		this.loadOutgoingLoggingEdges(request);
+
 		this.loadOutgoingEdges(message.content ?? "", messages);
 
 		this.completed();
@@ -1019,6 +1021,37 @@ export class CallNode extends CannoliNode {
 				functions && functions.length > 0 ? functions : undefined,
 			function_call: function_call ? function_call : undefined,
 		};
+	}
+
+	loadOutgoingLoggingEdges(request: CreateChatCompletionRequest) {
+		const loggingEdges = this.getOutgoingEdges().filter(
+			(edge) => edge.type === EdgeType.Logging
+		);
+
+		let configString = "";
+
+		// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
+		for (const key in request) {
+			if (key !== "messages" && request[key as keyof typeof request]) {
+				configString += `${key}: ${
+					request[key as keyof typeof request]
+				}\n`;
+			}
+		}
+
+		for (const edge of loggingEdges) {
+			const edgeObject = this.graph[edge.id];
+			if (!(edgeObject instanceof LoggingEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a logging edge.`
+				);
+			} else {
+				console.log(
+					`Loading logging edge with config:\n${configString}`
+				);
+				edgeObject.content = configString;
+			}
+		}
 	}
 
 	getFunctions(): ChatCompletionFunctions[] {

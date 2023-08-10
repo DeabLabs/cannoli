@@ -883,6 +883,13 @@ export class LoggingEdge extends WriteEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
+		// If content exists, save it as the configString
+		let configString = null;
+
+		if (content) {
+			configString = this.content as string;
+		}
+
 		// Get the current loop number of any repeat type groups that the edge is crossing out of
 		const repeatLoopNumbers = this.getLoopNumbers();
 		let logs = "";
@@ -895,6 +902,11 @@ export class LoggingEdge extends WriteEdge {
 
 		if (messages !== undefined) {
 			logs = `${logs}${this.formatInteractionHeaders(messages)}`;
+		}
+
+		// If there is a configString, add it to the logs
+		if (configString !== null) {
+			logs = `${logs}\n#### Config\n${configString}\n`;
 		}
 
 		this.content = logs;
