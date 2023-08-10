@@ -118,10 +118,10 @@ export class Run {
 	}
 
 	async start() {
-		if (this.isMock) {
-			// Log the graph
-			this.logGraph();
-		}
+		//if (this.isMock) {
+		// Log the graph
+		this.logGraph();
+		//}
 		// Setup listeners
 		this.setupListeners();
 
@@ -161,6 +161,8 @@ export class Run {
 			reason: "error",
 			message,
 		});
+
+		throw new Error(message);
 	}
 
 	stop() {
@@ -535,6 +537,8 @@ export class Run {
 		};
 
 		await this.vault.process(file, onEdit);
+
+		return;
 	}
 
 	async getNote(name: string): Promise<string | null> {

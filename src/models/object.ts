@@ -346,9 +346,7 @@ export class CannoliObject extends EventEmitter {
 		return `Dependencies:\n${dependenciesString}\n`;
 	}
 
-	validate() {
-		console.error("Validate method not implemented.");
-	}
+	validate() {}
 
 	setDependencies() {}
 }

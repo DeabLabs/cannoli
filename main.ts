@@ -149,22 +149,22 @@ export default class Cannoli extends Plugin {
 			}
 		};
 
-		// Create validation run
-		const validationRun = new Run({
-			graph: graph,
-			isMock: true,
-			canvas: canvas,
-			vault: this.app.vault,
-			onFinish: onFinished,
-		});
+		// // Create validation run
+		// const validationRun = new Run({
+		// 	graph: graph,
+		// 	isMock: true,
+		// 	canvas: canvas,
+		// 	vault: this.app.vault,
+		// 	onFinish: onFinished,
+		// });
 
-		console.log("Starting validation run");
+		// console.log("Starting validation run");
 
-		await validationRun.start();
+		// await validationRun.start();
 
-		console.log("Validation run complete");
+		// console.log("Validation run complete");
 
-		validationRun.reset();
+		// validationRun.reset();
 
 		// Create live run
 		const run = new Run({

@@ -17,6 +17,7 @@ export class CannoliEdge extends CannoliObject {
 	crossingOutGroups: string[];
 	canvasData: CanvasEdgeData;
 	content: string | Record<string, string> | undefined;
+	messages: ChatCompletionRequestMessage[] | undefined;
 	isLoaded: boolean;
 	isReflexive: boolean;
 
@@ -165,16 +166,10 @@ export class CannoliEdge extends CannoliObject {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		// We should never be calling the base class load method
-		throw new Error(
-			`Error on edge ${
-				this.id
-			}: load is not implemented. Attempted to load content "${content}" and messages "${JSON.stringify(
-				messages,
-				null,
-				2
-			)}".`
-		);
+		this.content = content ? content : undefined;
+		this.messages = messages ? messages : undefined;
+
+		this.isLoaded = true;
 	}
 
 	async execute(): Promise<void> {
@@ -662,7 +657,6 @@ export class CannoliEdge extends CannoliObject {
 
 export class ProvideEdge extends CannoliEdge {
 	name: string | null;
-	messages: ChatCompletionRequestMessage[] | undefined;
 	addMessages: boolean;
 
 	constructor(
@@ -695,9 +689,32 @@ export class ProvideEdge extends CannoliEdge {
 		this.type = EdgeType.Untyped;
 	}
 
+	load({
+		content,
+		messages,
+	}: {
+		content?: string | Record<string, string>;
+		messages?: ChatCompletionRequestMessage[];
+	}): void {
+		this.content = content ? content : undefined;
+
+		if (this.addMessages) {
+			this.messages = messages ? messages : undefined;
+		}
+
+		this.isLoaded = true;
+	}
+
 	reset(): void {
 		super.reset();
 		this.messages = [];
+	}
+
+	logDetails(): string {
+		return (
+			super.logDetails() +
+			`Name: ${this.name}\naddMessages: ${this.addMessages}\n`
+		);
 	}
 }
 
@@ -728,24 +745,6 @@ export class ChatEdge extends ProvideEdge {
 		);
 
 		this.type = EdgeType.Chat;
-	}
-
-	load({
-		content,
-		messages,
-	}: {
-		content?: string | Record<string, string>;
-		messages?: ChatCompletionRequestMessage[];
-	}): void {
-		if (messages !== undefined) {
-			this.messages = messages;
-		} else {
-			throw new Error(
-				`Error on Chat edge ${this.id}: messages is undefined.`
-			);
-		}
-
-		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -789,18 +788,15 @@ export class SystemMessageEdge extends ProvideEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		if (content !== undefined) {
-			this.messages = [
-				{
-					role: "system",
-					content: content as string,
-				},
-			];
-		} else {
-			throw new Error(
-				`Error on SystemMessage edge ${this.id}: content is undefined.`
-			);
-		}
+		this.messages = content
+			? undefined
+			: [
+					{
+						role: "system",
+						content: content as string,
+					},
+					// eslint-disable-next-line no-mixed-spaces-and-tabs
+			  ];
 
 		this.isLoaded = true;
 	}
@@ -843,19 +839,7 @@ export class WriteEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		if (typeof content === "string") {
-			if (content !== undefined) {
-				this.content = content;
-			} else {
-				throw new Error(
-					`Error on Write edge ${this.id}: content is undefined.`
-				);
-			}
-		} else {
-			throw new Error(
-				`Error on Write edge ${this.id}: content is a Record.`
-			);
-		}
+		this.content = content ? content : undefined;
 
 		this.isLoaded = true;
 	}
@@ -914,8 +898,6 @@ export class LoggingEdge extends WriteEdge {
 		}
 
 		this.content = logs;
-
-		console.log(`Logging edge ${this.id} content: ${this.content}`);
 
 		this.isLoaded = true;
 	}
@@ -1004,7 +986,6 @@ export class LoggingEdge extends WriteEdge {
 	dependencyCompleted(dependency: CannoliObject): void {
 		// If the dependency is the source node, execute
 		if (dependency.id === this.source) {
-			console.log(`Executing logging edge ${this.id}`);
 			this.execute();
 		}
 	}
@@ -1061,13 +1042,7 @@ export class ConfigEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		if (content === undefined) {
-			throw new Error(
-				`Error on Config edge ${this.id}: content is undefined.`
-			);
-		} else {
-			this.content = content;
-		}
+		content = content ? content : undefined;
 
 		this.isLoaded = true;
 	}
@@ -1107,20 +1082,6 @@ export class BranchEdge extends ProvideEdge {
 		this.type = EdgeType.Branch;
 	}
 
-	load({
-		content,
-		messages,
-	}: {
-		content?: string | Record<string, string>;
-		messages?: ChatCompletionRequestMessage[];
-	}): void {
-		if (messages !== undefined) {
-			this.messages = messages;
-		}
-
-		this.isLoaded = true;
-	}
-
 	logDetails(): string {
 		return super.logDetails() + `Type: Branch\n`;
 	}
@@ -1155,34 +1116,6 @@ export class SingleVariableEdge extends ProvideEdge {
 			addMessages
 		);
 		this.type = type;
-	}
-
-	load({
-		content,
-		messages,
-	}: {
-		content?: string | Record<string, string>;
-		messages?: ChatCompletionRequestMessage[];
-	}): void {
-		if (content !== undefined) {
-			this.content = content;
-		} else {
-			this.getSource().error(
-				`Error on outgoing variable edge. Content is undefined.`
-			);
-		}
-
-		if (this.addMessages) {
-			if (messages !== undefined) {
-				this.messages = messages;
-			} else {
-				this.getSource().error(
-					`Error on outgoing variable edge. Messages is undefined.`
-				);
-			}
-		}
-
-		this.isLoaded = true;
 	}
 
 	logDetails(): string {
@@ -1222,40 +1155,6 @@ export class MultipleVariableEdge extends ProvideEdge {
 			addMessages
 		);
 		this.type = type;
-	}
-
-	load({
-		content,
-		messages,
-	}: {
-		content?: string | Record<string, string>;
-		messages?: ChatCompletionRequestMessage[];
-	}): void {
-		if (typeof content === "object") {
-			if (content !== undefined) {
-				this.content = content;
-			} else {
-				throw new Error(
-					`Error on MultipleVariable edge ${this.id}: content is undefined.`
-				);
-			}
-
-			if (this.addMessages) {
-				if (messages !== undefined) {
-					this.messages = messages;
-				} else {
-					throw new Error(
-						`Error on MultipleVariable edge ${this.id}: messages undefined.`
-					);
-				}
-			}
-		} else {
-			throw new Error(
-				`Error on MultipleVariable edge ${this.id}: content is a string.`
-			);
-		}
-
-		this.isLoaded = true;
 	}
 
 	logDetails(): string {

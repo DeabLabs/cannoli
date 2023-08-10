@@ -6,7 +6,7 @@ import {
 	IndicatedGroupType,
 	IndicatedNodeType,
 } from "./object";
-import { isValidKey, type OpenAIConfig, type Run } from "src/run";
+import { isValidKey, type OpenAIConfig } from "src/run";
 import {
 	BranchEdge,
 	CannoliEdge,
@@ -130,8 +130,6 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	async getContentFromNote(name: string): Promise<string> {
-		console.log(`Getting content from note: ${name}`);
-
 		const note = await this.run.getNote(name);
 
 		if (!note) {
@@ -152,7 +150,7 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	async processReferences() {
-		const variableValues = this.getVariableValues();
+		const variableValues = this.getVariableValues(true);
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
@@ -200,11 +198,18 @@ export class CannoliNode extends CannoliVertex {
 		return this.renderFunction(resolvedReferences);
 	}
 
-	getVariableValues(): VariableValue[] {
+	getVariableValues(includeGroupEdges: boolean): VariableValue[] {
 		const variableValues: VariableValue[] = [];
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
+
+		// If includeGroupEdges is not true, filter for only incoming edges of this node
+		if (!includeGroupEdges) {
+			availableEdges.filter((edge) =>
+				this.incomingEdges.includes(edge.id)
+			);
+		}
 
 		for (const edge of availableEdges) {
 			const edgeObject = this.graph[edge.id];
@@ -228,7 +233,7 @@ export class CannoliNode extends CannoliVertex {
 			let content: string;
 
 			if (!edgeObject.content) {
-				content = "";
+				continue;
 			}
 
 			if (typeof edgeObject.content === "string" && edgeObject.name) {
@@ -318,10 +323,8 @@ export class CannoliNode extends CannoliVertex {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
-					content:
-						content && content.length > 0 ? content : undefined,
-					messages:
-						messages && messages.length > 0 ? messages : undefined,
+					content: content,
+					messages: messages,
 				});
 			}
 		}
@@ -705,7 +708,7 @@ export class CannoliNode extends CannoliVertex {
 
 		availableEdges.push(...nodeIncomingEdges);
 
-		// Filter out all logging and write edges
+		// Filter out all logging, and write edges
 		const filteredEdges = availableEdges.filter(
 			(edge) =>
 				edge.type !== EdgeType.Logging &&
@@ -942,14 +945,14 @@ export class CallNode extends CannoliNode {
 	validate() {
 		super.validate();
 
-		// There must not be more than one incoming edge of type Chat
-		if (
-			this.getIncomingEdges().filter(
-				(edge) => edge.type === EdgeType.Chat
-			).length > 1
-		) {
-			this.error(`Call nodes can only have one incoming chat edge.`);
-		}
+		// // There must not be more than one incoming edge of type Chat
+		// if (
+		// 	this.getIncomingEdges().filter(
+		// 		(edge) => edge.type === EdgeType.Chat
+		// 	).length > 1
+		// ) {
+		// 	this.error(`Call nodes can only have one incoming chat edge.`);
+		// }
 	}
 }
 
@@ -989,8 +992,6 @@ export class ListNode extends CallNode {
 
 		// Generate the list function
 		const listFunc = this.run.createListFunction(listItems);
-
-		console.log(`List Function:\n${JSON.stringify(listFunc, null, 2)}`);
 
 		return [listFunc];
 	}
@@ -1090,7 +1091,9 @@ export class ListNode extends CallNode {
 
 		if (
 			!this.getOutgoingEdges().some(
-				(edge) => edge.type === EdgeType.ListItem
+				(edge) =>
+					edge.type === EdgeType.ListItem ||
+					edge.type === EdgeType.List
 			)
 		) {
 			this.error(`List nodes must have at least one outgoing list edge.`);
@@ -1142,7 +1145,6 @@ export class ChoiceNode extends CallNode {
 		content: string,
 		messages: ChatCompletionRequestMessage[]
 	): void {
-		// Get the selected variable from the last message
 		// Get the chosen variable from the last message
 		const choiceFunctionArgs =
 			messages[messages.length - 1].function_call?.arguments;
@@ -1158,14 +1160,6 @@ export class ChoiceNode extends CallNode {
 		this.rejectUnselectedOptions(parsedVariable.choice);
 
 		super.loadOutgoingEdges(content, messages);
-	}
-
-	async runCategory(run: Run) {
-		throw new Error(`Not implemented`);
-	}
-
-	async runSelect(run: Run) {
-		throw new Error(`Not implemented`);
 	}
 
 	rejectUnselectedOptions(choice: string) {
@@ -1277,9 +1271,6 @@ export class ContentNode extends CannoliNode {
 		// Get all incoming edges
 		const incomingEdges = this.getIncomingEdges();
 
-		console.log(`Number of incoming edges: ${incomingEdges.length}`);
-		console.log(`Edge type: ${incomingEdges[0].type}`); // TODO: Remove
-
 		// Filter out all non-write and non-logging edges
 		const filteredEdges = incomingEdges.filter(
 			(edge) =>
@@ -1287,7 +1278,6 @@ export class ContentNode extends CannoliNode {
 		);
 
 		if (filteredEdges.length === 0) {
-			console.log(`No write or logging edges found.`); // TODO: Remove
 			return null;
 		}
 
@@ -1313,31 +1303,31 @@ export class ContentNode extends CannoliNode {
 	validate(): void {
 		super.validate();
 
-		// There must not be more than one incoming edge of type write
-		if (
-			this.getIncomingEdges().filter(
-				(edge) => edge.type === EdgeType.Write
-			).length > 1
-		) {
-			this.error(`Content nodes can only have one incoming write edge.`);
-		}
+		// // There must not be more than one incoming edge of type write
+		// if (
+		// 	this.getIncomingEdges().filter(
+		// 		(edge) => edge.type === EdgeType.Write
+		// 	).length > 1
+		// ) {
+		// 	this.error(`Content nodes can only have one incoming write edge.`);
+		// }
 
-		// Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
-		if (
-			this.getOutgoingEdges().some(
-				(edge) =>
-					edge.type === EdgeType.ListItem ||
-					edge.type === EdgeType.List ||
-					edge.type === EdgeType.Category ||
-					edge.type === EdgeType.Select ||
-					edge.type === EdgeType.Branch ||
-					edge.type === EdgeType.Function
-			)
-		) {
-			this.error(
-				`Content nodes cannot have any outgoing list, choice, or function edges.`
-			);
-		}
+		// // Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
+		// if (
+		// 	this.getOutgoingEdges().some(
+		// 		(edge) =>
+		// 			edge.type === EdgeType.ListItem ||
+		// 			edge.type === EdgeType.List ||
+		// 			edge.type === EdgeType.Category ||
+		// 			edge.type === EdgeType.Select ||
+		// 			edge.type === EdgeType.Branch ||
+		// 			edge.type === EdgeType.Function
+		// 	)
+		// ) {
+		// 	this.error(
+		// 		`Content nodes cannot have any outgoing list, choice, or function edges.`
+		// 	);
+		// }
 	}
 }
 
@@ -1424,7 +1414,7 @@ export class ReferenceNode extends ContentNode {
 		this.executing();
 
 		const writeOrLoggingContent = this.getWriteOrLoggingContent();
-		const variableValues = this.getVariableValues();
+		const variableValues = this.getVariableValues(false);
 
 		let content = "";
 		if (variableValues.length > 0) {
@@ -1471,7 +1461,7 @@ export class ReferenceNode extends ContentNode {
 				newContent
 			);
 
-			if (edit) {
+			if (edit !== null) {
 				return;
 			} else {
 				this.error(`Could not edit note ${this.reference.name}`);
@@ -1501,30 +1491,30 @@ export class ReferenceNode extends ContentNode {
 	validate(): void {
 		super.validate();
 
-		// Reference nodes cant have incoming edges of type category, list, or function
-		if (
-			this.getIncomingEdges().some(
-				(edge) =>
-					edge.type === EdgeType.Category ||
-					edge.type === EdgeType.List ||
-					edge.type === EdgeType.Function
-			)
-		) {
-			this.error(
-				`Reference nodes cannot have incoming category, list, or function edges.`
-			);
-		}
+		// // Reference nodes cant have incoming edges of type category, list, or function
+		// if (
+		// 	this.getIncomingEdges().some(
+		// 		(edge) =>
+		// 			edge.type === EdgeType.Category ||
+		// 			edge.type === EdgeType.List ||
+		// 			edge.type === EdgeType.Function
+		// 	)
+		// ) {
+		// 	this.error(
+		// 		`Reference nodes cannot have incoming category, list, or function edges.`
+		// 	);
+		// }
 
-		// If there are more than one incoming edges, there must only be one non-config edge
-		if (
-			this.getIncomingEdges().filter(
-				(edge) => edge.type !== EdgeType.Config
-			).length > 1
-		) {
-			this.error(
-				`Reference nodes can only have one incoming edge that is not of type config.`
-			);
-		}
+		// // If there are more than one incoming edges, there must only be one non-config edge
+		// if (
+		// 	this.getIncomingEdges().filter(
+		// 		(edge) => edge.type !== EdgeType.Config
+		// 	).length > 1
+		// ) {
+		// 	this.error(
+		// 		`Reference nodes can only have one incoming edge that is not of type config.`
+		// 	);
+		// }
 	}
 }
 
@@ -1655,10 +1645,8 @@ export class DisplayNode extends ContentNode {
 
 		let content = this.getWriteOrLoggingContent();
 
-		console.log(`Content: ${content}`);
-
 		if (!content) {
-			const variableValues = this.getVariableValues();
+			const variableValues = this.getVariableValues(false);
 
 			// Get first variable value
 			if (variableValues.length > 0) {
