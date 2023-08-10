@@ -100,8 +100,8 @@ export class Run {
 		llmLimit?: number;
 	}) {
 		this.graph = graph;
-		(this.onFinish = onFinish ?? ((stoppage: Stoppage) => {})),
-			(this.isMock = isMock ?? false);
+		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
+		this.isMock = isMock ?? false;
 		this.vault = vault;
 		this.canvas = canvas ?? null;
 		this.openai = openai ?? null;
@@ -136,22 +136,12 @@ export class Run {
 			await this.canvas.enqueueRemoveAllErrorNodes();
 		}
 
-		// Create a promise that will be resolved by onFinish
-		const promise = new Promise<Stoppage>((resolve) => {
-			this.onFinish = (stoppage: Stoppage) => {
-				resolve(stoppage);
-			};
-		});
-
 		// Call execute on all root objects
 		for (const object of Object.values(this.graph)) {
 			if (object.dependencies.length === 0) {
 				object.execute();
 			}
 		}
-
-		// Wait for the promise to be resolved
-		await promise;
 	}
 
 	error(message: string) {
@@ -258,7 +248,8 @@ export class Run {
 			}
 		}
 
-		if (this.allObjectsFinished()) {
+		if (this.allObjectsFinished() && !this.isStopped) {
+			this.isStopped = true;
 			this.onFinish({
 				reason: "complete",
 			});
@@ -266,7 +257,8 @@ export class Run {
 	}
 
 	objectRejected(object: CannoliObject) {
-		if (this.allObjectsFinished()) {
+		if (this.allObjectsFinished() && !this.isStopped) {
+			this.isStopped = true;
 			this.onFinish({
 				reason: "complete",
 			});

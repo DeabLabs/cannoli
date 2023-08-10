@@ -115,11 +115,18 @@ export default class Cannoli extends Plugin {
 	};
 
 	startCannoli = async (file: TFile) => {
+		// If the file's basename ends with .cno, don't include the extension in the notice
+		const name = file.basename.endsWith(".cno")
+			? file.basename.slice(0, -4)
+			: file.basename;
+
 		// Check if the cannoli is already running
 		if (this.runningCannolis[file.basename]) {
-			new Notice(`Cannoli: ${file.basename} is already running`);
+			new Notice(`Cannoli: ${name} is already running`);
 			return;
 		}
+
+		new Notice(`Started Cannoli: ${name}`);
 
 		const canvas = new Canvas(file);
 
@@ -130,17 +137,13 @@ export default class Cannoli extends Plugin {
 		const graph = factory.parse(canvas.getCanvasData());
 
 		// Create callback function to trigger notice
-		const onFinished = (stoppage: Stoppage) => {
+		const onFinish = (stoppage: Stoppage) => {
+			console.log(`Cannoli ${file.basename} finished`);
 			delete this.runningCannolis[file.basename];
-
-			// If the file's basename ends with .cno, don't include the extension in the notice
-			const name = file.basename.endsWith(".cno")
-				? file.basename.slice(0, -4)
-				: file.basename;
 
 			if (stoppage.reason === "error") {
 				new Notice(
-					`Cannoli ${name} failed with the error: ${stoppage.message}`
+					`Cannoli ${name} failed with the error:\n\n${stoppage.message}`
 				);
 			} else if (stoppage.reason === "complete") {
 				new Notice(`Cannoli Complete: ${name}`);
@@ -166,6 +169,9 @@ export default class Cannoli extends Plugin {
 
 		// validationRun.reset();
 
+		// Sleep for 1.5s to give the vault time to load
+		await new Promise((resolve) => setTimeout(resolve, 1500));
+
 		// Create live run
 		const run = new Run({
 			graph: graph,
@@ -173,7 +179,7 @@ export default class Cannoli extends Plugin {
 			isMock: false,
 			canvas: canvas,
 			vault: this.app.vault,
-			onFinish: onFinished,
+			onFinish: onFinish,
 		});
 
 		this.runningCannolis[file.basename] = run;
