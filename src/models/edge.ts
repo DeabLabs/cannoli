@@ -1042,7 +1042,7 @@ export class ConfigEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		messages?: ChatCompletionRequestMessage[];
 	}): void {
-		content = content ? content : undefined;
+		this.content = content ? content : undefined;
 
 		this.isLoaded = true;
 	}

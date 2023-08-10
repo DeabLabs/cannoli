@@ -6,7 +6,7 @@ import {
 	IndicatedGroupType,
 	IndicatedNodeType,
 } from "./object";
-import { isValidKey, type OpenAIConfig } from "src/run";
+import { type OpenAIConfig } from "src/run";
 import {
 	BranchEdge,
 	CannoliEdge,
@@ -798,86 +798,173 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
-	getConfig(): OpenAIConfig {
-		const runConfig = this.run.getDefaultConfig();
+	private getDefaultConfig(): OpenAIConfig {
+		const config = this.run.getDefaultConfig();
+		return config;
+	}
 
-		const updateConfig = (
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			content: string | Record<string, any>,
-			setting?: string
-		) => {
-			if (typeof content === "string") {
-				if (setting && isValidKey(setting, runConfig)) {
+	private updateConfigWithValue(
+		runConfig: OpenAIConfig,
+		content: string | Record<string, string>,
+		setting?: string
+	): void {
+		const isValidKey = (key: string, config: OpenAIConfig) =>
+			Object.prototype.hasOwnProperty.call(config, key);
+
+		if (typeof content === "string") {
+			if (setting && isValidKey(setting, runConfig)) {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(runConfig as any)[setting] = content; // Using type assertion
+			} else {
+				this.error(`"${setting}" is not a valid config setting.`);
+			}
+		} else if (typeof content === "object") {
+			for (const key in content) {
+				if (isValidKey(key, runConfig)) {
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					(runConfig as any)[setting] = content; // Using type assertion
+					(runConfig as any)[key] = content[key]; // Using type assertion
 				} else {
-					this.error(
-						`"${setting}" is not a valid LLM config setting.`
-					);
-				}
-			} else if (typeof content === "object") {
-				for (const key in content) {
-					if (isValidKey(key, runConfig)) {
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						(runConfig as any)[key] = content[key]; // Using type assertion
-					} else {
-						this.error(
-							`"${key}" is not a valid LLM config setting.`
-						);
-					}
+					this.error(`"${key}" is not a valid config setting.`);
 				}
 			}
-		};
+		}
+	}
 
-		// Starting at the last group in groups and working backward
+	private processSingleEdge(
+		runConfig: OpenAIConfig,
+		edgeObject: ConfigEdge
+	): void {
+		if (
+			typeof edgeObject.content === "string" ||
+			typeof edgeObject.content === "object"
+		) {
+			this.updateConfigWithValue(
+				runConfig,
+				edgeObject.content,
+				edgeObject.setting
+			);
+		} else {
+			this.error(`Config edge has invalid content.`);
+		}
+	}
+
+	private processEdges(runConfig: OpenAIConfig, edges: CannoliEdge[]): void {
+		for (const edgeObject of edges) {
+			if (!(edgeObject instanceof ConfigEdge)) {
+				throw new Error(
+					`Error on object ${edgeObject.id}: object is not a config edge.`
+				);
+			}
+			this.processSingleEdge(runConfig, edgeObject);
+		}
+	}
+
+	private processGroups(runConfig: OpenAIConfig): void {
 		for (let i = this.groups.length - 1; i >= 0; i--) {
 			const group = this.graph[this.groups[i]];
 			if (group instanceof CannoliGroup) {
 				const configEdges = group
 					.getIncomingEdges()
 					.filter((edge) => edge.type === EdgeType.Config);
-				for (const edge of configEdges) {
-					const edgeObject = this.graph[edge.id];
-					if (!(edgeObject instanceof ConfigEdge)) {
-						throw new Error(
-							`Error on object ${edgeObject.id}: object is not a config edge.`
-						);
-					}
-					if (
-						typeof edgeObject.content === "string" ||
-						typeof edgeObject.content === "object"
-					) {
-						updateConfig(edgeObject.content, edgeObject.setting);
-					} else {
-						this.error(`Config edge has invalid content.`);
-					}
-				}
-			}
-
-			// Then do the same for the node itself
-			const configEdges = this.getIncomingEdges().filter(
-				(edge) => edge.type === EdgeType.Config
-			);
-			for (const edge of configEdges) {
-				const edgeObject = this.graph[edge.id];
-				if (!(edgeObject instanceof ConfigEdge)) {
-					throw new Error(
-						`Error on object ${edgeObject.id}: object is not a config edge.`
-					);
-				}
-				if (
-					typeof edgeObject.content === "string" ||
-					typeof edgeObject.content === "object"
-				) {
-					updateConfig(edgeObject.content, edgeObject.setting);
-				} else {
-					this.error(`Config edge has invalid content.`);
-				}
+				this.processEdges(runConfig, configEdges);
 			}
 		}
+	}
 
+	private processNodes(runConfig: OpenAIConfig): void {
+		const configEdges = this.getIncomingEdges().filter(
+			(edge) => edge.type === EdgeType.Config
+		);
+		this.processEdges(runConfig, configEdges);
+	}
+
+	getConfig(): OpenAIConfig {
+		const runConfig = this.getDefaultConfig();
+		this.processGroups(runConfig);
+		this.processNodes(runConfig);
 		return runConfig;
 	}
+
+	// getConfig(): OpenAIConfig {
+	// 	const runConfig = this.run.getDefaultConfig();
+
+	// 	const updateConfig = (
+	// 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// 		content: string | Record<string, any>,
+	// 		setting?: string
+	// 	) => {
+	// 		if (typeof content === "string") {
+	// 			if (setting && isValidKey(setting, runConfig)) {
+	// 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// 				(runConfig as any)[setting] = content; // Using type assertion
+	// 			} else {
+	// 				this.error(
+	// 					`"${setting}" is not a valid LLM config setting.`
+	// 				);
+	// 			}
+	// 		} else if (typeof content === "object") {
+	// 			for (const key in content) {
+	// 				if (isValidKey(key, runConfig)) {
+	// 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// 					(runConfig as any)[key] = content[key]; // Using type assertion
+	// 				} else {
+	// 					this.error(
+	// 						`"${key}" is not a valid LLM config setting.`
+	// 					);
+	// 				}
+	// 			}
+	// 		}
+	// 	};
+
+	// 	// Starting at the last group in groups and working backward
+	// 	for (let i = this.groups.length - 1; i >= 0; i--) {
+	// 		const group = this.graph[this.groups[i]];
+	// 		if (group instanceof CannoliGroup) {
+	// 			const configEdges = group
+	// 				.getIncomingEdges()
+	// 				.filter((edge) => edge.type === EdgeType.Config);
+	// 			for (const edge of configEdges) {
+	// 				const edgeObject = this.graph[edge.id];
+	// 				if (!(edgeObject instanceof ConfigEdge)) {
+	// 					throw new Error(
+	// 						`Error on object ${edgeObject.id}: object is not a config edge.`
+	// 					);
+	// 				}
+	// 				if (
+	// 					typeof edgeObject.content === "string" ||
+	// 					typeof edgeObject.content === "object"
+	// 				) {
+	// 					updateConfig(edgeObject.content, edgeObject.setting);
+	// 				} else {
+	// 					this.error(`Config edge has invalid content.`);
+	// 				}
+	// 			}
+	// 		}
+
+	// 		// Then do the same for the node itself
+	// 		const configEdges = this.getIncomingEdges().filter(
+	// 			(edge) => edge.type === EdgeType.Config
+	// 		);
+	// 		for (const edge of configEdges) {
+	// 			const edgeObject = this.graph[edge.id];
+	// 			if (!(edgeObject instanceof ConfigEdge)) {
+	// 				throw new Error(
+	// 					`Error on object ${edgeObject.id}: object is not a config edge.`
+	// 				);
+	// 			}
+	// 			if (
+	// 				typeof edgeObject.content === "string" ||
+	// 				typeof edgeObject.content === "object"
+	// 			) {
+	// 				updateConfig(edgeObject.content, edgeObject.setting);
+	// 			} else {
+	// 				this.error(`Config edge has invalid content.`);
+	// 			}
+	// 		}
+	// 	}
+
+	// 	return runConfig;
+	// }
 
 	async execute() {
 		this.executing();

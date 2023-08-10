@@ -8,7 +8,6 @@ import { Canvas } from "./canvas";
 import { CallNode, DisplayNode, FloatingNode, VaultNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import { Vault } from "obsidian";
-// import { encoding_for_model, TiktokenModel } from "@dqbd/tiktoken";
 import pLimit from "p-limit";
 import { CannoliObjectStatus } from "./models/graph";
 
@@ -22,7 +21,27 @@ interface Limit {
 
 export interface Stoppage {
 	reason: StoppageReason;
+	usage: Record<string, Usage>;
+	totalCost: number;
 	message?: string; // Additional information, like an error message
+}
+
+export interface Usage {
+	model: Model;
+	modelUsage: ModelUsage;
+}
+
+export interface Model {
+	name: string;
+	promptTokenPrice: number;
+	completionTokenPrice: number;
+}
+
+export interface ModelUsage {
+	promptTokens: number;
+	completionTokens: number;
+	apiCalls: number;
+	totalCost: number;
 }
 
 export interface OpenAIConfig {
@@ -60,6 +79,20 @@ export class Run {
 	isMock: boolean;
 	isStopped = false;
 
+	modelInfo: Record<string, Model> = {
+		"gpt-4": {
+			name: "gpt-4",
+			promptTokenPrice: 0.03 / 1000, // $0.03 per 1K tokens
+			completionTokenPrice: 0.06 / 1000, // $0.06 per 1K tokens
+		},
+
+		"gpt-3.5-turbo": {
+			name: "gpt-3.5-turbo",
+			promptTokenPrice: 0.0015 / 1000, // $0.0015 per 1K tokens
+			completionTokenPrice: 0.002 / 1000, // $0.002 per 1K tokens
+		},
+	};
+
 	openaiConfig: OpenAIConfig = {
 		model: "gpt-3.5-turbo",
 		frequency_penalty: undefined,
@@ -71,13 +104,7 @@ export class Run {
 		top_p: undefined,
 	};
 
-	usage: {
-		[model: string]: {
-			promptTokens: number;
-			completionTokens: number;
-			apiCalls: number;
-		};
-	};
+	usage: Record<string, Usage>;
 
 	constructor({
 		graph,
@@ -149,6 +176,8 @@ export class Run {
 
 		this.onFinish({
 			reason: "error",
+			usage: this.calculateAllLLMCosts(),
+			totalCost: this.getTotalCost(),
 			message,
 		});
 
@@ -160,6 +189,8 @@ export class Run {
 
 		this.onFinish({
 			reason: "user",
+			usage: this.calculateAllLLMCosts(),
+			totalCost: this.getTotalCost(),
 		});
 	}
 
@@ -252,6 +283,8 @@ export class Run {
 			this.isStopped = true;
 			this.onFinish({
 				reason: "complete",
+				usage: this.calculateAllLLMCosts(),
+				totalCost: this.getTotalCost(),
 			});
 		}
 	}
@@ -261,6 +294,8 @@ export class Run {
 			this.isStopped = true;
 			this.onFinish({
 				reason: "complete",
+				usage: this.calculateAllLLMCosts(),
+				totalCost: this.getTotalCost(),
 			});
 		}
 	}
@@ -345,35 +380,38 @@ export class Run {
 			async (): Promise<ChatCompletionRequestMessage | Error> => {
 				// Only call LLM if we're not mocking
 				if (this.isMock || !this.openai) {
-					// const enc = encoding_for_model(
-					// 	request.model as TiktokenModel
-					// );
+					let textMessages = "";
 
-					// let textMessages = "";
+					// For each message, convert it to a string, including the role and the content, and a function call if present
+					for (const message of request.messages) {
+						if (message.function_call) {
+							textMessages += `${message.role}: ${message.content} ${message.function_call} `;
+						} else {
+							textMessages += `${message.role}: ${message.content} `;
+						}
+					}
 
-					// // For each message, convert it to a string, including the role and the content, and a function call if present
-					// for (const message of request.messages) {
-					// 	if (message.function_call) {
-					// 		textMessages += `${message.role}: ${message.content} ${message.function_call} `;
-					// 	} else {
-					// 		textMessages += `${message.role}: ${message.content} `;
-					// 	}
-					// }
+					// Estimate the tokens using the rule of thumb that 4 characters is 1 token
+					const promptTokens = textMessages.length / 4;
 
-					// const encoded = enc.encode(textMessages);
+					if (!this.usage[request.model]) {
+						// Find the right model from this.models
+						const model = this.modelInfo[request.model];
 
-					// const promptTokens = encoded.length;
+						this.usage[request.model] = {
+							model: model,
+							modelUsage: {
+								promptTokens: 0,
+								completionTokens: 0,
+								apiCalls: 0,
+								totalCost: 0,
+							},
+						};
+					}
 
-					// if (!this.usage[request.model]) {
-					// 	this.usage[request.model] = {
-					// 		promptTokens: 0,
-					// 		completionTokens: 0,
-					// 		apiCalls: 0,
-					// 	};
-					// }
-
-					// this.usage[request.model].promptTokens += promptTokens;
-					// this.usage[request.model].apiCalls += 1;
+					this.usage[request.model].modelUsage.promptTokens +=
+						promptTokens;
+					this.usage[request.model].modelUsage.apiCalls += 1;
 
 					// Find the choice function
 					const choiceFunction = request.functions?.find(
@@ -434,20 +472,24 @@ export class Run {
 					}
 
 					if (response.data.usage) {
-						const model = request.model as string;
-						if (!this.usage[model]) {
-							this.usage[model] = {
-								promptTokens: 0,
-								completionTokens: 0,
-								apiCalls: 0,
+						const model = this.modelInfo[request.model];
+						if (!this.usage[model.name]) {
+							this.usage[model.name] = {
+								model: model,
+								modelUsage: {
+									promptTokens: 0,
+									completionTokens: 0,
+									apiCalls: 0,
+									totalCost: 0,
+								},
 							};
 						}
 
-						this.usage[model].promptTokens +=
+						this.usage[model.name].modelUsage.promptTokens +=
 							response.data.usage.prompt_tokens;
-						this.usage[model].completionTokens +=
+						this.usage[model.name].modelUsage.completionTokens +=
 							response.data.usage.completion_tokens;
-						this.usage[model].apiCalls += 1;
+						this.usage[model.name].modelUsage.apiCalls += 1;
 					}
 					return response.data.choices[0].message
 						? response.data.choices[0].message
@@ -496,6 +538,31 @@ export class Run {
 				required: tags,
 			},
 		};
+	}
+
+	calculateAllLLMCosts(): Record<string, Usage> {
+		for (const usage of Object.values(this.usage)) {
+			usage.modelUsage.totalCost = this.calculateLLMCostForModel(usage);
+		}
+		return this.usage;
+	}
+
+	calculateLLMCostForModel(usage: Usage): number {
+		const promptCost =
+			usage.model.promptTokenPrice * usage.modelUsage.promptTokens;
+		const completionCost =
+			usage.model.completionTokenPrice *
+			usage.modelUsage.completionTokens;
+		const totalCost = promptCost + completionCost;
+		return totalCost;
+	}
+
+	getTotalCost(): number {
+		let totalCost = 0;
+		for (const usage of Object.values(this.usage)) {
+			totalCost += this.calculateLLMCostForModel(usage);
+		}
+		return totalCost;
 	}
 
 	async editNote(name: string, newContent: string): Promise<void | null> {

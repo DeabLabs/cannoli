@@ -10,8 +10,7 @@ import {
 import { Configuration, OpenAIApi } from "openai";
 import { Canvas } from "src/canvas";
 import { CannoliFactory } from "src/factory";
-import { Run, Stoppage } from "src/run";
-
+import { Run, Stoppage, Usage } from "src/run";
 interface CannoliSettings {
 	openaiAPIKey: string;
 }
@@ -143,13 +142,40 @@ export default class Cannoli extends Plugin {
 
 			if (stoppage.reason === "error") {
 				new Notice(
-					`Cannoli ${name} failed with the error:\n\n${stoppage.message}`
+					`Cannoli ${name} failed with the error:\n\n${
+						stoppage.message
+					}\n$${stoppage.totalCost.toFixed(4)}`
 				);
 			} else if (stoppage.reason === "complete") {
-				new Notice(`Cannoli Complete: ${name}`);
+				new Notice(
+					`Cannoli Complete: ${name}\n$${stoppage.totalCost.toFixed(
+						4
+					)}`
+				);
 			} else {
-				new Notice(`Cannoli Stopped: ${name}`);
+				new Notice(
+					`Cannoli Stopped: ${name}\n$${stoppage.totalCost.toFixed(
+						4
+					)}`
+				);
 			}
+
+			const onContinueCallback = async () => {
+				console.log("Continue selected");
+			};
+
+			const onCancelCallback = async () => {
+				console.log("Cancel selected");
+			};
+
+			new RunPriceAlertModal(
+				this.app,
+				stoppage.usage,
+				onContinueCallback,
+				onCancelCallback
+			).open();
+
+			console.log(JSON.stringify(stoppage.usage, null, 2));
 		};
 
 		// // Create validation run
@@ -205,6 +231,91 @@ export class ErrorModal extends Modal {
 	onClose() {
 		const { contentEl } = this;
 		contentEl.removeClass("error-modal");
+		contentEl.empty();
+	}
+}
+
+export class RunPriceAlertModal extends Modal {
+	usage: Usage[];
+	onContinue: () => void;
+	onCancel: () => void;
+
+	constructor(
+		app: App,
+		usage: Record<string, Usage>,
+		onContinue: () => void,
+		onCancel: () => void
+	) {
+		super(app);
+		this.usage = Object.values(usage);
+		this.onContinue = onContinue;
+		this.onCancel = onCancel;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+
+		let totalCost = 0;
+
+		for (const usageItem of this.usage) {
+			totalCost += usageItem.modelUsage.totalCost;
+		}
+
+		contentEl.createEl("h1", { text: "Run Price Alert" });
+		contentEl.createEl("p", {
+			text: "Review the estimated usage before proceeding.",
+		});
+
+		// Convert usage object to array
+
+		this.usage.forEach((usage) => {
+			contentEl.createEl("h2", { text: `Model: ${usage.model.name}` });
+			contentEl.createEl("p", {
+				text: `Prompt Tokens: ${
+					usage.modelUsage.promptTokens
+				}, Cost: $${(
+					usage.modelUsage.promptTokens * usage.model.promptTokenPrice
+				).toFixed(5)}`,
+			});
+			contentEl.createEl("p", {
+				text: `Completion Tokens: ${
+					usage.modelUsage.completionTokens
+				}, Cost: $${(
+					usage.modelUsage.completionTokens *
+					usage.model.completionTokenPrice
+				).toFixed(5)}`,
+			});
+			contentEl.createEl("p", {
+				text: `Total Cost for ${
+					usage.model.name
+				}: $${usage.modelUsage.totalCost.toFixed(5)}`,
+			});
+		});
+
+		contentEl.createEl("h2", {
+			text: `Overall Total Cost: $${totalCost.toFixed(5)}`,
+		});
+
+		new Setting(contentEl).addButton((btn) =>
+			btn
+				.setButtonText("Continue")
+				.setCta()
+				.onClick(() => {
+					this.close();
+					this.onContinue();
+				})
+		);
+
+		new Setting(contentEl).addButton((btn) =>
+			btn.setButtonText("Cancel").onClick(() => {
+				this.close();
+				this.onCancel();
+			})
+		);
+	}
+
+	onClose() {
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
