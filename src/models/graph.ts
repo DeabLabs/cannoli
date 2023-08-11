@@ -15,11 +15,24 @@ export enum CannoliObjectKind {
 }
 
 export enum GroupType {
+	ForEach = "for-each",
 	Repeat = "repeat",
-	List = "list",
 	Basic = "basic",
 	While = "while",
 	NonLogic = "non-logic",
+}
+
+export enum EdgeType {
+	Blank,
+	Variable,
+	Key,
+	List,
+	Merge,
+	Choice,
+	Category,
+	Config,
+	Function,
+	Logging,
 }
 
 export enum CannoliObjectStatus {
@@ -30,23 +43,23 @@ export enum CannoliObjectStatus {
 	Error = "error",
 }
 
-export enum EdgeType {
-	Write = "write",
-	Logging = "logging",
-	Config = "config",
-	Chat = "chat",
-	SystemMessage = "system-message",
-	List = "list",
-	Function = "function",
-	ListItem = "list-item",
-	Select = "select",
-	Branch = "branch",
-	Category = "category",
-	Vault = "vault",
-	SingleVariable = "single-variable",
-	NonLogic = "non-logic",
-	Untyped = "untyped",
-}
+// export enum EdgeType {
+// 	Write = "write",
+// 	Logging = "logging",
+// 	Config = "config",
+// 	Chat = "chat",
+// 	SystemMessage = "system-message",
+// 	List = "list",
+// 	Function = "function",
+// 	ListItem = "list-item",
+// 	Select = "select",
+// 	Branch = "branch",
+// 	Category = "category",
+// 	Vault = "vault",
+// 	SingleVariable = "single-variable",
+// 	NonLogic = "non-logic",
+// 	Untyped = "untyped",
+// }
 
 export enum NodeType {
 	Choice = "choice",
@@ -59,6 +72,26 @@ export enum NodeType {
 	Reference = "reference",
 	Floating = "floating",
 	NonLogic = "non-logic",
+}
+
+export enum CallNodeType {
+	Standard = "standard",
+	Select = "select",
+	Categorize = "categorize",
+	Choose = "choose",
+	Distribute = "distribute",
+}
+
+export enum ContentNodeType {
+	Input = "input",
+	Display = "display",
+	StaticReference = "static-reference",
+	DynamicReference = "dynamic-reference",
+	Formatter = "formatter",
+}
+
+export enum FloatingNodeType {
+	Variable = "variable",
 }
 
 export enum ReferenceType {
@@ -79,7 +112,13 @@ export interface CannoliData {
 	dependencies: string[];
 	isClone: boolean;
 	kind: CannoliObjectKind;
-	type?: EdgeType | NodeType | GroupType;
+	type:
+		| EdgeType
+		| GroupType
+		| CallNodeType
+		| ContentNodeType
+		| FloatingNodeType
+		| null;
 }
 
 export interface CannoliVertexData extends CannoliData {
@@ -93,18 +132,11 @@ export interface CannoliEdgeData extends CannoliData {
 	crossingOutGroups: string[];
 	content?: string | Record<string, string>;
 	messages?: ChatCompletionRequestMessage[];
-}
-
-export interface ProvideEdgeData extends CannoliEdgeData {
 	name?: string;
-	addMessagesOverride: boolean;
+	addMessages: boolean;
 }
 
-export interface ConfigEdgeData extends CannoliEdgeData {
-	setting: string;
-}
-
-export interface CannoliGroupData extends CannoliData {
+export interface CannoliGroupData extends CannoliVertexData {
 	members: string[];
 }
 
@@ -117,20 +149,20 @@ export interface ForEachGroupData extends CannoliGroupData {
 	index: number;
 }
 
-export interface CannoliNodeData extends CannoliData {
+export interface CannoliNodeData extends CannoliVertexData {
 	references?: Reference[];
 }
 
 export interface CannoliCanvasFileData extends CanvasFileData {
-	cannoliData?: CannoliNodeData;
+	cannoliData?: CannoliVertexData;
 }
 
 export interface CannoliCanvasTextData extends CanvasTextData {
-	cannoliData?: CannoliNodeData;
+	cannoliData?: CannoliVertexData;
 }
 
 export interface CannoliCanvasLinkData extends CanvasLinkData {
-	cannoliData?: CannoliNodeData;
+	cannoliData?: CannoliVertexData;
 }
 
 export interface CannoliCanvasGroupData extends CanvasGroupData {
