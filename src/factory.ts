@@ -420,9 +420,11 @@ export class CannoliFactory {
 		// If it's content, call getContentNodeType
 		else if (indicatedType === IndicatedNodeType.Content) {
 			return this.getContentNodeType(node);
-		} else {
+		} else if (indicatedType === IndicatedNodeType.Call) {
 			const textNode = node as CannoliCanvasTextData;
 			return this.getCallNodeType(textNode);
+		} else {
+			return null;
 		}
 	}
 

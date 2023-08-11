@@ -60,24 +60,23 @@ export class CannoliNode extends CannoliVertex {
 		return renderFunction;
 	}
 
-	async getContentFromNote(name: string): Promise<string> {
+	async getContentFromNote(name: string): Promise<string | null> {
 		const note = await this.run.getNote(name);
 
 		if (!note) {
-			this.error(`Note ${name} not found`);
-			return "";
+			return null;
 		}
 
 		return note;
 	}
 
-	getContentFromFloatingNode(name: string): string {
+	getContentFromFloatingNode(name: string): string | null {
 		for (const object of Object.values(this.graph)) {
 			if (object instanceof FloatingNode && object.getName() === name) {
 				return object.getContent();
 			}
 		}
-		throw new Error(`Floating node ${name} not found`);
+		return null;
 	}
 
 	async processReferences() {
@@ -106,20 +105,43 @@ export class CannoliNode extends CannoliVertex {
 						(variable) => variable.name === reference.name
 					);
 					if (variable && variable.content) {
-						content = await this.getContentFromNote(
+						const noteContent = await this.getContentFromNote(
 							variable.content
 						);
+						if (noteContent) {
+							content = noteContent;
+						} else {
+							this.warning(
+								`Note "${variable.content}" not found`
+							);
+							content = `{{${reference.name}}}`;
+						}
 					} else {
 						content = `{{${reference.name}}}`;
 					}
 				} else if (reference.type === ReferenceType.Note) {
-					content = reference.shouldExtract
-						? await this.getContentFromNote(reference.name)
-						: `{[[${reference.name}]]}`;
+					if (reference.shouldExtract) {
+						const noteContent = await this.getContentFromNote(
+							reference.name
+						);
+						if (noteContent) {
+							content = noteContent;
+						} else {
+							this.warning(`Note "${reference.name}" not found`);
+						}
+					}
 				} else if (reference.type === ReferenceType.Floating) {
-					content = reference.shouldExtract
-						? this.getContentFromFloatingNode(reference.name)
-						: `{[${reference.name}]}`;
+					if (reference.shouldExtract) {
+						const floatingContent = this.getContentFromFloatingNode(
+							reference.name
+						);
+						if (floatingContent) {
+							content = floatingContent;
+						} else {
+							this.warning(`Floating node "${name}" not found`);
+							content = `{[${reference.name}]}`;
+						}
+					}
 				}
 
 				return { name, content };
@@ -961,7 +983,7 @@ export class ReferenceNode extends ContentNode {
 		}
 
 		if (content) {
-			this.editContent(content);
+			await this.editContent(content);
 		}
 
 		const fetchedContent = await this.getContent();
@@ -974,21 +996,28 @@ export class ReferenceNode extends ContentNode {
 
 	async getContent(): Promise<string> {
 		if (this.reference.type === ReferenceType.Note) {
-			return this.getContentFromNote(this.reference.name);
+			const content = await this.getContentFromNote(this.reference.name);
+			if (content) {
+				return content;
+			} else {
+				this.error(
+					`Invalid reference. Could not find note "${this.reference.name}"`
+				);
+			}
 		} else {
-			// Search through all nodes for a floating node with the correct name
-			for (const objectId in this.graph) {
-				const object = this.graph[objectId];
-				if (
-					object instanceof FloatingNode &&
-					object.getName() === this.reference.name
-				) {
-					return object.getContent();
-				}
+			const content = this.getContentFromFloatingNode(
+				this.reference.name
+			);
+			if (content) {
+				return content;
+			} else {
+				this.error(
+					`Invalid reference. Could not find floating node "${this.reference.name}"`
+				);
 			}
 		}
 
-		return `Could not find reference ${this.reference.name}`;
+		return `Could not find reference "${this.reference.name}"`;
 	}
 
 	async editContent(newContent: string): Promise<void> {
@@ -1001,9 +1030,11 @@ export class ReferenceNode extends ContentNode {
 			if (edit !== null) {
 				return;
 			} else {
-				this.error(`Could not edit note ${this.reference.name}`);
+				this.error(
+					`Invalid reference. Could not edit note ${this.reference.name}`
+				);
 			}
-		} else {
+		} else if (this.reference.type === ReferenceType.Floating) {
 			// Search through all nodes for a floating node with the correct name
 			for (const objectId in this.graph) {
 				const object = this.graph[objectId];
@@ -1015,6 +1046,10 @@ export class ReferenceNode extends ContentNode {
 					return;
 				}
 			}
+
+			this.error(
+				`Invalid reference. Could not find floating node ${this.reference.name}`
+			);
 		}
 	}
 

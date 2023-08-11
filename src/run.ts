@@ -264,6 +264,10 @@ export class Run {
 				this.objectError(object, message);
 				break;
 			}
+			case CannoliObjectStatus.Warning: {
+				this.objectWarning(object, message);
+				break;
+			}
 
 			default: {
 				throw new Error(`Unknown status: ${status}`);
@@ -326,6 +330,15 @@ export class Run {
 		}
 
 		this.error(message ?? "Unknown error");
+	}
+
+	objectWarning(object: CannoliObject, message?: string) {
+		if (this.canvas && object instanceof CannoliVertex) {
+			this.canvas.enqueueAddWarningNode(
+				object.id,
+				message ?? "Unknown warning"
+			);
+		}
 	}
 
 	allObjectsFinished(): boolean {

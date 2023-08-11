@@ -262,6 +262,12 @@ export class CannoliVertex extends CannoliObject {
 		console.error(message);
 	}
 
+	warning(message: string) {
+		this.status = CannoliObjectStatus.Warning;
+		this.emit("update", this, CannoliObjectStatus.Warning, message);
+		console.error(message);
+	}
+
 	validate() {
 		super.validate();
 	}

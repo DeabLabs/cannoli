@@ -168,6 +168,8 @@ export default class Cannoli extends Plugin {
 					new Notice(
 						`Cannoli ${name} failed with the error:\n\n${stoppage.message}`
 					);
+					resolve(false);
+					return;
 				}
 
 				const onContinueCallback = () => {

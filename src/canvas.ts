@@ -222,11 +222,66 @@ export class Canvas {
 		return data;
 	}
 
+	private addWarningNode(
+		data: CanvasData,
+		nodeId: string,
+		error: string
+	): CanvasData | null {
+		const node = data.nodes.find((node) => node.id === nodeId);
+
+		// Find the node's vertical center
+		const nodeCenterY = node ? node.y + node.height / 2 : 0;
+
+		if (node) {
+			const newNodeId = this.generateNewId();
+			const errorNode: CanvasTextData = {
+				id: newNodeId,
+				x: node.x + node.width + 50,
+				y: nodeCenterY - 75,
+				width: 500,
+				height: 150,
+				color: "1",
+				text: `<u>Warning:</u>\n` + error,
+				type: "text", // Add the 'type' property
+			};
+			const newEdge: CanvasEdgeData = {
+				id: this.generateNewId(),
+				fromNode: nodeId,
+				fromSide: "right",
+				toNode: newNodeId,
+				toSide: "left",
+				fromEnd: "none",
+				toEnd: "none",
+				color: "1", // red color
+			};
+
+			// If there's already a node at the same position with the same text, return
+			const existingWarningNode = data.nodes.find(
+				(node) =>
+					node.x === errorNode.x &&
+					node.y === errorNode.y &&
+					node.width === errorNode.width &&
+					node.height === errorNode.height &&
+					node.text === errorNode.text
+			);
+
+			if (existingWarningNode) {
+				return null;
+			}
+
+			data.nodes.push(errorNode);
+			data.edges.push(newEdge);
+		}
+		return data;
+	}
+
 	private removeAllErrorNodes(data: CanvasData): CanvasData {
 		// Find all error nodes (nodes that are red and have text starting with "<u>Error:</u>\n")
 		const errorNodes = data.nodes.filter(
 			(node) =>
-				node.color === "1" && node.text?.startsWith("<u>Error:</u>\n")
+				node.color === "1" &&
+				(node.text?.startsWith("<u>Error:</u>\n") ||
+					node.text?.startsWith("<u>Warning:</u>\n"))
 		);
 
 		// Collect all the IDs of the edges connected to error nodes
@@ -274,6 +329,17 @@ export class Canvas {
 			const data = await this.readCanvasData();
 			const newData = this.addErrorNode(data, nodeId, message);
 			await this.writeCanvasData(newData);
+		});
+		return this.editQueue;
+	}
+
+	async enqueueAddWarningNode(nodeId: string, message: string) {
+		this.editQueue = this.editQueue.then(async () => {
+			const data = await this.readCanvasData();
+			const newData = this.addWarningNode(data, nodeId, message);
+			if (newData) {
+				await this.writeCanvasData(newData);
+			}
 		});
 		return this.editQueue;
 	}
