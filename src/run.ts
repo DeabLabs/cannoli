@@ -398,76 +398,7 @@ export class Run {
 			async (): Promise<ChatCompletionRequestMessage | Error> => {
 				// Only call LLM if we're not mocking
 				if (this.isMock || !this.openai) {
-					let textMessages = "";
-
-					// For each message, convert it to a string, including the role and the content, and a function call if present
-					for (const message of request.messages) {
-						if (message.function_call) {
-							textMessages += `${message.role}: ${message.content} ${message.function_call} `;
-						} else {
-							textMessages += `${message.role}: ${message.content} `;
-						}
-					}
-
-					// Estimate the tokens using the rule of thumb that 4 characters is 1 token
-					const promptTokens = textMessages.length / 4;
-
-					if (!this.usage[request.model]) {
-						// Find the right model from this.models
-						const model = this.modelInfo[request.model];
-
-						this.usage[request.model] = {
-							model: model,
-							modelUsage: {
-								promptTokens: 0,
-								completionTokens: 0,
-								apiCalls: 0,
-								totalCost: 0,
-							},
-						};
-					}
-
-					this.usage[request.model].modelUsage.promptTokens +=
-						promptTokens;
-					this.usage[request.model].modelUsage.apiCalls += 1;
-
-					// Find the choice function
-					const choiceFunction = request.functions?.find(
-						(fn) => fn.name === "enter_choice"
-					);
-
-					if (
-						choiceFunction &&
-						choiceFunction.parameters &&
-						choiceFunction.parameters.properties.choice.enum
-							.length > 0
-					) {
-						// Pick one of the choices randomly
-						const randomChoice =
-							choiceFunction.parameters.properties.choice.enum[
-								Math.floor(
-									Math.random() *
-										choiceFunction.parameters.properties
-											.choice.enum.length
-								)
-							];
-
-						return {
-							role: "assistant",
-							content: "Mock response",
-							function_call: {
-								name: "enter_choice",
-								arguments: `{
-									"choice" : "${randomChoice}"
-								}`,
-							},
-						};
-					}
-
-					return {
-						role: "assistant",
-						content: "Mock response",
-					};
+					return this.createMockFunctionResponse(request);
 				}
 
 				// Catch any errors
@@ -519,6 +450,129 @@ export class Run {
 		);
 	}
 
+	createMockFunctionResponse(
+		request: CreateChatCompletionRequest
+	): ChatCompletionRequestMessage {
+		let textMessages = "";
+
+		// For each message, convert it to a string, including the role and the content, and a function call if present
+		for (const message of request.messages) {
+			if (message.function_call) {
+				textMessages += `${message.role}: ${message.content} ${message.function_call} `;
+			} else {
+				textMessages += `${message.role}: ${message.content} `;
+			}
+		}
+
+		// Estimate the tokens using the rule of thumb that 4 characters is 1 token
+		const promptTokens = textMessages.length / 4;
+
+		if (!this.usage[request.model]) {
+			// Find the right model from this.models
+			const model = this.modelInfo[request.model];
+
+			this.usage[request.model] = {
+				model: model,
+				modelUsage: {
+					promptTokens: 0,
+					completionTokens: 0,
+					apiCalls: 0,
+					totalCost: 0,
+				},
+			};
+		}
+
+		this.usage[request.model].modelUsage.promptTokens += promptTokens;
+		this.usage[request.model].modelUsage.apiCalls += 1;
+
+		console.log(`Function_call: ${request.function_call}`);
+
+		let calledFunction = "";
+
+		if (request.functions && request.functions.length > 0) {
+			calledFunction = request.functions[0].name;
+		}
+
+		console.log(`Called function: ${calledFunction}`);
+
+		if (calledFunction) {
+			if (calledFunction === "enter_choice") {
+				// Find the choice function
+				const choiceFunction = request.functions?.find(
+					(fn) => fn.name === "enter_choice"
+				);
+
+				if (!choiceFunction) {
+					throw Error("No choice function found");
+				}
+
+				return this.createMockChoiceFunctionResponse(
+					choiceFunction
+				) as ChatCompletionRequestMessage;
+			} else if (calledFunction === "enter_answers") {
+				// Find the answers function
+				const listFunction = request.functions?.find(
+					(fn) => fn.name === "enter_answers"
+				);
+
+				if (!listFunction) {
+					throw Error("No list function found");
+				}
+
+				return this.createMockListFunctionResponse(
+					listFunction
+				) as ChatCompletionRequestMessage;
+			}
+		}
+
+		return {
+			role: "assistant",
+			content: "Mock response",
+		};
+	}
+
+	createMockChoiceFunctionResponse(choiceFunction: ChatCompletionFunctions) {
+		// Pick one of the choices randomly
+		const randomChoice =
+			choiceFunction?.parameters?.properties.choice.enum[
+				Math.floor(
+					Math.random() *
+						choiceFunction.parameters.properties.choice.enum.length
+				)
+			];
+
+		return {
+			role: "assistant",
+			function_call: {
+				name: "enter_choice",
+				arguments: `{
+					"choice" : "${randomChoice}"
+					}`,
+			},
+		};
+	}
+
+	createMockListFunctionResponse(listFunction: ChatCompletionFunctions) {
+		const args: { [key: string]: string }[] = [];
+
+		// Go through the properties of the function and enter a mock string
+		for (const property of Object.keys(
+			listFunction?.parameters?.properties ?? {}
+		)) {
+			args.push({
+				[property]: "Mock answer",
+			});
+		}
+
+		return {
+			role: "assistant",
+			function_call: {
+				name: "enter_answers",
+				arguments: JSON.stringify(args),
+			},
+		};
+	}
+
 	createChoiceFunction(choices: string[]): ChatCompletionFunctions {
 		return {
 			name: "enter_choice",
@@ -537,11 +591,21 @@ export class Run {
 		};
 	}
 
-	createListFunction(tags: string[]): ChatCompletionFunctions {
-		const properties: Record<string, { type: string }> = {};
+	createListFunction(
+		tags: { name: string; noteNames?: string[] }[]
+	): ChatCompletionFunctions {
+		const properties: Record<string, { type: string; enum?: string[] }> =
+			{};
 
 		tags.forEach((tag) => {
-			properties[tag] = {
+			if (tag.noteNames) {
+				properties[tag.name] = {
+					type: "string",
+					enum: tag.noteNames,
+				};
+				return;
+			}
+			properties[tag.name] = {
 				type: "string",
 			};
 		});
@@ -553,7 +617,24 @@ export class Run {
 			parameters: {
 				type: "object",
 				properties,
-				required: tags,
+				required: tags.map((tag) => tag.name),
+			},
+		};
+	}
+
+	createNoteNameFunction(notes: string[]): ChatCompletionFunctions {
+		return {
+			name: "enter_note_name",
+			description: "Enter one of the provided valid note names.",
+			parameters: {
+				type: "object",
+				properties: {
+					note: {
+						type: "string",
+						enum: notes,
+					},
+				},
+				required: ["note"],
 			},
 		};
 	}

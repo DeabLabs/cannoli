@@ -12,6 +12,7 @@ import {
 	EdgeType,
 	Reference,
 	ReferenceType,
+	VaultModifier,
 	VerifiedCannoliCanvasFileData,
 	VerifiedCannoliCanvasLinkData,
 	VerifiedCannoliCanvasTextData,
@@ -488,6 +489,28 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
+	findNoteReferencesInMessages(
+		messages: ChatCompletionRequestMessage[]
+	): string[] {
+		const references: string[] = [];
+		const noteRegex = /\[\[(.+?)\]\]/g;
+
+		// Get the contents of each double bracket
+		for (const message of messages) {
+			const matches = message.content?.matchAll(noteRegex);
+
+			if (!matches) {
+				continue;
+			}
+
+			for (const match of matches) {
+				references.push(match[1]);
+			}
+		}
+
+		return references;
+	}
+
 	private getDefaultConfig(): OpenAIConfig {
 		const config = this.run.getDefaultConfig();
 		return config;
@@ -580,10 +603,14 @@ export class CallNode extends CannoliNode {
 
 		const request = await this.createLLMRequest();
 
+		console.log(JSON.stringify(request, null, 2));
+
 		const message = (await this.run.callLLM(
 			request,
 			true
 		)) as ChatCompletionRequestMessage;
+
+		console.log(JSON.stringify(message, null, 2));
 
 		if (message instanceof Error) {
 			this.error(`Error calling LLM:\n${message.message}`);
@@ -602,7 +629,17 @@ export class CallNode extends CannoliNode {
 
 		this.loadOutgoingLoggingEdges(request);
 
-		this.loadOutgoingEdges(message.content ?? "", messages);
+		if (message.function_call?.arguments) {
+			if (message.function_call.name === "enter_note_name") {
+				const args = JSON.parse(message.function_call.arguments);
+
+				this.loadOutgoingEdges(args.note, messages);
+			} else {
+				this.loadOutgoingEdges(message.content ?? "", messages);
+			}
+		} else {
+			this.loadOutgoingEdges(message.content ?? "", messages);
+		}
 
 		this.completed();
 	}
@@ -616,7 +653,7 @@ export class CallNode extends CannoliNode {
 
 		messages.push(newMessage);
 
-		const functions = this.getFunctions();
+		const functions = this.getFunctions(messages);
 
 		const function_call =
 			functions && functions.length > 0
@@ -663,8 +700,19 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	getFunctions(): ChatCompletionFunctions[] {
-		return [];
+	getFunctions(
+		messages: ChatCompletionRequestMessage[]
+	): ChatCompletionFunctions[] {
+		if (
+			this.getOutgoingEdges().some(
+				(edge) => edge.vaultModifier === VaultModifier.Note
+			)
+		) {
+			const noteNames = this.findNoteReferencesInMessages(messages);
+			return [this.run.createNoteNameFunction(noteNames)];
+		} else {
+			return [];
+		}
 	}
 
 	logDetails(): string {
@@ -677,12 +725,33 @@ export class CallNode extends CannoliNode {
 }
 
 export class DistributeNode extends CallNode {
-	getFunctions(): ChatCompletionFunctions[] {
+	getFunctions(
+		messages: ChatCompletionRequestMessage[]
+	): ChatCompletionFunctions[] {
 		// Get the name of the list items
 		const listItems = this.getListItems();
 
+		const items: { name: string; noteNames?: string[] }[] = [];
+
+		// If one of the outgoing edges has a vault modifier of type "note", get the note names and pass it into that list item
+		const noteEdges = this.getOutgoingEdges().filter(
+			(edge) => edge.vaultModifier === VaultModifier.Note
+		);
+
+		for (const item of listItems) {
+			// If the item matches the name of one of the note edges
+			if (noteEdges.find((edge) => edge.text === item)) {
+				// Get the note names
+				const noteNames = this.findNoteReferencesInMessages(messages);
+
+				items.push({ name: item, noteNames: noteNames });
+			} else {
+				items.push({ name: item });
+			}
+		}
+
 		// Generate the list function
-		const listFunc = this.run.createListFunction(listItems);
+		const listFunc = this.run.createListFunction(items);
 
 		return [listFunc];
 	}
@@ -789,7 +858,9 @@ export class DistributeNode extends CallNode {
 }
 
 export class ChooseNode extends CallNode {
-	getFunctions(): ChatCompletionFunctions[] {
+	getFunctions(
+		messages: ChatCompletionRequestMessage[]
+	): ChatCompletionFunctions[] {
 		const choices = this.getBranchChoices();
 
 		// Create choice function
@@ -928,22 +999,22 @@ export class ContentNode extends CannoliNode {
 		// 	this.error(`Content nodes can only have one incoming write edge.`);
 		// }
 
-		// // Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
-		// if (
-		// 	this.getOutgoingEdges().some(
-		// 		(edge) =>
-		// 			edge.type === EdgeType.ListItem ||
-		// 			edge.type === EdgeType.List ||
-		// 			edge.type === EdgeType.Category ||
-		// 			edge.type === EdgeType.Select ||
-		// 			edge.type === EdgeType.Branch ||
-		// 			edge.type === EdgeType.Function
-		// 	)
-		// ) {
-		// 	this.error(
-		// 		`Content nodes cannot have any outgoing list, choice, or function edges.`
-		// 	);
-		// }
+		// Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
+		if (
+			this.getOutgoingEdges().some(
+				(edge) =>
+					edge.type === EdgeType.List ||
+					edge.type === EdgeType.Key ||
+					edge.type === EdgeType.Category ||
+					edge.type === EdgeType.Function ||
+					edge.type === EdgeType.Choice ||
+					edge.type === EdgeType.Logging
+			)
+		) {
+			this.error(
+				`Content nodes cannot have any outgoing list, choice, or function edges.`
+			);
+		}
 	}
 }
 
