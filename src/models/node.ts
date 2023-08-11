@@ -33,7 +33,6 @@ export class CannoliNode extends CannoliVertex {
 	) {
 		super(nodeData);
 		this.references = nodeData.cannoliData.references || [];
-		console.log(JSON.stringify(this.references, null, 2));
 		this.renderFunction = this.buildRenderFunction();
 	}
 

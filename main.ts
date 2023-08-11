@@ -10,7 +10,7 @@ import {
 import { Configuration, OpenAIApi } from "openai";
 import { Canvas } from "src/canvas";
 import { CannoliFactory } from "src/factory";
-import { CannoliGraph } from "src/models/graph";
+import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 interface CannoliSettings {
 	openaiAPIKey: string;
@@ -139,77 +139,128 @@ export default class Cannoli extends Plugin {
 		const graph = factory.getCannoliData();
 		console.log(JSON.stringify(graph, null, 2));
 
-		// Create callback function to trigger notice
-		const onFinish = (stoppage: Stoppage) => {
-			delete this.runningCannolis[file.basename];
+		const shouldContinue = await this.validateCannoli(
+			graph,
+			file,
+			name,
+			canvas
+		);
 
-			let costString = "";
+		if (shouldContinue) {
+			await this.runCannoli(graph, file, name, canvas);
+		} else {
+			console.log("Run was canceled during validation");
+		}
+	};
 
-			// If the cost is less than 0.01, don't show the notice
-			if (stoppage.totalCost > 0.01) {
-				costString = `\n$${stoppage.totalCost.toFixed(2)}`;
-			}
+	validateCannoli = async (
+		graph: VerifiedCannoliCanvasData,
+		file: TFile,
+		name: string,
+		canvas: Canvas
+	) => {
+		return new Promise<boolean>((resolve) => {
+			// Create callback function to trigger notice
+			const onFinish = (stoppage: Stoppage) => {
+				delete this.runningCannolis[file.basename];
 
-			if (stoppage.reason === "error") {
-				new Notice(
-					`Cannoli ${name} failed with the error:\n\n${stoppage.message}${costString}`
-				);
-			} else if (stoppage.reason === "complete") {
-				new Notice(`Cannoli Complete: ${name}${costString}`);
-			} else {
-				new Notice(`Cannoli Stopped: ${name}${costString}`);
-			}
+				if (stoppage.reason === "error") {
+					new Notice(
+						`Cannoli ${name} failed with the error:\n\n${stoppage.message}`
+					);
+				}
 
-			console.log(`${name} finished with cost: ${stoppage.totalCost}`);
+				const onContinueCallback = () => {
+					resolve(true); // Resolve with true if continued
+					console.log("Continue selected");
+				};
 
-			const onContinueCallback = async () => {
-				console.log("Continue selected");
+				const onCancelCallback = () => {
+					resolve(false); // Resolve with false if canceled
+					console.log("Cancel selected");
+				};
+
+				new RunPriceAlertModal(
+					this.app,
+					stoppage.usage,
+					onContinueCallback,
+					onCancelCallback
+				).open();
 			};
 
-			const onCancelCallback = async () => {
-				console.log("Cancel selected");
-			};
+			const validationGraph = new CannoliGraph(
+				JSON.parse(JSON.stringify(graph))
+			);
 
-			new RunPriceAlertModal(
-				this.app,
-				stoppage.usage,
-				onContinueCallback,
-				onCancelCallback
-			).open();
-		};
+			// Create validation run
+			const validationRun = new Run({
+				graph: validationGraph.graph,
+				isMock: true,
+				canvas: canvas,
+				vault: this.app.vault,
+				onFinish: onFinish,
+			});
 
-		// // Create validation run
-		// const validationRun = new Run({
-		// 	graph: graph,
-		// 	isMock: true,
-		// 	canvas: canvas,
-		// 	vault: this.app.vault,
-		// 	onFinish: onFinish,
-		// });
+			console.log("Starting validation run");
 
-		// console.log("Starting validation run");
-
-		// await validationRun.start();
-
-		// console.log("Validation run complete");
-
-		// validationRun.reset();
-
-		const liveGraph = new CannoliGraph(JSON.parse(JSON.stringify(graph)));
-
-		// Create live run
-		const run = new Run({
-			graph: liveGraph.graph,
-			openai: this.openai,
-			isMock: false,
-			canvas: canvas,
-			vault: this.app.vault,
-			onFinish: onFinish,
+			validationRun.start();
 		});
+	};
 
-		this.runningCannolis[file.basename] = run;
+	runCannoli = async (
+		graph: VerifiedCannoliCanvasData,
+		file: TFile,
+		name: string,
+		canvas: Canvas
+	) => {
+		return new Promise<void>((resolve) => {
+			// Create callback function to trigger notice
+			const onFinish = (stoppage: Stoppage) => {
+				delete this.runningCannolis[file.basename];
 
-		await run.start();
+				let costString = "";
+
+				// If the cost is less than 0.01, don't show the notice
+				if (stoppage.totalCost > 0.01) {
+					costString = `\n$${stoppage.totalCost.toFixed(2)}`;
+				}
+
+				if (stoppage.reason === "error") {
+					new Notice(
+						`Cannoli ${name} failed with the error:\n\n${stoppage.message}${costString}`
+					);
+				} else if (stoppage.reason === "complete") {
+					new Notice(`Cannoli Complete: ${name}${costString}`);
+				} else {
+					new Notice(`Cannoli Stopped: ${name}${costString}`);
+				}
+
+				console.log(
+					`${name} finished with cost: ${stoppage.totalCost}`
+				);
+
+				// Resolve the promise to continue the async function
+				resolve();
+			};
+
+			const liveGraph = new CannoliGraph(
+				JSON.parse(JSON.stringify(graph))
+			);
+
+			// Create live run
+			const run = new Run({
+				graph: liveGraph.graph,
+				openai: this.openai,
+				isMock: false,
+				canvas: canvas,
+				vault: this.app.vault,
+				onFinish: onFinish,
+			});
+
+			this.runningCannolis[file.basename] = run;
+
+			run.start();
+		});
 	};
 }
 
