@@ -41,7 +41,12 @@ export class CannoliNode extends CannoliVertex {
 		// Replace references with placeholders using an index-based system
 		let textCopy = this.text;
 		let index = 0;
-		textCopy = textCopy.replace(/{.+?}/g, () => `{${index++}}`);
+		textCopy = textCopy.replace(/{{?[^{}]+}}?/g, (match) => {
+			if (match.startsWith("{{") && match.endsWith("}}")) {
+				return `{${index++}}`;
+			}
+			return `{${index++}}`;
+		});
 
 		// Define and return the render function
 		const renderFunction = async (
@@ -83,6 +88,11 @@ export class CannoliNode extends CannoliVertex {
 	async processReferences() {
 		const variableValues = this.getVariableValues(true);
 
+		console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
+		console.log(
+			`Variable values: ${JSON.stringify(variableValues, null, 2)}`
+		);
+
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
 				let content = "{invalid reference}";
@@ -95,9 +105,13 @@ export class CannoliNode extends CannoliVertex {
 					const variable = variableValues.find(
 						(variable) => variable.name === reference.name
 					);
-					content = variable
-						? variable.content
-						: `{${reference.name}}`;
+
+					if (variable) {
+						content = variable.content;
+					} else {
+						// this.warning(`Variable "${reference.name}" not found`);
+						content = `{${reference.name}}`;
+					}
 				} else if (
 					reference.type === ReferenceType.Variable &&
 					reference.shouldExtract
@@ -118,6 +132,7 @@ export class CannoliNode extends CannoliVertex {
 							content = `{{${reference.name}}}`;
 						}
 					} else {
+						//this.warning(`Variable "${reference.name}" not found`);
 						content = `{{${reference.name}}}`;
 					}
 				} else if (reference.type === ReferenceType.Note) {
@@ -187,6 +202,7 @@ export class CannoliNode extends CannoliVertex {
 			let content: string;
 
 			if (!edgeObject.content) {
+				console.log(`Edge ${edgeObject.id} has no content`);
 				continue;
 			}
 
@@ -276,6 +292,7 @@ export class CannoliNode extends CannoliVertex {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
+				console.log(`Loading edge with content ${content}`);
 				edgeObject.load({
 					content: content,
 					messages: messages,

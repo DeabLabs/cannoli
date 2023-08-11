@@ -163,8 +163,8 @@ export class Run {
 		// Validate the graph
 		this.validate();
 
-		// If we have a canvas, remove all error nodes
-		if (this.canvas) {
+		// If we have a canvas and its mock, remove all error nodes
+		if (this.canvas && this.isMock) {
 			await this.canvas.enqueueRemoveAllErrorNodes();
 		}
 
@@ -333,7 +333,7 @@ export class Run {
 	}
 
 	objectWarning(object: CannoliObject, message?: string) {
-		if (!this.isMock && this.canvas && object instanceof CannoliVertex) {
+		if (this.canvas && object instanceof CannoliVertex) {
 			this.canvas.enqueueAddWarningNode(
 				object.id,
 				message ?? "Unknown warning"

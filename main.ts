@@ -14,10 +14,12 @@ import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 interface CannoliSettings {
 	openaiAPIKey: string;
+	costThreshold: number;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
 	openaiAPIKey: "Paste key here",
+	costThreshold: 0.5,
 };
 
 export default class Cannoli extends Plugin {
@@ -182,12 +184,18 @@ export default class Cannoli extends Plugin {
 					resolve(false); // Resolve with false if canceled
 				};
 
-				new RunPriceAlertModal(
-					this.app,
-					stoppage.usage,
-					onContinueCallback,
-					onCancelCallback
-				).open();
+				// If the total price is greater than the threshold, ask the user if they want to continue
+				if (stoppage.totalCost > this.settings.costThreshold) {
+					new RunPriceAlertModal(
+						this.app,
+						stoppage.usage,
+						onContinueCallback,
+						onCancelCallback
+					).open();
+				} else {
+					// Otherwise, continue
+					onContinueCallback();
+				}
 			};
 
 			const validationGraph = new CannoliGraph(
@@ -313,42 +321,49 @@ export class RunPriceAlertModal extends Modal {
 			totalCost += usageItem.modelUsage.totalCost;
 		}
 
-		contentEl.createEl("h1", { text: "Run Price Alert" });
+		contentEl.createEl("h1", { text: "Run Cost Alert" });
 		contentEl.createEl("p", {
-			text: "Review the estimated usage before proceeding.",
+			text: "Check the cost of your run before continuing",
 		});
 
 		// Convert usage object to array
 
 		this.usage.forEach((usage) => {
 			contentEl.createEl("h2", { text: `Model: ${usage.model.name}` });
-			contentEl.createEl("p", {
-				text: `Prompt Tokens: ${
-					usage.modelUsage.promptTokens
-				}, Cost: $${(
-					usage.modelUsage.promptTokens * usage.model.promptTokenPrice
-				).toFixed(5)}`,
-			});
-			contentEl.createEl("p", {
-				text: `Completion Tokens: ${
-					usage.modelUsage.completionTokens
-				}, Cost: $${(
-					usage.modelUsage.completionTokens *
-					usage.model.completionTokenPrice
-				).toFixed(5)}`,
-			});
-			contentEl.createEl("p", {
-				text: `Total Cost for ${
-					usage.model.name
-				}: $${usage.modelUsage.totalCost.toFixed(5)}`,
-			});
+			contentEl
+				.createEl("p", {
+					text: `\t\tEstimated Prompt Tokens: ${usage.modelUsage.promptTokens}`,
+				})
+				.addClass("whitespace");
+			contentEl
+				.createEl("p", {
+					text: `\t\tNumber of API calls: ${usage.modelUsage.apiCalls}`,
+				})
+				.addClass("whitespace");
+			contentEl
+				.createEl("p", {
+					text: `\t\tCost: $${(
+						usage.modelUsage.promptTokens *
+						usage.model.promptTokenPrice
+					).toFixed(2)}`,
+				})
+				.addClass("whitespace");
 		});
 
 		contentEl.createEl("h2", {
-			text: `Overall Total Cost: $${totalCost.toFixed(5)}`,
+			text: `Total Cost: $${totalCost.toFixed(2)}`,
 		});
 
-		new Setting(contentEl).addButton((btn) =>
+		const panel = new Setting(contentEl);
+
+		panel.addButton((btn) =>
+			btn.setButtonText("Cancel").onClick(() => {
+				this.close();
+				this.onCancel();
+			})
+		);
+
+		panel.addButton((btn) =>
 			btn
 				.setButtonText("Continue")
 				.setCta()
@@ -356,13 +371,6 @@ export class RunPriceAlertModal extends Modal {
 					this.close();
 					this.onContinue();
 				})
-		);
-
-		new Setting(contentEl).addButton((btn) =>
-			btn.setButtonText("Cancel").onClick(() => {
-				this.close();
-				this.onCancel();
-			})
 		);
 	}
 
@@ -395,6 +403,21 @@ class CannoliSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.openaiAPIKey)
 					.onChange(async (value) => {
 						this.plugin.settings.openaiAPIKey = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Cost threshold setting. This is the cost at which the user will be alerted before running a Cannoli
+		new Setting(containerEl)
+			.setName("Cost Threshold")
+			.setDesc(
+				"If the Cannoli you are about to run is estimated to cost more than this amount (USD$), you will be alerted before running it."
+			)
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.costThreshold.toString())
+					.onChange(async (value) => {
+						this.plugin.settings.costThreshold = parseFloat(value);
 						await this.plugin.saveSettings();
 					})
 			);
