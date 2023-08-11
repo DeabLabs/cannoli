@@ -603,14 +603,10 @@ export class CallNode extends CannoliNode {
 
 		const request = await this.createLLMRequest();
 
-		console.log(JSON.stringify(request, null, 2));
-
 		const message = (await this.run.callLLM(
 			request,
 			true
 		)) as ChatCompletionRequestMessage;
-
-		console.log(JSON.stringify(message, null, 2));
 
 		if (message instanceof Error) {
 			this.error(`Error calling LLM:\n${message.message}`);
@@ -692,9 +688,6 @@ export class CallNode extends CannoliNode {
 					`Error on object ${edgeObject.id}: object is not a logging edge.`
 				);
 			} else {
-				console.log(
-					`Loading logging edge with config:\n${configString}`
-				);
 				edgeObject.content = configString;
 			}
 		}

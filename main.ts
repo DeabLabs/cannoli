@@ -162,6 +162,8 @@ export default class Cannoli extends Plugin {
 		return new Promise<boolean>((resolve) => {
 			// Create callback function to trigger notice
 			const onFinish = (stoppage: Stoppage) => {
+				console.log("Finished validation run");
+
 				delete this.runningCannolis[file.basename];
 
 				if (stoppage.reason === "error") {
@@ -174,12 +176,10 @@ export default class Cannoli extends Plugin {
 
 				const onContinueCallback = () => {
 					resolve(true); // Resolve with true if continued
-					console.log("Continue selected");
 				};
 
 				const onCancelCallback = () => {
 					resolve(false); // Resolve with false if canceled
-					console.log("Cancel selected");
 				};
 
 				new RunPriceAlertModal(

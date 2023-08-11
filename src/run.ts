@@ -485,15 +485,11 @@ export class Run {
 		this.usage[request.model].modelUsage.promptTokens += promptTokens;
 		this.usage[request.model].modelUsage.apiCalls += 1;
 
-		console.log(`Function_call: ${request.function_call}`);
-
 		let calledFunction = "";
 
 		if (request.functions && request.functions.length > 0) {
 			calledFunction = request.functions[0].name;
 		}
-
-		console.log(`Called function: ${calledFunction}`);
 
 		if (calledFunction) {
 			if (calledFunction === "enter_choice") {
@@ -521,6 +517,19 @@ export class Run {
 
 				return this.createMockListFunctionResponse(
 					listFunction
+				) as ChatCompletionRequestMessage;
+			} else if (calledFunction === "enter_note_name") {
+				// Find the note name function
+				const noteNameFunction = request.functions?.find(
+					(fn) => fn.name === "enter_note_name"
+				);
+
+				if (!noteNameFunction) {
+					throw Error("No note name function found");
+				}
+
+				return this.createMockNoteNameFunctionResponse(
+					noteNameFunction
 				) as ChatCompletionRequestMessage;
 			}
 		}
@@ -568,6 +577,31 @@ export class Run {
 			role: "assistant",
 			function_call: {
 				name: "enter_answers",
+				arguments: JSON.stringify(args),
+			},
+		};
+	}
+
+	createMockNoteNameFunctionResponse(noteFunction: ChatCompletionFunctions) {
+		const args: { [key: string]: string }[] = [];
+
+		// Pick one of the options in note.enum randomly
+		const randomNote =
+			noteFunction?.parameters?.properties["note"].enum[
+				Math.floor(
+					Math.random() *
+						noteFunction?.parameters?.properties["note"].enum.length
+				)
+			];
+
+		args.push({
+			note: randomNote,
+		});
+
+		return {
+			role: "assistant",
+			function_call: {
+				name: "enter_note_names",
 				arguments: JSON.stringify(args),
 			},
 		};
