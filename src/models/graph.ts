@@ -14,6 +14,7 @@ import {
 	ChooseNode,
 	DisplayNode,
 	DistributeNode,
+	FloatingNode,
 	FormatterNode,
 	InputNode,
 	ReferenceNode,
@@ -206,6 +207,8 @@ export class CannoliGraph {
 		this.cannoliCanvasData = cannoliCanvasData;
 
 		this.hydrateGraph();
+		this.addGraphToAll();
+		this.setupAllListeners();
 	}
 
 	hydrateGraph() {
@@ -288,6 +291,11 @@ export class CannoliGraph {
 					// this.graph[node.id] = new SelectNode(selectNode);
 					break;
 				}
+				case FloatingNodeType.Variable: {
+					const variableNode = node as VerifiedCannoliCanvasTextData;
+					this.graph[node.id] = new FloatingNode(variableNode);
+					break;
+				}
 
 				default: {
 					throw new Error(
@@ -320,10 +328,19 @@ export class CannoliGraph {
 				}
 			}
 		}
+	}
 
+	addGraphToAll() {
 		// Call setGraph with the graph on every object
 		for (const id in this.graph) {
 			this.graph[id].setGraph(this.graph);
+		}
+	}
+
+	setupAllListeners() {
+		// Call setupListeners on every object
+		for (const id in this.graph) {
+			this.graph[id].setupListeners();
 		}
 	}
 

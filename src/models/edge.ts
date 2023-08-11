@@ -3,6 +3,7 @@ import { ChatCompletionRequestMessage } from "openai";
 import { RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,
+	EdgeType,
 	VaultModifier,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
@@ -14,7 +15,6 @@ export class CannoliEdge extends CannoliObject {
 	crossingOutGroups: string[];
 	isReflexive: boolean;
 	addMessages: boolean;
-	name: string | null;
 	vaultModifier: VaultModifier | null;
 	content: string | Record<string, string> | null;
 	messages: ChatCompletionRequestMessage[] | null;
@@ -27,9 +27,6 @@ export class CannoliEdge extends CannoliObject {
 		this.crossingOutGroups = edgeData.cannoliData.crossingOutGroups;
 		this.isReflexive = edgeData.cannoliData.isReflexive;
 		this.addMessages = edgeData.cannoliData.addMessages;
-		this.name = edgeData.cannoliData.name
-			? edgeData.cannoliData.name
-			: null;
 		this.vaultModifier = edgeData.cannoliData.vaultModifier
 			? edgeData.cannoliData.vaultModifier
 			: null;
@@ -39,6 +36,14 @@ export class CannoliEdge extends CannoliObject {
 		this.messages = edgeData.cannoliData.messages
 			? edgeData.cannoliData.messages
 			: null;
+
+		// Overrwite the addMessages for certain types of edges
+		if (
+			this.type === EdgeType.Chat ||
+			this.type === EdgeType.SystemMessage
+		) {
+			this.addMessages = true;
+		}
 	}
 
 	getSource(): CannoliVertex {
@@ -96,15 +101,16 @@ export class CannoliEdge extends CannoliObject {
 
 		return (
 			`--> Edge ${this.id} Text: "${
-				this.text
+				this.text ?? "undefined string"
 			}"\n"${this.ensureStringLength(
-				this.getSource().text,
+				this.getSource().text ?? "undefined string",
 				15
 			)}--->"${this.ensureStringLength(
-				this.getTarget().text,
+				this.getTarget().text ?? "undefined string",
 				15
-			)}"\n${crossingGroupsString}\nisReflexive: ${this.isReflexive}\n` +
-			super.logDetails()
+			)}"\n${crossingGroupsString}\nisReflexive: ${
+				this.isReflexive
+			}\nType: ${this.type}\n` + super.logDetails()
 		);
 	}
 
@@ -131,10 +137,6 @@ export class SystemMessageEdge extends CannoliEdge {
 				},
 			];
 		}
-	}
-
-	logDetails(): string {
-		return super.logDetails() + `Type: SystemMessage\n`;
 	}
 }
 
@@ -220,9 +222,5 @@ export class LoggingEdge extends CannoliEdge {
 		if (dependency.id === this.source) {
 			this.execute();
 		}
-	}
-
-	logDetails(): string {
-		return super.logDetails() + `Type: Logging\n`;
 	}
 }

@@ -33,16 +33,27 @@ export class CannoliNode extends CannoliVertex {
 	) {
 		super(nodeData);
 		this.references = nodeData.cannoliData.references || [];
+		console.log(JSON.stringify(this.references, null, 2));
 		this.renderFunction = this.buildRenderFunction();
 	}
 
 	buildRenderFunction() {
+		// Replace references with placeholders using an index-based system
+		let textCopy = this.text;
+		let index = 0;
+		textCopy = textCopy.replace(/{.+?}/g, () => `{${index++}}`);
+
+		// Define and return the render function
 		const renderFunction = async (
 			variables: { name: string; content: string }[]
 		) => {
+			// Create a map to look up variable content by name
 			const varMap = new Map(variables.map((v) => [v.name, v.content]));
-			return this.text.replace(/\{(\d+)\}/g, (match, index) => {
+			// Replace the indexed placeholders with the content from the variables
+			return textCopy.replace(/\{(\d+)\}/g, (match, index) => {
+				// Retrieve the reference by index
 				const reference = this.references[Number(index)];
+				// Retrieve the content from the varMap using the reference's name
 				return varMap.get(reference.name) || "{invalid reference}";
 			});
 		};
@@ -157,11 +168,11 @@ export class CannoliNode extends CannoliVertex {
 				continue;
 			}
 
-			if (typeof edgeObject.content === "string" && edgeObject.name) {
+			if (typeof edgeObject.content === "string" && edgeObject.text) {
 				content = edgeObject.content;
 
 				const variableValue = {
-					name: edgeObject.name,
+					name: edgeObject.text,
 					content: content,
 					edgeId: edgeObject.id,
 				};
@@ -499,7 +510,7 @@ export class CallNode extends CannoliNode {
 			this.updateConfigWithValue(
 				runConfig,
 				edgeObject.content,
-				edgeObject.name
+				edgeObject.text
 			);
 		} else {
 			this.error(`Config edge has invalid content.`);
@@ -671,7 +682,7 @@ export class DistributeNode extends CallNode {
 				);
 			}
 
-			const name = edgeObject.name;
+			const name = edgeObject.text;
 
 			if (name) {
 				uniqueNames.add(name);
@@ -705,7 +716,7 @@ export class DistributeNode extends CallNode {
 					edgeObject instanceof CannoliEdge &&
 					edgeObject.type === EdgeType.Key
 				) {
-					const name = edgeObject.name;
+					const name = edgeObject.text;
 
 					if (name) {
 						const listItemContent = listItems[name];
@@ -793,7 +804,7 @@ export class ChooseNode extends CallNode {
 			const edgeObject = this.graph[edge];
 			if (edgeObject.type === EdgeType.Choice) {
 				const branchEdge = edgeObject as CannoliEdge;
-				if (branchEdge.name !== choice) {
+				if (branchEdge.text !== choice) {
 					branchEdge.reject();
 				}
 			}
@@ -816,7 +827,7 @@ export class ChooseNode extends CallNode {
 				);
 			}
 
-			const name = edgeObject.name;
+			const name = edgeObject.text;
 
 			if (name) {
 				uniqueNames.add(name);
@@ -1187,7 +1198,7 @@ export class FloatingNode extends CannoliNode {
 	}
 
 	async execute() {
-		return;
+		this.completed();
 	}
 
 	getName(): string {

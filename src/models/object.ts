@@ -202,9 +202,9 @@ export class CannoliVertex extends CannoliObject {
 
 	constructor(vertexData: AllVerifiedCannoliCanvasNodeData) {
 		super(vertexData);
-		this.outgoingEdges = vertexData.outgoingEdges;
-		this.incomingEdges = vertexData.incomingEdges;
-		this.groups = vertexData.groups;
+		this.outgoingEdges = vertexData.cannoliData.outgoingEdges;
+		this.incomingEdges = vertexData.cannoliData.incomingEdges;
+		this.groups = vertexData.cannoliData.groups;
 	}
 
 	getOutgoingEdges(): CannoliEdge[] {

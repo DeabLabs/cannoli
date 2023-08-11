@@ -57,8 +57,8 @@ export class CannoliGroup extends CannoliVertex {
 	}
 
 	async execute(): Promise<void> {
-		this.status = CannoliObjectStatus.Executing;
-		this.emit("update", this, CannoliObjectStatus.Executing);
+		this.status = CannoliObjectStatus.Complete;
+		this.emit("update", this, CannoliObjectStatus.Complete);
 	}
 
 	membersFinished() {}
@@ -280,6 +280,11 @@ export class ForEachGroup extends CannoliGroup {
 		return super.logDetails() + `Type: List\n`;
 	}
 
+	async execute(): Promise<void> {
+		this.status = CannoliObjectStatus.Executing;
+		this.emit("update", this, CannoliObjectStatus.Executing);
+	}
+
 	validate(): void {
 		super.validate();
 
@@ -319,6 +324,11 @@ export class RepeatGroup extends CannoliGroup {
 
 		this.currentLoop = groupData.cannoliData.currentLoop ?? 0;
 		this.maxLoops = groupData.cannoliData.maxLoops ?? 1;
+	}
+
+	async execute(): Promise<void> {
+		this.status = CannoliObjectStatus.Executing;
+		this.emit("update", this, CannoliObjectStatus.Executing);
 	}
 
 	resetMembers() {

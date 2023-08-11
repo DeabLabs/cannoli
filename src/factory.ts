@@ -165,6 +165,9 @@ export class CannoliFactory {
 			// If the node is a file, the "file" property is a path. Get the text after the final "/" and remove the extension
 			const fileName = node.file.split("/").pop();
 			universalText = fileName?.split(".").shift();
+
+			// Then, prepend ">[[" and append "]]" to the text to match the reference format
+			universalText = `>[[${universalText}]]`;
 		} else if (node.type === "link") {
 			node = node as CannoliCanvasLinkData;
 			universalText = node.url;
@@ -566,9 +569,7 @@ export class CannoliFactory {
 
 		// If any of the incoming edges have a non-null vault modifier, its a dynamic reference node
 		if (
-			incomingEdgeLabelInfo.some(
-				(labelInfo) => labelInfo?.vaultModifier !== null
-			)
+			incomingEdgeLabelInfo.some((labelInfo) => labelInfo?.vaultModifier)
 		) {
 			return ContentNodeType.DynamicReference;
 		}
@@ -1062,8 +1063,12 @@ export class CannoliFactory {
 			group.height
 		);
 
-		// Iterate through all vertices
+		// Iterate through all vertices except the group itself
 		for (const vertex of this.cannoliData.nodes) {
+			// Skip the group itself
+			if (vertex.id === group.id) {
+				continue;
+			}
 			const vertexRectangle = this.createRectangle(
 				vertex.x,
 				vertex.y,
