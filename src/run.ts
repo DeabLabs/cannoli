@@ -5,7 +5,12 @@ import {
 	OpenAIApi,
 } from "openai";
 import { Canvas } from "./canvas";
-import { CallNode, DisplayNode, FloatingNode, VaultNode } from "./models/node";
+import {
+	CallNode,
+	DisplayNode,
+	DynamicReferenceNode,
+	FloatingNode,
+} from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import { Vault } from "obsidian";
 import pLimit from "p-limit";
@@ -272,7 +277,7 @@ export class Run {
 				this.canvas.enqueueChangeNodeColor(object.id, "4");
 			} else if (
 				object instanceof DisplayNode ||
-				object instanceof VaultNode ||
+				object instanceof DynamicReferenceNode ||
 				object instanceof FloatingNode
 			) {
 				this.canvas.enqueueChangeNodeText(object.id, object.text);

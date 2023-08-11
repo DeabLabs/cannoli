@@ -13,8 +13,6 @@ import {
 	CannoliGroupData,
 	CannoliNodeData,
 	CannoliObjectStatus,
-	ForEachGroupData,
-	RepeatGroupData,
 	ReferenceType,
 	Reference,
 	CallNodeType,
@@ -22,21 +20,15 @@ import {
 	FloatingNodeType,
 	GroupType,
 	EdgeType,
+	CannoliVertexData,
+	VaultModifier,
+	VerifiedCannoliCanvasData,
 } from "./models/graph";
 
 export enum IndicatedNodeType {
 	Call = "call",
 	Content = "content",
 	Floating = "floating",
-}
-
-enum VaultModifier {
-	Note = "note",
-	CreateNote = "create-note",
-	Folder = "folder",
-	CreateFolder = "create-folder",
-	EditProperty = "edit-property",
-	CreateProperty = "create-property",
 }
 
 export class CannoliFactory {
@@ -73,6 +65,7 @@ export class CannoliFactory {
 
 	addMessagesModifierMap: Record<string, boolean> = {
 		"|": true,
+		"~": false,
 	};
 
 	groupPrefixMap: Record<string, GroupType> = {
@@ -89,45 +82,7 @@ export class CannoliFactory {
 		this.cannoliData = canvas;
 	}
 
-	// parse(canvas: CanvasData): CannoliCanvasData {
-	// 	// Create initial objects
-	// 	this.initialParse();
-
-	// 	// Assign enclosing groups to vertices
-	// 	this.setAllGroups(edgesAndVertices);
-
-	// 	// Assign edges to vertices
-	// 	this.setAllIncomingAndOutgoingEdges(edgesAndVertices);
-
-	// 	// Create nodes and groups
-	// 	const edgesNodesGroups = this.createNodesAndGroups(edgesAndVertices);
-
-	// 	// Set group members
-	// 	this.setAllGroupMembers(edgesNodesGroups);
-
-	// 	// Set crossing groups
-	// 	this.setAllCrossingGroups(edgesNodesGroups);
-
-	// 	// Create typed objects
-	// 	const typedObjects = this.createTypedObjects(edgesNodesGroups);
-
-	// 	// This is where we would make copies of list groups
-	// 	// this.makeListCopies(typedObjects);
-
-	// 	// Set dependencies
-	// 	this.setAllDependencies(typedObjects);
-
-	// 	// Set listener functions
-	// 	this.setAllListeners(typedObjects);
-
-	// 	// Set special types
-	// 	this.setAllSpecialTypes(typedObjects);
-
-	// 	// Return typed objects
-	// 	return typedObjects;
-	// }
-
-	getCannoliData(): CannoliCanvasData {
+	getCannoliData(): VerifiedCannoliCanvasData {
 		// Create the cannoli data object for each node and edge
 		this.cannoliData.nodes.forEach((node) => {
 			// Ignore red ("1") objects
@@ -137,15 +92,21 @@ export class CannoliFactory {
 
 			const kind = this.getVertexKind(node);
 
+			let cannoliData: CannoliVertexData | null;
+
 			if (kind === CannoliObjectKind.Node) {
 				node = node as
 					| CannoliCanvasFileData
 					| CannoliCanvasLinkData
 					| CannoliCanvasTextData;
-				return this.createNodeData(node);
-			} else if (kind === CannoliObjectKind.Group) {
+				cannoliData = this.createNodeData(node);
+			} else {
 				node = node as CannoliCanvasGroupData;
-				return this.createGroupData(node);
+				cannoliData = this.createGroupData(node);
+			}
+
+			if (cannoliData) {
+				node.cannoliData = cannoliData;
 			}
 		});
 
@@ -156,7 +117,11 @@ export class CannoliFactory {
 				return;
 			}
 
-			this.createEdgeData(edge);
+			const cannoliData = this.createEdgeData(edge);
+
+			if (cannoliData) {
+				edge.cannoliData = cannoliData;
+			}
 		});
 
 		// Set all dependencies
@@ -173,7 +138,13 @@ export class CannoliFactory {
 			}
 		}
 
-		return this.cannoliData;
+		// Filter out objects that don't have cannoliData
+		const verifiedCannoliData: CannoliCanvasData = {
+			nodes: this.cannoliData.nodes.filter((node) => !!node.cannoliData),
+			edges: this.cannoliData.edges.filter((edge) => !!edge.cannoliData),
+		};
+
+		return verifiedCannoliData as VerifiedCannoliCanvasData;
 	}
 
 	createNodeData(
@@ -240,9 +211,7 @@ export class CannoliFactory {
 		};
 	}
 
-	createGroupData(
-		group: CannoliCanvasGroupData
-	): CannoliGroupData | RepeatGroupData | ForEachGroupData | null {
+	createGroupData(group: CannoliCanvasGroupData): CannoliGroupData | null {
 		// If the node already has a cannoliData object, return it
 		if (group.cannoliData) {
 			return group.cannoliData;
@@ -281,16 +250,11 @@ export class CannoliFactory {
 			status,
 		};
 
-		if (type === GroupType.Repeat) {
+		if (type === GroupType.Repeat || type === GroupType.While) {
 			return {
 				...genericProps,
 				currentLoop: labelInfo?.completedNumber || 0,
 				maxLoops: labelInfo?.totalNumber || 0,
-			};
-		} else if (type === GroupType.ForEach) {
-			return {
-				...genericProps,
-				index: 0,
 			};
 		} else {
 			return genericProps;
@@ -320,10 +284,12 @@ export class CannoliFactory {
 		const kind = CannoliObjectKind.Edge;
 		const type = this.getEdgeType(edge);
 		const text = labelInfo?.text || "";
+		const vaultModifier = labelInfo?.vaultModifier || undefined;
 		const addMessages = labelInfo?.addMessages || false;
 		const dependencies = [] as string[];
 		const isClone = false;
-		const status = CannoliObjectStatus.Complete;
+		const isReflexive = this.isReflexive(edge);
+		const status = CannoliObjectStatus.Pending;
 
 		if (!type) {
 			return null;
@@ -339,6 +305,8 @@ export class CannoliFactory {
 			crossingInGroups,
 			crossingOutGroups,
 			status,
+			isReflexive,
+			vaultModifier,
 		};
 	}
 
@@ -402,6 +370,16 @@ export class CannoliFactory {
 			});
 		});
 
+		// If the vertex is a group, add all of its members as dependencies
+		if (vertex.cannoliData?.kind === CannoliObjectKind.Group) {
+			console.log(`vertex with text ${vertex.text} is a group`);
+			const group = vertex as CannoliCanvasGroupData;
+			const members = group.cannoliData?.members;
+			if (members) {
+				dependencies.push(...members);
+			}
+		}
+
 		return dependencies;
 	}
 
@@ -409,7 +387,7 @@ export class CannoliFactory {
 		const dependencies = [] as string[];
 
 		// Set the source as a dependency
-		dependencies.push(edge.source);
+		dependencies.push(edge.fromNode);
 
 		// Set all crossing out groups as dependencies
 		const cannoliData = edge.cannoliData;
@@ -498,7 +476,7 @@ export class CannoliFactory {
 			}
 			// Otherwise, it's a standard call node
 			else {
-				return CallNodeType.Standard;
+				return CallNodeType.StandardCall;
 			}
 		} else {
 			// If it has any outgoing key or list edges, it's a distribute node
@@ -527,7 +505,7 @@ export class CannoliFactory {
 			) {
 				return CallNodeType.Categorize;
 			} else {
-				return CallNodeType.Standard;
+				return CallNodeType.StandardCall;
 			}
 		}
 	}
@@ -646,11 +624,6 @@ export class CannoliFactory {
 	}
 
 	getEdgeType(edge: CannoliCanvasEdgeData): EdgeType | null {
-		// If the edge has fromEnd and toEnd set to "none", return null
-		if (edge.fromEnd === "none" && edge.toEnd === "none") {
-			return null;
-		}
-
 		if (edge.color) {
 			// Check against the edge color map
 			if (this.edgeColorMap[edge.color]) {
@@ -662,14 +635,20 @@ export class CannoliFactory {
 				else if (this.edgeColorMap[edge.color] === EdgeType.Key) {
 					return this.getKeyEdgeSubtype(edge);
 				}
+				// If the type from the color map is config
+				else if (this.edgeColorMap[edge.color] === EdgeType.Config) {
+					// If the edge has a label, return config
+					if (edge.label && edge.label.length > 0) {
+						return EdgeType.Config;
+					} else {
+						// Otherwise, return logging
+						return EdgeType.Logging;
+					}
+				}
 
 				return this.edgeColorMap[edge.color];
 			}
-		} else if (edge.label) {
-			if (edge.label.length === 0) {
-				return EdgeType.Blank;
-			}
-
+		} else if (edge.label && edge.label.length > 0) {
 			// Check the first character against the edge prefix map
 			if (this.edgePrefixMap[edge.label[0]]) {
 				// If the type from the map is choice, return the subtype
@@ -680,13 +659,55 @@ export class CannoliFactory {
 				else if (this.edgePrefixMap[edge.label[0]] === EdgeType.Key) {
 					return this.getKeyEdgeSubtype(edge);
 				}
+				// If the type from the color map is config
+				else if (
+					this.edgePrefixMap[edge.label[0]] === EdgeType.Config
+				) {
+					// If the length is greater than 1, return config
+					if (edge.label.length > 1) {
+						return EdgeType.Config;
+					} else {
+						// Otherwise, return logging
+						return EdgeType.Logging;
+					}
+				}
 
 				return this.edgePrefixMap[edge.label[0]];
 			} else {
 				return EdgeType.Variable;
 			}
-		} else {
-			return EdgeType.Blank;
+		} else if (!edge.label || edge.label.length === 0) {
+			// Get the indicated type of the source and target nodes
+			const sourceNode = this.getNode(edge.fromNode);
+			const targetNode = this.getNode(edge.toNode);
+
+			if (!sourceNode || !targetNode) {
+				throw new Error("Edge source or target not found");
+			}
+
+			const sourceIndicatedType = this.getNodeIndicatedType(sourceNode);
+			const targetIndicatedType = this.getNodeIndicatedType(targetNode);
+
+			// If the source is a content node
+			if (sourceIndicatedType === IndicatedNodeType.Content) {
+				// If the target is a content node, return write
+				if (targetIndicatedType === IndicatedNodeType.Content) {
+					return EdgeType.Write;
+				} else {
+					// If the target is a call node, return SystemMessage
+					return EdgeType.SystemMessage;
+				}
+			}
+			// If the source is a call node
+			else {
+				// If the target is a content node, return write
+				if (targetIndicatedType === IndicatedNodeType.Content) {
+					return EdgeType.Write;
+				} else {
+					// If the target is a call node, return chat
+					return EdgeType.Chat;
+				}
+			}
 		}
 
 		return null;
@@ -768,7 +789,13 @@ export class CannoliFactory {
 		return this.cannoliData.nodes.find((node) => node.id === id);
 	}
 
-	getNode(id: string): AllCannoliCanvasNodeData | undefined {
+	getNode(
+		id: string
+	):
+		| CannoliCanvasFileData
+		| CannoliCanvasLinkData
+		| CannoliCanvasTextData
+		| undefined {
 		const node = this.cannoliData.nodes.find((node) => node.id === id);
 		if (
 			node?.type === "file" ||
@@ -908,16 +935,15 @@ export class CannoliFactory {
 	}
 
 	getIncomingEdges(id: string): CannoliCanvasEdgeData[] {
-		// Filter out non-logic edges
 		return this.cannoliData.edges.filter(
-			(edge) => edge.toNode === id && this.getEdgeType(edge)
+			(edge) => edge.toNode === id && this.isValidEdge(edge)
 		);
 	}
 
 	getOutgoingEdges(id: string): CannoliCanvasEdgeData[] {
 		// Filter out non-logic edges
 		return this.cannoliData.edges.filter(
-			(edge) => edge.fromNode === id && this.getEdgeType(edge)
+			(edge) => edge.fromNode === id && this.isValidEdge(edge)
 		);
 	}
 
@@ -929,6 +955,15 @@ export class CannoliFactory {
 			return true;
 		} else {
 			return false;
+		}
+	}
+
+	isValidEdge(edge: CannoliCanvasEdgeData): boolean {
+		// If the edge has fromEnd and toEnd set to "none"
+		if (edge.fromEnd === "none" && edge.toEnd === "none") {
+			return false;
+		} else {
+			return true;
 		}
 	}
 

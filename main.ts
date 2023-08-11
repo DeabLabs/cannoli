@@ -10,6 +10,7 @@ import {
 import { Configuration, OpenAIApi } from "openai";
 import { Canvas } from "src/canvas";
 import { CannoliFactory } from "src/factory";
+import { CannoliGraph } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 interface CannoliSettings {
 	openaiAPIKey: string;
@@ -127,13 +128,16 @@ export default class Cannoli extends Plugin {
 
 		new Notice(`Started Cannoli: ${name}`);
 
-		const canvas = new Canvas(file);
+		// Sleep for 1.5s to give the vault time to load
+		await new Promise((resolve) => setTimeout(resolve, 1500));
 
+		const canvas = new Canvas(file);
 		await canvas.fetchData();
 
-		const factory = new CannoliFactory();
+		const factory = new CannoliFactory(canvas.getCanvasData());
 
-		const graph = factory.parse(canvas.getCanvasData());
+		const graph = factory.getCannoliData();
+		console.log(JSON.stringify(graph, null, 2));
 
 		// Create callback function to trigger notice
 		const onFinish = (stoppage: Stoppage) => {
@@ -158,20 +162,20 @@ export default class Cannoli extends Plugin {
 
 			console.log(`${name} finished with cost: ${stoppage.totalCost}`);
 
-			// const onContinueCallback = async () => {
-			// 	console.log("Continue selected");
-			// };
+			const onContinueCallback = async () => {
+				console.log("Continue selected");
+			};
 
-			// const onCancelCallback = async () => {
-			// 	console.log("Cancel selected");
-			// };
+			const onCancelCallback = async () => {
+				console.log("Cancel selected");
+			};
 
-			// new RunPriceAlertModal(
-			// 	this.app,
-			// 	stoppage.usage,
-			// 	onContinueCallback,
-			// 	onCancelCallback
-			// ).open();
+			new RunPriceAlertModal(
+				this.app,
+				stoppage.usage,
+				onContinueCallback,
+				onCancelCallback
+			).open();
 		};
 
 		// // Create validation run
@@ -180,7 +184,7 @@ export default class Cannoli extends Plugin {
 		// 	isMock: true,
 		// 	canvas: canvas,
 		// 	vault: this.app.vault,
-		// 	onFinish: onFinished,
+		// 	onFinish: onFinish,
 		// });
 
 		// console.log("Starting validation run");
@@ -191,12 +195,11 @@ export default class Cannoli extends Plugin {
 
 		// validationRun.reset();
 
-		// Sleep for 1.5s to give the vault time to load
-		await new Promise((resolve) => setTimeout(resolve, 1500));
+		const liveGraph = new CannoliGraph(JSON.parse(JSON.stringify(graph)));
 
 		// Create live run
 		const run = new Run({
-			graph: graph,
+			graph: liveGraph.graph,
 			openai: this.openai,
 			isMock: false,
 			canvas: canvas,

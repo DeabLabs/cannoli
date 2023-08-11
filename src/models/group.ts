@@ -1,86 +1,18 @@
-import { AllCanvasNodeData } from "obsidian/canvas";
-import {
-	CannoliObject,
-	CannoliVertex,
-	IndicatedEdgeType,
-	IndicatedGroupType,
-	IndicatedNodeType,
-} from "./object";
+import { CannoliObject, CannoliVertex } from "./object";
 import { CannoliEdge } from "./edge";
 import {
 	CannoliObjectKind,
 	CannoliObjectStatus,
 	EdgeType,
-	GroupType,
-	NodeType,
+	VerifiedCannoliCanvasGroupData,
 } from "./graph";
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];
 
-	GroupPrefixMap: Record<string, IndicatedGroupType> = {
-		"<": IndicatedGroupType.List,
-		"?": IndicatedGroupType.While,
-	};
-
-	GroupColorMap: Record<string, IndicatedGroupType> = {
-		"5": IndicatedGroupType.List,
-		"3": IndicatedGroupType.While,
-	};
-
-	constructor(
-		id: string,
-		text: string,
-		graph: Record<string, CannoliObject>,
-		isClone: boolean,
-		canvasData: AllCanvasNodeData,
-		outgoingEdges?: string[],
-		incomingEdges?: string[],
-		groups?: string[],
-		members?: string[]
-	) {
-		super(
-			id,
-			text,
-			graph,
-			isClone,
-			canvasData,
-			outgoingEdges,
-			incomingEdges,
-			groups
-		);
-
-		this.members = members || [];
-
-		this.kind = CannoliObjectKind.Group;
-	}
-
-	setMembers() {
-		// Iterate through all vertices
-		for (const objectId in this.graph) {
-			const object = this.graph[objectId];
-			if (object instanceof CannoliVertex) {
-				// If the current group contains the vertex and the vertex is not a floating node
-				if (object.groups.includes(this.id)) {
-					this.members.push(object.id);
-				}
-			}
-		}
-	}
-
-	setDependencies(): void {
-		// All members and non-reflexive incoming edges are dependencies
-		for (const member of this.members) {
-			this.dependencies.push(member);
-		}
-
-		for (const edge of this.incomingEdges) {
-			const edgeObject = this.graph[edge] as CannoliEdge;
-
-			if (!edgeObject.isReflexive) {
-				this.dependencies.push(edge);
-			}
-		}
+	constructor(groupData: VerifiedCannoliCanvasGroupData) {
+		super(groupData);
+		this.members = groupData.cannoliData.members;
 	}
 
 	getMembers(): CannoliVertex[] {
@@ -105,42 +37,23 @@ export class CannoliGroup extends CannoliVertex {
 
 	allEdgeDependenciesComplete(): boolean {
 		// Get two arrays: one of all dependencies that are arrays, and one of all dependencies that are not arrays
-		const arrayDependencies = this.dependencies.filter((dependency) =>
-			Array.isArray(dependency)
-		) as string[][];
 
-		const nonArrayDependencies = this.dependencies.filter(
+		const dependencies = this.dependencies.filter(
 			(dependency) => !Array.isArray(dependency)
 		) as string[];
 
-		// Filter out the array dependencies that contain non-edges
-		const edgeArrayDependencies = arrayDependencies.filter((dependency) =>
-			dependency.every((dep) => this.graph[dep].kind === "edge")
-		);
-
-		// Filter out the non-array dependencies that are not edges
-		const edgeNonArrayDependencies = nonArrayDependencies.filter(
+		// Filter out the dependencies that are not edges
+		const edgeDependencies = dependencies.filter(
 			(dependency) => this.graph[dependency].kind === "edge"
 		);
 
-		// For each edge dependency, check if it's complete or at least one is complete, respectively
-		const edgeArrayDependenciesComplete = edgeArrayDependencies.every(
-			(dependency) =>
-				dependency.some(
-					(dep) =>
-						this.graph[dep].status === CannoliObjectStatus.Complete
-				)
-		);
-
-		const edgeNonArrayDependenciesComplete = edgeNonArrayDependencies.every(
+		const edgeDependenciesComplete = edgeDependencies.every(
 			(dependency) =>
 				this.graph[dependency].status === CannoliObjectStatus.Complete
 		);
 
 		// Return true if all edge dependencies are complete or at least one is complete, respectively
-		return (
-			edgeArrayDependenciesComplete && edgeNonArrayDependenciesComplete
-		);
+		return edgeDependenciesComplete;
 	}
 
 	async execute(): Promise<void> {
@@ -223,139 +136,6 @@ export class CannoliGroup extends CannoliVertex {
 			}
 		}
 		return false;
-	}
-
-	getIndicatedType():
-		| IndicatedEdgeType
-		| IndicatedNodeType
-		| IndicatedGroupType {
-		// If the group has no members that arent of type NonLogic, return NonLogic
-		if (
-			!this.getMembers().some(
-				(member) =>
-					member.getIndicatedType() !== IndicatedNodeType.NonLogic ||
-					member.getIndicatedType() !== IndicatedGroupType.NonLogic
-			)
-		) {
-			return IndicatedGroupType.NonLogic;
-		}
-
-		// Check if the first character is in the prefix map
-		const firstCharacter = this.text[0];
-		if (firstCharacter in this.GroupPrefixMap) {
-			return this.GroupPrefixMap[firstCharacter];
-		}
-
-		// If not, check the color map
-		const color = this.canvasData.color;
-
-		if (color) {
-			if (color in this.GroupColorMap) {
-				return this.GroupColorMap[color];
-			}
-		}
-
-		// If the label number is not null, return Repeat
-		const labelNumber = this.getLabelNumber();
-		if (labelNumber !== null) {
-			return IndicatedGroupType.Repeat;
-		} else {
-			// Otherwise, return Basic
-			return IndicatedGroupType.Basic;
-		}
-	}
-
-	decideType(): EdgeType | NodeType | GroupType {
-		const indicatedType = this.getIndicatedType();
-		switch (indicatedType) {
-			case IndicatedGroupType.Repeat:
-				return GroupType.Repeat;
-			case IndicatedGroupType.While:
-				return GroupType.While;
-			case IndicatedGroupType.List:
-				return GroupType.List;
-			case IndicatedGroupType.Basic:
-				return GroupType.Basic;
-			case IndicatedGroupType.NonLogic:
-				return GroupType.NonLogic;
-			default:
-				throw new Error(
-					`Error on object ${this.id}: indicated type ${indicatedType} is not a valid group type.`
-				);
-		}
-	}
-
-	createTyped(graph: Record<string, CannoliObject>): CannoliObject | null {
-		const type = this.decideType();
-		switch (type) {
-			case GroupType.Repeat:
-				return new RepeatGroup(
-					this.id,
-					this.text,
-					graph,
-					this.isClone,
-					this.canvasData,
-					this.outgoingEdges,
-					this.incomingEdges,
-					this.groups,
-					this.members
-				);
-			case GroupType.While:
-				return new WhileGroup(
-					this.id,
-					this.text,
-					graph,
-					this.isClone,
-					this.canvasData,
-					this.outgoingEdges,
-					this.incomingEdges,
-					this.groups,
-					this.members
-				);
-			case GroupType.List:
-				return new ListGroup(
-					this.id,
-					this.text,
-					graph,
-					this.isClone,
-					this.canvasData,
-					this.outgoingEdges,
-					this.incomingEdges,
-					this.groups,
-					this.members,
-					0
-				);
-			case GroupType.Basic:
-				return new BasicGroup(
-					this.id,
-					this.text,
-					graph,
-					this.isClone,
-					this.canvasData
-				);
-			case GroupType.NonLogic:
-				return null;
-			default:
-				throw new Error(
-					`Error on object ${this.id}: type ${type} is not a valid group type.`
-				);
-		}
-	}
-
-	getLabelNumber(): number | null {
-		let label = this.text;
-
-		// If the first character of the group label is in the group prefix map, remove it
-		if (label[0] in this.GroupPrefixMap) {
-			label = label.slice(1);
-		}
-
-		// If the remaining label is a positive integer, use it as the maxLoops
-		const maxLoops = parseInt(label);
-		if (isNaN(maxLoops)) {
-			return null;
-		}
-		return maxLoops;
 	}
 
 	logDetails(): string {
@@ -491,81 +271,17 @@ export class CannoliGroup extends CannoliVertex {
 	}
 }
 
-export class BasicGroup extends CannoliGroup {
-	constructor(
-		id: string,
-		text: string,
-		graph: Record<string, CannoliObject>,
-		isClone: boolean,
-		canvasData: AllCanvasNodeData
-	) {
-		super(id, text, graph, isClone, canvasData);
-
-		this.type = GroupType.Basic;
-	}
-
-	async execute(): Promise<void> {
-		this.status = CannoliObjectStatus.Complete;
-		this.emit("update", this, CannoliObjectStatus.Complete);
+export class ForEachGroup extends CannoliGroup {
+	constructor(forEachData: VerifiedCannoliCanvasGroupData) {
+		super(forEachData);
 	}
 
 	logDetails(): string {
-		return super.logDetails() + `Type: Basic\n`;
-	}
-}
-
-export class ListGroup extends CannoliGroup {
-	numberOfVersions: number | null;
-	copyId: number;
-	constructor(
-		id: string,
-		text: string,
-		graph: Record<string, CannoliObject>,
-		isClone: boolean,
-		canvasData: AllCanvasNodeData,
-		outgoingEdges: string[],
-		incomingEdges: string[],
-		groups: string[],
-		members: string[],
-		copyId: number
-	) {
-		super(
-			id,
-			text,
-			graph,
-			isClone,
-			canvasData,
-			outgoingEdges,
-			incomingEdges,
-			groups,
-			members
-		);
-
-		this.copyId = copyId;
-
-		this.type = GroupType.List;
-
-		this.numberOfVersions = this.getLabelNumber();
-	}
-
-	clone() {}
-
-	logDetails(): string {
-		return (
-			super.logDetails() +
-			`Type: List\nNumber of Versions: ${this.numberOfVersions}\n`
-		);
+		return super.logDetails() + `Type: List\n`;
 	}
 
 	validate(): void {
 		super.validate();
-
-		// List groups must have a valid label number
-		if (this.numberOfVersions === null) {
-			this.error(
-				`List groups must have a valid number in their label. Please ensure the label is a positive integer.`
-			);
-		}
 
 		// List groups must have one and only one edge of type either list or category
 		const listOrCategoryEdges = this.outgoingEdges.filter(
@@ -598,34 +314,11 @@ export class RepeatGroup extends CannoliGroup {
 	maxLoops: number;
 	currentLoop: number;
 
-	constructor(
-		id: string,
-		text: string,
-		graph: Record<string, CannoliObject>,
-		isClone: boolean,
-		canvasData: AllCanvasNodeData,
-		outgoingEdges: string[],
-		incomingEdges: string[],
-		groups: string[],
-		members: string[]
-	) {
-		super(
-			id,
-			text,
-			graph,
-			isClone,
-			canvasData,
-			outgoingEdges,
-			incomingEdges,
-			groups,
-			members
-		);
+	constructor(groupData: VerifiedCannoliCanvasGroupData) {
+		super(groupData);
 
-		this.currentLoop = 0;
-
-		this.type = GroupType.Repeat;
-
-		this.maxLoops = this.getLabelNumber() ?? 0;
+		this.currentLoop = groupData.cannoliData.currentLoop ?? 0;
+		this.maxLoops = groupData.cannoliData.maxLoops ?? 1;
 	}
 
 	resetMembers() {
@@ -716,30 +409,9 @@ export class RepeatGroup extends CannoliGroup {
 	}
 }
 
-class WhileGroup extends RepeatGroup {
-	constructor(
-		id: string,
-		text: string,
-		graph: Record<string, CannoliObject>,
-		isClone: boolean,
-		canvasData: AllCanvasNodeData,
-		outgoingEdges: string[],
-		incomingEdges: string[],
-		groups: string[],
-		members: string[]
-	) {
-		super(
-			id,
-			text,
-			graph,
-			isClone,
-			canvasData,
-			outgoingEdges,
-			incomingEdges,
-			groups,
-			members
-		);
-		this.type = GroupType.While;
+export class WhileGroup extends RepeatGroup {
+	constructor(groupData: VerifiedCannoliCanvasGroupData) {
+		super(groupData);
 	}
 
 	membersFinished(): void {
