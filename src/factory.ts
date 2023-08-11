@@ -328,8 +328,13 @@ export class CannoliFactory {
 
 		incomingEdges.forEach((edge) => {
 			const edgeData = this.getEdge(edge);
+
 			if (!edgeData) {
 				throw new Error("setVertexDependencies: edgeData is undefined");
+			}
+
+			if (!edgeData.cannoliData) {
+				return;
 			}
 
 			if (this.isReflexive(edgeData)) {
@@ -363,6 +368,10 @@ export class CannoliFactory {
 					throw new Error(
 						"setVertexDependencies: edgeData is undefined"
 					);
+				}
+
+				if (!edgeData.cannoliData) {
+					return;
 				}
 
 				if (this.isReflexive(edgeData)) {
@@ -965,6 +974,8 @@ export class CannoliFactory {
 		// If the edge has fromEnd and toEnd set to "none"
 		if (edge.fromEnd === "none" && edge.toEnd === "none") {
 			return false;
+		} else if (edge.color === "1") {
+			return false;
 		} else {
 			return true;
 		}
@@ -1102,9 +1113,8 @@ export class CannoliFactory {
 
 		// If the source or target don't have cannoliData, throw an error
 		if (!source.cannoliData || !target.cannoliData) {
-			throw new Error(
-				"Source or target vertex does not have cannoliData"
-			);
+			// Hmmm
+			return null;
 		}
 
 		// Initialize crossingOutGroups and crossingInGroups
@@ -1174,9 +1184,8 @@ export class CannoliFactory {
 		}
 
 		if (!source.cannoliData || !target.cannoliData) {
-			throw new Error(
-				"Source or target vertex does not have cannoliData"
-			);
+			// Hmmm
+			return true;
 		}
 
 		// If the source is a group that contains the target, return true

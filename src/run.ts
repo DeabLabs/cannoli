@@ -150,10 +150,10 @@ export class Run {
 	}
 
 	async start() {
-		//if (this.isMock) {
-		// Log the graph
-		this.logGraph();
-		//}
+		if (this.isMock) {
+			// Log the graph
+			this.logGraph();
+		}
 		// Setup listeners
 		this.setupListeners();
 
@@ -333,7 +333,7 @@ export class Run {
 	}
 
 	objectWarning(object: CannoliObject, message?: string) {
-		if (this.canvas && object instanceof CannoliVertex) {
+		if (!this.isMock && this.canvas && object instanceof CannoliVertex) {
 			this.canvas.enqueueAddWarningNode(
 				object.id,
 				message ?? "Unknown warning"
