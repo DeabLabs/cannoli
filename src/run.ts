@@ -12,10 +12,10 @@ import {
 	FloatingNode,
 } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
-import { Vault } from "obsidian";
+import { Vault, requestUrl } from "obsidian";
 import pLimit from "p-limit";
 import { CannoliObjectStatus } from "./models/graph";
-import { CurlCommandSetting } from "main";
+import { HttpTemplate } from "main";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -84,7 +84,7 @@ export class Run {
 	canvas: Canvas | null;
 	isMock: boolean;
 	isStopped = false;
-	httpTemplates: CurlCommandSetting[] = [];
+	httpTemplates: HttpTemplate[] = [];
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4": {
@@ -133,7 +133,7 @@ export class Run {
 		openai?: OpenAIApi;
 		openAiConfig?: OpenAIConfig;
 		llmLimit?: number;
-		httpTemplates?: CurlCommandSetting[];
+		httpTemplates?: HttpTemplate[];
 	}) {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
@@ -707,9 +707,9 @@ export class Run {
 
 	async executeCommandByName(
 		name: string,
-		body: string | Record<string, string>,
+		body: string | Record<string, string> | null,
 		callback: (response: unknown) => void
-	): Promise<void | Error> {
+	): Promise<void | string | Error> {
 		// If we don't have an httpTemplates array, we can't execute commands
 		if (!this.httpTemplates) {
 			return new Error(
@@ -740,6 +740,11 @@ export class Run {
 		} catch (error) {
 			return error;
 		}
+
+		// Return the result of the callback if it's a string
+		if (typeof callback({}) === "string") {
+			return callback({});
+		}
 	}
 
 	parseBodyTemplate = (
@@ -750,28 +755,72 @@ export class Run {
 			const variables = template.match(/\{\{.*?\}\}/g) || [];
 			if (variables.length !== 1) {
 				throw new Error(
-					"Mismatch between number of variables in template and provided arrow variables."
+					`Expected only one variable in the template, but found ${
+						variables.length
+					}: ${variables.join(
+						", "
+					)}. Write to this node using a single variable arrow or a write arrow.`
 				);
 			}
 			return template.replace(
 				new RegExp(variables[0], "g"),
-				body.replace(/\n/g, "\\n")
+				body.replace(/\n/g, "\\n").replace(/"/g, '\\"')
+			);
+		} else if (typeof body === "object" && Object.keys(body).length === 1) {
+			const key = Object.keys(body)[0];
+			const value = body[key];
+			const variables = template.match(/\{\{.*?\}\}/g) || [];
+			if (variables.length !== 1) {
+				throw new Error(
+					`Expected only one variable in the template, but found ${
+						variables.length
+					}: ${variables.join(
+						", "
+					)}. Write to this node using a single variable arrow or a write arrow.`
+				);
+			}
+			return template.replace(
+				new RegExp(variables[0], "g"),
+				value.replace(/\n/g, "\\n").replace(/"/g, '\\"')
 			);
 		}
+
 		let parsedTemplate = template;
+		const keysInBody = Object.keys(body);
+		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
+			(v) => v.slice(2, -2)
+		);
+
+		for (const variable of variablesInTemplate) {
+			if (!keysInBody.includes(variable)) {
+				throw new Error(
+					`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+						.map((v) => `  - ${v}`)
+						.join("\n")}`
+				);
+			}
+		}
+
 		for (const key in body) {
+			if (!variablesInTemplate.includes(key)) {
+				throw new Error(
+					`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+						.map((v) => `  - ${v}`)
+						.join("\n")}`
+				);
+			}
 			parsedTemplate = parsedTemplate.replace(
 				new RegExp(`{{${key}}}`, "g"),
-				body[key].replace(/\n/g, "\\n")
+				body[key].replace(/\n/g, "\\n").replace(/"/g, '\\"')
 			);
 		}
-		//parsedTemplate = parsedTemplate.replace(/\n/g, "\\n");
+
 		return parsedTemplate;
 	};
 
 	executeCommand(
-		command: CurlCommandSetting,
-		body: string | Record<string, string>,
+		command: HttpTemplate,
+		body: string | Record<string, string> | null,
 		callback: (response: unknown) => void
 	): Promise<void> {
 		return new Promise((resolve, reject) => {
@@ -781,7 +830,7 @@ export class Run {
 			if (command.bodyTemplate) {
 				requestBody = this.parseBodyTemplate(
 					command.bodyTemplate,
-					body
+					body || ""
 				);
 			} else {
 				if (typeof body === "string") {
@@ -801,12 +850,38 @@ export class Run {
 						: undefined,
 			};
 
-			fetch(command.url, options)
-				.then((response) => response.json())
+			console.log(JSON.stringify(options));
+
+			requestUrl({ ...options, url: command.url })
+				.then((response) => {
+					console.log("Raw Response: ", response);
+					return response.text;
+				})
+				.then((text) => {
+					console.log("Response Text: ", text);
+					let response;
+					if (text.length > 0) {
+						response = JSON.parse(text); // Manually parse to JSON
+					} else {
+						response = {};
+					}
+
+					// CHeck for error in status
+					if (response.status >= 400) {
+						throw new Error(
+							`HTTP error ${response.status}: ${response.statusText}`
+						);
+					}
+				})
 				.then(callback)
-				.then(resolve) // Resolve the Promise after successful execution
 				.catch((error) => {
-					reject(new Error(`Error executing HTTP request: ${error}`)); // Reject the Promise with an error
+					console.error(
+						"Error executing action node:",
+						error.message
+					);
+					reject(
+						new Error(`Error on HTTP request: ${error.message}`)
+					);
 				});
 		});
 	}

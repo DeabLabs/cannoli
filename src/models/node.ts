@@ -1181,16 +1181,18 @@ export class HttpNode extends ContentNode {
 	async execute(): Promise<void> {
 		this.executing();
 
-		let content = this.getWriteOrLoggingContent();
+		let content: string | Record<string, string> | null =
+			this.getWriteOrLoggingContent();
 
 		if (!content) {
 			const variableValues = this.getVariableValues(false);
 
-			// Get first variable value
+			// If there are variable values, make a record of them and set it to content
 			if (variableValues.length > 0) {
-				content = variableValues[0].content || "";
-			} else {
-				content = "";
+				content = {};
+				for (const variableValue of variableValues) {
+					content[variableValue.name] = variableValue.content || "";
+				}
 			}
 		}
 
@@ -1207,18 +1209,20 @@ export class HttpNode extends ContentNode {
 		};
 
 		// Make the request
-		const error = await this.run.executeCommandByName(
+		const result = await this.run.executeCommandByName(
 			this.text,
 			content,
 			callback
 		);
 
-		if (error instanceof Error) {
-			this.error(error.message);
+		if (result instanceof Error) {
+			this.error(result.message);
 		}
 
-		// Load all outgoing edges
-		this.loadOutgoingEdges(content, []);
+		if (typeof result === "string") {
+			// Load all outgoing edges
+			this.loadOutgoingEdges(result, []);
+		}
 	}
 }
 

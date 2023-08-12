@@ -17,7 +17,7 @@ interface CannoliSettings {
 	costThreshold: number;
 	defaultModel: string;
 	defaultTemperature: number;
-	curlCommands: CurlCommandSetting[];
+	httpTemplates: HttpTemplate[];
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -25,10 +25,10 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	costThreshold: 0.5,
 	defaultModel: "gpt-3.5-turbo",
 	defaultTemperature: 1,
-	curlCommands: [],
+	httpTemplates: [],
 };
 
-export interface CurlCommandSetting {
+export interface HttpTemplate {
 	id: string;
 	name: string;
 	url: string;
@@ -284,7 +284,7 @@ export default class Cannoli extends Plugin {
 				canvas: canvas,
 				vault: this.app.vault,
 				onFinish: onFinish,
-				httpTemplates: this.settings.curlCommands,
+				httpTemplates: this.settings.httpTemplates,
 			});
 
 			this.runningCannolis[file.basename] = run;
@@ -400,19 +400,19 @@ export class RunPriceAlertModal extends Modal {
 	}
 }
 
-export class CurlCommandEditorModal extends Modal {
-	command: CurlCommandSetting;
-	onSave: (command: CurlCommandSetting) => void;
+export class HttpTemplateEditorModal extends Modal {
+	template: HttpTemplate;
+	onSave: (template: HttpTemplate) => void;
 	onCancel: () => void;
 
 	constructor(
 		app: App,
-		command: CurlCommandSetting,
-		onSave: (command: CurlCommandSetting) => void,
+		template: HttpTemplate,
+		onSave: (template: HttpTemplate) => void,
 		onCancel: () => void
 	) {
 		super(app);
-		this.command = command;
+		this.template = template;
 		this.onSave = onSave;
 		this.onCancel = onCancel;
 	}
@@ -421,7 +421,7 @@ export class CurlCommandEditorModal extends Modal {
 		const { contentEl } = this;
 
 		contentEl.addClass("curl-command-editor");
-		contentEl.createEl("h1", { text: "Edit cURL Command" });
+		contentEl.createEl("h1", { text: "Edit Action Node Template" });
 
 		const createInputGroup = (
 			labelText: string,
@@ -447,14 +447,14 @@ export class CurlCommandEditorModal extends Modal {
 
 		const nameInput = contentEl.createEl("input", {
 			type: "text",
-			value: this.command.name || "",
+			value: this.template.name || "",
 		}) as HTMLInputElement;
 		nameInput.setAttribute("id", "name-input");
 		createInputGroup("Name:", nameInput, "name-input");
 
 		const urlInput = contentEl.createEl("input", {
 			type: "text",
-			value: this.command.url || "",
+			value: this.template.url || "",
 		}) as HTMLInputElement;
 		urlInput.setAttribute("id", "url-input");
 		createInputGroup("URL:", urlInput, "url-input");
@@ -467,24 +467,23 @@ export class CurlCommandEditorModal extends Modal {
 				text: method,
 				value: method,
 			});
-			// If the current command's method matches, select this option
-			if (this.command.method === method) {
+			// If the current template's method matches, select this option
+			if (this.template.method === method) {
 				option.selected = true;
 			}
 		});
 		createInputGroup("Method:", methodSelect, "method-select");
 
 		const headersValue =
-			this.command.headers && Object.keys(this.command.headers).length > 0
-				? JSON.stringify(this.command.headers, null, 2)
+			this.template.headers &&
+			Object.keys(this.template.headers).length > 0
+				? JSON.stringify(this.template.headers, null, 2)
 				: JSON.stringify(
 						{ "Content-Type": "application/json" },
 						null,
 						2
 						// eslint-disable-next-line no-mixed-spaces-and-tabs
 				  );
-
-		console.log("Headers value for textarea:", headersValue); // Logging headersValue
 
 		const headersInput = contentEl.createEl("textarea", {
 			placeholder: `{ "Content-Type": "application/json" }`,
@@ -499,7 +498,8 @@ export class CurlCommandEditorModal extends Modal {
 			placeholder:
 				"Enter body template. Use {{variableName}} for variables.",
 		}) as HTMLTextAreaElement;
-		bodyTemplateInput.value = this.command.bodyTemplate || "";
+		const formattedBody = this.formatBody(this.template.bodyTemplate || "");
+		bodyTemplateInput.value = formattedBody;
 		bodyTemplateInput.setAttribute("rows", "3");
 		bodyTemplateInput.setAttribute(
 			"placeholder",
@@ -513,7 +513,7 @@ export class CurlCommandEditorModal extends Modal {
 
 		// Add the permanent description below the input
 		createDescription(
-			"You can use the optional body template to predefine the structure of the request body. Use {{variableName}} syntax to insert variables into the body template. If there's only one variable, it will be replaced with whatever is written to the http node. If there are multiple variables, the http node will look for the associated named incoming arrows."
+			"You can use the optional body template to predefine the structure of the request body. Use {{variableName}} syntax to insert variables into the body template. If there's only one variable, it will be replaced with whatever is written to the action node. If there are multiple variables, the action node will look for the variables in the available named arrows."
 		);
 
 		const panel = new Setting(contentEl);
@@ -531,7 +531,6 @@ export class CurlCommandEditorModal extends Modal {
 				.setCta()
 				.onClick(() => {
 					// Parsing headers
-					console.log("Headers input value:", headersInput.value); // Logging input value before parsing
 					let headers: Record<string, string> = {};
 					try {
 						headers = JSON.parse(headersInput.value || "{}");
@@ -542,19 +541,15 @@ export class CurlCommandEditorModal extends Modal {
 						return;
 					}
 
-					console.log("Parsed headers:", headers); // Logging parsed headers
-
-					// Updating command object
-					this.command.name = nameInput.value;
-					this.command.url = urlInput.value;
-					this.command.headers = headers;
-					this.command.method = methodSelect.value;
-					this.command.bodyTemplate = bodyTemplateInput.value;
-
-					console.log("Updated command object:", this.command); // Logging updated command object
+					// Updating template object
+					this.template.name = nameInput.value;
+					this.template.url = urlInput.value;
+					this.template.headers = headers;
+					this.template.method = methodSelect.value;
+					this.template.bodyTemplate = bodyTemplateInput.value;
 
 					this.close();
-					this.onSave(this.command);
+					this.onSave(this.template);
 				})
 		);
 	}
@@ -562,6 +557,19 @@ export class CurlCommandEditorModal extends Modal {
 	onClose() {
 		const { contentEl } = this;
 		contentEl.empty();
+	}
+
+	formatBody(body: string): string {
+		try {
+			// Try to parse the body as JSON
+			const parsedBody = JSON.parse(body);
+
+			// If successful, stringify it with proper formatting
+			return JSON.stringify(parsedBody, null, 2);
+		} catch (error) {
+			// If parsing failed, return the body as-is
+			return body;
+		}
 	}
 }
 
@@ -641,12 +649,12 @@ class CannoliSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("cURL Commands")
-			.setDesc("Manage cURL command settings")
+			.setName("Action Node Templates")
+			.setDesc("Manage default HTTP templates for action nodes.")
 			.addButton((button) =>
-				button.setButtonText("+ Add cURL Command").onClick(() => {
+				button.setButtonText("+ Template").onClick(() => {
 					// Create a new command object to pass to the modal
-					const newCommand: CurlCommandSetting = {
+					const newCommand: HttpTemplate = {
 						name: "",
 						url: "",
 						headers: {},
@@ -654,12 +662,12 @@ class CannoliSettingTab extends PluginSettingTab {
 						method: "GET",
 					};
 
-					// Open the modal to edit the new command
-					new CurlCommandEditorModal(
+					// Open the modal to edit the new template
+					new HttpTemplateEditorModal(
 						this.app,
 						newCommand,
 						(command) => {
-							this.plugin.settings.curlCommands.push(command);
+							this.plugin.settings.httpTemplates.push(command);
 							this.plugin.saveSettings();
 							// Refresh the settings pane to reflect the changes
 							this.display();
@@ -669,18 +677,18 @@ class CannoliSettingTab extends PluginSettingTab {
 				})
 			);
 
-		// Iterate through saved cURL commands and display them
-		for (const command of this.plugin.settings.curlCommands) {
+		// Iterate through saved templates and display them
+		for (const template of this.plugin.settings.httpTemplates) {
 			new Setting(containerEl)
-				.setName(command.name)
+				.setName(template.name)
 				.addButton((button) =>
 					button.setButtonText("Edit").onClick(() => {
-						// Open the modal to edit the existing command
-						new CurlCommandEditorModal(
+						// Open the modal to edit the existing template
+						new HttpTemplateEditorModal(
 							this.app,
-							command,
-							(updatedCommand) => {
-								Object.assign(command, updatedCommand);
+							template,
+							(updatedTemplate) => {
+								Object.assign(template, updatedTemplate);
 								this.plugin.saveSettings();
 								// Refresh the settings pane to reflect the changes
 								this.display();
@@ -692,9 +700,11 @@ class CannoliSettingTab extends PluginSettingTab {
 				.addButton((button) =>
 					button.setButtonText("Delete").onClick(() => {
 						const index =
-							this.plugin.settings.curlCommands.indexOf(command);
+							this.plugin.settings.httpTemplates.indexOf(
+								template
+							);
 						if (index > -1) {
-							this.plugin.settings.curlCommands.splice(index, 1);
+							this.plugin.settings.httpTemplates.splice(index, 1);
 							this.plugin.saveSettings();
 							// Refresh the settings pane to reflect the changes
 							this.display();
