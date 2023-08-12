@@ -1215,6 +1215,8 @@ export class HttpNode extends ContentNode {
 			callback
 		);
 
+		console.log(`Result: ${result}`);
+
 		if (result instanceof Error) {
 			this.error(result.message);
 		}

@@ -710,20 +710,17 @@ export class Run {
 		body: string | Record<string, string> | null,
 		callback: (response: unknown) => void
 	): Promise<void | string | Error> {
+		// REMOVE WHEN I FIGURE OUT MOCKING
+		if (this.isMock) {
+			callback("mock response");
+			return "mock response";
+		}
+
 		// If we don't have an httpTemplates array, we can't execute commands
 		if (!this.httpTemplates) {
 			return new Error(
 				"No HTTP templates available. You can add them in Cannoli Plugin settings."
 			);
-
-			return;
-		}
-
-		// We shouldn't do requests on mock
-		if (this.isMock) {
-			// Call the callback with an empty response
-			callback({});
-			return;
 		}
 
 		// Find the command by name
@@ -740,78 +737,65 @@ export class Run {
 		} catch (error) {
 			return error;
 		}
-
-		// Return the result of the callback if it's a string
-		if (typeof callback({}) === "string") {
-			return callback({});
-		}
 	}
 
 	parseBodyTemplate = (
 		template: string,
 		body: string | Record<string, string>
 	): string => {
-		if (typeof body === "string") {
-			const variables = template.match(/\{\{.*?\}\}/g) || [];
-			if (variables.length !== 1) {
-				throw new Error(
-					`Expected only one variable in the template, but found ${
-						variables.length
-					}: ${variables.join(
-						", "
-					)}. Write to this node using a single variable arrow or a write arrow.`
-				);
-			}
-			return template.replace(
-				new RegExp(variables[0], "g"),
-				body.replace(/\n/g, "\\n").replace(/"/g, '\\"')
-			);
-		} else if (typeof body === "object" && Object.keys(body).length === 1) {
-			const key = Object.keys(body)[0];
-			const value = body[key];
-			const variables = template.match(/\{\{.*?\}\}/g) || [];
-			if (variables.length !== 1) {
-				throw new Error(
-					`Expected only one variable in the template, but found ${
-						variables.length
-					}: ${variables.join(
-						", "
-					)}. Write to this node using a single variable arrow or a write arrow.`
-				);
-			}
-			return template.replace(
-				new RegExp(variables[0], "g"),
-				value.replace(/\n/g, "\\n").replace(/"/g, '\\"')
-			);
-		}
-
-		let parsedTemplate = template;
-		const keysInBody = Object.keys(body);
 		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
 			(v) => v.slice(2, -2)
 		);
 
-		for (const variable of variablesInTemplate) {
-			if (!keysInBody.includes(variable)) {
+		if (variablesInTemplate.length === 1) {
+			let valueToReplace;
+			if (typeof body === "string") {
+				valueToReplace = body;
+			} else if (Object.keys(body).length === 1) {
+				valueToReplace = Object.values(body)[0];
+			} else {
 				throw new Error(
-					`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
-						.map((v) => `  - ${v}`)
-						.join("\n")}`
+					`Expected only one variable in the template, but found multiple values. This node expects the variable:\n  - ${variablesInTemplate[0]}\n\nWrite to this node using a single variable arrow or a write arrow.`
 				);
 			}
+
+			return template.replace(
+				new RegExp(`{{${variablesInTemplate[0]}}}`, "g"),
+				valueToReplace.replace(/\n/g, "\\n").replace(/"/g, '\\"')
+			);
 		}
 
-		for (const key in body) {
-			if (!variablesInTemplate.includes(key)) {
-				throw new Error(
-					`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
-						.map((v) => `  - ${v}`)
-						.join("\n")}`
+		let parsedTemplate = template;
+
+		if (typeof body === "object") {
+			for (const variable of variablesInTemplate) {
+				if (!(variable in body)) {
+					throw new Error(
+						`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+							.map((v) => `  - ${v}`)
+							.join("\n")}`
+					);
+				}
+				parsedTemplate = parsedTemplate.replace(
+					new RegExp(`{{${variable}}}`, "g"),
+					body[variable].replace(/\n/g, "\\n").replace(/"/g, '\\"')
 				);
 			}
-			parsedTemplate = parsedTemplate.replace(
-				new RegExp(`{{${key}}}`, "g"),
-				body[key].replace(/\n/g, "\\n").replace(/"/g, '\\"')
+
+			for (const key in body) {
+				if (!variablesInTemplate.includes(key)) {
+					throw new Error(
+						`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+							.map((v) => `  - ${v}`)
+							.join("\n")}`
+					);
+				}
+			}
+		} else {
+			throw new Error(
+				`This action node expected multiple variables, but only found one. This node expects the following variables:\n${variablesInTemplate
+					.map((v) => `  - ${v}`)
+					.join("\n")}`
 			);
 		}
 
@@ -852,37 +836,45 @@ export class Run {
 
 			console.log(JSON.stringify(options));
 
-			requestUrl({ ...options, url: command.url })
-				.then((response) => {
-					console.log("Raw Response: ", response);
-					return response.text;
-				})
-				.then((text) => {
-					console.log("Response Text: ", text);
-					let response;
-					if (text.length > 0) {
-						response = JSON.parse(text); // Manually parse to JSON
-					} else {
-						response = {};
-					}
+			if (this.isMock) {
+				console.log("Mocking request");
+				callback({});
+				return;
+			}
+			{
+				requestUrl({ ...options, url: command.url })
+					.then((response) => {
+						console.log("Raw Response: ", response);
+						return response.text;
+					})
+					.then((text) => {
+						console.log("Response Text: ", text);
+						let response;
+						if (text.length > 0) {
+							response = JSON.parse(text); // Manually parse to JSON
+						} else {
+							response = {};
+						}
 
-					// CHeck for error in status
-					if (response.status >= 400) {
-						throw new Error(
-							`HTTP error ${response.status}: ${response.statusText}`
+						// CHeck for error in status
+						if (response.status >= 400) {
+							throw new Error(
+								`HTTP error ${response.status}: ${response.statusText}`
+							);
+						}
+						callback(response);
+						return response;
+					})
+					.catch((error) => {
+						console.error(
+							"Error executing action node:",
+							error.message
 						);
-					}
-				})
-				.then(callback)
-				.catch((error) => {
-					console.error(
-						"Error executing action node:",
-						error.message
-					);
-					reject(
-						new Error(`Error on HTTP request: ${error.message}`)
-					);
-				});
+						reject(
+							new Error(`Error on HTTP request: ${error.message}`)
+						);
+					});
+			}
 		});
 	}
 

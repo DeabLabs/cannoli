@@ -224,6 +224,7 @@ export default class Cannoli extends Plugin {
 				canvas: canvas,
 				vault: this.app.vault,
 				onFinish: onFinish,
+				httpTemplates: this.settings.httpTemplates,
 			});
 
 			console.log("Starting validation run");
