@@ -705,15 +705,15 @@ export class Run {
 		return totalCost;
 	}
 
-	executeCommandByName(
+	async executeCommandByName(
 		name: string,
 		body: string | Record<string, string>,
 		callback: (response: unknown) => void
-	) {
+	): Promise<void | Error> {
 		// If we don't have an httpTemplates array, we can't execute commands
 		if (!this.httpTemplates) {
-			console.error(
-				"Can't execute command, no httpTemplates array found."
+			return new Error(
+				"No HTTP templates available. You can add them in Cannoli Plugin settings."
 			);
 
 			return;
@@ -732,12 +732,14 @@ export class Run {
 		);
 
 		if (!command) {
-			console.error(`Command with name "${name}" not found.`);
-			return;
+			return new Error(`HTTP template with name "${name}" not found.`);
 		}
 
-		// Execute the command using the found settings
-		this.executeCommand(command, body, callback);
+		try {
+			await this.executeCommand(command, body, callback);
+		} catch (error) {
+			return error;
+		}
 	}
 
 	parseBodyTemplate = (
@@ -748,7 +750,7 @@ export class Run {
 			const variables = template.match(/\{\{.*?\}\}/g) || [];
 			if (variables.length !== 1) {
 				throw new Error(
-					"Mismatch between number of variables in template and provided body argument."
+					"Mismatch between number of variables in template and provided arrow variables."
 				);
 			}
 			return template.replace(
@@ -771,40 +773,42 @@ export class Run {
 		command: CurlCommandSetting,
 		body: string | Record<string, string>,
 		callback: (response: unknown) => void
-	) {
-		// Prepare body
-		let requestBody: string;
+	): Promise<void> {
+		return new Promise((resolve, reject) => {
+			// Prepare body
+			let requestBody: string;
 
-		if (command.bodyTemplate) {
-			requestBody = this.parseBodyTemplate(command.bodyTemplate, body);
-		} else {
-			if (typeof body === "string") {
-				requestBody = body;
+			if (command.bodyTemplate) {
+				requestBody = this.parseBodyTemplate(
+					command.bodyTemplate,
+					body
+				);
 			} else {
-				requestBody = JSON.stringify(body);
+				if (typeof body === "string") {
+					requestBody = body;
+				} else {
+					requestBody = JSON.stringify(body);
+				}
 			}
-		}
 
-		// Prepare fetch options
-		const options = {
-			method: command.method,
-			headers: command.headers,
-			body:
-				command.method.toLowerCase() !== "get"
-					? requestBody
-					: undefined,
-		};
+			// Prepare fetch options
+			const options = {
+				method: command.method,
+				headers: command.headers,
+				body:
+					command.method.toLowerCase() !== "get"
+						? requestBody
+						: undefined,
+			};
 
-		console.log(`Sending http request with body: ${options.body}`);
-		console.log(`Headers: ${JSON.stringify(command.headers)}`);
-
-		// Make the fetch request
-		fetch(command.url, options)
-			.then((response) => response.json())
-			.then(callback)
-			.catch((error) =>
-				console.error("Error executing command:", error.message)
-			);
+			fetch(command.url, options)
+				.then((response) => response.json())
+				.then(callback)
+				.then(resolve) // Resolve the Promise after successful execution
+				.catch((error) => {
+					reject(new Error(`Error executing HTTP request: ${error}`)); // Reject the Promise with an error
+				});
+		});
 	}
 
 	async editNote(name: string, newContent: string): Promise<void | null> {

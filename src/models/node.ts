@@ -1194,8 +1194,6 @@ export class HttpNode extends ContentNode {
 			}
 		}
 
-		console.log(`Content to be sent as http: ${content}`);
-
 		// Create callback of the form: callback: (response: unknown) => void
 		const callback = (response: unknown) => {
 			// Stringify the response
@@ -1209,7 +1207,15 @@ export class HttpNode extends ContentNode {
 		};
 
 		// Make the request
-		this.run.executeCommandByName(this.text, content, callback);
+		const error = await this.run.executeCommandByName(
+			this.text,
+			content,
+			callback
+		);
+
+		if (error instanceof Error) {
+			this.error(error.message);
+		}
 
 		// Load all outgoing edges
 		this.loadOutgoingEdges(content, []);
