@@ -1196,35 +1196,19 @@ export class HttpNode extends ContentNode {
 			}
 		}
 
-		// Create callback of the form: callback: (response: unknown) => void
-		const callback = (response: unknown) => {
-			// Stringify the response
-			const stringifiedResponse = JSON.stringify(response);
-
-			// Load all outgoing edges
-			this.loadOutgoingEdges(stringifiedResponse, []);
-
-			// Call completed
-			this.completed();
-		};
-
 		// Make the request
-		const result = await this.run.executeCommandByName(
-			this.text,
-			content,
-			callback
-		);
-
-		console.log(`Result: ${result}`);
+		const result = await this.run.executeCommandByName(this.text, content);
 
 		if (result instanceof Error) {
 			this.error(result.message);
+			return;
 		}
 
 		if (typeof result === "string") {
-			// Load all outgoing edges
 			this.loadOutgoingEdges(result, []);
 		}
+
+		this.completed();
 	}
 }
 

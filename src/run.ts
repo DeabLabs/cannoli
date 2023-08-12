@@ -707,13 +707,11 @@ export class Run {
 
 	async executeCommandByName(
 		name: string,
-		body: string | Record<string, string> | null,
-		callback: (response: unknown) => void
-	): Promise<void | string | Error> {
+		body: string | Record<string, string> | null
+	): Promise<string | Error> {
 		// REMOVE WHEN I FIGURE OUT MOCKING
 		if (this.isMock) {
-			callback("mock response");
-			return "mock response";
+			return "Mock response";
 		}
 
 		// If we don't have an httpTemplates array, we can't execute commands
@@ -733,7 +731,7 @@ export class Run {
 		}
 
 		try {
-			await this.executeCommand(command, body, callback);
+			return await this.executeCommand(command, body);
 		} catch (error) {
 			return error;
 		}
@@ -804,9 +802,8 @@ export class Run {
 
 	executeCommand(
 		command: HttpTemplate,
-		body: string | Record<string, string> | null,
-		callback: (response: unknown) => void
-	): Promise<void> {
+		body: string | Record<string, string> | null
+	): Promise<string> {
 		return new Promise((resolve, reject) => {
 			// Prepare body
 			let requestBody: string;
@@ -834,42 +831,33 @@ export class Run {
 						: undefined,
 			};
 
-			console.log(JSON.stringify(options));
-
 			if (this.isMock) {
-				console.log("Mocking request");
-				callback({});
-				return;
+				resolve("mock response");
 			}
 			{
 				requestUrl({ ...options, url: command.url })
 					.then((response) => {
-						console.log("Raw Response: ", response);
 						return response.text;
 					})
 					.then((text) => {
-						console.log("Response Text: ", text);
 						let response;
 						if (text.length > 0) {
-							response = JSON.parse(text); // Manually parse to JSON
+							response = JSON.parse(text);
 						} else {
 							response = {};
 						}
 
-						// CHeck for error in status
 						if (response.status >= 400) {
-							throw new Error(
-								`HTTP error ${response.status}: ${response.statusText}`
+							reject(
+								new Error(
+									`HTTP error ${response.status}: ${response.statusText}`
+								)
 							);
+						} else {
+							resolve(JSON.stringify(response, null, 2));
 						}
-						callback(response);
-						return response;
 					})
 					.catch((error) => {
-						console.error(
-							"Error executing action node:",
-							error.message
-						);
 						reject(
 							new Error(`Error on HTTP request: ${error.message}`)
 						);
