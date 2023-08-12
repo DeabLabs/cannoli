@@ -1173,6 +1173,49 @@ export class ReferenceNode extends ContentNode {
 
 export class DynamicReferenceNode extends ReferenceNode {}
 
+export class HttpNode extends ContentNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Http\n`;
+	}
+
+	async execute(): Promise<void> {
+		this.executing();
+
+		let content = this.getWriteOrLoggingContent();
+
+		if (!content) {
+			const variableValues = this.getVariableValues(false);
+
+			// Get first variable value
+			if (variableValues.length > 0) {
+				content = variableValues[0].content || "";
+			} else {
+				content = "";
+			}
+		}
+
+		console.log(`Content to be sent as http: ${content}`);
+
+		// Create callback of the form: callback: (response: unknown) => void
+		const callback = (response: unknown) => {
+			// Stringify the response
+			const stringifiedResponse = JSON.stringify(response);
+
+			// Load all outgoing edges
+			this.loadOutgoingEdges(stringifiedResponse, []);
+
+			// Call completed
+			this.completed();
+		};
+
+		// Make the request
+		this.run.executeCommandByName(this.text, content, callback);
+
+		// Load all outgoing edges
+		this.loadOutgoingEdges(content, []);
+	}
+}
+
 export class FormatterNode extends ContentNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Formatter\n`;

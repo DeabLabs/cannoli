@@ -15,6 +15,7 @@ import { CannoliObject, CannoliVertex } from "./models/object";
 import { Vault } from "obsidian";
 import pLimit from "p-limit";
 import { CannoliObjectStatus } from "./models/graph";
+import { CurlCommandSetting } from "main";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -51,13 +52,13 @@ export interface ModelUsage {
 
 export interface OpenAIConfig {
 	model: string;
-	frequency_penalty: number | undefined;
-	presence_penalty: number | undefined;
-	stop: string[] | undefined;
-	function_call: string | undefined;
-	functions: ChatCompletionFunctions[] | undefined;
-	temperature: number | undefined;
-	top_p: number | undefined;
+	frequency_penalty?: number | undefined;
+	presence_penalty?: number | undefined;
+	stop?: string[] | undefined;
+	function_call?: string | undefined;
+	functions?: ChatCompletionFunctions[] | undefined;
+	temperature?: number | undefined;
+	top_p?: number | undefined;
 }
 
 enum DagCheckState {
@@ -83,6 +84,7 @@ export class Run {
 	canvas: Canvas | null;
 	isMock: boolean;
 	isStopped = false;
+	httpTemplates: CurlCommandSetting[] = [];
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4": {
@@ -394,6 +396,8 @@ export class Run {
 		request: CreateChatCompletionRequest,
 		verbose?: boolean
 	): Promise<ChatCompletionRequestMessage | Error> {
+		console.log(`Request: ${JSON.stringify(request, null, 2)}`);
+
 		return this.llmLimit(
 			async (): Promise<ChatCompletionRequestMessage | Error> => {
 				// Only call LLM if we're not mocking
@@ -696,6 +700,80 @@ export class Run {
 			totalCost += this.calculateLLMCostForModel(usage);
 		}
 		return totalCost;
+	}
+
+	executeCommandByName(
+		name: string,
+		body: string | Record<string, string>,
+		callback: (response: unknown) => void
+	) {
+		// Find the command by name
+		const command = this.httpTemplates.find(
+			(template) => template.name === name
+		);
+
+		if (!command) {
+			console.error(`Command with name "${name}" not found.`);
+			return;
+		}
+
+		// Execute the command using the found settings
+		this.executeCommand(command, body, callback);
+	}
+
+	parseBodyTemplate = (
+		template: string,
+		body: string | Record<string, string>
+	): string => {
+		if (typeof body === "string") {
+			const variables = template.match(/\{\{.*?\}\}/g) || [];
+			if (variables.length !== 1) {
+				throw new Error(
+					"Mismatch between number of variables in template and provided body argument."
+				);
+			}
+			return template.replace(new RegExp(variables[0], "g"), body);
+		}
+		let parsedTemplate = template;
+		for (const key in body) {
+			parsedTemplate = parsedTemplate.replace(
+				new RegExp(`{{${key}}}`, "g"),
+				body[key]
+			);
+		}
+		return parsedTemplate;
+	};
+
+	executeCommand(
+		command: CurlCommandSetting,
+		body: string | Record<string, string>,
+		callback: (response: unknown) => void
+	) {
+		// Prepare body
+		let requestBody: string;
+
+		if (command.bodyTemplate) {
+			requestBody = this.parseBodyTemplate(command.bodyTemplate, body);
+		} else {
+			if (typeof body === "string") {
+				requestBody = body;
+			} else {
+				requestBody = JSON.stringify(body);
+			}
+		}
+
+		// Prepare fetch options
+		const options = {
+			method: command.method,
+			headers: command.headers,
+			body: requestBody, // Using the processed requestBody
+		};
+
+		// Make the fetch request
+		fetch(command.url, options)
+			.then((response) => response.json())
+			.then(callback)
+			.catch((error) => console.error("Error executing command:", error));
 	}
 
 	async editNote(name: string, newContent: string): Promise<void | null> {

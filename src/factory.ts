@@ -44,6 +44,7 @@ export class CannoliFactory {
 	nodeColorMap: Record<string, IndicatedNodeType> = {
 		"0": IndicatedNodeType.Call,
 		"1": IndicatedNodeType.Call,
+		"2": IndicatedNodeType.Content,
 		"3": IndicatedNodeType.Call,
 		"4": IndicatedNodeType.Call,
 		"6": IndicatedNodeType.Content,
@@ -535,6 +536,11 @@ export class CannoliFactory {
 		// If its a file node, return reference
 		if (node.type === "file") {
 			return ContentNodeType.StaticReference;
+		}
+
+		// If its color is "2", return http
+		if (node.color === "2") {
+			return ContentNodeType.Http;
 		}
 
 		let text = "";

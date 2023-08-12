@@ -15,12 +15,27 @@ import { Run, Stoppage, Usage } from "src/run";
 interface CannoliSettings {
 	openaiAPIKey: string;
 	costThreshold: number;
+	defaultModel: string;
+	defaultTemperature: number;
+	curlCommands: CurlCommandSetting[];
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
 	openaiAPIKey: "Paste key here",
 	costThreshold: 0.5,
+	defaultModel: "gpt-3.5-turbo",
+	defaultTemperature: 1,
+	curlCommands: [],
 };
+
+export interface CurlCommandSetting {
+	id: string;
+	name: string;
+	url: string;
+	headers: Record<string, string>;
+	method: string;
+	bodyTemplate?: string;
+}
 
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
@@ -261,6 +276,10 @@ export default class Cannoli extends Plugin {
 			const run = new Run({
 				graph: liveGraph.graph,
 				openai: this.openai,
+				openAiConfig: {
+					model: this.settings.defaultModel,
+					temperature: this.settings.defaultTemperature,
+				},
 				isMock: false,
 				canvas: canvas,
 				vault: this.app.vault,
@@ -380,6 +399,171 @@ export class RunPriceAlertModal extends Modal {
 	}
 }
 
+export class CurlCommandEditorModal extends Modal {
+	command: CurlCommandSetting;
+	onSave: (command: CurlCommandSetting) => void;
+	onCancel: () => void;
+
+	constructor(
+		app: App,
+		command: CurlCommandSetting,
+		onSave: (command: CurlCommandSetting) => void,
+		onCancel: () => void
+	) {
+		super(app);
+		this.command = command;
+		this.onSave = onSave;
+		this.onCancel = onCancel;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+
+		contentEl.addClass("curl-command-editor");
+		contentEl.createEl("h1", { text: "Edit cURL Command" });
+
+		const createInputGroup = (
+			labelText: string,
+			inputElement: HTMLElement,
+			id: string
+		) => {
+			const div = contentEl.createEl("div", {
+				cls: "curl-command-group",
+			});
+			const label = div.createEl("label", { text: labelText });
+			label.htmlFor = id;
+			inputElement.setAttribute("id", id);
+			div.appendChild(inputElement);
+		};
+
+		const createDescription = (text: string) => {
+			const p = contentEl.createEl("p", {
+				cls: "curl-command-description",
+			});
+			p.textContent = text;
+			return p;
+		};
+
+		const nameInput = contentEl.createEl("input", {
+			type: "text",
+			value: this.command.name || "",
+		}) as HTMLInputElement;
+		nameInput.setAttribute("id", "name-input");
+		createInputGroup("Name:", nameInput, "name-input");
+
+		const urlInput = contentEl.createEl("input", {
+			type: "text",
+			value: this.command.url || "",
+		}) as HTMLInputElement;
+		urlInput.setAttribute("id", "url-input");
+		createInputGroup("URL:", urlInput, "url-input");
+
+		// Create a select element for HTTP methods
+		const methodSelect = contentEl.createEl("select") as HTMLSelectElement;
+		const methods = ["GET", "POST", "PUT", "DELETE"];
+		methods.forEach((method) => {
+			const option = methodSelect.createEl("option", {
+				text: method,
+				value: method,
+			});
+			// If the current command's method matches, select this option
+			if (this.command.method === method) {
+				option.selected = true;
+			}
+		});
+		createInputGroup("Method:", methodSelect, "method-select");
+
+		const headersValue =
+			this.command.headers && Object.keys(this.command.headers).length > 0
+				? JSON.stringify(this.command.headers, null, 2)
+				: JSON.stringify(
+						{ "Content-Type": "application/json" },
+						null,
+						2
+						// eslint-disable-next-line no-mixed-spaces-and-tabs
+				  );
+
+		console.log("Headers value for textarea:", headersValue); // Logging headersValue
+
+		const headersInput = contentEl.createEl("textarea", {
+			placeholder: `{ "Content-Type": "application/json" }`,
+		}) as HTMLTextAreaElement;
+		headersInput.value = headersValue;
+		headersInput.setAttribute("rows", "3");
+
+		createInputGroup("Headers:", headersInput, "headers-input");
+
+		// Body template input
+		const bodyTemplateInput = contentEl.createEl("textarea", {
+			placeholder:
+				"Enter body template. Use {{variableName}} for variables.",
+		}) as HTMLTextAreaElement;
+		bodyTemplateInput.value = this.command.bodyTemplate || "";
+		bodyTemplateInput.setAttribute("rows", "3");
+		bodyTemplateInput.setAttribute(
+			"placeholder",
+			"Enter body template. Use {{variableName}} for variables."
+		);
+		createInputGroup(
+			"Body Template: (optional)",
+			bodyTemplateInput,
+			"body-template-input"
+		);
+
+		// Add the permanent description below the input
+		createDescription(
+			"You can use the optional body template to predefine the structure of the request body. Use {{variableName}} syntax to insert variables into the body template. If there's only one variable, it will be replaced with whatever is written to the http node. If there are multiple variables, the http node will look for the associated named incoming arrows."
+		);
+
+		const panel = new Setting(contentEl);
+
+		panel.addButton((btn) =>
+			btn.setButtonText("Cancel").onClick(() => {
+				this.close();
+				this.onCancel();
+			})
+		);
+
+		panel.addButton((btn) =>
+			btn
+				.setButtonText("Save")
+				.setCta()
+				.onClick(() => {
+					// Parsing headers
+					console.log("Headers input value:", headersInput.value); // Logging input value before parsing
+					let headers: Record<string, string> = {};
+					try {
+						headers = JSON.parse(headersInput.value);
+					} catch (error) {
+						alert(
+							"Invalid JSON format for headers. Please correct and try again."
+						);
+						return;
+					}
+
+					console.log("Parsed headers:", headers); // Logging parsed headers
+
+					// Updating command object
+					this.command.name = nameInput.value;
+					this.command.url = urlInput.value;
+					this.command.headers = headers;
+					this.command.method = methodSelect.value;
+					this.command.bodyTemplate = bodyTemplateInput.value;
+
+					console.log("Updated command object:", this.command); // Logging updated command object
+
+					this.close();
+					this.onSave(this.command);
+				})
+		);
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
 class CannoliSettingTab extends PluginSettingTab {
 	plugin: Cannoli;
 
@@ -421,5 +605,101 @@ class CannoliSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// Default LLM model setting
+		new Setting(containerEl)
+			.setName("Default LLM Model")
+			.setDesc(
+				"This model will be used for all LLM nodes unless overridden with a config arrow. (Note that special arrow types rely on function calling, which is not available in all models.)"
+			)
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.defaultModel)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultModel = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Default LLM temperature setting
+		new Setting(containerEl)
+			.setName("Default LLM Temperature")
+			.setDesc(
+				"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+			)
+			.addText((text) =>
+				text
+					.setValue(
+						this.plugin.settings.defaultTemperature.toString()
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultTemperature =
+							parseFloat(value);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("cURL Commands")
+			.setDesc("Manage cURL command settings")
+			.addButton((button) =>
+				button.setButtonText("+ Add cURL Command").onClick(() => {
+					// Create a new command object to pass to the modal
+					const newCommand: CurlCommandSetting = {
+						name: "",
+						url: "",
+						headers: {},
+						id: "",
+						method: "GET",
+					};
+
+					// Open the modal to edit the new command
+					new CurlCommandEditorModal(
+						this.app,
+						newCommand,
+						(command) => {
+							this.plugin.settings.curlCommands.push(command);
+							this.plugin.saveSettings();
+							// Refresh the settings pane to reflect the changes
+							this.display();
+						},
+						() => {}
+					).open();
+				})
+			);
+
+		// Iterate through saved cURL commands and display them
+		for (const command of this.plugin.settings.curlCommands) {
+			new Setting(containerEl)
+				.setName(command.name)
+				.addButton((button) =>
+					button.setButtonText("Edit").onClick(() => {
+						// Open the modal to edit the existing command
+						new CurlCommandEditorModal(
+							this.app,
+							command,
+							(updatedCommand) => {
+								Object.assign(command, updatedCommand);
+								this.plugin.saveSettings();
+								// Refresh the settings pane to reflect the changes
+								this.display();
+							},
+							() => {}
+						).open();
+					})
+				)
+				.addButton((button) =>
+					button.setButtonText("Delete").onClick(() => {
+						const index =
+							this.plugin.settings.curlCommands.indexOf(command);
+						if (index > -1) {
+							this.plugin.settings.curlCommands.splice(index, 1);
+							this.plugin.saveSettings();
+							// Refresh the settings pane to reflect the changes
+							this.display();
+						}
+					})
+				);
+		}
 	}
 }

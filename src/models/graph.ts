@@ -16,6 +16,7 @@ import {
 	DistributeNode,
 	FloatingNode,
 	FormatterNode,
+	HttpNode,
 	InputNode,
 	ReferenceNode,
 } from "./node";
@@ -74,6 +75,7 @@ export enum ContentNodeType {
 	StaticReference = "static-reference",
 	DynamicReference = "dynamic-reference",
 	Formatter = "formatter",
+	Http = "http",
 }
 
 export enum FloatingNodeType {
@@ -264,6 +266,11 @@ export class CannoliGraph {
 				case ContentNodeType.Formatter: {
 					const formatterNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new FormatterNode(formatterNode);
+					break;
+				}
+				case ContentNodeType.Http: {
+					const httpNode = node as VerifiedCannoliCanvasTextData;
+					this.graph[node.id] = new HttpNode(httpNode);
 					break;
 				}
 				case CallNodeType.StandardCall: {

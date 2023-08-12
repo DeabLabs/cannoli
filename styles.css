@@ -19,3 +19,27 @@ If your plugin does not need CSS, delete this file.
 .whitespace {
 	margin-left: 8px;
 }
+
+.curl-command-editor label {
+	display: inline-block;
+	margin-bottom: 4px;
+	margin-right: 8px;
+}
+
+.curl-command-editor input,
+.curl-command-editor textarea {
+	width: 100%;
+	box-sizing: border-box;
+	margin-bottom: 10px;
+}
+
+.curl-command-group {
+	margin-bottom: 15px;
+}
+
+.curl-command-description {
+	margin-top: -22px;
+	font-size: 12px;
+	opacity: 0.6;
+	margin-left: 4px;
+}
