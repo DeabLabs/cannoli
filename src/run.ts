@@ -751,15 +751,19 @@ export class Run {
 					"Mismatch between number of variables in template and provided body argument."
 				);
 			}
-			return template.replace(new RegExp(variables[0], "g"), body);
+			return template.replace(
+				new RegExp(variables[0], "g"),
+				body.replace(/\n/g, "\\n")
+			);
 		}
 		let parsedTemplate = template;
 		for (const key in body) {
 			parsedTemplate = parsedTemplate.replace(
 				new RegExp(`{{${key}}}`, "g"),
-				body[key]
+				body[key].replace(/\n/g, "\\n")
 			);
 		}
+		//parsedTemplate = parsedTemplate.replace(/\n/g, "\\n");
 		return parsedTemplate;
 	};
 
