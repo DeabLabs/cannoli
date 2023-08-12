@@ -122,6 +122,7 @@ export class Run {
 		openai,
 		openAiConfig,
 		llmLimit,
+		httpTemplates,
 	}: {
 		graph: Record<string, CannoliObject>;
 		vault: Vault;
@@ -132,6 +133,7 @@ export class Run {
 		openai?: OpenAIApi;
 		openAiConfig?: OpenAIConfig;
 		llmLimit?: number;
+		httpTemplates?: CurlCommandSetting[];
 	}) {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
@@ -141,6 +143,7 @@ export class Run {
 		this.openai = openai ?? null;
 		this.usage = {};
 		this.llmLimit = pLimit(llmLimit ?? 10);
+		this.httpTemplates = httpTemplates ?? [];
 
 		// Set the default openai config
 		this.openaiConfig = openAiConfig ? openAiConfig : this.openaiConfig;
@@ -707,6 +710,22 @@ export class Run {
 		body: string | Record<string, string>,
 		callback: (response: unknown) => void
 	) {
+		// If we don't have an httpTemplates array, we can't execute commands
+		if (!this.httpTemplates) {
+			console.error(
+				"Can't execute command, no httpTemplates array found."
+			);
+
+			return;
+		}
+
+		// We shouldn't do requests on mock
+		if (this.isMock) {
+			// Call the callback with an empty response
+			callback({});
+			return;
+		}
+
 		// Find the command by name
 		const command = this.httpTemplates.find(
 			(template) => template.name === name
@@ -766,14 +785,22 @@ export class Run {
 		const options = {
 			method: command.method,
 			headers: command.headers,
-			body: requestBody, // Using the processed requestBody
+			body:
+				command.method.toLowerCase() !== "get"
+					? requestBody
+					: undefined,
 		};
+
+		console.log(`Sending http request with body: ${options.body}`);
+		console.log(`Headers: ${JSON.stringify(command.headers)}`);
 
 		// Make the fetch request
 		fetch(command.url, options)
 			.then((response) => response.json())
 			.then(callback)
-			.catch((error) => console.error("Error executing command:", error));
+			.catch((error) =>
+				console.error("Error executing command:", error.message)
+			);
 	}
 
 	async editNote(name: string, newContent: string): Promise<void | null> {

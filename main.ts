@@ -284,6 +284,7 @@ export default class Cannoli extends Plugin {
 				canvas: canvas,
 				vault: this.app.vault,
 				onFinish: onFinish,
+				httpTemplates: this.settings.curlCommands,
 			});
 
 			this.runningCannolis[file.basename] = run;
@@ -533,7 +534,7 @@ export class CurlCommandEditorModal extends Modal {
 					console.log("Headers input value:", headersInput.value); // Logging input value before parsing
 					let headers: Record<string, string> = {};
 					try {
-						headers = JSON.parse(headersInput.value);
+						headers = JSON.parse(headersInput.value || "{}");
 					} catch (error) {
 						alert(
 							"Invalid JSON format for headers. Please correct and try again."
