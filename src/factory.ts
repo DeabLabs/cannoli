@@ -167,8 +167,8 @@ export class CannoliFactory {
 			const fileName = node.file.split("/").pop();
 			universalText = fileName?.split(".").shift();
 
-			// Then, prepend ">[[" and append "]]" to the text to match the reference format
-			universalText = `>[[${universalText}]]`;
+			// Then, prepend "{{" and append "}}" to the text to match the reference format
+			universalText = `{{${universalText}}}`;
 		} else if (node.type === "link") {
 			node = node as CannoliCanvasLinkData;
 			universalText = node.url;
@@ -535,7 +535,7 @@ export class CannoliFactory {
 
 		// If its a file node, return reference
 		if (node.type === "file") {
-			return ContentNodeType.StaticReference;
+			return ContentNodeType.Reference;
 		}
 
 		// If its color is "2", return http
@@ -570,25 +570,9 @@ export class CannoliFactory {
 			return ContentNodeType.Input;
 		}
 
-		// If the first line of the text starts with ">[[" and ends with "]]", or it starts with ">[" and ends with "]", it's a static reference node
-		const firstLine = text.split("\n")[0];
-		if (
-			(firstLine.startsWith(">[[") && text.endsWith("]]")) ||
-			(firstLine.startsWith(">[") && text.endsWith("]"))
-		) {
-			return ContentNodeType.StaticReference;
-		}
-
-		// Parse the incoming edges
-		const incomingEdgeLabelInfo = incomingEdges.map((edge) =>
-			this.parseEdgeLabel(edge)
-		);
-
-		// If any of the incoming edges have a non-null vault modifier, its a dynamic reference node
-		if (
-			incomingEdgeLabelInfo.some((labelInfo) => labelInfo?.vaultModifier)
-		) {
-			return ContentNodeType.DynamicReference;
+		// If the text starts with {{ and ends with }}, return reference
+		if (text.startsWith("{{") && text.endsWith("}}")) {
+			return ContentNodeType.Reference;
 		}
 
 		// Otherwise, its a display node
@@ -917,7 +901,7 @@ export class CannoliFactory {
 	}
 
 	parseNodeReferences(node: CannoliCanvasTextData): Reference[] {
-		const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|{{(.+?)}}|{(.+?)}/g;
+		const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|\{@(.+?)\}|{(.+?)}/g; // Updated regex pattern
 		let match: RegExpExecArray | null;
 		const references: Reference[] = [];
 		let textCopy = node.text;
@@ -935,9 +919,12 @@ export class CannoliFactory {
 				type = ReferenceType.Floating;
 				name = match[2];
 				shouldExtract = true;
-			} else if (match[3] || match[4]) {
-				name = match[3] || match[4];
-				shouldExtract = !!match[3];
+			} else if (match[3]) {
+				// Updated condition
+				name = match[3];
+				shouldExtract = true; // Extraction based on new pattern
+			} else if (match[4]) {
+				name = match[4];
 			}
 
 			const reference: Reference = {

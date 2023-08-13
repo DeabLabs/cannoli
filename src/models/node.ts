@@ -41,12 +41,7 @@ export class CannoliNode extends CannoliVertex {
 		// Replace references with placeholders using an index-based system
 		let textCopy = this.text;
 		let index = 0;
-		textCopy = textCopy.replace(/{{?[^{}]+}}?/g, (match) => {
-			if (match.startsWith("{{") && match.endsWith("}}")) {
-				return `{${index++}}`;
-			}
-			return `{${index++}}`;
-		});
+		textCopy = textCopy.replace(/\{[^{}]+\}/g, () => `{${index++}}`); // Updated regex pattern to match {thing}
 
 		// Define and return the render function
 		const renderFunction = async (
@@ -311,8 +306,8 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	getNoteOrFloatingReference(): Reference | null {
-		const notePattern = /^>\[\[([^\]]+)\]\]$/;
-		const floatingPattern = /^>\[([^\]]+)\]$/;
+		const notePattern = /^{{\[\[([^\]]+)\]\]}}$/;
+		const floatingPattern = /^{{\[([^\]]+)\]}}$/;
 
 		const strippedText = this.text.trim();
 
@@ -1030,6 +1025,7 @@ export class ContentNode extends CannoliNode {
 
 export class ReferenceNode extends ContentNode {
 	reference: Reference;
+	isDynamic: boolean;
 
 	constructor(
 		nodeData:
@@ -1048,17 +1044,61 @@ export class ReferenceNode extends ContentNode {
 		} else {
 			this.reference = reference;
 		}
+
+		// If the text matches "{{@variable name}}" then it is dynamic
+		this.isDynamic = this.text.match(/{{@.*}}/) !== null;
 	}
 
 	async execute(): Promise<void> {
 		this.executing();
+
+		if (this.isDynamic) {
+			await this.loadDynamicReference();
+		}
 
 		const writeOrLoggingContent = this.getWriteOrLoggingContent();
 		const variableValues = this.getVariableValues(false);
 
 		let content = "";
 		if (variableValues.length > 0) {
-			content = variableValues[0].content || "";
+			// If the variable value's id has a vaultModifier of note, createNote, folder, or createFolder, ignore it
+			// First, get the edges of the variable values
+			const variableValueEdges = variableValues.map((variableValue) => {
+				return this.graph[variableValue.edgeId] as CannoliEdge;
+			});
+
+			// Then, filter out the edges that have a vaultModifier of note, createNote, folder, or createFolder
+			const filteredVariableValueEdges = variableValueEdges.filter(
+				(variableValueEdge) => {
+					return (
+						variableValueEdge.vaultModifier !==
+							VaultModifier.Note &&
+						variableValueEdge.vaultModifier !==
+							VaultModifier.CreateNote &&
+						variableValueEdge.vaultModifier !==
+							VaultModifier.Folder &&
+						variableValueEdge.vaultModifier !==
+							VaultModifier.CreateFolder
+					);
+				}
+			);
+
+			// Then, filter the variable values by the filtered edges
+			const filteredVariableValues = variableValues.filter(
+				(variableValue) => {
+					return filteredVariableValueEdges.some(
+						(filteredVariableValueEdge) => {
+							return (
+								filteredVariableValueEdge.id ===
+								variableValue.edgeId
+							);
+						}
+					);
+				}
+			);
+
+			// Then, get the content of the first variable value
+			content = filteredVariableValues[0].content;
 		} else if (writeOrLoggingContent) {
 			content = writeOrLoggingContent;
 		}
@@ -1099,6 +1139,118 @@ export class ReferenceNode extends ContentNode {
 		}
 
 		return `Could not find reference "${this.reference.name}"`;
+	}
+
+	async loadDynamicReference() {
+		// Search the incoming edges for any that have a vault modifier of type "note" or "create note"
+		const incomingEdges = this.getIncomingEdges();
+		const vaultModifierEdges = incomingEdges.filter(
+			(edge) => edge.vaultModifier !== null
+		);
+
+		if (vaultModifierEdges.length > 0) {
+			// Find the edges with the vault modifier of "note" or "create note"
+			const noteVaultModifierEdges = vaultModifierEdges.filter(
+				(edge) =>
+					edge.vaultModifier === VaultModifier.Note ||
+					edge.vaultModifier === VaultModifier.CreateNote
+			);
+
+			// Find the edges with the vault modifier of "folder" or "create folder"
+			const folderVaultModifierEdges = vaultModifierEdges.filter(
+				(edge) =>
+					edge.vaultModifier === VaultModifier.Folder ||
+					edge.vaultModifier === VaultModifier.CreateFolder
+			);
+
+			// If there's more than one of either, throw an error
+			if (noteVaultModifierEdges.length > 1) {
+				this.error(
+					`Invalid reference node. More than one incoming edge with a vault modifier of "note" or "create note".`
+				);
+			}
+
+			if (folderVaultModifierEdges.length > 1) {
+				this.error(
+					`Invalid reference node. More than one incoming edge with a vault modifier of "folder" or "create folder".`
+				);
+			}
+
+			let noteName = {
+				name: "",
+				create: false,
+			};
+			let path = {
+				path: "",
+				create: false,
+			};
+
+			// If there's a note vault modifier edge, use that to get the note name and whether or not to create it
+			if (noteVaultModifierEdges.length === 1) {
+				const noteVaultModifierEdge = noteVaultModifierEdges[0];
+				noteName = {
+					name:
+						typeof noteVaultModifierEdge.content === "string"
+							? noteVaultModifierEdge.content
+							: "",
+					create:
+						noteVaultModifierEdge.vaultModifier ===
+						VaultModifier.CreateNote,
+				};
+			}
+
+			// If there's a folder vault modifier edge, use that to get the path and whether or not to create it
+			if (folderVaultModifierEdges.length === 1) {
+				const folderVaultModifierEdge = folderVaultModifierEdges[0];
+				path = {
+					path:
+						typeof folderVaultModifierEdge.content === "string"
+							? folderVaultModifierEdge.content
+							: "",
+					create:
+						folderVaultModifierEdge.vaultModifier ===
+						VaultModifier.CreateFolder,
+				};
+			}
+
+			// Use the noteName and path variables to decide between the functions: createNoteAtExistingPath, createNoteAtNewPath, createFolder, moveNote
+			if (noteName.name && path.path) {
+				if (noteName.create && path.create) {
+					await this.run.createNoteAtNewPath(
+						noteName.name,
+						path.path
+					);
+				} else if (noteName.create && !path.create) {
+					await this.run.createNoteAtExistingPath(
+						noteName.name,
+						path.path
+					);
+				} else if (!noteName.create && path.create) {
+					await this.run.createFolder(path.path);
+					await this.run.moveNote(noteName.name, path.path);
+				} else {
+					await this.run.moveNote(noteName.name, path.path, false);
+				}
+			} else if (noteName.name && !path.path) {
+				if (noteName.create) {
+					// Create it at the root
+					await this.run.createNoteAtExistingPath(noteName.name);
+				}
+			} else if (!noteName.name && path.path) {
+				if (path.create) {
+					await this.run.createFolder(path.path);
+				}
+			}
+
+			// If noteName isn't empty, create a Reference object with the note
+			if (noteName.name) {
+				this.reference = {
+					name: noteName.name,
+					type: ReferenceType.Note,
+					shouldExtract: false,
+				};
+			}
+		}
 	}
 
 	async editContent(newContent: string): Promise<void> {

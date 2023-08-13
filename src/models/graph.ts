@@ -72,8 +72,7 @@ export enum CallNodeType {
 export enum ContentNodeType {
 	Input = "input",
 	Display = "display",
-	StaticReference = "static-reference",
-	DynamicReference = "dynamic-reference",
+	Reference = "reference",
 	Formatter = "formatter",
 	Http = "http",
 }
@@ -246,21 +245,9 @@ export class CannoliGraph {
 					this.graph[node.id] = new DisplayNode(displayNode);
 					break;
 				}
-				case ContentNodeType.StaticReference: {
-					const staticReferenceNode =
-						node as VerifiedCannoliCanvasTextData;
-					this.graph[node.id] = new ReferenceNode(
-						staticReferenceNode
-					);
-					break;
-				}
-				case ContentNodeType.DynamicReference: {
-					console.error("Dynamic references not yet implemented");
-					// const dynamicReferenceNode =
-					// 	node as VerifiedCannoliCanvasTextData;
-					// this.graph[node.id] = new ReferenceNode(
-					// 	dynamicReferenceNode
-					// );
+				case ContentNodeType.Reference: {
+					const referenceNode = node as VerifiedCannoliCanvasTextData;
+					this.graph[node.id] = new ReferenceNode(referenceNode);
 					break;
 				}
 				case ContentNodeType.Formatter: {

@@ -924,10 +924,15 @@ export class Run {
 
 	async createNoteAtExistingPath(
 		noteName: string,
-		path: string,
+		path?: string,
 		content?: string,
 		verbose = false
 	): Promise<boolean> {
+		// If path isn't given, use root
+		if (!path) {
+			path = "/";
+		}
+
 		// Create the path by appending the note name to the path with .md
 		const fullPath = `${path}/${noteName}.md`;
 
@@ -989,18 +994,19 @@ export class Run {
 
 	async moveNote(
 		noteName: string,
-		oldPath: string,
 		newPath: string,
 		verbose = false
 	): Promise<boolean> {
-		// Create the paths by appending the note name to the paths with .md
-		const oldFullPath = `${oldPath}/${noteName}.md`;
+		// Create the path by appending the note name to the paths with .md
 		const newFullPath = `${newPath}/${noteName}.md`;
 
 		// Get the note
 		const note = this.vault.getMarkdownFiles().find((file) => {
-			return file.path === oldFullPath;
+			return file.basename === noteName;
 		});
+
+		// Get the old path
+		const oldFullPath = note?.path;
 
 		if (!note) {
 			return false;
