@@ -5,12 +5,7 @@ import {
 	OpenAIApi,
 } from "openai";
 import { Canvas } from "./canvas";
-import {
-	CallNode,
-	DisplayNode,
-	DynamicReferenceNode,
-	FloatingNode,
-} from "./models/node";
+import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import { Vault, requestUrl } from "obsidian";
 import pLimit from "p-limit";
@@ -285,8 +280,7 @@ export class Run {
 			if (object instanceof CallNode) {
 				this.canvas.enqueueChangeNodeColor(object.id, "4");
 			} else if (
-				object instanceof DisplayNode ||
-				object instanceof DynamicReferenceNode ||
+				object instanceof ContentNode ||
 				object instanceof FloatingNode
 			) {
 				this.canvas.enqueueChangeNodeText(object.id, object.text);
@@ -399,7 +393,7 @@ export class Run {
 		request: CreateChatCompletionRequest,
 		verbose?: boolean
 	): Promise<ChatCompletionRequestMessage | Error> {
-		console.log(`Request: ${JSON.stringify(request, null, 2)}`);
+		//console.log(`Request: ${JSON.stringify(request, null, 2)}`);
 
 		return this.llmLimit(
 			async (): Promise<ChatCompletionRequestMessage | Error> => {
@@ -705,7 +699,68 @@ export class Run {
 		return totalCost;
 	}
 
-	async executeCommandByName(
+	createHttpTemplate(inputString: string): HttpTemplate {
+		// Split the input string by newline to separate the name from the JSON
+		const lines = inputString.split("\n");
+		const nameLine = lines[0];
+		let jsonString = lines.slice(1).join("\n");
+
+		// If the json string is in a text block, remove the leading and trailing quotes, as well as the language identifier
+		if (jsonString.startsWith("```")) {
+			jsonString = jsonString.substring(3, jsonString.length - 3);
+		}
+
+		if (jsonString.startsWith("json")) {
+			jsonString = jsonString.substring(4, jsonString.length);
+		}
+
+		// Extract the name from the first line
+		const name = nameLine.substring(1, nameLine.length - 1).trim();
+
+		// Parse the JSON string
+		const json = JSON.parse(jsonString);
+
+		// Construct the httpTemplate object
+		const httpTemplate: HttpTemplate = {
+			id: "", // Using an empty string for the ID as specified
+			name: name,
+			url: json.url,
+			method: json.method,
+			headers: json.headers,
+			bodyTemplate: JSON.stringify(json.bodyTemplate),
+		};
+
+		return httpTemplate;
+	}
+
+	async executeHttpTemplateFromFloatingNode(
+		inputString: string,
+		body: string | Record<string, string> | null
+	): Promise<string | Error> {
+		// If this is a mock, return a mock response
+		if (this.isMock) {
+			return "Mock response";
+		}
+
+		// Try to parse the input string into an httpTemplate object
+		let template: HttpTemplate;
+		try {
+			template = this.createHttpTemplate(inputString);
+		} catch (error) {
+			return new Error(
+				`Failed to create HTTP template from input string: ${error.message}`
+			);
+		}
+
+		// Try to execute the parsed template
+		try {
+			return await this.executeHttpTemplate(template, body);
+		} catch (error) {
+			return error;
+		}
+	}
+
+	async executeHttpTemplateByName(
 		name: string,
 		body: string | Record<string, string> | null
 	): Promise<string | Error> {
@@ -721,17 +776,17 @@ export class Run {
 			);
 		}
 
-		// Find the command by name
-		const command = this.httpTemplates.find(
+		// Find the template by name
+		const template = this.httpTemplates.find(
 			(template) => template.name === name
 		);
 
-		if (!command) {
+		if (!template) {
 			return new Error(`HTTP template with name "${name}" not found.`);
 		}
 
 		try {
-			return await this.executeCommand(command, body);
+			return await this.executeHttpTemplate(template, body);
 		} catch (error) {
 			return error;
 		}
@@ -741,6 +796,7 @@ export class Run {
 		template: string,
 		body: string | Record<string, string>
 	): string => {
+		console.log("template:", template);
 		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
 			(v) => v.slice(2, -2)
 		);
@@ -800,17 +856,21 @@ export class Run {
 		return parsedTemplate;
 	};
 
-	executeCommand(
-		command: HttpTemplate,
+	executeHttpTemplate(
+		template: HttpTemplate,
 		body: string | Record<string, string> | null
 	): Promise<string> {
+		console.log(
+			`Executing HTTP template: ${JSON.stringify(template, null, 2)}`
+		);
+
 		return new Promise((resolve, reject) => {
 			// Prepare body
 			let requestBody: string;
 
-			if (command.bodyTemplate) {
+			if (template.bodyTemplate) {
 				requestBody = this.parseBodyTemplate(
-					command.bodyTemplate,
+					template.bodyTemplate,
 					body || ""
 				);
 			} else {
@@ -823,10 +883,10 @@ export class Run {
 
 			// Prepare fetch options
 			const options = {
-				method: command.method,
-				headers: command.headers,
+				method: template.method,
+				headers: template.headers,
 				body:
-					command.method.toLowerCase() !== "get"
+					template.method.toLowerCase() !== "get"
 						? requestBody
 						: undefined,
 			};
@@ -835,7 +895,7 @@ export class Run {
 				resolve("mock response");
 			}
 			{
-				requestUrl({ ...options, url: command.url })
+				requestUrl({ ...options, url: template.url })
 					.then((response) => {
 						return response.text;
 					})

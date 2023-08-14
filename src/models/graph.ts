@@ -12,12 +12,11 @@ import { CannoliGroup, ForEachGroup, RepeatGroup, WhileGroup } from "./group";
 import {
 	CallNode,
 	ChooseNode,
-	DisplayNode,
+	ContentNode,
 	DistributeNode,
 	FloatingNode,
 	FormatterNode,
 	HttpNode,
-	InputNode,
 	ReferenceNode,
 } from "./node";
 import { CannoliEdge, LoggingEdge, SystemMessageEdge } from "./edge";
@@ -70,8 +69,7 @@ export enum CallNodeType {
 }
 
 export enum ContentNodeType {
-	Input = "input",
-	Display = "display",
+	StandardConent = "standard-content",
 	Reference = "reference",
 	Formatter = "formatter",
 	Http = "http",
@@ -79,6 +77,7 @@ export enum ContentNodeType {
 
 export enum FloatingNodeType {
 	Variable = "variable",
+	ActionTemplate = "action-template",
 }
 
 export enum ReferenceType {
@@ -235,14 +234,10 @@ export class CannoliGraph {
 					this.graph[node.id] = new WhileGroup(whileGroup);
 					break;
 				}
-				case ContentNodeType.Input: {
-					const inputNode = node as VerifiedCannoliCanvasTextData;
-					this.graph[node.id] = new InputNode(inputNode);
-					break;
-				}
-				case ContentNodeType.Display: {
-					const displayNode = node as VerifiedCannoliCanvasTextData;
-					this.graph[node.id] = new DisplayNode(displayNode);
+				case ContentNodeType.StandardConent: {
+					const standardContentNode =
+						node as VerifiedCannoliCanvasTextData;
+					this.graph[node.id] = new ContentNode(standardContentNode);
 					break;
 				}
 				case ContentNodeType.Reference: {

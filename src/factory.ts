@@ -69,6 +69,22 @@ export class CannoliFactory {
 		"~": false,
 	};
 
+	defaultAddMessagesMap: Record<EdgeType, boolean> = {
+		[EdgeType.Choice]: true,
+		[EdgeType.Chat]: true,
+		[EdgeType.SystemMessage]: true,
+
+		[EdgeType.Function]: false,
+		[EdgeType.Config]: false,
+		[EdgeType.Key]: false,
+		[EdgeType.List]: false,
+		[EdgeType.Merge]: false,
+		[EdgeType.Variable]: false,
+		[EdgeType.Category]: false,
+		[EdgeType.Logging]: false,
+		[EdgeType.Write]: false,
+	};
+
 	groupPrefixMap: Record<string, GroupType> = {
 		"<": GroupType.ForEach,
 		"?": GroupType.While,
@@ -167,8 +183,8 @@ export class CannoliFactory {
 			const fileName = node.file.split("/").pop();
 			universalText = fileName?.split(".").shift();
 
-			// Then, prepend "{{" and append "}}" to the text to match the reference format
-			universalText = `{{${universalText}}}`;
+			// Then, prepend "{{[[" and append "]]}}" to the text to match the file reference format
+			universalText = `{{[[${universalText}]]}}`;
 		} else if (node.type === "link") {
 			node = node as CannoliCanvasLinkData;
 			universalText = node.url;
@@ -289,7 +305,19 @@ export class CannoliFactory {
 		const type = this.getEdgeType(edge);
 		const text = labelInfo?.text || "";
 		const vaultModifier = labelInfo?.vaultModifier || undefined;
-		const addMessages = labelInfo?.addMessages || false;
+
+		let addMessages = false;
+
+		if (type) {
+			// Find the default addMessages override using the map against the type
+			addMessages = this.defaultAddMessagesMap[type];
+		}
+
+		addMessages =
+			labelInfo?.addMessages !== undefined &&
+			labelInfo?.addMessages !== null
+				? labelInfo.addMessages
+				: addMessages;
 		const dependencies = [] as string[];
 		const isClone = false;
 		const isReflexive = this.isReflexive(edge);
@@ -531,16 +559,9 @@ export class CannoliFactory {
 			| CannoliCanvasLinkData
 			| CannoliCanvasTextData
 	): ContentNodeType | null {
-		const incomingEdges = this.getIncomingEdges(node.id);
-
 		// If its a file node, return reference
 		if (node.type === "file") {
 			return ContentNodeType.Reference;
-		}
-
-		// If its color is "2", return http
-		if (node.color === "2") {
-			return ContentNodeType.Http;
 		}
 
 		let text = "";
@@ -551,6 +572,11 @@ export class CannoliFactory {
 		} else {
 			node = node as CannoliCanvasLinkData;
 			text = node.url;
+		}
+
+		// If its color is "2", return http
+		if (node.color === "2") {
+			return ContentNodeType.Http;
 		}
 
 		// If its text starts and ends with a "`", and it doesn't start and end with "```", and it contains at least one "{" and one "}", it's a formatter node
@@ -565,18 +591,17 @@ export class CannoliFactory {
 			return ContentNodeType.Formatter;
 		}
 
-		// If doesnt have any incoming edges, return input
-		if (incomingEdges.length === 0) {
-			return ContentNodeType.Input;
-		}
-
-		// If the text starts with {{ and ends with }}, return reference
-		if (text.startsWith("{{") && text.endsWith("}}")) {
+		// If the text starts with {{ and ends with }}, and doesnt have any newlines, it's a reference node
+		if (
+			text.trim().startsWith("{{") &&
+			text.trim().endsWith("}}") &&
+			!text.trim().includes("\n")
+		) {
 			return ContentNodeType.Reference;
 		}
 
-		// Otherwise, its a display node
-		return ContentNodeType.Display;
+		// Otherwise, its a standard content node
+		return ContentNodeType.StandardConent;
 	}
 
 	getVertexKind(vertex: AllCannoliCanvasNodeData) {
@@ -839,11 +864,17 @@ export class CannoliFactory {
 			text = text.slice(2);
 		}
 
+		console.log(`Last character: ${edge.label[edge.label.length - 1]}`);
+
 		// If the last character is in the add messages map, set add messages to the corresponding bool value and remove it from the label
-		if (this.addMessagesModifierMap[edge.label[edge.label.length - 1]]) {
+		if (
+			this.addMessagesModifierMap[edge.label[edge.label.length - 1]] !==
+			undefined
+		) {
 			addMessages =
 				this.addMessagesModifierMap[edge.label[edge.label.length - 1]];
 			text = text.slice(0, -1);
+			console.log(`Add messages modifier: ${addMessages}`);
 		}
 
 		return {
@@ -901,7 +932,7 @@ export class CannoliFactory {
 	}
 
 	parseNodeReferences(node: CannoliCanvasTextData): Reference[] {
-		const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|\{@(.+?)\}|{(.+?)}/g; // Updated regex pattern
+		const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|\{@(.+?)\}|{(.+?)}/g;
 		let match: RegExpExecArray | null;
 		const references: Reference[] = [];
 		let textCopy = node.text;

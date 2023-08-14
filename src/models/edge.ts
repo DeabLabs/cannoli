@@ -67,7 +67,7 @@ export class CannoliEdge extends CannoliObject {
 			this.messages = messages ? messages : null;
 		}
 
-		console.log(`Edge loaded with content: ${this.content}`);
+		// console.log(`Edge loaded with content: ${this.content}`);
 	}
 
 	async execute(): Promise<void> {
@@ -79,7 +79,7 @@ export class CannoliEdge extends CannoliObject {
 			this.allDependenciesComplete() &&
 			this.status === CannoliObjectStatus.Pending
 		) {
-			console.log(`Executing edge with loaded content: ${this.content}`);
+			//console.log(`Executing edge with loaded content: ${this.content}`);
 			this.execute();
 		}
 	}

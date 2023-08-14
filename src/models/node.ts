@@ -9,6 +9,7 @@ import {
 import { CannoliGroup } from "./group";
 import {
 	CannoliObjectStatus,
+	ContentNodeType,
 	EdgeType,
 	Reference,
 	ReferenceType,
@@ -83,10 +84,10 @@ export class CannoliNode extends CannoliVertex {
 	async processReferences() {
 		const variableValues = this.getVariableValues(true);
 
-		console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
-		console.log(
-			`Variable values: ${JSON.stringify(variableValues, null, 2)}`
-		);
+		//console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
+		//console.log(
+		//	`Variable values: ${JSON.stringify(variableValues, null, 2)}`
+		//);
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
@@ -287,7 +288,7 @@ export class CannoliNode extends CannoliVertex {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
-				console.log(`Loading edge with content ${content}`);
+				//console.log(`Loading edge with content ${content}`);
 				edgeObject.load({
 					content: content,
 					messages: messages,
@@ -311,8 +312,13 @@ export class CannoliNode extends CannoliVertex {
 
 		const strippedText = this.text.trim();
 
+		console.log(
+			`Checking for note or floating reference in "${strippedText}"`
+		);
+
 		let match = strippedText.match(notePattern);
 		if (match) {
+			console.log(`Found note reference ${match[1]}`);
 			return {
 				name: match[1],
 				type: ReferenceType.Note,
@@ -322,6 +328,7 @@ export class CannoliNode extends CannoliVertex {
 
 		match = strippedText.match(floatingPattern);
 		if (match) {
+			console.log(`Found floating reference ${match[1]}`);
 			return {
 				name: match[1],
 				type: ReferenceType.Floating,
@@ -955,6 +962,55 @@ export class ChooseNode extends CallNode {
 }
 
 export class ContentNode extends CannoliNode {
+	async execute(): Promise<void> {
+		this.executing();
+
+		let content = this.getWriteOrLoggingContent();
+
+		if (!content) {
+			const variableValues = this.getVariableValues(false);
+
+			// Get first variable value
+			if (variableValues.length > 0) {
+				content = variableValues[0].content || "";
+			} else {
+				content = "";
+			}
+		}
+
+		// If the incoming edge is a logging edge, append the content to this node's text rather than replacing it
+		if (
+			this.getIncomingEdges().some(
+				(edge) => edge.type === EdgeType.Logging
+			)
+		) {
+			this.text += (this.text.length > 0 ? "\n" : "") + content;
+		} else {
+			if (content !== null && content !== undefined && content !== "") {
+				this.text = content;
+			}
+		}
+
+		content = this.text;
+
+		// Load all outgoing edges
+		this.loadOutgoingEdges(content, []);
+
+		this.completed();
+	}
+
+	dependencyCompleted(dependency: CannoliObject): void {
+		// If the dependency is a logging edge, execute regardless of this node's status
+		if (dependency instanceof LoggingEdge) {
+			this.execute();
+		} else if (
+			this.allDependenciesComplete() &&
+			this.status === CannoliObjectStatus.Pending
+		) {
+			this.execute();
+		}
+	}
+
 	logDetails(): string {
 		return super.logDetails() + `Type: Content\n`;
 	}
@@ -1003,6 +1059,18 @@ export class ContentNode extends CannoliNode {
 		// ) {
 		// 	this.error(`Content nodes can only have one incoming write edge.`);
 		// }
+
+		// If there are more than one incoming edges and its a standard content node, there must only be one non-config edge
+		if (
+			this.type === ContentNodeType.StandardConent &&
+			this.getIncomingEdges().filter(
+				(edge) => edge.type !== EdgeType.Config
+			).length > 1
+		) {
+			this.error(
+				`Standard content nodes can only have one incoming edge that is not of type config.`
+			);
+		}
 
 		// Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
 		if (
@@ -1323,8 +1391,6 @@ export class ReferenceNode extends ContentNode {
 	}
 }
 
-export class DynamicReferenceNode extends ReferenceNode {}
-
 export class HttpNode extends ContentNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Http\n`;
@@ -1348,8 +1414,34 @@ export class HttpNode extends ContentNode {
 			}
 		}
 
-		// Make the request
-		const result = await this.run.executeCommandByName(this.text, content);
+		let template: string | null = null;
+
+		// Check if the text matches the name of a floating node
+		for (const objectId in this.graph) {
+			const object = this.graph[objectId];
+			if (
+				object instanceof FloatingNode &&
+				object.getName() === this.text
+			) {
+				template = object.text;
+			}
+		}
+
+		let result: string | Error;
+
+		// If there's a template, call executeTemplateFromFloatingNode
+		if (template) {
+			result = await this.run.executeHttpTemplateFromFloatingNode(
+				template,
+				content
+			);
+		} else {
+			// Make the request
+			result = await this.run.executeHttpTemplateByName(
+				this.text,
+				content
+			);
+		}
 
 		if (result instanceof Error) {
 			this.error(result.message);
@@ -1381,106 +1473,6 @@ export class FormatterNode extends ContentNode {
 		this.loadOutgoingEdges(processedContent, []);
 
 		this.completed();
-	}
-}
-
-export class InputNode extends CannoliNode {
-	logDetails(): string {
-		return super.logDetails() + `Subtype: Input\n`;
-	}
-
-	async execute(): Promise<void> {
-		this.executing();
-
-		// Load all outgoing edges
-		this.loadOutgoingEdges(this.text, []);
-
-		this.completed();
-	}
-}
-
-export class DisplayNode extends ContentNode {
-	logDetails(): string {
-		return super.logDetails() + `Subtype: Display\n`;
-	}
-
-	validate(): void {
-		super.validate();
-
-		// If there are more than one incoming edges, there must only be one non-config edge
-		if (
-			this.getIncomingEdges().filter(
-				(edge) => edge.type !== EdgeType.Config
-			).length > 1
-		) {
-			this.error(
-				`Reference nodes can only have one incoming edge that is not of type config.`
-			);
-		}
-
-		// Display nodes cant have incoming edges of type category, list, or function
-		if (
-			this.getIncomingEdges().some(
-				(edge) =>
-					edge.type === EdgeType.Category ||
-					edge.type === EdgeType.List ||
-					edge.type === EdgeType.Function
-			)
-		) {
-			this.error(
-				`Display nodes cannot have incoming category, list, or function edges.`
-			);
-		}
-	}
-
-	async execute(): Promise<void> {
-		this.executing();
-
-		let content = this.getWriteOrLoggingContent();
-
-		if (!content) {
-			const variableValues = this.getVariableValues(false);
-
-			// Get first variable value
-			if (variableValues.length > 0) {
-				content = variableValues[0].content || "";
-			} else {
-				content = "";
-			}
-		}
-
-		// If the incoming edge is a logging edge, append the content to this node's text rather than replacing it
-		if (
-			this.getIncomingEdges().some(
-				(edge) => edge.type === EdgeType.Logging
-			)
-		) {
-			this.text += (this.text.length > 0 ? "\n" : "") + content;
-		} else {
-			this.text = content;
-		}
-
-		// Load all outgoing edges
-		this.loadOutgoingEdges(content, []);
-
-		this.completed();
-	}
-
-	dependencyCompleted(dependency: CannoliObject): void {
-		// If the dependency is a logging edge, execute regardless of this node's status
-		if (dependency instanceof LoggingEdge) {
-			this.execute();
-		} else if (
-			this.allDependenciesComplete() &&
-			this.status === CannoliObjectStatus.Pending
-		) {
-			this.execute();
-		}
-	}
-
-	reset(): void {
-		super.reset();
-		this.text = "";
 	}
 }
 
