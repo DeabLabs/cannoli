@@ -4,6 +4,7 @@ import type { CannoliGroup } from "./group";
 import type { Run } from "src/run";
 import {
 	AllVerifiedCannoliCanvasNodeData,
+	CannoliGraph,
 	CannoliObjectKind,
 	CannoliObjectStatus,
 	EdgeType,
@@ -18,10 +19,11 @@ export class CannoliObject extends EventEmitter {
 	status: CannoliObjectStatus;
 	dependencies: string[];
 	graph: Record<string, CannoliObject>;
+	cannoliGraph: CannoliGraph;
 	canvasData:
 		| AllVerifiedCannoliCanvasNodeData
 		| VerifiedCannoliCanvasEdgeData;
-	isClone: boolean;
+	originalObject: string | null;
 	kind: CannoliObjectKind;
 	type: EdgeType | NodeType | GroupType;
 
@@ -33,7 +35,7 @@ export class CannoliObject extends EventEmitter {
 		this.text = data.cannoliData.text;
 		this.status = data.cannoliData.status;
 		this.dependencies = data.cannoliData.dependencies;
-		this.isClone = data.cannoliData.isClone;
+		this.originalObject = data.cannoliData.originalObject;
 		this.kind = data.cannoliData.kind;
 		this.type = data.cannoliData.type;
 		this.canvasData = data;
@@ -43,8 +45,9 @@ export class CannoliObject extends EventEmitter {
 		this.run = run;
 	}
 
-	setGraph(graph: Record<string, CannoliObject>) {
+	setGraph(graph: Record<string, CannoliObject>, cannoliGraph: CannoliGraph) {
 		this.graph = graph;
+		this.cannoliGraph = cannoliGraph;
 	}
 
 	setupListeners() {
@@ -87,27 +90,36 @@ export class CannoliObject extends EventEmitter {
 	}
 
 	allDependenciesComplete(): boolean {
+		// Get the dependencies as objects
+		const dependencies = this.getAllDependencies();
+
 		// For each dependency
-		for (const dependency of this.dependencies) {
-			// If it's an array, check if all elements are complete
-			if (Array.isArray(dependency)) {
-				// If any element is not complete, return false
-				if (
-					dependency.some(
-						(dep) =>
-							this.graph[dep].status !==
-							CannoliObjectStatus.Complete
-					)
-				) {
-					return false;
-				}
-			}
-			// If it's not an array, check if it's complete
-			else {
-				if (
-					this.graph[dependency].status !==
-					CannoliObjectStatus.Complete
-				) {
+		for (const dependency of dependencies) {
+			if (dependency.status !== CannoliObjectStatus.Complete) {
+				// If the dependency is an edge
+				if (this.cannoliGraph.isEdge(dependency)) {
+					let redundantComplete = false;
+
+					// Check if there are any other edge dependencies that share the same name which are complete
+					for (const otherDependency of dependencies) {
+						if (
+							this.cannoliGraph.isEdge(otherDependency) &&
+							otherDependency.text === dependency.text &&
+							otherDependency.status ===
+								CannoliObjectStatus.Complete
+						) {
+							// If there are, set redundantComplete to true
+							redundantComplete = true;
+							break;
+						}
+					}
+
+					// If redundantComplete is false, return false
+					if (!redundantComplete) {
+						return false;
+					}
+				} else {
+					// If the dependency is not an edge, return false
 					return false;
 				}
 			}
@@ -137,19 +149,44 @@ export class CannoliObject extends EventEmitter {
 
 	tryReject() {
 		// Check all dependencies
-		this.dependencies.every((dependency) => {
-			// If it's not an array and has status "rejected", return true, if not, continue
-			if (
-				this.graph[dependency].status === CannoliObjectStatus.Rejected
-			) {
-				this.status = CannoliObjectStatus.Rejected;
-				this.emit("update", this, CannoliObjectStatus.Rejected);
-				return true;
+		const shouldReject = this.getAllDependencies().every((dependency) => {
+			if (dependency.status === CannoliObjectStatus.Rejected) {
+				// If the dependency is an edge
+				if (this.cannoliGraph.isEdge(dependency)) {
+					let redundantNotRejected = false;
+
+					// Check if there are any other edge dependencies that share the same name and are not rejected
+					for (const otherDependency of this.getAllDependencies()) {
+						if (
+							this.cannoliGraph.isEdge(otherDependency) &&
+							otherDependency.text === dependency.text &&
+							otherDependency.status !==
+								CannoliObjectStatus.Rejected
+						) {
+							// If there are, set redundantNotRejected to true and break the loop
+							redundantNotRejected = true;
+							break;
+						}
+					}
+
+					// If redundantNotRejected is true, return true to continue the evaluation
+					if (redundantNotRejected) {
+						return true;
+					}
+				}
+
+				// If the dependency is not an edge or no redundancy was found, return false to reject
+				return false;
 			}
+
+			// If the current dependency is not rejected, continue the evaluation
+			return true;
 		});
 
-		// If all dependencies are not rejected, return false
-		return false;
+		// If the object should be rejected, call the reject method
+		if (!shouldReject) {
+			this.reject();
+		}
 	}
 
 	ensureStringLength(str: string, maxLength: number): string {
@@ -178,15 +215,7 @@ export class CannoliObject extends EventEmitter {
 	logDetails(): string {
 		let dependenciesString = "";
 		for (const dependency of this.dependencies) {
-			if (Array.isArray(dependency)) {
-				dependenciesString += "\t[";
-				for (const element of dependency) {
-					dependenciesString += `"${this.graph[element].text}", `;
-				}
-				dependenciesString += "]\n";
-			} else {
-				dependenciesString += `\t"${this.graph[dependency].text}"\n`;
-			}
+			dependenciesString += `\t"${this.graph[dependency].text}"\n`;
 		}
 
 		return `Dependencies:\n${dependenciesString}\n`;

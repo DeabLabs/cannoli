@@ -207,7 +207,7 @@ export class CannoliFactory {
 		);
 		const groups = this.getGroupsForVertex(node);
 		const dependencies = [] as string[];
-		const isClone = false;
+		const originalObject = null;
 		const status =
 			type === FloatingNodeType.Variable
 				? CannoliObjectStatus.Complete
@@ -226,7 +226,7 @@ export class CannoliFactory {
 			outgoingEdges,
 			groups,
 			dependencies,
-			isClone,
+			originalObject,
 			status,
 		};
 	}
@@ -251,7 +251,7 @@ export class CannoliFactory {
 		const groups = this.getGroupsForVertex(group);
 		const members = this.getMembersForGroup(group);
 		const dependencies = [] as string[];
-		const isClone = false;
+		const originalObject = group.originalObject;
 		const status =
 			type === GroupType.Basic
 				? CannoliObjectStatus.Complete
@@ -266,7 +266,7 @@ export class CannoliFactory {
 			groups,
 			members,
 			dependencies,
-			isClone,
+			originalObject,
 			status,
 		};
 
@@ -319,7 +319,7 @@ export class CannoliFactory {
 				? labelInfo.addMessages
 				: addMessages;
 		const dependencies = [] as string[];
-		const isClone = false;
+		const originalObject = null;
 		const isReflexive = this.isReflexive(edge);
 		const status = CannoliObjectStatus.Pending;
 
@@ -333,7 +333,7 @@ export class CannoliFactory {
 			text,
 			addMessages,
 			dependencies,
-			isClone,
+			originalObject,
 			crossingInGroups,
 			crossingOutGroups,
 			status,

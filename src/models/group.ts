@@ -35,27 +35,6 @@ export class CannoliGroup extends CannoliVertex {
 		return true;
 	}
 
-	allEdgeDependenciesComplete(): boolean {
-		// Get two arrays: one of all dependencies that are arrays, and one of all dependencies that are not arrays
-
-		const dependencies = this.dependencies.filter(
-			(dependency) => !Array.isArray(dependency)
-		) as string[];
-
-		// Filter out the dependencies that are not edges
-		const edgeDependencies = dependencies.filter(
-			(dependency) => this.graph[dependency].kind === "edge"
-		);
-
-		const edgeDependenciesComplete = edgeDependencies.every(
-			(dependency) =>
-				this.graph[dependency].status === CannoliObjectStatus.Complete
-		);
-
-		// Return true if all edge dependencies are complete or at least one is complete, respectively
-		return edgeDependenciesComplete;
-	}
-
 	async execute(): Promise<void> {
 		this.status = CannoliObjectStatus.Complete;
 		this.emit("update", this, CannoliObjectStatus.Complete);
@@ -89,34 +68,13 @@ export class CannoliGroup extends CannoliVertex {
 	noEdgeDependenciesRejected(): boolean {
 		// For each dependency
 		for (const dependency of this.dependencies) {
-			// If it's an array, check if all elements are complete
-			if (Array.isArray(dependency)) {
-				// If its an array of edges
+			// If its an edge
+			if (this.graph[dependency].kind === "edge") {
 				if (
-					dependency.every((dep) => this.graph[dep].kind === "edge")
+					this.graph[dependency].status ===
+					CannoliObjectStatus.Rejected
 				) {
-					// If all elements are rejected, return false
-					if (
-						dependency.every(
-							(dep) =>
-								this.graph[dep].status ===
-								CannoliObjectStatus.Rejected
-						)
-					) {
-						return false;
-					}
-				}
-			}
-			// If it's not an array, check if it's rejected
-			else {
-				// If its an edge
-				if (this.graph[dependency].kind === "edge") {
-					if (
-						this.graph[dependency].status ===
-						CannoliObjectStatus.Rejected
-					) {
-						return false;
-					}
+					return false;
 				}
 			}
 		}

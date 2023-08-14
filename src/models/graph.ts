@@ -11,6 +11,7 @@ import { CannoliObject } from "./object";
 import { CannoliGroup, ForEachGroup, RepeatGroup, WhileGroup } from "./group";
 import {
 	CallNode,
+	CannoliNode,
 	ChooseNode,
 	ContentNode,
 	DistributeNode,
@@ -105,7 +106,7 @@ export interface CannoliData {
 	text: string;
 	status: CannoliObjectStatus;
 	dependencies: string[];
-	isClone: boolean;
+	originalObject: string | null;
 	kind: CannoliObjectKind;
 	type: EdgeType | NodeType | GroupType;
 }
@@ -327,7 +328,7 @@ export class CannoliGraph {
 	addGraphToAll() {
 		// Call setGraph with the graph on every object
 		for (const id in this.graph) {
-			this.graph[id].setGraph(this.graph);
+			this.graph[id].setGraph(this.graph, this);
 		}
 	}
 
@@ -338,14 +339,15 @@ export class CannoliGraph {
 		}
 	}
 
-	// getEdge(id: string): CannoliEdge {
-	// 	// Use type guard to ensure that the edge is actually an edge
-	// 	if (this.isEdge(this.graph[id])) {
-	// 		return this.graph[id];
-	// 	} else {
-	// }
+	isEdge(edge: CannoliObject): edge is CannoliEdge {
+		return edge.kind === CannoliObjectKind.Edge;
+	}
 
-	// isEdge(edge: CannoliObject): edge is CannoliEdge {
-	// 	return edge.kind === CannoliObjectKind.Edge;
-	// }
+	isNode(node: CannoliObject): node is CannoliNode {
+		return node.kind === CannoliObjectKind.Node;
+	}
+
+	isGroup(group: CannoliObject): group is CannoliGroup {
+		return group.kind === CannoliObjectKind.Group;
+	}
 }

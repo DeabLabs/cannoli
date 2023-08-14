@@ -198,7 +198,6 @@ export class CannoliNode extends CannoliVertex {
 			let content: string;
 
 			if (!edgeObject.content) {
-				console.log(`Edge ${edgeObject.id} has no content`);
 				continue;
 			}
 
