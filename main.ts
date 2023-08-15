@@ -163,6 +163,8 @@ export default class Cannoli extends Plugin {
 			canvas
 		);
 
+		//const shouldContinue = true;
+
 		if (shouldContinue) {
 			await this.runCannoli(graph, file, name, canvas);
 		} else {

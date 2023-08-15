@@ -932,14 +932,20 @@ export class Run {
 			return;
 		}
 
-		// If the first line is a header that matches the name of the reference, remove it
+		// Split the content into lines
 		const lines = newContent.split("\n");
-		if (lines[0].startsWith("#")) {
-			const header = lines[0].slice(2);
-			if (header === name) {
-				lines.shift();
-				newContent = lines.join("\n").trim();
-			}
+
+		// Find the index of the header line that matches the name
+		const headerIndex = lines.findIndex(
+			(line) => line.startsWith("# ") && line.slice(2) === name
+		);
+
+		// If the header is found, remove everything before it
+		if (headerIndex !== -1) {
+			newContent = lines
+				.slice(headerIndex + 1)
+				.join("\n")
+				.trim();
 		}
 
 		// Get the file
@@ -951,7 +957,7 @@ export class Run {
 			return null;
 		}
 
-		// Newcontent callback function
+		// New content callback function
 		const onEdit = (data: string) => {
 			return newContent;
 		};

@@ -1102,18 +1102,22 @@ export class ReferenceNode extends ContentNode {
 	) {
 		super(nodeData);
 
-		const reference = this.getNoteOrFloatingReference();
-
-		if (reference === null) {
-			throw new Error(
-				`Error on reference node ${this.id}: could not find reference.`
-			);
-		} else {
-			this.reference = reference;
-		}
-
 		// If the text matches "{{@variable name}}" then it is dynamic
 		this.isDynamic = this.text.match(/{{@.*}}/) !== null;
+
+		let reference: Reference | null = null;
+
+		if (!this.isDynamic) {
+			reference = this.getNoteOrFloatingReference();
+
+			if (reference === null) {
+				throw new Error(
+					`Error on reference node ${this.id}: could not find reference.`
+				);
+			} else {
+				this.reference = reference;
+			}
+		}
 	}
 
 	async execute(): Promise<void> {
@@ -1123,10 +1127,12 @@ export class ReferenceNode extends ContentNode {
 			await this.loadDynamicReference();
 		}
 
+		let content = "";
+
 		const writeOrLoggingContent = this.getWriteOrLoggingContent();
+
 		const variableValues = this.getVariableValues(false);
 
-		let content = "";
 		if (variableValues.length > 0) {
 			// If the variable value's id has a vaultModifier of note, createNote, folder, or createFolder, ignore it
 			// First, get the edges of the variable values
@@ -1164,8 +1170,12 @@ export class ReferenceNode extends ContentNode {
 				}
 			);
 
-			// Then, get the content of the first variable value
-			content = filteredVariableValues[0].content;
+			if (filteredVariableValues.length > 0) {
+				// Then, get the content of the first variable value
+				content = filteredVariableValues[0].content;
+			} else if (writeOrLoggingContent) {
+				content = writeOrLoggingContent;
+			}
 		} else if (writeOrLoggingContent) {
 			content = writeOrLoggingContent;
 		}
@@ -1183,32 +1193,38 @@ export class ReferenceNode extends ContentNode {
 	}
 
 	async getContent(): Promise<string> {
-		if (this.reference.type === ReferenceType.Note) {
-			const content = await this.getContentFromNote(this.reference.name);
-			if (content) {
-				return content;
-			} else {
-				this.error(
-					`Invalid reference. Could not find note "${this.reference.name}"`
+		if (this.reference) {
+			if (this.reference.type === ReferenceType.Note) {
+				const content = await this.getContentFromNote(
+					this.reference.name
 				);
-			}
-		} else {
-			const content = this.getContentFromFloatingNode(
-				this.reference.name
-			);
-			if (content) {
-				return content;
+				if (content) {
+					return content;
+				} else {
+					this.error(
+						`Invalid reference. Could not find note "${this.reference.name}"`
+					);
+				}
 			} else {
-				this.error(
-					`Invalid reference. Could not find floating node "${this.reference.name}"`
+				const content = this.getContentFromFloatingNode(
+					this.reference.name
 				);
+				if (content) {
+					return content;
+				} else {
+					this.error(
+						`Invalid reference. Could not find floating node "${this.reference.name}"`
+					);
+				}
 			}
 		}
 
-		return `Could not find reference "${this.reference.name}"`;
+		return `Could not find reference.`;
 	}
 
 	async loadDynamicReference() {
+		console.log("Loading dynamic reference");
+
 		// Search the incoming edges for any that have a vault modifier of type "note" or "create note"
 		const incomingEdges = this.getIncomingEdges();
 		const vaultModifierEdges = incomingEdges.filter(
@@ -1254,7 +1270,12 @@ export class ReferenceNode extends ContentNode {
 
 			// If there's a note vault modifier edge, use that to get the note name and whether or not to create it
 			if (noteVaultModifierEdges.length === 1) {
+				console.log(`Note vault modifier edge found`);
 				const noteVaultModifierEdge = noteVaultModifierEdges[0];
+
+				console.log(
+					`note modifier edge content: ${noteVaultModifierEdge.content}`
+				);
 				noteName = {
 					name:
 						typeof noteVaultModifierEdge.content === "string"
@@ -1279,6 +1300,9 @@ export class ReferenceNode extends ContentNode {
 						VaultModifier.CreateFolder,
 				};
 			}
+
+			console.log(`Note: ${noteName.name}, ${noteName.create}`);
+			console.log(`Path: ${path.path}, ${path.create}`);
 
 			// Use the noteName and path variables to decide between the functions: createNoteAtExistingPath, createNoteAtNewPath, createFolder, moveNote
 			if (noteName.name && path.path) {
@@ -1321,43 +1345,42 @@ export class ReferenceNode extends ContentNode {
 	}
 
 	async editContent(newContent: string): Promise<void> {
-		if (this.reference.type === ReferenceType.Note) {
-			const edit = await this.run.editNote(
-				this.reference.name,
-				newContent
-			);
+		if (this.reference) {
+			if (this.reference.type === ReferenceType.Note) {
+				const edit = await this.run.editNote(
+					this.reference.name,
+					newContent
+				);
 
-			if (edit !== null) {
-				return;
-			} else {
+				if (edit !== null) {
+					return;
+				} else {
+					this.error(
+						`Invalid reference. Could not edit note ${this.reference.name}`
+					);
+				}
+			} else if (this.reference.type === ReferenceType.Floating) {
+				// Search through all nodes for a floating node with the correct name
+				for (const objectId in this.graph) {
+					const object = this.graph[objectId];
+					if (
+						object instanceof FloatingNode &&
+						object.getName() === this.reference.name
+					) {
+						object.editContent(newContent);
+						return;
+					}
+				}
+
 				this.error(
-					`Invalid reference. Could not edit note ${this.reference.name}`
+					`Invalid reference. Could not find floating node ${this.reference.name}`
 				);
 			}
-		} else if (this.reference.type === ReferenceType.Floating) {
-			// Search through all nodes for a floating node with the correct name
-			for (const objectId in this.graph) {
-				const object = this.graph[objectId];
-				if (
-					object instanceof FloatingNode &&
-					object.getName() === this.reference.name
-				) {
-					object.editContent(newContent);
-					return;
-				}
-			}
-
-			this.error(
-				`Invalid reference. Could not find floating node ${this.reference.name}`
-			);
 		}
 	}
 
 	logDetails(): string {
-		return (
-			super.logDetails() +
-			`Subtype: Reference\nReference name: ${this.reference.name}\n`
-		);
+		return super.logDetails() + `Subtype: Reference\n`;
 	}
 
 	validate(): void {
