@@ -167,11 +167,11 @@ export class CannoliNode extends CannoliVertex {
 		const variableValues: VariableValue[] = [];
 
 		// Get all available provide edges
-		const availableEdges = this.getAllAvailableProvideEdges();
+		let availableEdges = this.getAllAvailableProvideEdges();
 
 		// If includeGroupEdges is not true, filter for only incoming edges of this node
 		if (!includeGroupEdges) {
-			availableEdges.filter((edge) =>
+			availableEdges = availableEdges.filter((edge) =>
 				this.incomingEdges.includes(edge.id)
 			);
 		}
@@ -465,7 +465,13 @@ export class CallNode extends CannoliNode {
 		const messages: ChatCompletionRequestMessage[] = [];
 
 		// Get all available provide edges
-		const availableEdges = this.getAllAvailableProvideEdges();
+		let availableEdges = this.getAllAvailableProvideEdges();
+
+		// filter for only incoming edges of this node
+
+		availableEdges = availableEdges.filter((edge) =>
+			this.incomingEdges.includes(edge.id)
+		);
 
 		for (const edge of availableEdges) {
 			const edgeObject = this.graph[edge.id];
@@ -838,19 +844,6 @@ export class DistributeNode extends CallNode {
 			}
 		}
 	}
-
-	// setSpecialType() {
-	// 	// If there are any outgoing list item edges, it's a list item node
-	// 	if (
-	// 		this.getSpecialOutgoingEdges().some(
-	// 			(edge) => edge.type === EdgeType.ListItem
-	// 		)
-	// 	) {
-	// 		this.listNodeType = ListNodeType.ListItem;
-	// 	} else {
-	// 		this.listNodeType = ListNodeType.List;
-	// 	}
-	// }
 
 	logDetails(): string {
 		return super.logDetails() + `Subtype: List\n`;
