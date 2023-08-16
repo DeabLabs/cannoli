@@ -29,6 +29,7 @@ export enum CannoliObjectKind {
 }
 
 export enum GroupType {
+	SignifiedForEach = "signified-for-each",
 	ForEach = "for-each",
 	Repeat = "repeat",
 	Basic = "basic",

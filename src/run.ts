@@ -150,10 +150,10 @@ export class Run {
 	}
 
 	async start() {
-		if (this.isMock) {
-			// Log the graph
-			this.logGraph();
-		}
+		//if (this.isMock) {
+		// Log the graph
+		this.logGraph();
+		//}
 		// Setup listeners
 		this.setupListeners();
 
@@ -276,7 +276,7 @@ export class Run {
 	}
 
 	objectCompleted(object: CannoliObject) {
-		if (!this.isMock && this.canvas) {
+		if (!this.isMock && this.canvas && object.originalObject === null) {
 			if (object instanceof CallNode) {
 				this.canvas.enqueueChangeNodeColor(object.id, "4");
 			} else if (
@@ -309,7 +309,12 @@ export class Run {
 	}
 
 	objectExecuting(object: CannoliObject) {
-		if (!this.isMock && this.canvas && object instanceof CallNode) {
+		if (
+			!this.isMock &&
+			this.canvas &&
+			object instanceof CallNode &&
+			object.originalObject === null
+		) {
 			this.canvas.enqueueChangeNodeColor(object.id, "3");
 		}
 	}

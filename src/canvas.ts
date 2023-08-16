@@ -325,6 +325,11 @@ export class Canvas {
 	}
 
 	async enqueueAddErrorNode(nodeId: string, message: string) {
+		// If the id has a "-" in it, remove it and everything after it
+		if (nodeId.includes("-")) {
+			nodeId = nodeId.split("-")[0];
+		}
+
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
 			const newData = this.addErrorNode(data, nodeId, message);
@@ -334,6 +339,11 @@ export class Canvas {
 	}
 
 	async enqueueAddWarningNode(nodeId: string, message: string) {
+		// If the id has a "-" in it, remove it and everything after it
+		if (nodeId.includes("-")) {
+			nodeId = nodeId.split("-")[0];
+		}
+
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
 			const newData = this.addWarningNode(data, nodeId, message);

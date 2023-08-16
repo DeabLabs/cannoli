@@ -67,7 +67,7 @@ export class CannoliEdge extends CannoliObject {
 			this.messages = messages ? messages : null;
 		}
 
-		// console.log(`Edge loaded with content: ${this.content}`);
+		console.log(`Edge loaded with content: ${this.content}`);
 	}
 
 	async execute(): Promise<void> {

@@ -156,14 +156,14 @@ export default class Cannoli extends Plugin {
 		const graph = factory.getCannoliData();
 		console.log(JSON.stringify(graph, null, 2));
 
-		const shouldContinue = await this.validateCannoli(
-			graph,
-			file,
-			name,
-			canvas
-		);
+		// const shouldContinue = await this.validateCannoli(
+		// 	graph,
+		// 	file,
+		// 	name,
+		// 	canvas
+		// );
 
-		//const shouldContinue = true;
+		const shouldContinue = true;
 
 		if (shouldContinue) {
 			await this.runCannoli(graph, file, name, canvas);

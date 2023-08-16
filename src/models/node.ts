@@ -84,10 +84,10 @@ export class CannoliNode extends CannoliVertex {
 	async processReferences() {
 		const variableValues = this.getVariableValues(true);
 
-		//console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
-		//console.log(
-		//	`Variable values: ${JSON.stringify(variableValues, null, 2)}`
-		//);
+		console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
+		console.log(
+			`Variable values: ${JSON.stringify(variableValues, null, 2)}`
+		);
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
@@ -169,6 +169,13 @@ export class CannoliNode extends CannoliVertex {
 		// Get all available provide edges
 		let availableEdges = this.getAllAvailableProvideEdges();
 
+		// Log out the text of all available edges
+		console.log(
+			`Available edges: ${availableEdges
+				.map((edge) => edge.text)
+				.join(", ")}`
+		);
+
 		// If includeGroupEdges is not true, filter for only incoming edges of this node
 		if (!includeGroupEdges) {
 			availableEdges = availableEdges.filter((edge) =>
@@ -196,6 +203,8 @@ export class CannoliNode extends CannoliVertex {
 			}
 
 			let content: string;
+
+			console.log(`Edge content: ${edgeObject.content}`);
 
 			if (!edgeObject.content) {
 				continue;

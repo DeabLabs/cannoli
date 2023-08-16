@@ -1,7 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./object";
 import { CannoliEdge } from "./edge";
 import {
-	CannoliObjectKind,
 	CannoliObjectStatus,
 	EdgeType,
 	VerifiedCannoliCanvasGroupData,
@@ -19,6 +18,62 @@ export class CannoliGroup extends CannoliVertex {
 		return this.members.map(
 			(member) => this.graph[member] as CannoliVertex
 		);
+	}
+
+	getCrossingAndInternalEdges(): {
+		crossingInEdges: CannoliEdge[];
+		crossingOutEdges: CannoliEdge[];
+		internalEdges: CannoliEdge[];
+	} {
+		// Initialize the lists
+		const crossingInEdges: CannoliEdge[] = [];
+		const crossingOutEdges: CannoliEdge[] = [];
+		const internalEdges: CannoliEdge[] = [];
+
+		// For each member
+		for (const member of this.members) {
+			const memberObject = this.graph[member];
+			// If it's a vertex
+			if (
+				this.cannoliGraph.isNode(memberObject) ||
+				this.cannoliGraph.isGroup(memberObject)
+			) {
+				// For each incoming edge
+				for (const edge of memberObject.incomingEdges) {
+					const edgeObject = this.graph[edge];
+					if (this.cannoliGraph.isEdge(edgeObject)) {
+						// If it's crossing in
+						if (edgeObject.crossingInGroups.includes(this.id)) {
+							// Add it to the list
+							crossingInEdges.push(edgeObject);
+						} else {
+							// Otherwise, it's internal
+							internalEdges.push(edgeObject);
+						}
+					}
+				}
+				// For each outgoing edge
+				for (const edge of memberObject.outgoingEdges) {
+					const edgeObject = this.graph[edge];
+					if (this.cannoliGraph.isEdge(edgeObject)) {
+						// If it's crossing out
+						if (edgeObject.crossingOutGroups.includes(this.id)) {
+							// Add it to the list
+							crossingOutEdges.push(edgeObject);
+						} else {
+							// Otherwise, it's internal
+							internalEdges.push(edgeObject);
+						}
+					}
+				}
+			}
+		}
+
+		return {
+			crossingInEdges,
+			crossingOutEdges,
+			internalEdges,
+		};
 	}
 
 	allMembersCompleteOrRejected(): boolean {
@@ -214,18 +269,6 @@ export class CannoliGroup extends CannoliVertex {
 
 		// Check overlap
 		this.checkOverlap();
-
-		// Groups can't have outgoing edges that aren't of type list
-		for (const edge of this.outgoingEdges) {
-			if (
-				this.graph[edge].kind === CannoliObjectKind.Edge &&
-				this.graph[edge].type !== EdgeType.List
-			) {
-				this.error(
-					`Groups can't have outgoing edges that aren't of type list.`
-				);
-			}
-		}
 	}
 }
 
@@ -235,7 +278,7 @@ export class ForEachGroup extends CannoliGroup {
 	}
 
 	logDetails(): string {
-		return super.logDetails() + `Type: List\n`;
+		return super.logDetails() + `Type: ForEach\n`;
 	}
 
 	async execute(): Promise<void> {
@@ -243,33 +286,42 @@ export class ForEachGroup extends CannoliGroup {
 		this.emit("update", this, CannoliObjectStatus.Executing);
 	}
 
+	dependencyCompleted(dependency: CannoliObject): void {
+		if (this.status === CannoliObjectStatus.Executing) {
+			// If all members are complete or rejected, call membersFinished
+			if (this.allMembersCompleteOrRejected()) {
+				this.completed();
+			}
+		}
+	}
+
 	validate(): void {
 		super.validate();
 
-		// List groups must have one and only one edge of type either list or category
-		const listOrCategoryEdges = this.outgoingEdges.filter(
-			(edge) =>
-				this.graph[edge].type === EdgeType.List ||
-				this.graph[edge].type === EdgeType.Category
-		);
+		// // List groups must have one and only one edge of type either list or category
+		// const listOrCategoryEdges = this.outgoingEdges.filter(
+		// 	(edge) =>
+		// 		this.graph[edge].type === EdgeType.List ||
+		// 		this.graph[edge].type === EdgeType.Category
+		// );
 
-		if (listOrCategoryEdges.length !== 1) {
-			this.error(
-				`List groups must have one and only one edge of type list or category.`
-			);
-		}
+		// if (listOrCategoryEdges.length !== 1) {
+		// 	this.error(
+		// 		`List groups must have one and only one edge of type list or category.`
+		// 	);
+		// }
 
-		// List groups can't have outgoing edges that aren't of type list
-		for (const edge of this.outgoingEdges) {
-			if (
-				this.graph[edge].kind === CannoliObjectKind.Edge &&
-				this.graph[edge].type !== EdgeType.List
-			) {
-				this.error(
-					`List groups can't have outgoing edges that aren't of type list.`
-				);
-			}
-		}
+		// // List groups can't have outgoing edges that aren't of type list
+		// for (const edge of this.outgoingEdges) {
+		// 	if (
+		// 		this.graph[edge].kind === CannoliObjectKind.Edge &&
+		// 		this.graph[edge].type !== EdgeType.List
+		// 	) {
+		// 		this.error(
+		// 			`List groups can't have outgoing edges that aren't of type list.`
+		// 		);
+		// 	}
+		// }
 	}
 }
 
