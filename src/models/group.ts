@@ -14,6 +14,8 @@ export class CannoliGroup extends CannoliVertex {
 	constructor(groupData: VerifiedCannoliCanvasGroupData) {
 		super(groupData);
 		this.members = groupData.cannoliData.members;
+		this.maxLoops = groupData.cannoliData.maxLoops ?? 1;
+		this.currentLoop = groupData.cannoliData.currentLoop ?? 0;
 	}
 
 	getMembers(): CannoliVertex[] {
@@ -280,7 +282,9 @@ export class ForEachGroup extends CannoliGroup {
 	}
 
 	logDetails(): string {
-		return super.logDetails() + `Type: ForEach\n`;
+		return (
+			super.logDetails() + `Type: ForEach\nIndex: ${this.currentLoop}\n`
+		);
 	}
 
 	async execute(): Promise<void> {

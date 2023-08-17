@@ -1,6 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./object";
 import { ChatCompletionRequestMessage } from "openai";
-import { RepeatGroup } from "./group";
+import { ForEachGroup, RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,
 	EdgeType,
@@ -66,8 +66,6 @@ export class CannoliEdge extends CannoliObject {
 		if (this.addMessages) {
 			this.messages = messages ? messages : null;
 		}
-
-		console.log(`Edge loaded with content: ${this.content}`);
 	}
 
 	async execute(): Promise<void> {
@@ -158,14 +156,24 @@ export class LoggingEdge extends CannoliEdge {
 			configString = this.content as string;
 		}
 
+		let logs = "";
+
 		// Get the current loop number of any repeat type groups that the edge is crossing out of
 		const repeatLoopNumbers = this.getLoopNumbers();
-		let logs = "";
 
 		const loopHeader = this.formatLoopHeader(repeatLoopNumbers);
 
+		// Get the version header
+		const forEachVersionNumbers = this.getForEachVersionNumbers();
+
+		const versionHeader = this.formatVersionHeader(forEachVersionNumbers);
+
 		if (repeatLoopNumbers.length > 0) {
 			logs = `${loopHeader}\n`;
+		}
+
+		if (forEachVersionNumbers.length > 0) {
+			logs = `${logs}${versionHeader}\n`;
 		}
 
 		if (messages !== undefined) {
@@ -197,6 +205,23 @@ export class LoggingEdge extends CannoliEdge {
 		return repeatLoopNumbers;
 	}
 
+	getForEachVersionNumbers(): number[] {
+		// Get the current loop number of any repeat type groups that the edge is crossing out of
+		const forEachVersionNumbers: number[] = [];
+
+		this.crossingOutGroups.forEach((group) => {
+			const groupObject = this.graph[group];
+			if (groupObject instanceof ForEachGroup) {
+				forEachVersionNumbers.push(groupObject.currentLoop);
+			}
+		});
+
+		// Reverse the array
+		forEachVersionNumbers.reverse();
+
+		return forEachVersionNumbers;
+	}
+
 	formatInteractionHeaders(messages: ChatCompletionRequestMessage[]): string {
 		let formattedString = "";
 		messages.forEach((message) => {
@@ -220,9 +245,25 @@ export class LoggingEdge extends CannoliEdge {
 		return loopString.slice(0, -1);
 	}
 
+	formatVersionHeader(versionNumbers: number[]): string {
+		let versionString = "# Version ";
+		versionNumbers.forEach((versionNumber) => {
+			versionString += `${versionNumber}.`;
+		});
+		return versionString.slice(0, -1);
+	}
+
 	dependencyCompleted(dependency: CannoliObject): void {
-		// If the dependency is the source node, execute
-		if (dependency.id === this.source) {
+		// If the dependency is the source node and all forEach groups being crossed are complete, execute the edge
+		if (
+			this.getSource().status === CannoliObjectStatus.Complete &&
+			// If all forEach type groups being crossed are complete
+			this.crossingOutGroups.every(
+				(group) =>
+					!(this.graph[group] instanceof ForEachGroup) ||
+					this.graph[group].status === CannoliObjectStatus.Complete
+			)
+		) {
 			this.execute();
 		}
 	}

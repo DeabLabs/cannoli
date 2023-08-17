@@ -10,6 +10,7 @@ import { CannoliGroup } from "./group";
 import {
 	CannoliObjectStatus,
 	EdgeType,
+	GroupType,
 	Reference,
 	ReferenceType,
 	VaultModifier,
@@ -83,10 +84,10 @@ export class CannoliNode extends CannoliVertex {
 	async processReferences() {
 		const variableValues = this.getVariableValues(true);
 
-		console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
-		console.log(
-			`Variable values: ${JSON.stringify(variableValues, null, 2)}`
-		);
+		// console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
+		// console.log(
+		// 	`Variable values: ${JSON.stringify(variableValues, null, 2)}`
+		// );
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
@@ -168,13 +169,6 @@ export class CannoliNode extends CannoliVertex {
 		// Get all available provide edges
 		let availableEdges = this.getAllAvailableProvideEdges();
 
-		// Log out the text of all available edges
-		console.log(
-			`Available edges: ${availableEdges
-				.map((edge) => edge.text)
-				.join(", ")}`
-		);
-
 		// If includeGroupEdges is not true, filter for only incoming edges of this node
 		if (!includeGroupEdges) {
 			availableEdges = availableEdges.filter((edge) =>
@@ -202,8 +196,6 @@ export class CannoliNode extends CannoliVertex {
 			}
 
 			let content: string;
-
-			console.log(`Edge content: ${edgeObject.content}`);
 
 			if (!edgeObject.content) {
 				continue;
@@ -295,7 +287,6 @@ export class CannoliNode extends CannoliVertex {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
-				console.log(`Loading edge with content ${content}`);
 				edgeObject.load({
 					content: content,
 					messages: messages,
@@ -982,11 +973,10 @@ export class ContentNode extends CannoliNode {
 			}
 		}
 
-		// If the incoming edge is a logging edge, append the content to this node's text rather than replacing it
+		// If the incoming edge is a single logging edge, append the content to the text
 		if (
-			this.getIncomingEdges().some(
-				(edge) => edge.type === EdgeType.Logging
-			)
+			this.getIncomingEdges().length === 1 &&
+			this.getIncomingEdges()[0].type === EdgeType.Logging
 		) {
 			this.text += (this.text.length > 0 ? "\n" : "") + content;
 		} else {
@@ -1004,8 +994,19 @@ export class ContentNode extends CannoliNode {
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
-		// If the dependency is a logging edge, execute regardless of this node's status
-		if (dependency instanceof LoggingEdge) {
+		// If the dependency is a logging edge not crossing out of a forEach group, execute regardless of this node's status
+		if (
+			dependency instanceof LoggingEdge &&
+			!dependency.crossingOutGroups.some((group) => {
+				const groupObject = this.graph[group];
+				if (!(groupObject instanceof CannoliGroup)) {
+					throw new Error(
+						`Error on object ${groupObject.id}: object is not a group.`
+					);
+				}
+				return groupObject.type === GroupType.ForEach;
+			})
+		) {
 			this.execute();
 		} else if (
 			this.allDependenciesComplete() &&
@@ -1022,6 +1023,26 @@ export class ContentNode extends CannoliNode {
 	getWriteOrLoggingContent(): string | null {
 		// Get all incoming edges
 		const incomingEdges = this.getIncomingEdges();
+
+		// If there are multiple logging edges
+		if (
+			incomingEdges.filter((edge) => edge.type === EdgeType.Logging)
+				.length > 1
+		) {
+			// Append the content of all logging edges
+			let content = "";
+			for (const edge of incomingEdges) {
+				const edgeObject = this.graph[edge.id];
+				if (edgeObject instanceof LoggingEdge) {
+					if (edgeObject.content) {
+						content += edgeObject.content;
+					}
+					console.log(`Appending content ${edgeObject.content}`);
+				}
+			}
+
+			return content;
+		}
 
 		// Filter out all non-write and non-logging edges
 		const filteredEdges = incomingEdges.filter(

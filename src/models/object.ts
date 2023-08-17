@@ -96,8 +96,11 @@ export class CannoliObject extends EventEmitter {
 		// For each dependency
 		for (const dependency of dependencies) {
 			if (dependency.status !== CannoliObjectStatus.Complete) {
-				// If the dependency is an edge
-				if (this.cannoliGraph.isEdge(dependency)) {
+				// If the dependency is a non-logging edge
+				if (
+					this.cannoliGraph.isEdge(dependency) &&
+					dependency.type !== EdgeType.Logging
+				) {
 					let redundantComplete = false;
 
 					// Check if there are any other edge dependencies that share the same name which are complete

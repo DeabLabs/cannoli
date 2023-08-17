@@ -781,7 +781,6 @@ export class CannoliFactory {
 
 			// If the toNode is the accumulatorNode, add the index to the edge's text
 			if (edge.toNode === accumulatorNode?.id) {
-				console.log(`Accumulator node: ${accumulatorNode?.id}`);
 				edge.cannoliData.text = `${edge.cannoliData.text} ${index}`;
 			}
 
@@ -838,7 +837,6 @@ export class CannoliFactory {
 		// Add the duplicate group, members, and edges to the canvas
 		canvas.nodes.push(duplicateGroup);
 		canvas.nodes.push(...duplicateMembers);
-
 		// Add the duplicate edges to the canvas
 		canvas.edges.push(
 			...duplicateIncomingEdges,
