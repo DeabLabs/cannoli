@@ -8,6 +8,8 @@ import {
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];
+	maxLoops: number;
+	currentLoop: number;
 
 	constructor(groupData: VerifiedCannoliCanvasGroupData) {
 		super(groupData);
@@ -326,9 +328,6 @@ export class ForEachGroup extends CannoliGroup {
 }
 
 export class RepeatGroup extends CannoliGroup {
-	maxLoops: number;
-	currentLoop: number;
-
 	constructor(groupData: VerifiedCannoliCanvasGroupData) {
 		super(groupData);
 

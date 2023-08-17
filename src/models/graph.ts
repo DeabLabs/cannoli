@@ -10,6 +10,7 @@ import { ChatCompletionRequestMessage } from "openai";
 import { CannoliObject } from "./object";
 import { CannoliGroup, ForEachGroup, RepeatGroup, WhileGroup } from "./group";
 import {
+	AccumulateNode,
 	CallNode,
 	CannoliNode,
 	ChooseNode,
@@ -68,6 +69,7 @@ export enum CallNodeType {
 	Categorize = "categorize",
 	Choose = "choose",
 	Distribute = "distribute",
+	Accumulate = "accumulate",
 }
 
 export enum ContentNodeType {
@@ -272,6 +274,12 @@ export class CannoliGraph {
 					const distributeNode =
 						node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new DistributeNode(distributeNode);
+					break;
+				}
+				case CallNodeType.Accumulate: {
+					const accumulateNode =
+						node as VerifiedCannoliCanvasTextData;
+					this.graph[node.id] = new AccumulateNode(accumulateNode);
 					break;
 				}
 				case CallNodeType.Categorize: {

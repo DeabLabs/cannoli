@@ -9,7 +9,6 @@ import {
 import { CannoliGroup } from "./group";
 import {
 	CannoliObjectStatus,
-	ContentNodeType,
 	EdgeType,
 	Reference,
 	ReferenceType,
@@ -296,7 +295,7 @@ export class CannoliNode extends CannoliVertex {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
-				//console.log(`Loading edge with content ${content}`);
+				console.log(`Loading edge with content ${content}`);
 				edgeObject.load({
 					content: content,
 					messages: messages,
@@ -477,7 +476,6 @@ export class CallNode extends CannoliNode {
 		let availableEdges = this.getAllAvailableProvideEdges();
 
 		// filter for only incoming edges of this node
-
 		availableEdges = availableEdges.filter((edge) =>
 			this.incomingEdges.includes(edge.id)
 		);
@@ -870,6 +868,11 @@ export class DistributeNode extends CallNode {
 	}
 }
 
+export class AccumulateNode extends CallNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Accumulate\n`;
+	}
+}
 export class ChooseNode extends CallNode {
 	getFunctions(
 		messages: ChatCompletionRequestMessage[]
@@ -1062,16 +1065,16 @@ export class ContentNode extends CannoliNode {
 		// }
 
 		// If there are more than one incoming edges and its a standard content node, there must only be one non-config edge
-		if (
-			this.type === ContentNodeType.StandardConent &&
-			this.getIncomingEdges().filter(
-				(edge) => edge.type !== EdgeType.Config
-			).length > 1
-		) {
-			this.error(
-				`Standard content nodes can only have one incoming edge that is not of type config.`
-			);
-		}
+		// if (
+		// 	this.type === ContentNodeType.StandardConent &&
+		// 	this.getIncomingEdges().filter(
+		// 		(edge) => edge.type !== EdgeType.Config
+		// 	).length > 1
+		// ) {
+		// 	this.error(
+		// 		`Standard content nodes can only have one incoming edge that is not of type config.`
+		// 	);
+		// }
 
 		// Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
 		if (
@@ -1275,9 +1278,6 @@ export class ReferenceNode extends ContentNode {
 				console.log(`Note vault modifier edge found`);
 				const noteVaultModifierEdge = noteVaultModifierEdges[0];
 
-				console.log(
-					`note modifier edge content: ${noteVaultModifierEdge.content}`
-				);
 				noteName = {
 					name:
 						typeof noteVaultModifierEdge.content === "string"

@@ -207,6 +207,7 @@ export class CannoliFactory {
 
 		const kind = CannoliObjectKind.Node;
 		const type = this.getNodeType(node);
+
 		const text = universalText || "";
 		const references =
 			node.type === "text" ? this.parseNodeReferences(node) : [];
@@ -391,6 +392,110 @@ export class CannoliFactory {
 								) as VerifiedCannoliCanvasEdgeData
 						);
 
+					const outgoingMergeEdge = outgoingEdges.find(
+						(edge) => edge.cannoliData.type === EdgeType.Merge
+					);
+
+					// Get the target of the merge edge
+					const mergeNode = outgoingMergeEdge
+						? data.nodes.find(
+								(node) => node.id === outgoingMergeEdge.toNode
+								// eslint-disable-next-line no-mixed-spaces-and-tabs
+						  )
+						: null;
+
+					// Find the line of the node's text that starts with "{#}" and replicate it for each loop, adding " <loopNumber>" to each {variable}. I.e. {variable} becomes {variable 1}, {variable 2}, etc.
+					if (
+						mergeNode &&
+						mergeNode.cannoliData.kind === CannoliObjectKind.Node
+					) {
+						const castMergeNode =
+							mergeNode as VerifiedCannoliCanvasTextData;
+
+						// Split the text by newline
+						const lines =
+							castMergeNode.cannoliData.text.split("\n");
+
+						// Get the line of the node's text that starts with "{#}"
+						const loopLine = lines.find((line) =>
+							line.startsWith("{#}")
+						);
+
+						if (loopLine) {
+							// Get the text before and after the loopLine
+							let beforeLoopLine =
+								castMergeNode.cannoliData.text.slice(
+									0,
+									castMergeNode.cannoliData.text.indexOf(
+										loopLine
+									)
+								);
+
+							const afterLoopLine =
+								castMergeNode.cannoliData.text.slice(
+									castMergeNode.cannoliData.text.indexOf(
+										loopLine
+									) + loopLine.length
+								);
+
+							// Find the variables
+							const variables = loopLine.match(/{\w+}/g);
+
+							if (variables) {
+								// Create a copy of the loopLine for each loop
+								for (
+									let i = 0;
+									// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+									i < castGroup.cannoliData.maxLoops!;
+									i++
+								) {
+									// Create a copy of the loopLine
+									let newLoopLine = loopLine;
+
+									// Replace the "{#}" with the loop number
+									newLoopLine = newLoopLine.replace(
+										"{#}",
+										`${i + 1}`
+									);
+
+									// Replace each variable with the variable and the loop number
+									variables.forEach((variable) => {
+										newLoopLine = newLoopLine.replace(
+											variable,
+											`{${variable.slice(1, -1)} ${
+												i + 1
+											}}`
+										);
+									});
+
+									// Add the new loopLine to the beforeLoopLine
+									beforeLoopLine = `${beforeLoopLine}${newLoopLine}\n\n`;
+								}
+
+								// Add the afterLoopLine to the beforeLoopLine
+								beforeLoopLine = `${beforeLoopLine}${afterLoopLine.trim()}`;
+
+								// Update the node's text
+								castMergeNode.text = beforeLoopLine;
+
+								castMergeNode.cannoliData.text = beforeLoopLine;
+							}
+						}
+
+						// Update the node's references
+						castMergeNode.cannoliData.references =
+							this.parseNodeReferences(castMergeNode);
+
+						// Replace the old node with the new node
+						data.nodes = data.nodes.map((node) => {
+							if (node.id === castMergeNode.id) {
+								return castMergeNode;
+							} else {
+								return node;
+							}
+						});
+					}
+
 					// Get group crossingInEdges, crossingOutEdges, and internalEdges
 					const { crossingInEdges, crossingOutEdges, internalEdges } =
 						this.getCrossingAndInternalEdges(castGroup, data);
@@ -400,7 +505,7 @@ export class CannoliFactory {
 						// Create a duplicate group and its members and edges
 						this.createDuplicateGroup(
 							group as VerifiedCannoliCanvasGroupData,
-							i,
+							i + 1,
 							incomingEdges,
 							outgoingEdges,
 							crossingInEdges,
@@ -477,6 +582,7 @@ export class CannoliFactory {
 		// Update the duplicate group's id and type
 		duplicateGroup.cannoliData.originalObject = group.id;
 		duplicateGroup.id = `${duplicateGroup.id}-${index}`;
+		duplicateGroup.cannoliData.currentLoop = index;
 		duplicateGroup.cannoliData.type = GroupType.ForEach;
 
 		// Update the members arrays of the groups in this group's groups array
@@ -507,6 +613,8 @@ export class CannoliFactory {
 				edge.toNode === group.id &&
 				edge.cannoliData.type === EdgeType.List
 		) as VerifiedCannoliCanvasEdgeData;
+
+		let accumulatorNode: AllVerifiedCannoliCanvasNodeData | null = null;
 
 		// Update the duplicate members' ids and replace the group id in the groups with the duplicate group id
 		duplicateMembers.forEach((member) => {
@@ -589,6 +697,10 @@ export class CannoliFactory {
 			duplicateGroup.cannoliData.outgoingEdges.push(edge.id);
 			if (edge.cannoliData.type === EdgeType.Merge) {
 				edge.cannoliData.type = EdgeType.Variable;
+				edge.cannoliData.text = `${edge.cannoliData.text} ${index}`;
+				accumulatorNode = canvas.nodes.find(
+					(node) => node.id === edge.toNode
+				) as AllVerifiedCannoliCanvasNodeData;
 			}
 
 			// Update the incomingEdges array of the toNode
@@ -612,9 +724,23 @@ export class CannoliFactory {
 
 		// For each duplicate crossing in edge, update the edge's target to the new member and update the edge's crossingInGroups with the duplicate group
 		duplicateCrossingInEdges.forEach((edge) => {
-			edge.toNode = duplicateMembers.find(
-				(member) => member.cannoliData.originalObject === edge.toNode
-			)?.id as string;
+			edge.cannoliData.originalObject = edge.id;
+			edge.id = `${edge.id}-${index}`;
+			edge.toNode = `${edge.toNode}-${index}`;
+			// edge.toNode = duplicateMembers.find(
+			// 	(member) => member.cannoliData.originalObject === edge.toNode
+			// )?.id as string;
+
+			// Add this edge to the incomingEdges array of the toNode
+			const toNode = duplicateMembers.find(
+				(node) => node.id === edge.toNode
+			) as AllVerifiedCannoliCanvasNodeData;
+
+			if (!toNode) {
+				throw new Error("createDuplicateGroup: toNode is undefined");
+			}
+
+			toNode.cannoliData.incomingEdges.push(edge.id);
 
 			// Update the outgoingEdges array of the fromNode
 			const fromNode = canvas.nodes.find(
@@ -646,9 +772,29 @@ export class CannoliFactory {
 
 		// For each duplicate crossing out edge, update the edge's source to the new member and update the edge's crossingOutGroups with the duplicate group
 		duplicateCrossingOutEdges.forEach((edge) => {
-			edge.fromNode = duplicateMembers.find(
-				(member) => member.cannoliData.originalObject === edge.fromNode
-			)?.id as string;
+			edge.cannoliData.originalObject = edge.id;
+			edge.id = `${edge.id}-${index}`;
+			edge.fromNode = `${edge.fromNode}-${index}`;
+			// edge.fromNode = duplicateMembers.find(
+			// 	(member) => member.cannoliData.originalObject === edge.fromNode
+			// )?.id as string;
+
+			// If the toNode is the accumulatorNode, add the index to the edge's text
+			if (edge.toNode === accumulatorNode?.id) {
+				console.log(`Accumulator node: ${accumulatorNode?.id}`);
+				edge.cannoliData.text = `${edge.cannoliData.text} ${index}`;
+			}
+
+			// Add this edge to the outgoingEdges array of the fromNode
+			const fromNode = duplicateMembers.find(
+				(node) => node.id === edge.fromNode
+			) as AllVerifiedCannoliCanvasNodeData;
+
+			if (!fromNode) {
+				throw new Error("createDuplicateGroup: fromNode is undefined");
+			}
+
+			fromNode.cannoliData.outgoingEdges.push(edge.id);
 
 			// Update the incomingEdges array of the toNode
 			const toNode = canvas.nodes.find(
@@ -741,25 +887,21 @@ export class CannoliFactory {
 					// Otherwise, it's internal
 					internalEdges.push(edgeData);
 				}
+			}
 
-				// For each outgoing edge
-				for (const edgeId of memberData.cannoliData.outgoingEdges) {
-					const edgeData = canvas.edges.find(
-						(edge) => edge.id === edgeId
-					) as VerifiedCannoliCanvasEdgeData;
+			// For each outgoing edge
+			for (const edgeId of memberData.cannoliData.outgoingEdges) {
+				const edgeData = canvas.edges.find(
+					(edge) => edge.id === edgeId
+				) as VerifiedCannoliCanvasEdgeData;
 
-					// If it's crossing out
-					if (
-						edgeData.cannoliData.crossingOutGroups.includes(
-							group.id
-						)
-					) {
-						// Add it to the list
-						crossingOutEdges.push(edgeData);
-					} else {
-						// Otherwise, it's internal
-						internalEdges.push(edgeData);
-					}
+				// If it's crossing out
+				if (edgeData.cannoliData.crossingOutGroups.includes(group.id)) {
+					// Add it to the list
+					crossingOutEdges.push(edgeData);
+				} else {
+					// Otherwise, it's internal
+					internalEdges.push(edgeData);
 				}
 			}
 		}
@@ -954,9 +1096,9 @@ export class CannoliFactory {
 			) {
 				return CallNodeType.Distribute;
 			}
-			// Otherwise, it's a standard call node
+			// Otherwise, it's an accumulate node
 			else {
-				return CallNodeType.StandardCall;
+				return CallNodeType.Accumulate;
 			}
 		} else {
 			// If it has any outgoing key or list edges, it's a distribute node
@@ -1371,6 +1513,7 @@ export class CannoliFactory {
 		const references: Reference[] = [];
 		let textCopy = node.text;
 
+		const replacements: string[] = [];
 		while ((match = regex.exec(textCopy)) !== null) {
 			let name = "";
 			let type: ReferenceType = ReferenceType.Variable;
@@ -1397,8 +1540,16 @@ export class CannoliFactory {
 				type,
 				shouldExtract,
 			};
+
 			references.push(reference);
-			textCopy = textCopy.replace(match[0], `{${references.length - 1}}`);
+			replacements.push(`{${references.length - 1}}`);
+		}
+
+		for (let i = 0; i < replacements.length; i++) {
+			textCopy = textCopy.replace(
+				`{${references[i].name}}`,
+				replacements[i]
+			);
 		}
 
 		return references;
