@@ -120,7 +120,9 @@ export class CannoliEdge extends CannoliObject {
 	}
 
 	reset() {
-		super.reset();
+		if (!this.isReflexive) {
+			super.reset();
+		}
 	}
 }
 
@@ -140,12 +142,6 @@ export class SystemMessageEdge extends CannoliEdge {
 				},
 			];
 		}
-	}
-
-	reset(): void {
-		super.reset();
-		this.content = null;
-		this.messages = null;
 	}
 }
 
@@ -206,10 +202,6 @@ export class LoggingEdge extends CannoliEdge {
 		} else {
 			this.content = logs;
 		}
-	}
-
-	reset(): void {
-		super.reset();
 	}
 
 	getConfigString(request: CreateChatCompletionRequest) {

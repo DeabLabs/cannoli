@@ -307,13 +307,8 @@ export class CannoliNode extends CannoliVertex {
 
 		const strippedText = this.text.trim();
 
-		console.log(
-			`Checking for note or floating reference in "${strippedText}"`
-		);
-
 		let match = strippedText.match(notePattern);
 		if (match) {
-			console.log(`Found note reference ${match[1]}`);
 			return {
 				name: match[1],
 				type: ReferenceType.Note,
@@ -323,7 +318,6 @@ export class CannoliNode extends CannoliVertex {
 
 		match = strippedText.match(floatingPattern);
 		if (match) {
-			console.log(`Found floating reference ${match[1]}`);
 			return {
 				name: match[1],
 				type: ReferenceType.Floating,

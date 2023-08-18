@@ -1759,7 +1759,7 @@ export class CannoliFactory {
 		}
 
 		// Check if the target is a member of the source group, if so remove the first group from crossingInGroups
-		const sourceAsGroup = this.getGroup(target.id);
+		const sourceAsGroup = this.getGroup(source.id);
 		if (sourceAsGroup) {
 			if (targetGroups.includes(sourceAsGroup)) {
 				crossingInGroups.shift();
@@ -1767,7 +1767,7 @@ export class CannoliFactory {
 		}
 
 		// Check if the source is a member of the target group, if so remove the last group from crossingOutGroups
-		const targetAsGroup = this.getGroup(source.id);
+		const targetAsGroup = this.getGroup(target.id);
 		if (targetAsGroup) {
 			if (sourceGroups.includes(targetAsGroup)) {
 				crossingOutGroups.pop();

@@ -350,7 +350,6 @@ export class RepeatGroup extends CannoliGroup {
 			// Reset the member
 			member.reset();
 			// Reset the member's outgoing edges whose target isn't this group
-
 			for (const edge of member.outgoingEdges) {
 				const edgeObject = this.graph[edge] as CannoliEdge;
 
