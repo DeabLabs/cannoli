@@ -280,16 +280,13 @@ export class CannoliNode extends CannoliVertex {
 		return finalVariables;
 	}
 
-	loadOutgoingEdges(
-		content: string,
-		messages: ChatCompletionRequestMessage[]
-	) {
+	loadOutgoingEdges(content: string, request?: CreateChatCompletionRequest) {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
 				edgeObject.load({
 					content: content,
-					messages: messages,
+					request: request,
 				});
 			}
 		}
@@ -640,23 +637,18 @@ export class CallNode extends CannoliNode {
 			return;
 		}
 
-		// Append the message to the end of the request messages
-		const messages = request.messages;
-
-		messages.push(message);
-
-		this.loadOutgoingLoggingEdges(request);
+		request.messages.push(message);
 
 		if (message.function_call?.arguments) {
 			if (message.function_call.name === "enter_note_name") {
 				const args = JSON.parse(message.function_call.arguments);
 
-				this.loadOutgoingEdges(args.note, messages);
+				this.loadOutgoingEdges(args.note, request);
 			} else {
-				this.loadOutgoingEdges(message.content ?? "", messages);
+				this.loadOutgoingEdges(message.content ?? "", request);
 			}
 		} else {
-			this.loadOutgoingEdges(message.content ?? "", messages);
+			this.loadOutgoingEdges(message.content ?? "", request);
 		}
 
 		this.completed();
@@ -687,33 +679,33 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
-	loadOutgoingLoggingEdges(request: CreateChatCompletionRequest) {
-		const loggingEdges = this.getOutgoingEdges().filter(
-			(edge) => edge.type === EdgeType.Logging
-		);
+	// loadOutgoingLoggingEdges(request: CreateChatCompletionRequest) {
+	// 	const loggingEdges = this.getOutgoingEdges().filter(
+	// 		(edge) => edge.type === EdgeType.Logging
+	// 	);
 
-		let configString = "";
+	// 	let configString = "";
 
-		// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
-		for (const key in request) {
-			if (key !== "messages" && request[key as keyof typeof request]) {
-				configString += `${key}: ${
-					request[key as keyof typeof request]
-				}\n`;
-			}
-		}
+	// 	// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
+	// 	for (const key in request) {
+	// 		if (key !== "messages" && request[key as keyof typeof request]) {
+	// 			configString += `${key}: ${
+	// 				request[key as keyof typeof request]
+	// 			}\n`;
+	// 		}
+	// 	}
 
-		for (const edge of loggingEdges) {
-			const edgeObject = this.graph[edge.id];
-			if (!(edgeObject instanceof LoggingEdge)) {
-				throw new Error(
-					`Error on object ${edgeObject.id}: object is not a logging edge.`
-				);
-			} else {
-				edgeObject.content = configString;
-			}
-		}
-	}
+	// 	for (const edge of loggingEdges) {
+	// 		const edgeObject = this.graph[edge.id];
+	// 		if (!(edgeObject instanceof LoggingEdge)) {
+	// 			throw new Error(
+	// 				`Error on object ${edgeObject.id}: object is not a logging edge.`
+	// 			);
+	// 		} else {
+	// 			edgeObject.content = configString;
+	// 		}
+	// 	}
+	// }
 
 	getFunctions(
 		messages: ChatCompletionRequestMessage[]
@@ -799,8 +791,10 @@ export class DistributeNode extends CallNode {
 
 	loadOutgoingEdges(
 		content: string,
-		messages: ChatCompletionRequestMessage[]
+		request: CreateChatCompletionRequest
 	): void {
+		const messages = request.messages;
+
 		// Get the list items from the last message
 		const listFunctionArgs =
 			messages[messages.length - 1].function_call?.arguments;
@@ -829,14 +823,14 @@ export class DistributeNode extends CallNode {
 						if (listItemContent) {
 							edgeObject.load({
 								content: listItemContent,
-								messages: messages,
+								request: request,
 							});
 						}
 					}
 				} else {
 					edgeObject.load({
 						content: content,
-						messages: messages,
+						request: request,
 					});
 				}
 			}
@@ -878,8 +872,10 @@ export class ChooseNode extends CallNode {
 
 	loadOutgoingEdges(
 		content: string,
-		messages: ChatCompletionRequestMessage[]
+		request: CreateChatCompletionRequest
 	): void {
+		const messages = request.messages;
+
 		// Get the chosen variable from the last message
 		const choiceFunctionArgs =
 			messages[messages.length - 1].function_call?.arguments;
@@ -894,7 +890,7 @@ export class ChooseNode extends CallNode {
 		// Reject all unselected options
 		this.rejectUnselectedOptions(parsedVariable.choice);
 
-		super.loadOutgoingEdges(content, messages);
+		super.loadOutgoingEdges(content, request);
 	}
 
 	rejectUnselectedOptions(choice: string) {
@@ -973,22 +969,14 @@ export class ContentNode extends CannoliNode {
 			}
 		}
 
-		// If the incoming edge is a single logging edge, append the content to the text
-		if (
-			this.getIncomingEdges().length === 1 &&
-			this.getIncomingEdges()[0].type === EdgeType.Logging
-		) {
-			this.text += (this.text.length > 0 ? "\n" : "") + content;
-		} else {
-			if (content !== null && content !== undefined && content !== "") {
-				this.text = content;
-			}
+		if (content !== null && content !== undefined && content !== "") {
+			this.text = content;
 		}
 
 		content = this.text;
 
 		// Load all outgoing edges
-		this.loadOutgoingEdges(content, []);
+		this.loadOutgoingEdges(content);
 
 		this.completed();
 	}
@@ -1037,7 +1025,6 @@ export class ContentNode extends CannoliNode {
 					if (edgeObject.content) {
 						content += edgeObject.content;
 					}
-					console.log(`Appending content ${edgeObject.content}`);
 				}
 			}
 
@@ -1213,7 +1200,7 @@ export class ReferenceNode extends ContentNode {
 		const fetchedContent = await this.getContent();
 
 		// Load all outgoing edges
-		this.loadOutgoingEdges(fetchedContent, []);
+		this.loadOutgoingEdges(fetchedContent);
 
 		this.completed();
 	}
@@ -1494,7 +1481,7 @@ export class HttpNode extends ContentNode {
 		}
 
 		if (typeof result === "string") {
-			this.loadOutgoingEdges(result, []);
+			this.loadOutgoingEdges(result);
 		}
 
 		this.completed();
@@ -1515,7 +1502,7 @@ export class FormatterNode extends ContentNode {
 		const processedContent = content.slice(1, -1);
 
 		// Load all outgoing edges
-		this.loadOutgoingEdges(processedContent, []);
+		this.loadOutgoingEdges(processedContent);
 
 		this.completed();
 	}

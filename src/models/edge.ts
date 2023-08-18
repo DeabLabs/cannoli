@@ -1,5 +1,8 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { ChatCompletionRequestMessage } from "openai";
+import {
+	ChatCompletionRequestMessage,
+	CreateChatCompletionRequest,
+} from "openai";
 import { ForEachGroup, RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,
@@ -56,15 +59,16 @@ export class CannoliEdge extends CannoliObject {
 
 	load({
 		content,
-		messages,
+		request,
 	}: {
 		content?: string | Record<string, string>;
-		messages?: ChatCompletionRequestMessage[];
+		request?: CreateChatCompletionRequest;
 	}): void {
 		this.content = content ? content : null;
 
 		if (this.addMessages) {
-			this.messages = messages ? messages : null;
+			this.messages =
+				request && request.messages ? request.messages : null;
 		}
 	}
 
@@ -117,18 +121,16 @@ export class CannoliEdge extends CannoliObject {
 
 	reset() {
 		super.reset();
-		this.content = null;
-		this.messages = null;
 	}
 }
 
 export class SystemMessageEdge extends CannoliEdge {
 	load({
 		content,
-		messages,
+		request,
 	}: {
 		content?: string | Record<string, string>;
-		messages?: ChatCompletionRequestMessage[];
+		request?: CreateChatCompletionRequest;
 	}): void {
 		if (content) {
 			this.messages = [
@@ -139,21 +141,34 @@ export class SystemMessageEdge extends CannoliEdge {
 			];
 		}
 	}
+
+	reset(): void {
+		super.reset();
+		this.content = null;
+		this.messages = null;
+	}
 }
 
 export class LoggingEdge extends CannoliEdge {
 	load({
 		content,
-		messages,
+		request,
 	}: {
 		content?: string | Record<string, string>;
-		messages?: ChatCompletionRequestMessage[];
+		request?: CreateChatCompletionRequest;
 	}): void {
 		// If content exists, save it as the configString
 		let configString = null;
 
-		if (content) {
-			configString = this.content as string;
+		let messages = [];
+
+		if (request) {
+			configString = this.getConfigString(request);
+			messages = request.messages ? request.messages : [];
+		} else {
+			throw new Error(
+				"Logging edge was loaded without a request, this should never happen"
+			);
 		}
 
 		let logs = "";
@@ -185,7 +200,31 @@ export class LoggingEdge extends CannoliEdge {
 			logs = `${logs}\n#### Config\n${configString}\n`;
 		}
 
-		this.content = logs;
+		// Append the logs to the content
+		if (this.content !== null) {
+			this.content = `${this.content}\n${logs}`;
+		} else {
+			this.content = logs;
+		}
+	}
+
+	reset(): void {
+		super.reset();
+	}
+
+	getConfigString(request: CreateChatCompletionRequest) {
+		let configString = "";
+
+		// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
+		for (const key in request) {
+			if (key !== "messages" && request[key as keyof typeof request]) {
+				configString += `${key}: ${
+					request[key as keyof typeof request]
+				}\n`;
+			}
+		}
+
+		return configString;
 	}
 
 	getLoopNumbers(): number[] {
