@@ -261,7 +261,20 @@ export class CannoliFactory {
 			(edge) => edge.id
 		);
 		const groups = this.getGroupsForVertex(group);
-		const members = this.getMembersForGroup(group);
+
+		// Filter for members with a non-null indicated type
+		const members = this.getMembersForGroup(group).filter(
+			(member) =>
+				this.getNodeIndicatedType(
+					this.cannoliData.nodes.find(
+						(node) => node.id === member
+					) as
+						| CannoliCanvasFileData
+						| CannoliCanvasLinkData
+						| CannoliCanvasTextData
+				) !== null
+		);
+
 		const dependencies = [] as string[];
 		const originalObject = group.originalObject;
 		const status =
@@ -993,8 +1006,13 @@ export class CannoliFactory {
 		if (vertex.cannoliData?.kind === CannoliObjectKind.Group) {
 			const group = vertex as CannoliCanvasGroupData;
 			const members = group.cannoliData?.members;
-			if (members) {
-				dependencies.push(...members);
+			// Filter for members that exist in the data
+			const existingMembers = members?.filter((member) =>
+				data.nodes.some((node) => node.id === member)
+			);
+
+			if (existingMembers) {
+				dependencies.push(...existingMembers);
 			}
 		}
 

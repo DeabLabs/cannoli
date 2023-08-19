@@ -398,7 +398,7 @@ export class Run {
 		request: CreateChatCompletionRequest,
 		verbose?: boolean
 	): Promise<ChatCompletionRequestMessage | Error> {
-		//console.log(`Request: ${JSON.stringify(request, null, 2)}`);
+		console.log(`Request: ${JSON.stringify(request, null, 2)}`);
 
 		return this.llmLimit(
 			async (): Promise<ChatCompletionRequestMessage | Error> => {

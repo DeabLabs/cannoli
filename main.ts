@@ -12,6 +12,7 @@ import { Canvas } from "src/canvas";
 import { CannoliFactory } from "src/factory";
 import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
+
 interface CannoliSettings {
 	openaiAPIKey: string;
 	costThreshold: number;
@@ -156,14 +157,14 @@ export default class Cannoli extends Plugin {
 		const graph = factory.getCannoliData();
 		console.log(JSON.stringify(graph, null, 2));
 
-		// const shouldContinue = await this.validateCannoli(
-		// 	graph,
-		// 	file,
-		// 	name,
-		// 	canvas
-		// );
+		const shouldContinue = await this.validateCannoli(
+			graph,
+			file,
+			name,
+			canvas
+		);
 
-		const shouldContinue = true;
+		//const shouldContinue = true;
 
 		if (shouldContinue) {
 			await this.runCannoli(graph, file, name, canvas);
@@ -588,6 +589,18 @@ class CannoliSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 
 		containerEl.empty();
+
+		// // Add button to add sample folder
+		// new Setting(containerEl)
+		// 	.setName("Add Sample Folder")
+		// 	.setDesc(
+		// 		"This will add a sample folder to your vault with some example canvases and cannolis."
+		// 	)
+		// 	.addButton((button) =>
+		// 		button.setButtonText("Add").onClick(() => {
+		// 			this.plugin.addSampleFolder();
+		// 		})
+		// 	);
 
 		new Setting(containerEl)
 			.setName("OpenAI API Key")

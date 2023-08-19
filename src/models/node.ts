@@ -525,7 +525,7 @@ export class CallNode extends CannoliNode {
 	}
 
 	private getDefaultConfig(): OpenAIConfig {
-		const config = this.run.getDefaultConfig();
+		const config = JSON.parse(JSON.stringify(this.run.getDefaultConfig()));
 		return config;
 	}
 
@@ -534,21 +534,53 @@ export class CallNode extends CannoliNode {
 		content: string | Record<string, string> | null,
 		setting?: string | null
 	): void {
-		const isValidKey = (key: string, config: OpenAIConfig) =>
-			Object.prototype.hasOwnProperty.call(config, key);
+		// Sample object to validate keys against
+		const sampleOpenAIConfig: OpenAIConfig = {
+			model: "",
+			frequency_penalty: undefined,
+			presence_penalty: undefined,
+			stop: undefined,
+			function_call: undefined,
+			functions: undefined,
+			temperature: undefined,
+			top_p: undefined,
+		};
+
+		// Define the expected types for each key
+		const keyTypeMap: {
+			[key in keyof OpenAIConfig]?: "string" | "number";
+		} = {
+			frequency_penalty: "number",
+			presence_penalty: "number",
+			temperature: "number",
+			top_p: "number",
+		};
+
+		// Convert value based on its expected type
+		const convertValue = (key: keyof OpenAIConfig, value: string) => {
+			const expectedType = keyTypeMap[key];
+			return expectedType === "number" ? parseFloat(value) : value;
+		};
+
+		// Type guard to check if a string is a key of OpenAIConfig
+		const isValidKey = (key: string): key is keyof OpenAIConfig => {
+			return key in sampleOpenAIConfig;
+		};
 
 		if (typeof content === "string") {
-			if (setting && isValidKey(setting, runConfig)) {
+			if (setting && isValidKey(setting)) {
+				// Use isValidKey
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				(runConfig as any)[setting] = content; // Using type assertion
+				(runConfig as any)[setting] = convertValue(setting, content); // Using type assertion with conversion
 			} else {
 				this.error(`"${setting}" is not a valid config setting.`);
 			}
 		} else if (typeof content === "object") {
 			for (const key in content) {
-				if (isValidKey(key, runConfig)) {
+				if (isValidKey(key)) {
+					// Use isValidKey
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					(runConfig as any)[key] = content[key]; // Using type assertion
+					(runConfig as any)[key] = convertValue(key, content[key]); // Using type assertion with conversion
 				} else {
 					this.error(`"${key}" is not a valid config setting.`);
 				}
@@ -606,8 +638,10 @@ export class CallNode extends CannoliNode {
 
 	getConfig(): OpenAIConfig {
 		const runConfig = this.getDefaultConfig();
+
 		this.processGroups(runConfig);
 		this.processNodes(runConfig);
+
 		return runConfig;
 	}
 
@@ -823,7 +857,7 @@ export class DistributeNode extends CallNode {
 					}
 				} else {
 					edgeObject.load({
-						content: content,
+						content: listFunctionArgs,
 						request: request,
 					});
 				}
@@ -884,7 +918,7 @@ export class ChooseNode extends CallNode {
 		// Reject all unselected options
 		this.rejectUnselectedOptions(parsedVariable.choice);
 
-		super.loadOutgoingEdges(content, request);
+		super.loadOutgoingEdges(choiceFunctionArgs, request);
 	}
 
 	rejectUnselectedOptions(choice: string) {
