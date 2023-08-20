@@ -1174,15 +1174,20 @@ export class CannoliFactory {
 			return ContentNodeType.Http;
 		}
 
-		// If its text starts and ends with a "`", and it doesn't start and end with "```", and it contains at least one "{" and one "}", it's a formatter node
-		if (
-			text.startsWith("`") &&
-			text.endsWith("`") &&
-			!text.startsWith("```") &&
-			!text.endsWith("```") &&
-			text.includes("{") &&
-			text.includes("}")
-		) {
+		// // If its text starts and ends with a "`", and it doesn't start and end with "```", and it contains at least one "{" and one "}", it's a formatter node
+		// if (
+		// 	text.startsWith("`") &&
+		// 	text.endsWith("`") &&
+		// 	!text.startsWith("```") &&
+		// 	!text.endsWith("```") &&
+		// 	text.includes("{") &&
+		// 	text.includes("}")
+		// ) {
+		// 	return ContentNodeType.Formatter;
+		// }
+
+		// If its text starts and ends with double double quotes, it's a formatter node
+		if (text.startsWith('""') && text.endsWith('""')) {
 			return ContentNodeType.Formatter;
 		}
 

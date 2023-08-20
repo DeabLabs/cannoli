@@ -125,11 +125,11 @@ export class CannoliNode extends CannoliVertex {
 							this.warning(
 								`Note "${variable.content}" not found`
 							);
-							content = `{{${reference.name}}}`;
+							content = `{@${reference.name}}`;
 						}
 					} else {
 						//this.warning(`Variable "${reference.name}" not found`);
-						content = `{{${reference.name}}}`;
+						content = `{@${reference.name}}`;
 					}
 				} else if (reference.type === ReferenceType.Note) {
 					if (reference.shouldExtract) {
@@ -671,6 +671,9 @@ export class CallNode extends CannoliNode {
 			if (message.function_call.name === "enter_note_name") {
 				const args = JSON.parse(message.function_call.arguments);
 
+				// Put double brackets around the note name
+				args.note = `[[${args.note}]]`;
+
 				this.loadOutgoingEdges(args.note, request);
 			} else {
 				this.loadOutgoingEdges(message.content ?? "", request);
@@ -706,34 +709,6 @@ export class CallNode extends CannoliNode {
 			function_call: function_call ? function_call : undefined,
 		};
 	}
-
-	// loadOutgoingLoggingEdges(request: CreateChatCompletionRequest) {
-	// 	const loggingEdges = this.getOutgoingEdges().filter(
-	// 		(edge) => edge.type === EdgeType.Logging
-	// 	);
-
-	// 	let configString = "";
-
-	// 	// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
-	// 	for (const key in request) {
-	// 		if (key !== "messages" && request[key as keyof typeof request]) {
-	// 			configString += `${key}: ${
-	// 				request[key as keyof typeof request]
-	// 			}\n`;
-	// 		}
-	// 	}
-
-	// 	for (const edge of loggingEdges) {
-	// 		const edgeObject = this.graph[edge.id];
-	// 		if (!(edgeObject instanceof LoggingEdge)) {
-	// 			throw new Error(
-	// 				`Error on object ${edgeObject.id}: object is not a logging edge.`
-	// 			);
-	// 		} else {
-	// 			edgeObject.content = configString;
-	// 		}
-	// 	}
-	// }
 
 	getFunctions(
 		messages: ChatCompletionRequestMessage[]
@@ -1526,8 +1501,8 @@ export class FormatterNode extends ContentNode {
 
 		const content = await this.processReferences();
 
-		// Take off the first and last characters (the backticks)
-		const processedContent = content.slice(1, -1);
+		// Take off the first 2 and last 2 characters (the double double quotes)
+		const processedContent = content.slice(2, -2);
 
 		// Load all outgoing edges
 		this.loadOutgoingEdges(processedContent);

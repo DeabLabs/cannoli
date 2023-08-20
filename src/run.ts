@@ -955,7 +955,8 @@ export class Run {
 
 		// Get the file
 		const file = this.vault.getMarkdownFiles().find((file) => {
-			return file.basename === name;
+			// Remove double brackets from the name
+			return file.basename === name.replace("[[", "").replace("]]", "");
 		});
 
 		if (!file) {
@@ -973,9 +974,15 @@ export class Run {
 	}
 
 	async getNote(name: string): Promise<string | null> {
+		// If we're mocking, return a mock response
+		if (this.isMock) {
+			return `# ${name}\nMock note content`;
+		}
+
 		// Get the file
 		const file = this.vault.getMarkdownFiles().find((file) => {
-			return file.basename === name;
+			// Remove double brackets from the name
+			return file.basename === name.replace("[[", "").replace("]]", "");
 		});
 
 		if (!file) {
@@ -986,7 +993,7 @@ export class Run {
 		let content = await this.vault.read(file);
 
 		// Prepend the note's name as a header
-		const header = `# ${name}\n`;
+		const header = `# ${file.basename}\n`;
 
 		content = header + content;
 
