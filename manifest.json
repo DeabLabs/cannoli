@@ -4,8 +4,8 @@
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Create LLM Chat flows using the Obsidian Canvas.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"author": "Blind Mansion",
+	"authorUrl": "https://deablabs.com/",
+	"fundingUrl": "",
 	"isDesktopOnly": false
 }
