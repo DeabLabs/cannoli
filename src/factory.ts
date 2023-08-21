@@ -65,7 +65,8 @@ export class CannoliFactory {
 		"2": EdgeType.Config,
 		"3": EdgeType.Choice,
 		"4": EdgeType.Function,
-		"5": EdgeType.Key,
+		"5": EdgeType.List,
+		"6": EdgeType.Key,
 	};
 
 	addMessagesModifierMap: Record<string, boolean> = {
@@ -1260,8 +1261,10 @@ export class CannoliFactory {
 				}
 				// If the type from the color map is key, return the subtype
 				else if (this.edgeColorMap[edge.color] === EdgeType.Key) {
-					return this.getKeyEdgeSubtype(edge);
+					// return this.getKeyEdgeSubtype(edge);
+					return EdgeType.Key;
 				}
+
 				// If the type from the color map is config
 				else if (this.edgeColorMap[edge.color] === EdgeType.Config) {
 					// If the edge has a label, return config
@@ -1305,15 +1308,34 @@ export class CannoliFactory {
 			}
 		} else if (!edge.label || edge.label.length === 0) {
 			// Get the indicated type of the source and target nodes
-			const sourceNode = this.getNode(edge.fromNode);
-			const targetNode = this.getNode(edge.toNode);
+			const sourceNode = this.getVertex(edge.fromNode);
+			const targetNode = this.getVertex(edge.toNode);
 
 			if (!sourceNode || !targetNode) {
-				throw new Error("Edge source or target not found");
+				throw new Error(
+					`Edge: ${edge.label} source or target not found`
+				);
 			}
 
-			const sourceIndicatedType = this.getNodeIndicatedType(sourceNode);
-			const targetIndicatedType = this.getNodeIndicatedType(targetNode);
+			if (
+				sourceNode.kind === CannoliObjectKind.Group ||
+				targetNode.kind === CannoliObjectKind.Group
+			) {
+				return EdgeType.Chat;
+			}
+
+			const sourceIndicatedType = this.getNodeIndicatedType(
+				sourceNode as
+					| CannoliCanvasFileData
+					| CannoliCanvasLinkData
+					| CannoliCanvasTextData
+			);
+			const targetIndicatedType = this.getNodeIndicatedType(
+				targetNode as
+					| CannoliCanvasFileData
+					| CannoliCanvasLinkData
+					| CannoliCanvasTextData
+			);
 
 			// If the source is a content node
 			if (sourceIndicatedType === IndicatedNodeType.Content) {

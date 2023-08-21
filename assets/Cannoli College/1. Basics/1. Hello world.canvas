@@ -1,0 +1,15 @@
+{
+	"nodes":[
+		{"type":"group","id":"161279baf7763214","x":-174,"y":-160,"width":394,"height":340,"label":"Cannoli"},
+		{"type":"text","text":"Hello world!","id":"dc3f9351f787531e","x":-97,"y":-91,"width":250,"height":60},
+		{"type":"text","text":"","id":"bc1a550bbb4aac7b","x":-97,"y":60,"width":250,"height":60,"color":"6"},
+		{"type":"text","text":"The purple node is a content node. Content nodes can be used to store and display text that can be read or written by you or another node.","id":"f77169b141243e65","x":240,"y":30,"width":420,"height":120},
+		{"type":"text","text":"The colorless, green, or yellow node is a call node. Call nodes make a chat completion call to the LLM with the text of the node as a user message.","id":"0af5a453bd4d6ec9","x":240,"y":-110,"width":380,"height":120},
+		{"type":"text","text":"If a node in a cannoli is floating (no arrows attached) it won't affect the cannoli unless it is formatted in a special way we'll go over later.","id":"7d005c80299f3674","x":-202,"y":220,"width":461,"height":102},
+		{"type":"text","text":"This is a Cannoli. Its made up of different types of nodes and arrows.","id":"24dd96c964700992","x":-147,"y":-300,"width":350,"height":80},
+		{"type":"text","text":"You can run a canvas as a Cannoli by clicking on the cannoli icon in the control ribbon on the left side of your obsidian window.\n\nYou can also run Cannolis from the command pallet by adding the extension \".cno\" to the end of the canvas file name.","id":"927cf33512b0dfc1","x":-560,"y":-109,"width":358,"height":238}
+	],
+	"edges":[
+		{"id":"23c2d7dffb49bf75","fromNode":"dc3f9351f787531e","fromSide":"bottom","toNode":"bc1a550bbb4aac7b","toSide":"top"}
+	]
+}

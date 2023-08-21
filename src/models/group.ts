@@ -361,8 +361,11 @@ export class RepeatGroup extends CannoliGroup {
 	}
 
 	membersFinished(): void {
-		// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-		if (this.currentLoop < this.maxLoops! - 1) {
+		if (
+			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+			this.currentLoop < this.maxLoops! - 1 &&
+			!this.anyReflexiveEdgesRejected()
+		) {
 			this.currentLoop++;
 
 			if (!this.run.isMock) {
@@ -381,9 +384,22 @@ export class RepeatGroup extends CannoliGroup {
 		}
 	}
 
-	executeMembers(): void {
-		// THIS SHOULD CALL A "TRY EXECUTE" METHOD ON EACH MEMBER
+	noRejectedReflexiveEdges(): boolean {
+		// For each incoming edge
+		for (const edge of this.incomingEdges) {
+			const edgeObject = this.graph[edge] as CannoliEdge;
+			// If it's reflexive and rejected, return true
+			if (
+				edgeObject.isReflexive &&
+				edgeObject.status === CannoliObjectStatus.Rejected
+			) {
+				return false;
+			}
+		}
+		return true;
+	}
 
+	executeMembers(): void {
 		// For each member
 		for (const member of this.getMembers()) {
 			member.dependencyCompleted(this);

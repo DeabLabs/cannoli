@@ -12,6 +12,7 @@ import { Canvas } from "src/canvas";
 import { CannoliFactory } from "src/factory";
 import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
+import { cannoliCollege } from "assets/cannoliCollege";
 
 interface CannoliSettings {
 	openaiAPIKey: string;
@@ -295,6 +296,31 @@ export default class Cannoli extends Plugin {
 
 			run.start();
 		});
+	};
+
+	addSampleFolder = async () => {
+		try {
+			await this.app.vault.createFolder("Cannoli College");
+		} catch (error) {
+			// If the folder already exists, send a Notice
+			new Notice("Cannoli College folder already exists");
+			return;
+		}
+
+		// For each element of the cannoliCollege object, create a subfolder with the name of the key
+		for (const [key, value] of Object.entries(cannoliCollege)) {
+			await this.app.vault.createFolder("Cannoli College/" + key);
+
+			// Iterate through the array of objects in the subfolder
+			for (const item of value) {
+				const { name, content } = item; // Destructure the name and content properties
+
+				await this.app.vault.create(
+					"Cannoli College/" + key + "/" + name,
+					content
+				);
+			}
+		}
 	};
 }
 
@@ -590,17 +616,17 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		// // Add button to add sample folder
-		// new Setting(containerEl)
-		// 	.setName("Add Sample Folder")
-		// 	.setDesc(
-		// 		"This will add a sample folder to your vault with some example canvases and cannolis."
-		// 	)
-		// 	.addButton((button) =>
-		// 		button.setButtonText("Add").onClick(() => {
-		// 			this.plugin.addSampleFolder();
-		// 		})
-		// 	);
+		// Add button to add sample folder
+		new Setting(containerEl)
+			.setName("Add Cannoli College")
+			.setDesc(
+				"Add a folder of sample Cannolis to your vault to walk you through the basics of Cannoli."
+			)
+			.addButton((button) =>
+				button.setButtonText("Add").onClick(() => {
+					this.plugin.addSampleFolder();
+				})
+			);
 
 		new Setting(containerEl)
 			.setName("OpenAI API Key")
