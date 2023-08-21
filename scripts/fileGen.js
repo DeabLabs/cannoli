@@ -2,10 +2,10 @@ const fs = require("fs");
 const path = require("path");
 
 // Path to the directory containing the subfolders you want to parse
-const inputDirectory = "./Cannoli College";
+const inputDirectory = path.join(__dirname, "../assets/Cannoli College");
 
 // Path to the generated JavaScript file
-const outputFile = "./cannoliCollege.js";
+const outputFile = path.join(__dirname, "../assets/cannoliCollege.js");
 
 let cannoliCollegeContent = "export const cannoliCollege = {\n";
 
