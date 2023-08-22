@@ -94,6 +94,21 @@ export class CannoliGroup extends CannoliVertex {
 		return true;
 	}
 
+	allDependenciesCompleteOrRejected(): boolean {
+		// For each dependency
+		for (const dependency of this.dependencies) {
+			// If it's not complete, return false
+			if (
+				this.graph[dependency].status !==
+					CannoliObjectStatus.Complete &&
+				this.graph[dependency].status !== CannoliObjectStatus.Rejected
+			) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	async execute(): Promise<void> {
 		this.status = CannoliObjectStatus.Complete;
 		this.emit("update", this, CannoliObjectStatus.Complete);
@@ -140,14 +155,17 @@ export class CannoliGroup extends CannoliVertex {
 		return true;
 	}
 
-	anyReflexiveEdgesRejected(): boolean {
+	anyReflexiveEdgesComplete(): boolean {
 		// For each incoming edge
 		for (const edge of this.incomingEdges) {
 			const edgeObject = this.graph[edge] as CannoliEdge;
-			// If it's reflexive and rejected, return true
+			// If it's reflexive and complete, return true
+			console.log(
+				`Edge: ${edgeObject.text} is reflexive: ${edgeObject.isReflexive} and has status: ${edgeObject.status}`
+			);
 			if (
 				edgeObject.isReflexive &&
-				edgeObject.status === CannoliObjectStatus.Rejected
+				edgeObject.status === CannoliObjectStatus.Complete
 			) {
 				return true;
 			}
@@ -364,7 +382,7 @@ export class RepeatGroup extends CannoliGroup {
 		if (
 			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
 			this.currentLoop < this.maxLoops! - 1 &&
-			!this.anyReflexiveEdgesRejected()
+			this.allEdgeDependenciesComplete()
 		) {
 			this.currentLoop++;
 
@@ -382,21 +400,6 @@ export class RepeatGroup extends CannoliGroup {
 			this.status = CannoliObjectStatus.Complete;
 			this.emit("update", this, CannoliObjectStatus.Complete);
 		}
-	}
-
-	noRejectedReflexiveEdges(): boolean {
-		// For each incoming edge
-		for (const edge of this.incomingEdges) {
-			const edgeObject = this.graph[edge] as CannoliEdge;
-			// If it's reflexive and rejected, return true
-			if (
-				edgeObject.isReflexive &&
-				edgeObject.status === CannoliObjectStatus.Rejected
-			) {
-				return false;
-			}
-		}
-		return true;
 	}
 
 	executeMembers(): void {
@@ -423,7 +426,7 @@ export class RepeatGroup extends CannoliGroup {
 		// Repeat groups must have a valid label number
 		if (this.maxLoops === null) {
 			this.error(
-				`Repeat groups and While loops must have a valid number in their label. Please ensure the label is a positive integer.`
+				`Repeat groups loops must have a valid number in their label. Please ensure the label is a positive integer.`
 			);
 		}
 
@@ -444,55 +447,5 @@ export class RepeatGroup extends CannoliGroup {
 		if (this.outgoingEdges.length !== 0) {
 			this.error(`Repeat groups can't have any outgoing edges.`);
 		}
-	}
-}
-
-export class WhileGroup extends RepeatGroup {
-	constructor(groupData: VerifiedCannoliCanvasGroupData) {
-		super(groupData);
-	}
-
-	membersFinished(): void {
-		// Check if any non-vertex dependencies are rejected and if the current loop is less than the max loops
-		if (
-			!this.anyReflexiveEdgesRejected() &&
-			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-			this.currentLoop < this.maxLoops! - 1
-		) {
-			this.currentLoop++;
-
-			if (!this.run.isMock) {
-				// Sleep for 20ms to allow complete color to render
-				setTimeout(() => {
-					this.resetMembers();
-					this.executeMembers();
-				}, 20);
-			} else {
-				this.resetMembers();
-				this.executeMembers();
-			}
-		} else {
-			this.status = CannoliObjectStatus.Complete;
-			this.emit("update", this, CannoliObjectStatus.Complete);
-		}
-	}
-
-	validate(): void {
-		super.validate();
-
-		// While groups must have at least one incoming edge that is reflexive and of type "branch"
-		// const branchEdges = this.getIncomingEdges().filter(
-		// 	(edge) => edge.type === EdgeType.Branch && edge.isReflexive
-		// );
-
-		// if (branchEdges.length === 0) {
-		// 	this.error(
-		// 		`While groups must have at least one incoming branch edge coming from a node in the group.`
-		// 	);
-		// }
-	}
-
-	logDetails(): string {
-		return super.logDetails() + `Subtype: While\n`;
 	}
 }

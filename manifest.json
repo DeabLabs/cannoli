@@ -3,9 +3,9 @@
 	"name": "Cannoli",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Create and run LLM scripts on the Canvas.",
+	"description": "Create and run LLM scripts on the Obsidian Canvas.",
 	"author": "Blind Mansion",
 	"authorUrl": "https://deablabs.com/",
-	"fundingUrl": "",
+	"fundingUrl": "https://ko-fi.com/blindmansion",
 	"isDesktopOnly": false
 }

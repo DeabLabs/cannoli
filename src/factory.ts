@@ -92,12 +92,10 @@ export class CannoliFactory {
 
 	groupPrefixMap: Record<string, GroupType> = {
 		"<": GroupType.SignifiedForEach,
-		"?": GroupType.While,
 	};
 
 	groupColorMap: Record<string, GroupType> = {
 		"5": GroupType.SignifiedForEach,
-		"3": GroupType.While,
 	};
 
 	constructor(canvas: CanvasData) {
@@ -296,11 +294,7 @@ export class CannoliFactory {
 			status,
 		};
 
-		if (
-			type === GroupType.Repeat ||
-			type === GroupType.While ||
-			type === GroupType.SignifiedForEach
-		) {
+		if (type === GroupType.Repeat || type === GroupType.SignifiedForEach) {
 			return {
 				...genericProps,
 				currentLoop: labelInfo?.completedNumber || 0,
@@ -954,11 +948,11 @@ export class CannoliFactory {
 				return;
 			}
 
-			if (edgeData.cannoliData.isReflexive) {
-				return;
-			} else {
-				dependencies.push(edge);
-			}
+			// if (edgeData.cannoliData.isReflexive) {
+			// 	return;
+			// } else {
+			dependencies.push(edge);
+			// }
 		});
 
 		// For each incoming edge of each group in groups, check if it is reflexive and add it if its not

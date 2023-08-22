@@ -8,7 +8,7 @@ import {
 } from "obsidian/canvas";
 import { ChatCompletionRequestMessage } from "openai";
 import { CannoliObject } from "./object";
-import { CannoliGroup, ForEachGroup, RepeatGroup, WhileGroup } from "./group";
+import { CannoliGroup, ForEachGroup, RepeatGroup } from "./group";
 import {
 	AccumulateNode,
 	CallNode,
@@ -34,7 +34,6 @@ export enum GroupType {
 	ForEach = "for-each",
 	Repeat = "repeat",
 	Basic = "basic",
-	While = "while",
 }
 
 export enum EdgeType {
@@ -231,11 +230,6 @@ export class CannoliGraph {
 				case GroupType.Basic: {
 					const basicGroup = node as VerifiedCannoliCanvasGroupData;
 					this.graph[node.id] = new CannoliGroup(basicGroup);
-					break;
-				}
-				case GroupType.While: {
-					const whileGroup = node as VerifiedCannoliCanvasGroupData;
-					this.graph[node.id] = new WhileGroup(whileGroup);
 					break;
 				}
 				case ContentNodeType.StandardConent: {

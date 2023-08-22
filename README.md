@@ -27,4 +27,8 @@ Cannolis can be run in several ways:
 -   Run the "Start/Stop this Cannoli" command in the command palette to run the current Canvas file as a Cannoli
 -   If a canvas filename ends with ".cno", it will have its own run command in the command palette
 
+# Network Use
+
+Cannoli uses the OpenAI API to run your cannolis. Cannoli can send HTTP requests that you define up front.
+
 <a href='https://ko-fi.com/Z8Z1OHPFX' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi2.png?v=3' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>

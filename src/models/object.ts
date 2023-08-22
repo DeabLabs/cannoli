@@ -130,6 +130,52 @@ export class CannoliObject extends EventEmitter {
 		return true;
 	}
 
+	allEdgeDependenciesComplete(): boolean {
+		// Get the dependencies as objects
+		const dependencies = this.getAllDependencies();
+
+		// For each dependency
+		for (const dependency of dependencies) {
+			// If the dependency it's not an edge, continue
+			if (!this.cannoliGraph.isEdge(dependency)) {
+				continue;
+			}
+
+			if (dependency.status !== CannoliObjectStatus.Complete) {
+				// If the dependency is a non-logging edge
+				if (
+					this.cannoliGraph.isEdge(dependency) &&
+					dependency.type !== EdgeType.Logging
+				) {
+					let redundantComplete = false;
+
+					// Check if there are any other edge dependencies that share the same name which are complete
+					for (const otherDependency of dependencies) {
+						if (
+							this.cannoliGraph.isEdge(otherDependency) &&
+							otherDependency.text === dependency.text &&
+							otherDependency.status ===
+								CannoliObjectStatus.Complete
+						) {
+							// If there are, set redundantComplete to true
+							redundantComplete = true;
+							break;
+						}
+					}
+
+					// If redundantComplete is false, return false
+					if (!redundantComplete) {
+						return false;
+					}
+				} else {
+					// If the dependency is not an edge, return false
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
 	executing() {
 		this.status = CannoliObjectStatus.Executing;
 		this.emit("update", this, CannoliObjectStatus.Executing);
