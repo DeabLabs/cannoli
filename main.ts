@@ -6,6 +6,7 @@ import {
 	PluginSettingTab,
 	Setting,
 	TFile,
+	addIcon,
 } from "obsidian";
 import { Configuration, OpenAIApi } from "openai";
 import { Canvas } from "src/canvas";
@@ -13,6 +14,7 @@ import { CannoliFactory } from "src/factory";
 import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
+import { cannoliIcon } from "assets/cannoliIcon";
 
 interface CannoliSettings {
 	openaiAPIKey: string;
@@ -56,9 +58,11 @@ export default class Cannoli extends Plugin {
 			}
 		});
 
+		addIcon("cannoli", cannoliIcon);
+
 		// This creates an icon in the left ribbon.
 		const ribbonIconEl = this.addRibbonIcon(
-			"brain-circuit",
+			"cannoli",
 			"Start/Stop this Cannoli",
 			this.startOrStopCannoli
 		);
