@@ -4,7 +4,7 @@
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
 	"description": "Create and run LLM scripts on the Obsidian Canvas.",
-	"author": "Blind Mansion",
+	"author": "blindmansion",
 	"authorUrl": "https://deablabs.com/",
 	"fundingUrl": "https://ko-fi.com/blindmansion",
 	"isDesktopOnly": false
