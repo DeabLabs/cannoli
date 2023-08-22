@@ -1,6 +1,6 @@
 # Cannoli
 
-Cannoli allows you to build no-code LLM scripts using the Obsidian Canvas editor.
+Cannoli allows you to build and run no-code LLM scripts using the Obsidian Canvas editor.
 
 ## What is a Cannoli?
 
@@ -13,6 +13,7 @@ Using colors or prefixes, you can create nodes and arrows of different types to 
 ## Documentation
 
 You can access a walkthrough folder of sample cannolis in the plugin settings (full docs website forthcoming).
+
 ![Cannoli College](/assets/cannoliCollege.png)
 
 ## Running Cannolis
@@ -20,7 +21,9 @@ You can access a walkthrough folder of sample cannolis in the plugin settings (f
 Cannolis can be run in several ways:
 
 -   Click the Cannoli ribbon icon to run the current Canvas file as a Cannoli
-    ![Icon](/assets/icon.png)
+
+![Icon](/assets/icon.png)
+
 -   Run the "Start/Stop this Cannoli" command in the command palette to run the current Canvas file as a Cannoli
 -   If a canvas filename ends with ".cno", it will have its own run command in the command palette
 
