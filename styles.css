@@ -1,43 +1,25 @@
-/*
-
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
-*/
-
-.cannoli-button {
-	position: absolute;
-	bottom: 16px;
-	margin: auto;
-	left: 12%;
-	width: 144px;
-	height: 48px;
-}
-
 .whitespace {
 	margin-left: 8px;
 }
 
-.curl-command-editor label {
+.http-template-editor label {
 	display: inline-block;
 	margin-bottom: 4px;
 	margin-right: 8px;
 }
 
-.curl-command-editor input,
-.curl-command-editor textarea {
+.http-template-editor input,
+.http-template-editor textarea {
 	width: 100%;
 	box-sizing: border-box;
 	margin-bottom: 10px;
 }
 
-.curl-command-group {
+.http-template-group {
 	margin-bottom: 15px;
 }
 
-.curl-command-description {
+.http-template-description {
 	margin-top: -22px;
 	font-size: 12px;
 	opacity: 0.6;

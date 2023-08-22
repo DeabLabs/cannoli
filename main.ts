@@ -58,6 +58,15 @@ export default class Cannoli extends Plugin {
 			}
 		});
 
+		// Add command for running a cannoli
+		this.addCommand({
+			id: "current-cannoli",
+			name: "Start/Stop this Cannoli",
+			callback: async () => {
+				this.startOrStopCannoli();
+			},
+		});
+
 		addIcon("cannoli", cannoliIcon);
 
 		// This creates an icon in the left ribbon.
@@ -328,27 +337,6 @@ export default class Cannoli extends Plugin {
 	};
 }
 
-export class ErrorModal extends Modal {
-	error: string;
-
-	constructor(app: App, error: string) {
-		super(app);
-		this.error = error;
-	}
-
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.addClass("error-modal");
-		contentEl.setText(this.error);
-	}
-
-	onClose() {
-		const { contentEl } = this;
-		contentEl.removeClass("error-modal");
-		contentEl.empty();
-	}
-}
-
 export class RunPriceAlertModal extends Modal {
 	usage: Usage[];
 	onContinue: () => void;
@@ -454,7 +442,7 @@ export class HttpTemplateEditorModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 
-		contentEl.addClass("curl-command-editor");
+		contentEl.addClass("http-template-editor");
 		contentEl.createEl("h1", { text: "Edit Action Node Template" });
 
 		const createInputGroup = (
@@ -463,7 +451,7 @@ export class HttpTemplateEditorModal extends Modal {
 			id: string
 		) => {
 			const div = contentEl.createEl("div", {
-				cls: "curl-command-group",
+				cls: "http-template-group",
 			});
 			const label = div.createEl("label", { text: labelText });
 			label.htmlFor = id;
@@ -473,7 +461,7 @@ export class HttpTemplateEditorModal extends Modal {
 
 		const createDescription = (text: string) => {
 			const p = contentEl.createEl("p", {
-				cls: "curl-command-description",
+				cls: "http-template-description",
 			});
 			p.textContent = text;
 			return p;

@@ -3,7 +3,7 @@
 	"name": "Cannoli",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Create LLM Chat flows using the Obsidian Canvas.",
+	"description": "Create and run LLM scripts on the Canvas.",
 	"author": "Blind Mansion",
 	"authorUrl": "https://deablabs.com/",
 	"fundingUrl": "",
