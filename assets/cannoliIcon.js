@@ -1,7 +1,7 @@
 export const cannoliIcon = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0.00 0.00 100.00 100.00">
-<g stroke-width="0.3" fill="none" stroke-linecap="butt">
+<g stroke-width="0.4" fill="none" stroke-linecap="butt">
 <path stroke="currentColor" vector-effect="non-scaling-stroke" d="
   M 55.75 12.79
   C 40.46 27.55 25.39 42.58 10.32 57.57

@@ -456,14 +456,19 @@ export class CallNode extends CannoliNode {
 		const messages: ChatCompletionRequestMessage[] = [];
 
 		// Get all available provide edges
-		let availableEdges = this.getAllAvailableProvideEdges();
+		const availableEdges = this.getAllAvailableProvideEdges();
 
 		// filter for only incoming edges of this node
-		availableEdges = availableEdges.filter((edge) =>
+		const directEdges = availableEdges.filter((edge) =>
 			this.incomingEdges.includes(edge.id)
 		);
 
-		for (const edge of availableEdges) {
+		// Filter for indirect edges (not incoming edges of this node)
+		const indirectEdges = availableEdges.filter(
+			(edge) => !this.incomingEdges.includes(edge.id)
+		);
+
+		for (const edge of directEdges) {
 			const edgeObject = this.graph[edge.id];
 			if (!(edgeObject instanceof CannoliEdge)) {
 				throw new Error(
@@ -481,12 +486,88 @@ export class CallNode extends CannoliNode {
 				continue;
 			}
 
+			// If the edge is crossing a group, check if there are any indirect edges pointing to that group
+			for (const group of edgeObject.crossingInGroups) {
+				const indirectEdgesToGroup = indirectEdges.filter(
+					(edge) => edge.target === group
+				);
+
+				// Filter for those indirect edges that have addMessages = true
+				const indirectEdgesToAdd = indirectEdgesToGroup.filter(
+					(edge) =>
+						this.graph[edge.id] instanceof CannoliEdge &&
+						(this.graph[edge.id] as CannoliEdge).addMessages
+				);
+
+				// For each indirect edge
+				for (const indirectEdge of indirectEdgesToAdd) {
+					const indirectEdgeObject = this.graph[indirectEdge.id];
+					if (!(indirectEdgeObject instanceof CannoliEdge)) {
+						throw new Error(
+							`Error on object ${indirectEdgeObject.id}: object is not a provide edge.`
+						);
+					}
+
+					const indirectEdgeMessages = indirectEdgeObject.messages;
+
+					if (!indirectEdgeMessages) {
+						continue;
+					}
+
+					if (indirectEdgeMessages.length < 1) {
+						continue;
+					}
+
+					// Overwrite edgeMessages with indirectEdgeMessages
+					edgeMessages.length = 0;
+					edgeMessages.push(...indirectEdgeMessages);
+				}
+			}
+
 			if (edgeMessages) {
 				// If its a system message, add it to the beginning of the array
 				if (edge.type === EdgeType.SystemMessage) {
 					messages.unshift(edgeMessages[0]);
 				} else {
 					messages.push(...edgeMessages);
+				}
+			}
+		}
+
+		// If messages is empty and there are no incoming edges with addMessages = true, try it with indirect edges
+		if (
+			messages.length === 0 &&
+			this.incomingEdges.filter(
+				(edge) =>
+					this.cannoliGraph.isEdge(this.graph[edge]) &&
+					(this.graph[edge] as CannoliEdge).addMessages
+			).length === 0
+		) {
+			for (const edge of indirectEdges) {
+				const edgeObject = this.graph[edge.id];
+				if (!(edgeObject instanceof CannoliEdge)) {
+					throw new Error(
+						`Error on object ${edgeObject.id}: object is not a provide edge.`
+					);
+				}
+
+				const edgeMessages = edgeObject.messages;
+
+				if (!edgeMessages) {
+					continue;
+				}
+
+				if (edgeMessages.length < 1) {
+					continue;
+				}
+
+				if (edgeMessages) {
+					// If its a system message, add it to the beginning of the array
+					if (edge.type === EdgeType.SystemMessage) {
+						messages.unshift(edgeMessages[0]);
+					} else {
+						messages.push(...edgeMessages);
+					}
 				}
 			}
 		}
