@@ -6,7 +6,7 @@ Cannoli allows you to build and run no-code LLM scripts using the Obsidian Canva
 
 ![Example Cannoli](/assets/exampleCannoli.png)
 
-Cannolis are scripts that leverage the Openai API to read/write to your vault, and take actions using HTTP requests. Cannolis are created in the Obsidian Canvas editor, using cards and arrows to define variables and logic. They can be run within Obsidian using the ribbon icon or the command palette.
+Cannolis are scripts that leverage the Openai API to read/write to your vault, and take actions using HTTP requests. Cannolis are created in the Obsidian Canvas editor, using cards and arrows to define variables and logic. They can be run within Obsidian using the control ribbon button or the command palette.
 
 Using colors or prefixes, you can create nodes and arrows of different types to define basic logical functions like variables, fields, loops, and branching choices. If a Canvas is a Directed Acyclic Graph and follows the Cannoli schema, it can be run as a cannoli.
 
