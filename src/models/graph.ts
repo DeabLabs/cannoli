@@ -72,7 +72,7 @@ export enum CallNodeType {
 }
 
 export enum ContentNodeType {
-	StandardConent = "standard-content",
+	StandardContent = "standard-content",
 	Reference = "reference",
 	Formatter = "formatter",
 	Http = "http",
@@ -232,7 +232,7 @@ export class CannoliGraph {
 					this.graph[node.id] = new CannoliGroup(basicGroup);
 					break;
 				}
-				case ContentNodeType.StandardConent: {
+				case ContentNodeType.StandardContent: {
 					const standardContentNode =
 						node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new ContentNode(standardContentNode);

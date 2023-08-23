@@ -959,7 +959,7 @@ export class ContentNode extends CannoliNode {
 	reset(): void {
 		// If its a standard content node and it has incoming edges, reset the text and then call the super
 		if (
-			this.type === ContentNodeType.StandardConent &&
+			this.type === ContentNodeType.StandardContent &&
 			this.incomingEdges.length > 0
 		) {
 			this.text = "";

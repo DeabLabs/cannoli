@@ -61,7 +61,7 @@ export default class Cannoli extends Plugin {
 		// Add command for running a cannoli
 		this.addCommand({
 			id: "current-cannoli",
-			name: "Start/Stop this Cannoli",
+			name: "Start/Stop this cannoli",
 			callback: async () => {
 				this.startOrStopCannoli();
 			},
@@ -123,7 +123,7 @@ export default class Cannoli extends Plugin {
 
 		// Check if file is a .canvas file
 		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
-			new Notice("Move to a canvas file to start a Cannoli");
+			new Notice("Move to a canvas file to start a cannoli");
 			return;
 		}
 
@@ -166,7 +166,7 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		new Notice(`Started Cannoli: ${name}`);
+		new Notice(`Started cannoli: ${name}`);
 
 		// Sleep for 1.5s to give the vault time to load
 		await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -179,7 +179,7 @@ export default class Cannoli extends Plugin {
 		const graph = factory.getCannoliData();
 		// console.log(JSON.stringify(graph, null, 2));
 
-		console.log(`Starting Cannoli: ${name}`);
+		console.log(`Starting cannoli: ${name}`);
 
 		const shouldContinue = await this.validateCannoli(
 			graph,
@@ -620,7 +620,7 @@ class CannoliSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Add Cannoli College")
 			.setDesc(
-				"Add a folder of sample Cannolis to your vault to walk you through the basics of Cannoli."
+				"Add a folder of sample cannolis to your vault to walk you through the basics of Cannoli."
 			)
 			.addButton((button) =>
 				button.setButtonText("Add").onClick(() => {
@@ -631,7 +631,7 @@ class CannoliSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("OpenAI API Key")
 			.setDesc(
-				"This key will be used to make all openai LLM calls. Be aware that complex Cannolis, especially those with many GPT-4 calls, can be expensive to run."
+				"This key will be used to make all openai LLM calls. Be aware that complex cannolis, especially those with many GPT-4 calls, can be expensive to run."
 			)
 			.addText((text) =>
 				text
@@ -646,7 +646,7 @@ class CannoliSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Cost Threshold")
 			.setDesc(
-				"If the Cannoli you are about to run is estimated to cost more than this amount (USD$), you will be alerted before running it."
+				"If the cannoli you are about to run is estimated to cost more than this amount (USD$), you will be alerted before running it."
 			)
 			.addText((text) =>
 				text
