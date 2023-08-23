@@ -81,15 +81,6 @@ export default class Cannoli extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
-
-		// Create an instance of OpenAI
-		const configuration = new Configuration({
-			apiKey: this.settings.openaiAPIKey,
-		});
-		delete configuration.baseOptions.headers["User-Agent"];
-
-		// Create an instance of OpenAI
-		this.openai = new OpenAIApi(configuration);
 	}
 
 	onunload() {}
@@ -147,13 +138,22 @@ export default class Cannoli extends Plugin {
 	};
 
 	startCannoli = async (file: TFile) => {
-		// If the api key is the default, send a notice telling the user to add their key and restart obsidian
+		// If the api key is the default, send a notice telling the user to add their key
 		if (this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
 			new Notice(
-				"Please enter your OpenAI API key in the Cannoli settings and restart Obsidian"
+				"Please enter your OpenAI API key in the Cannoli settings"
 			);
 			return;
 		}
+
+		// Create an instance of OpenAI
+		const configuration = new Configuration({
+			apiKey: this.settings.openaiAPIKey,
+		});
+		delete configuration.baseOptions.headers["User-Agent"];
+
+		// Create an instance of OpenAI
+		this.openai = new OpenAIApi(configuration);
 
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
