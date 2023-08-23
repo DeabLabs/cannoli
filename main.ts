@@ -147,6 +147,14 @@ export default class Cannoli extends Plugin {
 	};
 
 	startCannoli = async (file: TFile) => {
+		// If the api key is the default, send a notice telling the user to add their key and restart obsidian
+		if (this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
+			new Notice(
+				"Please enter your OpenAI API key in the Cannoli settings and restart Obsidian"
+			);
+			return;
+		}
+
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
 			? file.basename.slice(0, -4)
