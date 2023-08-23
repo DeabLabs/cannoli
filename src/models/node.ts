@@ -1238,8 +1238,6 @@ export class ReferenceNode extends ContentNode {
 	}
 
 	async loadDynamicReference() {
-		console.log("Loading dynamic reference");
-
 		// Search the incoming edges for any that have a vault modifier of type "note" or "create note"
 		const incomingEdges = this.getIncomingEdges();
 		const vaultModifierEdges = incomingEdges.filter(
@@ -1285,7 +1283,6 @@ export class ReferenceNode extends ContentNode {
 
 			// If there's a note vault modifier edge, use that to get the note name and whether or not to create it
 			if (noteVaultModifierEdges.length === 1) {
-				console.log(`Note vault modifier edge found`);
 				const noteVaultModifierEdge = noteVaultModifierEdges[0];
 
 				noteName = {
@@ -1312,9 +1309,6 @@ export class ReferenceNode extends ContentNode {
 						VaultModifier.CreateFolder,
 				};
 			}
-
-			console.log(`Note: ${noteName.name}, ${noteName.create}`);
-			console.log(`Path: ${path.path}, ${path.create}`);
 
 			// Use the noteName and path variables to decide between the functions: createNoteAtExistingPath, createNoteAtNewPath, createFolder, moveNote
 			if (noteName.name && path.path) {

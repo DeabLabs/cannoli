@@ -169,7 +169,9 @@ export default class Cannoli extends Plugin {
 		const factory = new CannoliFactory(canvas.getCanvasData());
 
 		const graph = factory.getCannoliData();
-		console.log(JSON.stringify(graph, null, 2));
+		// console.log(JSON.stringify(graph, null, 2));
+
+		console.log(`Starting Cannoli: ${name}`);
 
 		const shouldContinue = await this.validateCannoli(
 			graph,
@@ -182,8 +184,6 @@ export default class Cannoli extends Plugin {
 
 		if (shouldContinue) {
 			await this.runCannoli(graph, file, name, canvas);
-		} else {
-			console.log("Run was canceled during validation");
 		}
 	};
 
@@ -196,7 +196,7 @@ export default class Cannoli extends Plugin {
 		return new Promise<boolean>((resolve) => {
 			// Create callback function to trigger notice
 			const onFinish = (stoppage: Stoppage) => {
-				console.log("Finished validation run");
+				// console.log("Finished validation run");
 
 				delete this.runningCannolis[file.basename];
 
@@ -244,7 +244,7 @@ export default class Cannoli extends Plugin {
 				httpTemplates: this.settings.httpTemplates,
 			});
 
-			console.log("Starting validation run");
+			// console.log("Starting validation run");
 
 			validationRun.start();
 		});

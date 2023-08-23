@@ -150,10 +150,9 @@ export class Run {
 	}
 
 	async start() {
-		//if (this.isMock) {
 		// Log the graph
-		this.logGraph();
-		//}
+		// this.logGraph();
+
 		// Setup listeners
 		this.setupListeners();
 
@@ -801,7 +800,6 @@ export class Run {
 		template: string,
 		body: string | Record<string, string>
 	): string => {
-		console.log("template:", template);
 		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
 			(v) => v.slice(2, -2)
 		);

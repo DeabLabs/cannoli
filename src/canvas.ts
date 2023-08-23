@@ -67,7 +67,7 @@ export class Canvas {
 			);
 
 			// log out stringified version of the filtered canvas data
-			console.log(JSON.stringify(parsedContent, null, 2));
+			// console.log(JSON.stringify(parsedContent, null, 2));
 
 			this.canvasData = parsedContent;
 		}

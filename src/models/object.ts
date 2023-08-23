@@ -141,9 +141,6 @@ export class CannoliObject extends EventEmitter {
 				continue;
 			}
 
-			console.log(`Checking if ${dependency.text} is complete`);
-			console.log(`Status: ${dependency.status}`);
-
 			if (dependency.status !== CannoliObjectStatus.Complete) {
 				// If the dependency is a non-logging edge
 				if (

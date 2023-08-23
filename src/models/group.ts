@@ -160,9 +160,6 @@ export class CannoliGroup extends CannoliVertex {
 		for (const edge of this.incomingEdges) {
 			const edgeObject = this.graph[edge] as CannoliEdge;
 			// If it's reflexive and complete, return true
-			console.log(
-				`Edge: ${edgeObject.text} is reflexive: ${edgeObject.isReflexive} and has status: ${edgeObject.status}`
-			);
 			if (
 				edgeObject.isReflexive &&
 				edgeObject.status === CannoliObjectStatus.Complete
