@@ -118,8 +118,8 @@ export class CannoliGroup extends CannoliVertex {
 
 	dependencyCompleted(dependency: CannoliObject): void {
 		if (this.status === CannoliObjectStatus.Executing) {
-			// If all members are complete or rejected, call membersFinished
-			if (this.allMembersCompleteOrRejected()) {
+			// If all dependencies are complete or rejected, call membersFinished
+			if (this.allDependenciesCompleteOrRejected()) {
 				this.membersFinished();
 			}
 		}

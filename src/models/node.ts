@@ -651,8 +651,7 @@ export class CallNode extends CannoliNode {
 		const request = await this.createLLMRequest();
 
 		const message = (await this.run.callLLM(
-			request,
-			true
+			request
 		)) as ChatCompletionRequestMessage;
 
 		if (message instanceof Error) {
