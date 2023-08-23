@@ -261,7 +261,7 @@ export class CannoliFactory {
 		);
 		const groups = this.getGroupsForVertex(group);
 
-		// Filter for members with a non-null indicated type
+		// Filter for members that are groups or have a non-null indicated type
 		const members = this.getMembersForGroup(group).filter(
 			(member) =>
 				this.getNodeIndicatedType(
@@ -271,7 +271,9 @@ export class CannoliFactory {
 						| CannoliCanvasFileData
 						| CannoliCanvasLinkData
 						| CannoliCanvasTextData
-				) !== null
+				) !== null ||
+				this.cannoliData.nodes.find((node) => node.id === member)
+					?.type === "group"
 		);
 
 		const dependencies = [] as string[];
