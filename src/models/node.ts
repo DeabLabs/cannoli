@@ -9,6 +9,7 @@ import {
 import { CannoliGroup } from "./group";
 import {
 	CannoliObjectStatus,
+	ContentNodeType,
 	EdgeType,
 	GroupType,
 	Reference,
@@ -955,6 +956,18 @@ export class ChooseNode extends CallNode {
 }
 
 export class ContentNode extends CannoliNode {
+	reset(): void {
+		// If its a standard content node and it has incoming edges, reset the text and then call the super
+		if (
+			this.type === ContentNodeType.StandardConent &&
+			this.incomingEdges.length > 0
+		) {
+			this.text = "";
+		}
+
+		super.reset();
+	}
+
 	async execute(): Promise<void> {
 		this.executing();
 

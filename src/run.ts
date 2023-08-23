@@ -321,6 +321,12 @@ export class Run {
 	objectPending(object: CannoliObject) {
 		if (this.canvas && object instanceof CallNode) {
 			this.canvas.enqueueChangeNodeColor(object.id, "0");
+		} else if (
+			this.canvas &&
+			object instanceof ContentNode &&
+			object.text === ""
+		) {
+			this.canvas.enqueueChangeNodeText(object.id, "");
 		}
 	}
 
