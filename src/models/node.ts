@@ -43,7 +43,7 @@ export class CannoliNode extends CannoliVertex {
 		// Replace references with placeholders using an index-based system
 		let textCopy = this.text;
 		let index = 0;
-		textCopy = textCopy.replace(/\{[^{}]+\}/g, () => `{${index++}}`); // Updated regex pattern to match {thing}
+		textCopy = textCopy.replace(/\{\{[^{}]+\}\}/g, () => `{{${index++}}}`); // Updated regex pattern to match {{thing}}
 
 		// Define and return the render function
 		const renderFunction = async (
@@ -52,11 +52,11 @@ export class CannoliNode extends CannoliVertex {
 			// Create a map to look up variable content by name
 			const varMap = new Map(variables.map((v) => [v.name, v.content]));
 			// Replace the indexed placeholders with the content from the variables
-			return textCopy.replace(/\{(\d+)\}/g, (match, index) => {
+			return textCopy.replace(/\{\{(\d+)\}\}/g, (match, index) => {
 				// Retrieve the reference by index
 				const reference = this.references[Number(index)];
 				// Retrieve the content from the varMap using the reference's name
-				return varMap.get(reference.name) || "{invalid reference}";
+				return varMap.get(reference.name) || "{{invalid reference}}";
 			});
 		};
 
@@ -92,7 +92,7 @@ export class CannoliNode extends CannoliVertex {
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
-				let content = "{invalid reference}";
+				let content = "{{invalid reference}}";
 				const { name } = reference;
 
 				if (
@@ -107,7 +107,7 @@ export class CannoliNode extends CannoliVertex {
 						content = variable.content;
 					} else {
 						// this.warning(`Variable "${reference.name}" not found`);
-						content = `{${reference.name}}`;
+						content = `{{${reference.name}}}`;
 					}
 				} else if (
 					reference.type === ReferenceType.Variable &&
@@ -126,11 +126,11 @@ export class CannoliNode extends CannoliVertex {
 							this.warning(
 								`Note "${variable.content}" not found`
 							);
-							content = `{@${reference.name}}`;
+							content = `{{@${reference.name}}}`;
 						}
 					} else {
 						//this.warning(`Variable "${reference.name}" not found`);
-						content = `{@${reference.name}}`;
+						content = `{{@${reference.name}}}`;
 					}
 				} else if (reference.type === ReferenceType.Note) {
 					if (reference.shouldExtract) {
@@ -141,6 +141,7 @@ export class CannoliNode extends CannoliVertex {
 							content = noteContent;
 						} else {
 							this.warning(`Note "${reference.name}" not found`);
+							content = `{{${reference.name}}}`;
 						}
 					}
 				} else if (reference.type === ReferenceType.Floating) {
@@ -152,7 +153,7 @@ export class CannoliNode extends CannoliVertex {
 							content = floatingContent;
 						} else {
 							this.warning(`Floating node "${name}" not found`);
-							content = `{[${reference.name}]}`;
+							content = `{{[${reference.name}]}}`;
 						}
 					}
 				}

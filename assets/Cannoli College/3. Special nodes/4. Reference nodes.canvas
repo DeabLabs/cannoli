@@ -6,10 +6,10 @@
 		{"type":"text","text":"Reference nodes can be used to write to and read from notes in your vault or floating nodes on the cannoli.","id":"28c071d10dfda17f","x":-333,"y":-340,"width":379,"height":122},
 		{"type":"text","text":"[Current state]\nNot much going on","id":"e08885cd2f146f7d","x":-113,"y":203,"width":250,"height":92},
 		{"type":"text","text":"{{[Current state]}}","id":"079588e3f7e0afa0","x":-393,"y":203,"width":250,"height":60,"color":"6"},
-		{"type":"text","text":"Does this change our plan at all:\n{a}","id":"e9768515f6295d9b","x":-393,"y":333,"width":250,"height":100},
+		{"type":"text","text":"Does this change our plan at all:\n{{a}}","id":"e9768515f6295d9b","x":-393,"y":333,"width":250,"height":100},
 		{"type":"text","text":"Reference nodes can reference floating nodes or notes from your vault.","id":"a8346a9d96a737bb","x":-692,"y":238,"width":262,"height":114},
 		{"type":"text","text":"Reference nodes are content nodes surrounded by double curly braces.","id":"a9ea85b101bc8776","x":-686,"y":-149,"width":250,"height":111},
-		{"id":"be5c114d263a0107","x":-686,"y":66,"width":250,"height":97,"type":"text","text":"You can write or read from them the same way you use normal content nodes."}
+		{"type":"text","text":"You can write or read from them the same way you use normal content nodes.","id":"be5c114d263a0107","x":-686,"y":66,"width":250,"height":97}
 	],
 	"edges":[
 		{"id":"bc3f3aa5abc3914d","fromNode":"fba8c017a84a0a74","fromSide":"bottom","toNode":"e8e998b3d784e3a1","toSide":"top"},

@@ -20,7 +20,7 @@
 		{"type":"text","text":"Is this my first message?","id":"76252deff058a30b","x":28,"y":641,"width":175,"height":85,"color":"0"},
 		{"type":"text","text":"","id":"32b8f51ebe623e94","x":-369,"y":560,"width":164,"height":135,"color":"6"},
 		{"type":"text","text":"Is this my first message?","id":"c63995fa03f9e524","x":-190,"y":629,"width":166,"height":85},
-		{"type":"text","text":"Write a shopping list based on this recipe: {a}","id":"b95eb36f138e1a24","x":-126,"y":1360,"width":250,"height":60},
+		{"type":"text","text":"Write a shopping list based on this recipe: {{a}}","id":"b95eb36f138e1a24","x":-126,"y":1360,"width":250,"height":60},
 		{"type":"text","text":"Which pasta is better for a red sauce?","id":"0fd490ac150e0f5e","x":-143,"y":1000,"width":250,"height":60},
 		{"type":"text","text":"","id":"676ea6885c79b682","x":-185,"y":1480,"width":368,"height":120,"color":"6"},
 		{"type":"text","text":"I dont have any orzo. Respond with a recipe for orzo as well as a recipe for a simple red sauce.","id":"a234933050b99f4f","x":8,"y":1160,"width":250,"height":120,"color":"0"},

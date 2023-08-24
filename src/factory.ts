@@ -1176,11 +1176,13 @@ export class CannoliFactory {
 			return ContentNodeType.Formatter;
 		}
 
-		// If the text starts with {{ and ends with }}, and doesnt have any newlines, it's a reference node
+		// If the text starts with {{ and ends with }}, and doesnt have any newlines, and only contains one instance of {{ and }} it's a reference node
 		if (
 			text.trim().startsWith("{{") &&
 			text.trim().endsWith("}}") &&
-			!text.trim().includes("\n")
+			!text.trim().includes("\n") &&
+			text.trim().split("{{").length === 2 &&
+			text.trim().split("}}").length === 2
 		) {
 			return ContentNodeType.Reference;
 		}
@@ -1535,7 +1537,9 @@ export class CannoliFactory {
 	}
 
 	parseNodeReferences(node: CannoliCanvasTextData): Reference[] {
-		const regex = /\{\[\[(.+?)\]\]\}|\{\[(.+?)\]\}|\{@(.+?)\}|{(.+?)}/g;
+		const regex =
+			/\{\{\[\[(.+?)\]\]\}\}|\{\{\[(.+?)\]\}\}|\{\{@(.+?)\}\}|{{(.+?)}}/g;
+
 		let match: RegExpExecArray | null;
 		const references: Reference[] = [];
 		let textCopy = node.text;
@@ -1569,12 +1573,12 @@ export class CannoliFactory {
 			};
 
 			references.push(reference);
-			replacements.push(`{${references.length - 1}}`);
+			replacements.push(`{{${references.length - 1}}}`);
 		}
 
 		for (let i = 0; i < replacements.length; i++) {
 			textCopy = textCopy.replace(
-				`{${references[i].name}}`,
+				`{{${references[i].name}}}`,
 				replacements[i]
 			);
 		}
