@@ -52,32 +52,43 @@ export default class Cannoli extends Plugin {
 		this.createCannoliCommands();
 
 		// Rerun the createCannoliCommands function whenever a file is renamed to be a cannoli file
-		this.app.vault.on("rename", (file: TFile, oldPath: string) => {
-			if (file.name.includes(".cno.canvas")) {
-				this.createCannoliCommands();
-			}
-		});
+		this.registerEvent(
+			this.app.vault.on("rename", (file: TFile, oldPath: string) => {
+				if (file.name.includes(".cno.canvas")) {
+					this.createCannoliCommands();
+				}
+			})
+		);
 
 		// Add command for running a cannoli
 		this.addCommand({
-			id: "current-cannoli",
+			id: "current",
 			name: "Start/Stop this cannoli",
-			callback: async () => {
-				this.startOrStopCannoli();
+			checkCallback: (checking: boolean) => {
+				const isCanvasOpen = this.app.workspace
+					.getActiveFile()
+					?.path.endsWith(".canvas");
+
+				if (isCanvasOpen) {
+					if (!checking) {
+						this.startOrStopCannoli();
+					}
+
+					return true;
+				}
+
+				return false;
 			},
 		});
 
 		addIcon("cannoli", cannoliIcon);
 
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon(
+		this.addRibbonIcon(
 			"cannoli",
-			"Start/Stop this Cannoli",
+			"Start/Stop this cannoli",
 			this.startOrStopCannoli
 		);
-
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass("my-plugin-ribbon-class");
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
@@ -250,6 +261,7 @@ export default class Cannoli extends Plugin {
 				vault: this.app.vault,
 				onFinish: onFinish,
 				httpTemplates: this.settings.httpTemplates,
+				cannoli: this,
 			});
 
 			// console.log("Starting validation run");
@@ -281,9 +293,9 @@ export default class Cannoli extends Plugin {
 						`Cannoli ${name} failed with the error:\n\n${stoppage.message}${costString}`
 					);
 				} else if (stoppage.reason === "complete") {
-					new Notice(`Cannoli Complete: ${name}${costString}`);
+					new Notice(`Cannoli complete: ${name}${costString}`);
 				} else {
-					new Notice(`Cannoli Stopped: ${name}${costString}`);
+					new Notice(`Cannoli stopped: ${name}${costString}`);
 				}
 
 				console.log(
@@ -311,6 +323,7 @@ export default class Cannoli extends Plugin {
 				vault: this.app.vault,
 				onFinish: onFinish,
 				httpTemplates: this.settings.httpTemplates,
+				cannoli: this,
 			});
 
 			this.runningCannolis[file.basename] = run;
@@ -371,7 +384,7 @@ export class RunPriceAlertModal extends Modal {
 			totalCost += usageItem.modelUsage.totalCost;
 		}
 
-		contentEl.createEl("h1", { text: "Run Cost Alert" });
+		contentEl.createEl("h1", { text: "Run cost alert" });
 		contentEl.createEl("p", {
 			text: "Check the cost of your run before continuing",
 		});
@@ -382,7 +395,7 @@ export class RunPriceAlertModal extends Modal {
 			contentEl.createEl("h2", { text: `Model: ${usage.model.name}` });
 			contentEl
 				.createEl("p", {
-					text: `\t\tEstimated Prompt Tokens: ${usage.modelUsage.promptTokens}`,
+					text: `\t\tEstimated prompt tokens: ${usage.modelUsage.promptTokens}`,
 				})
 				.addClass("whitespace");
 			contentEl
@@ -401,7 +414,7 @@ export class RunPriceAlertModal extends Modal {
 		});
 
 		contentEl.createEl("h2", {
-			text: `Total Cost: $${totalCost.toFixed(2)}`,
+			text: `Total cost: $${totalCost.toFixed(2)}`,
 		});
 
 		const panel = new Setting(contentEl);
@@ -451,7 +464,7 @@ export class HttpTemplateEditorModal extends Modal {
 		const { contentEl } = this;
 
 		contentEl.addClass("http-template-editor");
-		contentEl.createEl("h1", { text: "Edit Action Node Template" });
+		contentEl.createEl("h1", { text: "Edit action node template" });
 
 		const createInputGroup = (
 			labelText: string,
@@ -536,7 +549,7 @@ export class HttpTemplateEditorModal extends Modal {
 			"Enter body template. Use {{variableName}} for variables."
 		);
 		createInputGroup(
-			"Body Template: (optional)",
+			"Body template: (optional)",
 			bodyTemplateInput,
 			"body-template-input"
 		);
@@ -629,7 +642,7 @@ class CannoliSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("OpenAI API Key")
+			.setName("OpenAI API key")
 			.setDesc(
 				"This key will be used to make all openai LLM calls. Be aware that complex cannolis, especially those with many GPT-4 calls, can be expensive to run."
 			)
@@ -644,7 +657,7 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Cost threshold setting. This is the cost at which the user will be alerted before running a Cannoli
 		new Setting(containerEl)
-			.setName("Cost Threshold")
+			.setName("Cost threshold")
 			.setDesc(
 				"If the cannoli you are about to run is estimated to cost more than this amount (USD$), you will be alerted before running it."
 			)
@@ -659,7 +672,7 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Default LLM model setting
 		new Setting(containerEl)
-			.setName("Default LLM Model")
+			.setName("Default LLM model")
 			.setDesc(
 				"This model will be used for all LLM nodes unless overridden with a config arrow. (Note that special arrow types rely on function calling, which is not available in all models.)"
 			)
@@ -674,7 +687,7 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Default LLM temperature setting
 		new Setting(containerEl)
-			.setName("Default LLM Temperature")
+			.setName("Default LLM temperature")
 			.setDesc(
 				"This temperature will be used for all LLM nodes unless overridden with a config arrow."
 			)
@@ -691,7 +704,7 @@ class CannoliSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Action Node Templates")
+			.setName("Action node templates")
 			.setDesc("Manage default HTTP templates for action nodes.")
 			.addButton((button) =>
 				button.setButtonText("+ Template").onClick(() => {

@@ -11,6 +11,7 @@ import { Vault, requestUrl } from "obsidian";
 import pLimit from "p-limit";
 import { CannoliObjectStatus } from "./models/graph";
 import { HttpTemplate } from "main";
+import Cannoli from "main";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -108,6 +109,8 @@ export class Run {
 
 	usage: Record<string, Usage>;
 
+	cannoli: Cannoli;
+
 	constructor({
 		graph,
 		onFinish,
@@ -118,9 +121,11 @@ export class Run {
 		openAiConfig,
 		llmLimit,
 		httpTemplates,
+		cannoli,
 	}: {
 		graph: Record<string, CannoliObject>;
 		vault: Vault;
+		cannoli: Cannoli;
 
 		onFinish?: (stoppage: Stoppage) => void;
 		isMock?: boolean;
@@ -139,6 +144,7 @@ export class Run {
 		this.usage = {};
 		this.llmLimit = pLimit(llmLimit ?? 10);
 		this.httpTemplates = httpTemplates ?? [];
+		this.cannoli = cannoli;
 
 		// Set the default openai config
 		this.openaiConfig = openAiConfig ? openAiConfig : this.openaiConfig;
@@ -958,21 +964,17 @@ export class Run {
 		}
 
 		// Get the file
-		const file = this.vault.getMarkdownFiles().find((file) => {
-			// Remove double brackets from the name
-			return file.basename === name.replace("[[", "").replace("]]", "");
-		});
+		const filename = name.replace("[[", "").replace("]]", "");
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			filename,
+			""
+		);
 
 		if (!file) {
 			return null;
 		}
 
-		// New content callback function
-		const onEdit = (data: string) => {
-			return newContent;
-		};
-
-		await this.vault.process(file, onEdit);
+		await this.vault.modify(file, newContent);
 
 		return;
 	}
@@ -984,10 +986,11 @@ export class Run {
 		}
 
 		// Get the file
-		const file = this.vault.getMarkdownFiles().find((file) => {
-			// Remove double brackets from the name
-			return file.basename === name.replace("[[", "").replace("]]", "");
-		});
+		const filename = name.replace("[[", "").replace("]]", "");
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			filename,
+			""
+		);
 
 		if (!file) {
 			return null;
@@ -1019,9 +1022,10 @@ export class Run {
 		const fullPath = `${path}/${noteName}.md`;
 
 		// Check if a note already exists at the path
-		const note = this.vault.getMarkdownFiles().find((file) => {
-			return file.path === fullPath;
-		});
+		const note = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			fullPath,
+			""
+		);
 
 		if (note) {
 			return false;
@@ -1082,10 +1086,11 @@ export class Run {
 		// Create the path by appending the note name to the paths with .md
 		const newFullPath = `${newPath}/${noteName}.md`;
 
-		// Get the note
-		const note = this.vault.getMarkdownFiles().find((file) => {
-			return file.basename === noteName;
-		});
+		const filename = noteName.replace("[[", "").replace("]]", "");
+		const note = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			filename,
+			""
+		);
 
 		// Get the old path
 		const oldFullPath = note?.path;
