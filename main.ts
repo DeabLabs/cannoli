@@ -22,6 +22,7 @@ interface CannoliSettings {
 	defaultModel: string;
 	defaultTemperature: number;
 	httpTemplates: HttpTemplate[];
+	addFilenameAsHeader?: boolean;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -324,6 +325,7 @@ export default class Cannoli extends Plugin {
 				onFinish: onFinish,
 				httpTemplates: this.settings.httpTemplates,
 				cannoli: this,
+				addFilenameAsHeader: this.settings.addFilenameAsHeader,
 			});
 
 			this.runningCannolis[file.basename] = run;
@@ -699,6 +701,21 @@ class CannoliSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.defaultTemperature =
 							parseFloat(value);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Toggle adding filenames as headers when extracting text from files
+		new Setting(containerEl)
+			.setName("Add filenames as headers to extracted notes")
+			.setDesc(
+				"When extracting a note in a node, add the filename as a header."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.addFilenameAsHeader || false)
+					.onChange(async (value) => {
+						this.plugin.settings.addFilenameAsHeader = value;
 						await this.plugin.saveSettings();
 					})
 			);

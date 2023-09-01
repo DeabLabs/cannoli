@@ -81,6 +81,7 @@ export class Run {
 	isMock: boolean;
 	isStopped = false;
 	httpTemplates: HttpTemplate[] = [];
+	addFilenameAsHeader = false;
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4": {
@@ -122,6 +123,7 @@ export class Run {
 		llmLimit,
 		httpTemplates,
 		cannoli,
+		addFilenameAsHeader,
 	}: {
 		graph: Record<string, CannoliObject>;
 		vault: Vault;
@@ -134,6 +136,7 @@ export class Run {
 		openAiConfig?: OpenAIConfig;
 		llmLimit?: number;
 		httpTemplates?: HttpTemplate[];
+		addFilenameAsHeader?: boolean;
 	}) {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
@@ -145,6 +148,7 @@ export class Run {
 		this.llmLimit = pLimit(llmLimit ?? 10);
 		this.httpTemplates = httpTemplates ?? [];
 		this.cannoli = cannoli;
+		this.addFilenameAsHeader = addFilenameAsHeader ?? false;
 
 		// Set the default openai config
 		this.openaiConfig = openAiConfig ? openAiConfig : this.openaiConfig;
@@ -947,21 +951,21 @@ export class Run {
 			return;
 		}
 
-		// Split the content into lines
-		const lines = newContent.split("\n");
+		// // Split the content into lines
+		// const lines = newContent.split("\n");
 
-		// Find the index of the header line that matches the name
-		const headerIndex = lines.findIndex(
-			(line) => line.startsWith("# ") && line.slice(2) === name
-		);
+		// // Find the index of the header line that matches the name
+		// const headerIndex = lines.findIndex(
+		// 	(line) => line.startsWith("# ") && line.slice(2) === name
+		// );
 
-		// If the header is found, remove everything before it
-		if (headerIndex !== -1) {
-			newContent = lines
-				.slice(headerIndex + 1)
-				.join("\n")
-				.trim();
-		}
+		// // If the header is found, remove everything before it
+		// if (headerIndex !== -1) {
+		// 	newContent = lines
+		// 		.slice(headerIndex + 1)
+		// 		.join("\n")
+		// 		.trim();
+		// }
 
 		// Get the file
 		const filename = name.replace("[[", "").replace("]]", "");
@@ -999,10 +1003,11 @@ export class Run {
 		// Read the file
 		let content = await this.vault.read(file);
 
-		// Prepend the note's name as a header
-		const header = `# ${file.basename}\n`;
-
-		content = header + content;
+		// If addFilenameAsHeader is true, prepend the note's name as a header
+		if (this.addFilenameAsHeader) {
+			const header = `# ${file.basename}\n`;
+			content = header + content;
+		}
 
 		return content;
 	}
