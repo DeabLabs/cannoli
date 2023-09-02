@@ -100,11 +100,23 @@ export class CannoliNode extends CannoliVertex {
 					!reference.shouldExtract
 				) {
 					const variable = variableValues.find(
-						(variable) => variable.name === reference.name
+						(variable: { name: string }) =>
+							variable.name === reference.name
 					);
 
 					if (variable) {
 						content = variable.content;
+					}
+					// If the reference name contains only "#" symbols, replace it with the loop index
+					else if (reference.name.match(/^#+$/)) {
+						// Depth is the number of hash symbols minus 1
+						const depth = reference.name.length - 1;
+						const loopIndex = this.getLoopIndex(depth);
+						if (loopIndex !== null) {
+							content = loopIndex.toString();
+						} else {
+							content = `{{${reference.name}}}`;
+						}
 					} else {
 						// this.warning(`Variable "${reference.name}" not found`);
 						content = `{{${reference.name}}}`;
@@ -163,6 +175,34 @@ export class CannoliNode extends CannoliVertex {
 		);
 
 		return this.renderFunction(resolvedReferences);
+	}
+
+	getLoopIndex(depth: number): number | null {
+		// Get the group at the specified depth (0 is the most immediate group)
+		const group = this.graph[this.groups[depth]];
+
+		// If group is not there, return null
+		if (!group) {
+			return null;
+		}
+
+		// If group is not a CannoliGroup, return null
+		if (!(group instanceof CannoliGroup)) {
+			return null;
+		}
+
+		// If the group is not a repeat or forEach group, return null
+		if (
+			group.type !== GroupType.Repeat &&
+			group.type !== GroupType.ForEach
+		) {
+			return null;
+		}
+
+		// Get the loop index from the group
+		const loopIndex = group.currentLoop + 1;
+
+		return loopIndex;
 	}
 
 	getVariableValues(includeGroupEdges: boolean): VariableValue[] {
