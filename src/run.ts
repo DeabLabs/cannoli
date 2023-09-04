@@ -82,6 +82,7 @@ export class Run {
 	isStopped = false;
 	httpTemplates: HttpTemplate[] = [];
 	addFilenameAsHeader = false;
+	currentNote: string | null = null;
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4": {
@@ -124,6 +125,7 @@ export class Run {
 		httpTemplates,
 		cannoli,
 		addFilenameAsHeader,
+		currentNote,
 	}: {
 		graph: Record<string, CannoliObject>;
 		vault: Vault;
@@ -137,6 +139,7 @@ export class Run {
 		llmLimit?: number;
 		httpTemplates?: HttpTemplate[];
 		addFilenameAsHeader?: boolean;
+		currentNote?: string;
 	}) {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
@@ -149,6 +152,7 @@ export class Run {
 		this.httpTemplates = httpTemplates ?? [];
 		this.cannoli = cannoli;
 		this.addFilenameAsHeader = addFilenameAsHeader ?? false;
+		this.currentNote = currentNote ?? null;
 
 		// Set the default openai config
 		this.openaiConfig = openAiConfig ? openAiConfig : this.openaiConfig;

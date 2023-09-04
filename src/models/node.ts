@@ -275,6 +275,17 @@ export class CannoliNode extends CannoliVertex {
 			}
 		}
 
+		// Add the default "NOTE" variable
+		if (this.run.currentNote) {
+			const currentNoteVariableValue = {
+				name: "NOTE",
+				content: this.run.currentNote,
+				edgeId: "",
+			};
+
+			variableValues.push(currentNoteVariableValue);
+		}
+
 		// Resolve variable conflicts
 		const resolvedVariableValues =
 			this.resolveVariableConflicts(variableValues);

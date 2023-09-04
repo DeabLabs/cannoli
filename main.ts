@@ -263,6 +263,9 @@ export default class Cannoli extends Plugin {
 				onFinish: onFinish,
 				httpTemplates: this.settings.httpTemplates,
 				cannoli: this,
+				currentNote: `[[${
+					this.app.workspace.getActiveFile()?.basename
+				}]]`,
 			});
 
 			// console.log("Starting validation run");
@@ -326,6 +329,9 @@ export default class Cannoli extends Plugin {
 				httpTemplates: this.settings.httpTemplates,
 				cannoli: this,
 				addFilenameAsHeader: this.settings.addFilenameAsHeader,
+				currentNote: `[[${
+					this.app.workspace.getActiveFile()?.basename
+				}]]`,
 			});
 
 			this.runningCannolis[file.basename] = run;
