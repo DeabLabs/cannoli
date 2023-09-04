@@ -4,6 +4,7 @@ import { CannoliEdge, LoggingEdge } from "./edge";
 import {
 	ChatCompletionFunctions,
 	ChatCompletionRequestMessage,
+	ChatCompletionRequestMessageRoleEnum,
 	CreateChatCompletionRequest,
 } from "openai";
 import { CannoliGroup } from "./group";
@@ -276,7 +277,7 @@ export class CannoliNode extends CannoliVertex {
 		}
 
 		// Add the default "NOTE" variable
-		if (this.run.currentNote) {
+		if (this.run.currentNote && includeGroupEdges) {
 			const currentNoteVariableValue = {
 				name: "NOTE",
 				content: this.run.currentNote,
@@ -627,11 +628,11 @@ export class CallNode extends CannoliNode {
 		return messages;
 	}
 
-	async getNewMessage(): Promise<ChatCompletionRequestMessage> {
+	async getNewMessage(role?: string): Promise<ChatCompletionRequestMessage> {
 		const content = await this.processReferences();
 
 		return {
-			role: "user",
+			role: role as ChatCompletionRequestMessageRoleEnum | "user",
 			content: content,
 		};
 	}
@@ -678,6 +679,7 @@ export class CallNode extends CannoliNode {
 			functions: undefined,
 			temperature: undefined,
 			top_p: undefined,
+			role: "user" || "assistant" || "system",
 		};
 
 		// Define the expected types for each key
@@ -823,7 +825,10 @@ export class CallNode extends CannoliNode {
 
 		const messages = this.getPrependedMessages();
 
-		const newMessage = await this.getNewMessage();
+		const newMessage = await this.getNewMessage(config.role);
+
+		// Remove the role from the config
+		delete config.role;
 
 		messages.push(newMessage);
 

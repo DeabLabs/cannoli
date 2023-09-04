@@ -34,6 +34,7 @@ export enum GroupType {
 	ForEach = "for-each",
 	Repeat = "repeat",
 	Basic = "basic",
+	Chat = "chat",
 }
 
 export enum EdgeType {

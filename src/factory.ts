@@ -92,10 +92,12 @@ export class CannoliFactory {
 
 	groupPrefixMap: Record<string, GroupType> = {
 		"<": GroupType.SignifiedForEach,
+		"@": GroupType.Chat,
 	};
 
 	groupColorMap: Record<string, GroupType> = {
 		"5": GroupType.SignifiedForEach,
+		"6": GroupType.Chat,
 	};
 
 	constructor(canvas: CanvasData) {

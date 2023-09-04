@@ -48,6 +48,7 @@ export interface ModelUsage {
 
 export interface OpenAIConfig {
 	model: string;
+	role?: string;
 	frequency_penalty?: number | undefined;
 	presence_penalty?: number | undefined;
 	stop?: string[] | undefined;
@@ -107,6 +108,7 @@ export class Run {
 		functions: undefined,
 		temperature: undefined,
 		top_p: undefined,
+		role: "user",
 	};
 
 	usage: Record<string, Usage>;

@@ -321,6 +321,7 @@ export default class Cannoli extends Plugin {
 				openAiConfig: {
 					model: this.settings.defaultModel,
 					temperature: this.settings.defaultTemperature,
+					role: "user",
 				},
 				isMock: false,
 				canvas: canvas,
