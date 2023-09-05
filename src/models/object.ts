@@ -103,11 +103,12 @@ export class CannoliObject extends EventEmitter {
 				) {
 					let redundantComplete = false;
 
-					// Check if there are any other edge dependencies that share the same name which are complete
+					// Check if there are any other edge dependencies that share the same name and type which are complete
 					for (const otherDependency of dependencies) {
 						if (
 							this.cannoliGraph.isEdge(otherDependency) &&
 							otherDependency.text === dependency.text &&
+							otherDependency.type === dependency.type &&
 							otherDependency.status ===
 								CannoliObjectStatus.Complete
 						) {

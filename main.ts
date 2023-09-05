@@ -340,6 +340,8 @@ export default class Cannoli extends Plugin {
 				chatFormatString: this.settings.chatFormatString,
 			});
 
+			run.logGraph();
+
 			this.runningCannolis[file.basename] = run;
 
 			run.start();

@@ -541,6 +541,10 @@ export class CallNode extends CannoliNode {
 
 			const edgeMessages = edgeObject.messages;
 
+			// console.log(
+			// 	`Edge messages: ${JSON.stringify(edgeMessages, null, 2)}`
+			// );
+
 			if (!edgeMessages) {
 				continue;
 			}

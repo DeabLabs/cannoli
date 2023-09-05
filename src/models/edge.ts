@@ -82,7 +82,11 @@ export class CannoliEdge extends CannoliObject {
 			this.allDependenciesComplete() &&
 			this.status === CannoliObjectStatus.Pending
 		) {
-			//console.log(`Executing edge with loaded content: ${this.content}`);
+			// console.log(
+			// 	`Executing edge with loaded content: ${
+			// 		this.content
+			// 	} and messages:\n${JSON.stringify(this.messages, null, 2)}`
+			// );
 			this.execute();
 		}
 	}
@@ -147,6 +151,9 @@ export class ChatConverterEdge extends CannoliEdge {
 			messages = this.stringToArray(content as string, format);
 		}
 
+		// console.log(`Converted messages: ${JSON.stringify(messages, null, 2)}`);
+		// console.log(`Converted string: ${messageString}`);
+
 		this.content = messageString;
 		this.messages = messages;
 	}
@@ -164,8 +171,12 @@ export class ChatConverterEdge extends CannoliEdge {
 				continue;
 			}
 
+			// Capitalize the role
+			const capRole =
+				message.role.charAt(0).toUpperCase() + message.role.slice(1);
+
 			const formattedMessage = format
-				.replace("{{role}}", message.role)
+				.replace("{{role}}", capRole)
 				.replace("{{content}}", message.content ?? "");
 
 			// Add a newline separator if this isn't the first message
@@ -180,7 +191,7 @@ export class ChatConverterEdge extends CannoliEdge {
 
 		// Create a user template for the next message
 		const userTemplate = format
-			.replace("{{role}}", "user")
+			.replace("{{role}}", "User")
 			.replace("{{content}}", "");
 
 		// Append the user template to the message string, considering whether it's empty
@@ -194,7 +205,7 @@ export class ChatConverterEdge extends CannoliEdge {
 	stringToArray(str: string, format: string): ChatCompletionRequestMessage[] {
 		// Use regex only to match the roles and their immediate line break
 		const rolePattern = format
-			.replace("{{role}}", "(system|user|assistant)")
+			.replace("{{role}}", "(System|User|Assistant)")
 			.replace("{{content}}", "")
 			.trim();
 		const regex = new RegExp(rolePattern, "g");
@@ -223,9 +234,12 @@ export class ChatConverterEdge extends CannoliEdge {
 			// Extract and trim the content
 			const content = str.substring(start, end).trim();
 
+			// Uncapitalize the role
+			const uncapRole = role.charAt(0).toLowerCase() + role.slice(1);
+
 			// Push to messages array
 			messages.push({
-				role: role as ChatCompletionRequestMessageRoleEnum,
+				role: uncapRole as ChatCompletionRequestMessageRoleEnum,
 				content,
 			});
 
