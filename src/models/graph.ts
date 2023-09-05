@@ -6,7 +6,7 @@ import {
 	CanvasLinkData,
 	CanvasTextData,
 } from "obsidian/canvas";
-import { ChatCompletionRequestMessage } from "openai";
+
 import { CannoliObject } from "./object";
 import { CannoliGroup, ForEachGroup, RepeatGroup } from "./group";
 import {
@@ -27,6 +27,7 @@ import {
 	LoggingEdge,
 	SystemMessageEdge,
 } from "./edge";
+import { ChatCompletionMessage } from "openai/resources/chat";
 
 export enum CannoliObjectKind {
 	Node = "node",
@@ -131,7 +132,7 @@ export interface CannoliEdgeData extends CannoliData {
 	addMessages: boolean;
 	isReflexive: boolean;
 	content?: string | Record<string, string>;
-	messages?: ChatCompletionRequestMessage[];
+	messages?: ChatCompletionMessage[];
 	name?: string;
 	vaultModifier?: VaultModifier;
 }

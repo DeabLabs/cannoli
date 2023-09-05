@@ -8,7 +8,7 @@ import {
 	TFile,
 	addIcon,
 } from "obsidian";
-import { Configuration, OpenAIApi } from "openai";
+import OpenAI from "openai";
 import { Canvas } from "src/canvas";
 import { CannoliFactory } from "src/factory";
 import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
@@ -48,7 +48,7 @@ export interface HttpTemplate {
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
 	runningCannolis: { [key: string]: Run } = {};
-	openai: OpenAIApi;
+	openai: OpenAI;
 
 	async onload() {
 		await this.loadSettings();
@@ -161,14 +161,17 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		// Create an instance of OpenAI
-		const configuration = new Configuration({
-			apiKey: this.settings.openaiAPIKey,
-		});
-		delete configuration.baseOptions.headers["User-Agent"];
+		// // Create an instance of OpenAI
+		// const configuration = new Configuration({
+		// 	apiKey: this.settings.openaiAPIKey,
+		// });
+		// delete configuration.baseOptions.headers["User-Agent"];
 
 		// Create an instance of OpenAI
-		this.openai = new OpenAIApi(configuration);
+		this.openai = new OpenAI({
+			apiKey: this.settings.openaiAPIKey,
+			dangerouslyAllowBrowser: true,
+		});
 
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")

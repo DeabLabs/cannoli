@@ -1,9 +1,4 @@
-import {
-	ChatCompletionFunctions,
-	ChatCompletionRequestMessage,
-	CreateChatCompletionRequest,
-	OpenAIApi,
-} from "openai";
+import { OpenAI } from "openai";
 import { Canvas } from "./canvas";
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
@@ -12,12 +7,17 @@ import pLimit from "p-limit";
 import { CannoliObjectStatus } from "./models/graph";
 import { HttpTemplate } from "main";
 import Cannoli from "main";
+import {
+	ChatCompletionCreateParams,
+	ChatCompletionCreateParamsNonStreaming,
+	ChatCompletionMessage,
+} from "openai/resources/chat";
 
 export type StoppageReason = "user" | "error" | "complete";
 
 interface Limit {
-	(fn: () => Promise<ChatCompletionRequestMessage | Error>): Promise<
-		ChatCompletionRequestMessage | Error
+	(fn: () => Promise<ChatCompletionMessage | Error>): Promise<
+		ChatCompletionMessage | Error
 	>;
 }
 
@@ -53,10 +53,12 @@ export interface OpenAIConfig {
 	presence_penalty?: number | undefined;
 	stop?: string[] | undefined;
 	function_call?: string | undefined;
-	functions?: ChatCompletionFunctions[] | undefined;
+	functions?: ChatCompletionCreateParams.Function[] | undefined;
 	temperature?: number | undefined;
 	top_p?: number | undefined;
 }
+
+export type ChatRole = "user" | "assistant" | "system";
 
 enum DagCheckState {
 	UNVISITED,
@@ -76,7 +78,7 @@ export class Run {
 	onFinish: (stoppage: Stoppage) => void;
 	vault: Vault;
 
-	openai: OpenAIApi | null;
+	openai: OpenAI | null;
 	llmLimit: Limit;
 	canvas: Canvas | null;
 	isMock: boolean;
@@ -138,7 +140,7 @@ export class Run {
 		onFinish?: (stoppage: Stoppage) => void;
 		isMock?: boolean;
 		canvas?: Canvas;
-		openai?: OpenAIApi;
+		openai?: OpenAI;
 		openAiConfig?: OpenAIConfig;
 		llmLimit?: number;
 		httpTemplates?: HttpTemplate[];
@@ -420,21 +422,26 @@ export class Run {
 	}
 
 	async callLLM(
-		request: CreateChatCompletionRequest,
+		request: ChatCompletionCreateParamsNonStreaming,
 		verbose?: boolean
-	): Promise<ChatCompletionRequestMessage | Error> {
+	): Promise<ChatCompletionMessage | Error> {
 		// console.log(`Request: ${JSON.stringify(request, null, 2)}`);
 
 		return this.llmLimit(
-			async (): Promise<ChatCompletionRequestMessage | Error> => {
+			async (): Promise<ChatCompletionMessage | Error> => {
 				// Only call LLM if we're not mocking
 				if (this.isMock || !this.openai) {
-					return this.createMockFunctionResponse(request);
+					return {
+						role: "assistant",
+						content: "Mock response",
+					};
+
+					//return this.createMockFunctionResponse(request);
 				}
 
 				// Catch any errors
 				try {
-					const response = await this.openai.createChatCompletion(
+					const response = await this.openai.chat.completions.create(
 						request
 					);
 
@@ -444,14 +451,14 @@ export class Run {
 								JSON.stringify(request.messages, null, 2) +
 								"\n\nResponse Message:\n" +
 								JSON.stringify(
-									response.data.choices[0].message,
+									response.choices[0].message,
 									null,
 									2
 								)
 						);
 					}
 
-					if (response.data.usage) {
+					if (response.usage) {
 						const model = this.modelInfo[request.model];
 						if (!this.usage[model.name]) {
 							this.usage[model.name] = {
@@ -466,13 +473,13 @@ export class Run {
 						}
 
 						this.usage[model.name].modelUsage.promptTokens +=
-							response.data.usage.prompt_tokens;
+							response.usage.prompt_tokens;
 						this.usage[model.name].modelUsage.completionTokens +=
-							response.data.usage.completion_tokens;
+							response.usage.completion_tokens;
 						this.usage[model.name].modelUsage.apiCalls += 1;
 					}
-					return response.data.choices[0].message
-						? response.data.choices[0].message
+					return response.choices[0].message
+						? response.choices[0].message
 						: Error("No message returned");
 				} catch (e) {
 					return e;
@@ -481,164 +488,168 @@ export class Run {
 		);
 	}
 
-	createMockFunctionResponse(
-		request: CreateChatCompletionRequest
-	): ChatCompletionRequestMessage {
-		let textMessages = "";
+	// createMockFunctionResponse(
+	// 	request: ChatCompletionCreateParamsNonStreaming
+	// ): ChatCompletionMessage {
+	// 	let textMessages = "";
 
-		// For each message, convert it to a string, including the role and the content, and a function call if present
-		for (const message of request.messages) {
-			if (message.function_call) {
-				textMessages += `${message.role}: ${message.content} ${message.function_call} `;
-			} else {
-				textMessages += `${message.role}: ${message.content} `;
-			}
-		}
+	// 	// For each message, convert it to a string, including the role and the content, and a function call if present
+	// 	for (const message of request.messages) {
+	// 		if (message.function_call) {
+	// 			textMessages += `${message.role}: ${message.content} ${message.function_call} `;
+	// 		} else {
+	// 			textMessages += `${message.role}: ${message.content} `;
+	// 		}
+	// 	}
 
-		// Estimate the tokens using the rule of thumb that 4 characters is 1 token
-		const promptTokens = textMessages.length / 4;
+	// 	// Estimate the tokens using the rule of thumb that 4 characters is 1 token
+	// 	const promptTokens = textMessages.length / 4;
 
-		if (!this.usage[request.model]) {
-			// Find the right model from this.models
-			const model = this.modelInfo[request.model];
+	// 	if (!this.usage[request.model]) {
+	// 		// Find the right model from this.models
+	// 		const model = this.modelInfo[request.model];
 
-			this.usage[request.model] = {
-				model: model,
-				modelUsage: {
-					promptTokens: 0,
-					completionTokens: 0,
-					apiCalls: 0,
-					totalCost: 0,
-				},
-			};
-		}
+	// 		this.usage[request.model] = {
+	// 			model: model,
+	// 			modelUsage: {
+	// 				promptTokens: 0,
+	// 				completionTokens: 0,
+	// 				apiCalls: 0,
+	// 				totalCost: 0,
+	// 			},
+	// 		};
+	// 	}
 
-		this.usage[request.model].modelUsage.promptTokens += promptTokens;
-		this.usage[request.model].modelUsage.apiCalls += 1;
+	// 	this.usage[request.model].modelUsage.promptTokens += promptTokens;
+	// 	this.usage[request.model].modelUsage.apiCalls += 1;
 
-		let calledFunction = "";
+	// 	let calledFunction = "";
 
-		if (request.functions && request.functions.length > 0) {
-			calledFunction = request.functions[0].name;
-		}
+	// 	if (request.functions && request.functions.length > 0) {
+	// 		calledFunction = request.functions[0].name;
+	// 	}
 
-		if (calledFunction) {
-			if (calledFunction === "enter_choice") {
-				// Find the choice function
-				const choiceFunction = request.functions?.find(
-					(fn) => fn.name === "enter_choice"
-				);
+	// 	if (calledFunction) {
+	// 		if (calledFunction === "enter_choice") {
+	// 			// Find the choice function
+	// 			const choiceFunction = request.functions?.find(
+	// 				(fn) => fn.name === "enter_choice"
+	// 			);
 
-				if (!choiceFunction) {
-					throw Error("No choice function found");
-				}
+	// 			if (!choiceFunction) {
+	// 				throw Error("No choice function found");
+	// 			}
 
-				return this.createMockChoiceFunctionResponse(
-					choiceFunction
-				) as ChatCompletionRequestMessage;
-			} else if (calledFunction === "enter_answers") {
-				// Find the answers function
-				const listFunction = request.functions?.find(
-					(fn) => fn.name === "enter_answers"
-				);
+	// 			return this.createMockChoiceFunctionResponse(
+	// 				choiceFunction
+	// 			) as ChatCompletionMessage;
+	// 		} else if (calledFunction === "enter_answers") {
+	// 			// Find the answers function
+	// 			const listFunction = request.functions?.find(
+	// 				(fn) => fn.name === "enter_answers"
+	// 			);
 
-				if (!listFunction) {
-					throw Error("No list function found");
-				}
+	// 			if (!listFunction) {
+	// 				throw Error("No list function found");
+	// 			}
 
-				return this.createMockListFunctionResponse(
-					listFunction
-				) as ChatCompletionRequestMessage;
-			} else if (calledFunction === "enter_note_name") {
-				// Find the note name function
-				const noteNameFunction = request.functions?.find(
-					(fn) => fn.name === "enter_note_name"
-				);
+	// 			return this.createMockListFunctionResponse(
+	// 				listFunction
+	// 			) as ChatCompletionMessage;
+	// 		} else if (calledFunction === "enter_note_name") {
+	// 			// Find the note name function
+	// 			const noteNameFunction = request.functions?.find(
+	// 				(fn) => fn.name === "enter_note_name"
+	// 			);
 
-				if (!noteNameFunction) {
-					throw Error("No note name function found");
-				}
+	// 			if (!noteNameFunction) {
+	// 				throw Error("No note name function found");
+	// 			}
 
-				return this.createMockNoteNameFunctionResponse(
-					noteNameFunction
-				) as ChatCompletionRequestMessage;
-			}
-		}
+	// 			return this.createMockNoteNameFunctionResponse(
+	// 				noteNameFunction
+	// 			) as ChatCompletionMessage;
+	// 		}
+	// 	}
 
-		return {
-			role: "assistant",
-			content: "Mock response",
-		};
-	}
+	// 	return {
+	// 		role: "assistant",
+	// 		content: "Mock response",
+	// 	};
+	// }
 
-	createMockChoiceFunctionResponse(choiceFunction: ChatCompletionFunctions) {
-		// Pick one of the choices randomly
-		const randomChoice =
-			choiceFunction?.parameters?.properties.choice.enum[
-				Math.floor(
-					Math.random() *
-						choiceFunction.parameters.properties.choice.enum.length
-				)
-			];
+	// createMockChoiceFunctionResponse(choiceFunction: ChatCompletionCreateParams.Function) {
+	// 	if(!choiceFunction.parameters?.properties.choice.enum) {
 
-		return {
-			role: "assistant",
-			function_call: {
-				name: "enter_choice",
-				arguments: `{
-					"choice" : "${randomChoice}"
-					}`,
-			},
-		};
-	}
+	// 	// Pick one of the choices randomly
+	// 	const randomChoice =
+	// 		choiceFunction?.parameters?.properties.choice.enum[
+	// 			Math.floor(
+	// 				Math.random() *
+	// 					choiceFunction.parameters.properties.choice.enum.length
+	// 			)
+	// 		];
 
-	createMockListFunctionResponse(listFunction: ChatCompletionFunctions) {
-		const args: { [key: string]: string }[] = [];
+	// 	return {
+	// 		role: "assistant",
+	// 		function_call: {
+	// 			name: "enter_choice",
+	// 			arguments: `{
+	// 				"choice" : "${randomChoice}"
+	// 				}`,
+	// 		},
+	// 	};
+	// }
 
-		// Go through the properties of the function and enter a mock string
-		for (const property of Object.keys(
-			listFunction?.parameters?.properties ?? {}
-		)) {
-			args.push({
-				[property]: "Mock answer",
-			});
-		}
+	// createMockListFunctionResponse(listFunction: ChatCompletionCreateParams.Function) {
+	// 	const args: { [key: string]: string }[] = [];
 
-		return {
-			role: "assistant",
-			function_call: {
-				name: "enter_answers",
-				arguments: JSON.stringify(args),
-			},
-		};
-	}
+	// 	// Go through the properties of the function and enter a mock string
+	// 	for (const property of Object.keys(
+	// 		listFunction?.parameters?.properties ?? {}
+	// 	)) {
+	// 		args.push({
+	// 			[property]: "Mock answer",
+	// 		});
+	// 	}
 
-	createMockNoteNameFunctionResponse(noteFunction: ChatCompletionFunctions) {
-		const args: { [key: string]: string }[] = [];
+	// 	return {
+	// 		role: "assistant",
+	// 		function_call: {
+	// 			name: "enter_answers",
+	// 			arguments: JSON.stringify(args),
+	// 		},
+	// 	};
+	// }
 
-		// Pick one of the options in note.enum randomly
-		const randomNote =
-			noteFunction?.parameters?.properties["note"].enum[
-				Math.floor(
-					Math.random() *
-						noteFunction?.parameters?.properties["note"].enum.length
-				)
-			];
+	// createMockNoteNameFunctionResponse(noteFunction: ChatCompletionCreateParams.Function) {
+	// 	const args: { [key: string]: string }[] = [];
 
-		args.push({
-			note: randomNote,
-		});
+	// 	// Pick one of the options in note.enum randomly
+	// 	const randomNote =
+	// 		noteFunction?.parameters?.properties["note"].enum[
+	// 			Math.floor(
+	// 				Math.random() *
+	// 					noteFunction?.parameters?.properties["note"].enum.length
+	// 			)
+	// 		];
 
-		return {
-			role: "assistant",
-			function_call: {
-				name: "enter_note_names",
-				arguments: JSON.stringify(args),
-			},
-		};
-	}
+	// 	args.push({
+	// 		note: randomNote,
+	// 	});
 
-	createChoiceFunction(choices: string[]): ChatCompletionFunctions {
+	// 	return {
+	// 		role: "assistant",
+	// 		function_call: {
+	// 			name: "enter_note_names",
+	// 			arguments: JSON.stringify(args),
+	// 		},
+	// 	};
+	// }
+
+	createChoiceFunction(
+		choices: string[]
+	): ChatCompletionCreateParams.Function {
 		return {
 			name: "enter_choice",
 			description:
@@ -658,7 +669,7 @@ export class Run {
 
 	createListFunction(
 		tags: { name: string; noteNames?: string[] }[]
-	): ChatCompletionFunctions {
+	): ChatCompletionCreateParams.Function {
 		const properties: Record<string, { type: string; enum?: string[] }> =
 			{};
 
@@ -687,7 +698,9 @@ export class Run {
 		};
 	}
 
-	createNoteNameFunction(notes: string[]): ChatCompletionFunctions {
+	createNoteNameFunction(
+		notes: string[]
+	): ChatCompletionCreateParams.Function {
 		return {
 			name: "enter_note_name",
 			description: "Enter one of the provided valid note names.",

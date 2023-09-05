@@ -1,12 +1,7 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { type OpenAIConfig } from "src/run";
+import { ChatRole, type OpenAIConfig } from "src/run";
 import { CannoliEdge, LoggingEdge } from "./edge";
-import {
-	ChatCompletionFunctions,
-	ChatCompletionRequestMessage,
-	ChatCompletionRequestMessageRoleEnum,
-	CreateChatCompletionRequest,
-} from "openai";
+import {} from "openai";
 import { CannoliGroup } from "./group";
 import {
 	CannoliObjectStatus,
@@ -20,6 +15,11 @@ import {
 	VerifiedCannoliCanvasLinkData,
 	VerifiedCannoliCanvasTextData,
 } from "./graph";
+import {
+	ChatCompletionCreateParams,
+	ChatCompletionCreateParamsNonStreaming,
+	ChatCompletionMessage,
+} from "openai/resources/chat";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
@@ -334,7 +334,7 @@ export class CannoliNode extends CannoliVertex {
 		return finalVariables;
 	}
 
-	loadOutgoingEdges(content: string, request?: CreateChatCompletionRequest) {
+	loadOutgoingEdges(content: string, request?: ChatCompletionCreateParams) {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
@@ -515,8 +515,8 @@ export class CannoliNode extends CannoliVertex {
 }
 
 export class CallNode extends CannoliNode {
-	getPrependedMessages(): ChatCompletionRequestMessage[] {
-		const messages: ChatCompletionRequestMessage[] = [];
+	getPrependedMessages(): ChatCompletionMessage[] {
+		const messages: ChatCompletionMessage[] = [];
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
@@ -642,9 +642,7 @@ export class CallNode extends CannoliNode {
 		return messages;
 	}
 
-	async getNewMessage(
-		role?: string
-	): Promise<ChatCompletionRequestMessage | null> {
+	async getNewMessage(role?: string): Promise<ChatCompletionMessage | null> {
 		const content = await this.processReferences();
 
 		// If the role is system and there is no content, return null
@@ -653,14 +651,12 @@ export class CallNode extends CannoliNode {
 		}
 
 		return {
-			role: role as ChatCompletionRequestMessageRoleEnum | "user",
+			role: (role as ChatRole) || "user",
 			content: content,
 		};
 	}
 
-	findNoteReferencesInMessages(
-		messages: ChatCompletionRequestMessage[]
-	): string[] {
+	findNoteReferencesInMessages(messages: ChatCompletionMessage[]): string[] {
 		const references: string[] = [];
 		const noteRegex = /\[\[(.+?)\]\]/g;
 
@@ -809,7 +805,7 @@ export class CallNode extends CannoliNode {
 
 		const message = (await this.run.callLLM(
 			request
-		)) as ChatCompletionRequestMessage;
+		)) as ChatCompletionMessage;
 
 		if (message instanceof Error) {
 			this.error(`Error calling LLM:\n${message.message}`);
@@ -841,7 +837,7 @@ export class CallNode extends CannoliNode {
 		this.completed();
 	}
 
-	async createLLMRequest(): Promise<CreateChatCompletionRequest> {
+	async createLLMRequest(): Promise<ChatCompletionCreateParamsNonStreaming> {
 		const config = this.getConfig();
 
 		const messages = this.getPrependedMessages();
@@ -872,8 +868,8 @@ export class CallNode extends CannoliNode {
 	}
 
 	getFunctions(
-		messages: ChatCompletionRequestMessage[]
-	): ChatCompletionFunctions[] {
+		messages: ChatCompletionMessage[]
+	): ChatCompletionCreateParams.Function[] {
 		if (
 			this.getOutgoingEdges().some(
 				(edge) => edge.vaultModifier === VaultModifier.Note
@@ -897,8 +893,8 @@ export class CallNode extends CannoliNode {
 
 export class DistributeNode extends CallNode {
 	getFunctions(
-		messages: ChatCompletionRequestMessage[]
-	): ChatCompletionFunctions[] {
+		messages: ChatCompletionMessage[]
+	): ChatCompletionCreateParams.Function[] {
 		// Get the name of the list items
 		const listItems = this.getListItems();
 
@@ -955,7 +951,7 @@ export class DistributeNode extends CallNode {
 
 	loadOutgoingEdges(
 		content: string,
-		request: CreateChatCompletionRequest
+		request: ChatCompletionCreateParams
 	): void {
 		const messages = request.messages;
 
@@ -1024,8 +1020,8 @@ export class AccumulateNode extends CallNode {
 }
 export class ChooseNode extends CallNode {
 	getFunctions(
-		messages: ChatCompletionRequestMessage[]
-	): ChatCompletionFunctions[] {
+		messages: ChatCompletionMessage[]
+	): ChatCompletionCreateParams.Function[] {
 		const choices = this.getBranchChoices();
 
 		// Create choice function
@@ -1036,7 +1032,7 @@ export class ChooseNode extends CallNode {
 
 	loadOutgoingEdges(
 		content: string,
-		request: CreateChatCompletionRequest
+		request: ChatCompletionCreateParams
 	): void {
 		const messages = request.messages;
 

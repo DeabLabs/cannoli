@@ -1,9 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import {
-	ChatCompletionRequestMessage,
-	ChatCompletionRequestMessageRoleEnum,
-	CreateChatCompletionRequest,
-} from "openai";
+import {} from "openai";
 import { ForEachGroup, RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,
@@ -11,6 +7,11 @@ import {
 	VaultModifier,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
+import {
+	ChatCompletionCreateParams,
+	ChatCompletionMessage,
+} from "openai/resources/chat";
+import { ChatRole } from "src/run";
 
 export class CannoliEdge extends CannoliObject {
 	source: string;
@@ -21,7 +22,7 @@ export class CannoliEdge extends CannoliObject {
 	addMessages: boolean;
 	vaultModifier: VaultModifier | null;
 	content: string | Record<string, string> | null;
-	messages: ChatCompletionRequestMessage[] | null;
+	messages: ChatCompletionMessage[] | null;
 
 	constructor(edgeData: VerifiedCannoliCanvasEdgeData) {
 		super(edgeData);
@@ -63,7 +64,7 @@ export class CannoliEdge extends CannoliObject {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: CreateChatCompletionRequest;
+		request?: ChatCompletionCreateParams;
 	}): void {
 		this.content = content ? content : null;
 
@@ -137,11 +138,11 @@ export class ChatConverterEdge extends CannoliEdge {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: CreateChatCompletionRequest;
+		request?: ChatCompletionCreateParams;
 	}): void {
 		const format = this.run.chatFormatString;
 		let messageString = "";
-		let messages: ChatCompletionRequestMessage[] = [];
+		let messages: ChatCompletionMessage[] = [];
 
 		if (request?.messages && format) {
 			// Convert messages to string using the format
@@ -159,7 +160,7 @@ export class ChatConverterEdge extends CannoliEdge {
 	}
 
 	arrayToString(
-		messages: ChatCompletionRequestMessage[],
+		messages: ChatCompletionMessage[],
 		format: string,
 		showSystemMessages = false
 	): string {
@@ -202,7 +203,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		return completeStr.trimStart();
 	}
 
-	stringToArray(str: string, format: string): ChatCompletionRequestMessage[] {
+	stringToArray(str: string, format: string): ChatCompletionMessage[] {
 		// Use regex only to match the roles and their immediate line break
 		const rolePattern = format
 			.replace("{{role}}", "(System|User|Assistant)")
@@ -211,7 +212,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		const regex = new RegExp(rolePattern, "g");
 
 		let match;
-		const messages: ChatCompletionRequestMessage[] = [];
+		const messages: ChatCompletionMessage[] = [];
 		let lastIndex = 0;
 
 		// First loop to get roles
@@ -239,7 +240,7 @@ export class ChatConverterEdge extends CannoliEdge {
 
 			// Push to messages array
 			messages.push({
-				role: uncapRole as ChatCompletionRequestMessageRoleEnum,
+				role: uncapRole as ChatRole,
 				content,
 			});
 
@@ -249,7 +250,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		// If no roles were found, treat the entire string as a user message
 		if (messages.length === 0) {
 			messages.push({
-				role: "user" as ChatCompletionRequestMessageRoleEnum,
+				role: "user" as ChatRole,
 				content: str.trim(),
 			});
 			return messages;
@@ -258,7 +259,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		// Check for any remaining text
 		if (lastIndex < str.length - 1) {
 			messages.push({
-				role: "user" as ChatCompletionRequestMessageRoleEnum,
+				role: "user" as ChatRole,
 				content: str.substring(lastIndex).trim(),
 			});
 		}
@@ -273,7 +274,7 @@ export class SystemMessageEdge extends CannoliEdge {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: CreateChatCompletionRequest;
+		request?: ChatCompletionCreateParams;
 	}): void {
 		if (content) {
 			this.messages = [
@@ -292,7 +293,7 @@ export class LoggingEdge extends CannoliEdge {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: CreateChatCompletionRequest;
+		request?: ChatCompletionCreateParams;
 	}): void {
 		// If content exists, save it as the configString
 		let configString = null;
@@ -345,7 +346,7 @@ export class LoggingEdge extends CannoliEdge {
 		}
 	}
 
-	getConfigString(request: CreateChatCompletionRequest) {
+	getConfigString(request: ChatCompletionCreateParams) {
 		let configString = "";
 
 		// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
@@ -394,7 +395,7 @@ export class LoggingEdge extends CannoliEdge {
 		return forEachVersionNumbers;
 	}
 
-	formatInteractionHeaders(messages: ChatCompletionRequestMessage[]): string {
+	formatInteractionHeaders(messages: ChatCompletionMessage[]): string {
 		let formattedString = "";
 		messages.forEach((message) => {
 			const role = message.role;
