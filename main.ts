@@ -22,7 +22,8 @@ interface CannoliSettings {
 	defaultModel: string;
 	defaultTemperature: number;
 	httpTemplates: HttpTemplate[];
-	addFilenameAsHeader?: boolean;
+	addFilenameAsHeader: boolean;
+	chatFormatString: string;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -31,6 +32,8 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	defaultModel: "gpt-3.5-turbo",
 	defaultTemperature: 1,
 	httpTemplates: [],
+	addFilenameAsHeader: false,
+	chatFormatString: `\n#### <u>{{role}}</u>:\n{{content}}\n`,
 };
 
 export interface HttpTemplate {
@@ -193,14 +196,14 @@ export default class Cannoli extends Plugin {
 
 		console.log(`Starting cannoli: ${name}`);
 
-		const shouldContinue = await this.validateCannoli(
-			graph,
-			file,
-			name,
-			canvas
-		);
+		// const shouldContinue = await this.validateCannoli(
+		// 	graph,
+		// 	file,
+		// 	name,
+		// 	canvas
+		// );
 
-		//const shouldContinue = true;
+		const shouldContinue = true;
 
 		if (shouldContinue) {
 			await this.runCannoli(graph, file, name, canvas);
@@ -266,6 +269,7 @@ export default class Cannoli extends Plugin {
 				currentNote: `[[${
 					this.app.workspace.getActiveFile()?.basename
 				}]]`,
+				chatFormatString: this.settings.chatFormatString,
 			});
 
 			// console.log("Starting validation run");
@@ -333,6 +337,7 @@ export default class Cannoli extends Plugin {
 				currentNote: `[[${
 					this.app.workspace.getActiveFile()?.basename
 				}]]`,
+				chatFormatString: this.settings.chatFormatString,
 			});
 
 			this.runningCannolis[file.basename] = run;
@@ -708,6 +713,34 @@ class CannoliSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.defaultTemperature =
 							parseFloat(value);
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Chat format string setting, error if invalid
+		new Setting(containerEl)
+			.setName("Chat format string")
+			.addTextArea((text) =>
+				text
+					.setPlaceholder(
+						"Enter a format string for extracting chat infromation from notes. Use {{role}} and {{content}} to define where to look for those values."
+					)
+					.setValue(this.plugin.settings.chatFormatString)
+					.onChange(async (value) => {
+						// Check if the format string is valid
+						const rolePlaceholder = "{{role}}";
+						const contentPlaceholder = "{{content}}";
+						if (
+							!value.includes(rolePlaceholder) ||
+							!value.includes(contentPlaceholder)
+						) {
+							alert(
+								`Invalid format string. Please include both ${rolePlaceholder} and ${contentPlaceholder}.`
+							);
+							return;
+						}
+
+						this.plugin.settings.chatFormatString = value;
 						await this.plugin.saveSettings();
 					})
 			);

@@ -83,6 +83,7 @@ export class Run {
 	isStopped = false;
 	httpTemplates: HttpTemplate[] = [];
 	addFilenameAsHeader = false;
+	chatFormatString: string | null = null;
 	currentNote: string | null = null;
 
 	modelInfo: Record<string, Model> = {
@@ -127,6 +128,7 @@ export class Run {
 		httpTemplates,
 		cannoli,
 		addFilenameAsHeader,
+		chatFormatString,
 		currentNote,
 	}: {
 		graph: Record<string, CannoliObject>;
@@ -141,6 +143,7 @@ export class Run {
 		llmLimit?: number;
 		httpTemplates?: HttpTemplate[];
 		addFilenameAsHeader?: boolean;
+		chatFormatString?: string;
 		currentNote?: string;
 	}) {
 		this.graph = graph;
@@ -154,6 +157,7 @@ export class Run {
 		this.httpTemplates = httpTemplates ?? [];
 		this.cannoli = cannoli;
 		this.addFilenameAsHeader = addFilenameAsHeader ?? false;
+		this.chatFormatString = chatFormatString ?? null;
 		this.currentNote = currentNote ?? null;
 
 		// Set the default openai config

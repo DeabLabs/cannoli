@@ -57,14 +57,15 @@ export class CannoliFactory {
 	edgePrefixMap: Record<string, EdgeType> = {
 		"*": EdgeType.Config,
 		"?": EdgeType.Choice,
-		"=": EdgeType.Function,
-		"<": EdgeType.Key,
+		"@": EdgeType.ChatConverter,
+		"<": EdgeType.List,
+		":": EdgeType.Key,
 	};
 
 	edgeColorMap: Record<string, EdgeType> = {
 		"2": EdgeType.Config,
 		"3": EdgeType.Choice,
-		"4": EdgeType.Function,
+		"4": EdgeType.ChatConverter,
 		"5": EdgeType.List,
 		"6": EdgeType.Key,
 	};
@@ -78,6 +79,7 @@ export class CannoliFactory {
 		[EdgeType.Choice]: true,
 		[EdgeType.Chat]: true,
 		[EdgeType.SystemMessage]: true,
+		[EdgeType.ChatConverter]: true,
 
 		[EdgeType.Function]: false,
 		[EdgeType.Config]: false,
@@ -92,12 +94,10 @@ export class CannoliFactory {
 
 	groupPrefixMap: Record<string, GroupType> = {
 		"<": GroupType.SignifiedForEach,
-		"@": GroupType.Chat,
 	};
 
 	groupColorMap: Record<string, GroupType> = {
 		"5": GroupType.SignifiedForEach,
-		"6": GroupType.Chat,
 	};
 
 	constructor(canvas: CanvasData) {
@@ -1255,7 +1255,7 @@ export class CannoliFactory {
 
 				// If the type from the color map is config
 				else if (this.edgeColorMap[edge.color] === EdgeType.Config) {
-					// If the edge has a label, return config
+					// If the edge has a label
 					if (edge.label && edge.label.length > 0) {
 						return EdgeType.Config;
 					} else {

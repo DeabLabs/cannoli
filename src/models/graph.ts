@@ -21,7 +21,12 @@ import {
 	HttpNode,
 	ReferenceNode,
 } from "./node";
-import { CannoliEdge, LoggingEdge, SystemMessageEdge } from "./edge";
+import {
+	CannoliEdge,
+	ChatConverterEdge,
+	LoggingEdge,
+	SystemMessageEdge,
+} from "./edge";
 
 export enum CannoliObjectKind {
 	Node = "node",
@@ -34,11 +39,11 @@ export enum GroupType {
 	ForEach = "for-each",
 	Repeat = "repeat",
 	Basic = "basic",
-	Chat = "chat",
 }
 
 export enum EdgeType {
 	Chat = "chat",
+	ChatConverter = "chat-converter",
 	SystemMessage = "system-message",
 	Write = "write",
 	Variable = "variable",
@@ -316,6 +321,14 @@ export class CannoliGraph {
 						edge as VerifiedCannoliCanvasEdgeData;
 					this.graph[edge.id] = new SystemMessageEdge(
 						systemMessageEdge
+					);
+					break;
+				}
+				case EdgeType.ChatConverter: {
+					const chatConverterEdge =
+						edge as VerifiedCannoliCanvasEdgeData;
+					this.graph[edge.id] = new ChatConverterEdge(
+						chatConverterEdge
 					);
 					break;
 				}

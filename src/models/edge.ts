@@ -1,6 +1,7 @@
 import { CannoliObject, CannoliVertex } from "./object";
 import {
 	ChatCompletionRequestMessage,
+	ChatCompletionRequestMessageRoleEnum,
 	CreateChatCompletionRequest,
 } from "openai";
 import { ForEachGroup, RepeatGroup } from "./group";
@@ -123,6 +124,132 @@ export class CannoliEdge extends CannoliObject {
 		if (!this.isReflexive) {
 			super.reset();
 		}
+	}
+}
+
+export class ChatConverterEdge extends CannoliEdge {
+	load({
+		content,
+		request,
+	}: {
+		content?: string | Record<string, string>;
+		request?: CreateChatCompletionRequest;
+	}): void {
+		const format = this.run.chatFormatString;
+		let messageString = "";
+		let messages: ChatCompletionRequestMessage[] = [];
+
+		if (request?.messages && format) {
+			// Convert messages to string using the format
+			messageString = this.arrayToString(request.messages, format);
+		} else if (content && format) {
+			// Convert content to messages using the format
+			messages = this.stringToArray(content as string, format);
+		}
+
+		this.content = messageString;
+		this.messages = messages;
+	}
+
+	arrayToString(
+		messages: ChatCompletionRequestMessage[],
+		format: string,
+		showSystemMessages = false
+	): string {
+		let messageStr = "";
+		let isFirstMessage = true;
+
+		for (const message of messages) {
+			if (message.role === "system" && !showSystemMessages) {
+				continue;
+			}
+
+			const formattedMessage = format
+				.replace("{{role}}", message.role)
+				.replace("{{content}}", message.content ?? "");
+
+			// Add a newline separator if this isn't the first message
+			if (!isFirstMessage) {
+				messageStr += "\n\n";
+			}
+
+			messageStr += formattedMessage;
+
+			isFirstMessage = false;
+		}
+
+		// Create a user template for the next message
+		const userTemplate = format
+			.replace("{{role}}", "user")
+			.replace("{{content}}", "");
+
+		// Append the user template to the message string, considering whether it's empty
+		const completeStr = messageStr
+			? messageStr + "\n\n" + userTemplate
+			: userTemplate;
+
+		return completeStr.trimStart();
+	}
+
+	stringToArray(str: string, format: string): ChatCompletionRequestMessage[] {
+		// Use regex only to match the roles and their immediate line break
+		const rolePattern = format
+			.replace("{{role}}", "(system|user|assistant)")
+			.replace("{{content}}", "")
+			.trim();
+		const regex = new RegExp(rolePattern, "g");
+
+		let match;
+		const messages: ChatCompletionRequestMessage[] = [];
+		let lastIndex = 0;
+
+		// First loop to get roles
+		while ((match = regex.exec(str)) !== null) {
+			const [, role] = match;
+
+			// Starting index for this role's content
+			const start = regex.lastIndex;
+
+			// Find the ending index of this role's content
+			let end;
+			const nextMatch = regex.exec(str);
+			if (nextMatch) {
+				end = nextMatch.index;
+			} else {
+				end = str.length;
+			}
+			regex.lastIndex = start; // reset for the next loop
+
+			// Extract and trim the content
+			const content = str.substring(start, end).trim();
+
+			// Push to messages array
+			messages.push({
+				role: role as ChatCompletionRequestMessageRoleEnum,
+				content,
+			});
+
+			lastIndex = end;
+		}
+
+		// If no roles were found, treat the entire string as a user message
+		if (messages.length === 0) {
+			messages.push({
+				role: "user" as ChatCompletionRequestMessageRoleEnum,
+				content: str.trim(),
+			});
+			return messages;
+		}
+
+		// Check for any remaining text
+		if (lastIndex < str.length - 1) {
+			messages.push({
+				role: "user" as ChatCompletionRequestMessageRoleEnum,
+				content: str.substring(lastIndex).trim(),
+			});
+		}
+
+		return messages;
 	}
 }
 

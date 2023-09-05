@@ -358,6 +358,7 @@ export class CannoliNode extends CannoliVertex {
 	getNoteOrFloatingReference(): Reference | null {
 		const notePattern = /^{{\[\[([^\]]+)\]\]}}$/;
 		const floatingPattern = /^{{\[([^\]]+)\]}}$/;
+		const currentNotePattern = /^{{NOTE}}$/;
 
 		const strippedText = this.text.trim();
 
@@ -375,6 +376,15 @@ export class CannoliNode extends CannoliVertex {
 			return {
 				name: match[1],
 				type: ReferenceType.Floating,
+				shouldExtract: false,
+			};
+		}
+
+		match = strippedText.match(currentNotePattern);
+		if (match && this.run.currentNote) {
+			return {
+				name: this.run.currentNote,
+				type: ReferenceType.Note,
 				shouldExtract: false,
 			};
 		}
@@ -628,8 +638,15 @@ export class CallNode extends CannoliNode {
 		return messages;
 	}
 
-	async getNewMessage(role?: string): Promise<ChatCompletionRequestMessage> {
+	async getNewMessage(
+		role?: string
+	): Promise<ChatCompletionRequestMessage | null> {
 		const content = await this.processReferences();
+
+		// If the role is system and there is no content, return null
+		if (role === "system" && !content) {
+			return null;
+		}
 
 		return {
 			role: role as ChatCompletionRequestMessageRoleEnum | "user",
@@ -830,7 +847,9 @@ export class CallNode extends CannoliNode {
 		// Remove the role from the config
 		delete config.role;
 
-		messages.push(newMessage);
+		if (newMessage) {
+			messages.push(newMessage);
+		}
 
 		const functions = this.getFunctions(messages);
 
@@ -1187,7 +1206,9 @@ export class ContentNode extends CannoliNode {
 		// Filter out all non-write and non-logging edges
 		const filteredEdges = incomingEdges.filter(
 			(edge) =>
-				edge.type === EdgeType.Write || edge.type === EdgeType.Logging
+				edge.type === EdgeType.Write ||
+				edge.type === EdgeType.Logging ||
+				edge.type === EdgeType.ChatConverter
 		);
 
 		if (filteredEdges.length === 0) {
@@ -1270,11 +1291,15 @@ export class ReferenceNode extends ContentNode {
 
 		// If the text matches "{{@variable name}}" then it is dynamic
 		this.isDynamic = this.text.match(/{{@.*}}/) !== null;
+	}
 
-		let reference: Reference | null = null;
+	async execute(): Promise<void> {
+		this.executing();
 
-		if (!this.isDynamic) {
-			reference = this.getNoteOrFloatingReference();
+		if (this.isDynamic) {
+			await this.loadDynamicReference();
+		} else {
+			const reference = this.getNoteOrFloatingReference();
 
 			if (reference === null) {
 				throw new Error(
@@ -1283,14 +1308,6 @@ export class ReferenceNode extends ContentNode {
 			} else {
 				this.reference = reference;
 			}
-		}
-	}
-
-	async execute(): Promise<void> {
-		this.executing();
-
-		if (this.isDynamic) {
-			await this.loadDynamicReference();
 		}
 
 		let content = "";
