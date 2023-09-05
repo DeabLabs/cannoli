@@ -161,12 +161,6 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		// // Create an instance of OpenAI
-		// const configuration = new Configuration({
-		// 	apiKey: this.settings.openaiAPIKey,
-		// });
-		// delete configuration.baseOptions.headers["User-Agent"];
-
 		// Create an instance of OpenAI
 		this.openai = new OpenAI({
 			apiKey: this.settings.openaiAPIKey,
@@ -199,14 +193,14 @@ export default class Cannoli extends Plugin {
 
 		console.log(`Starting cannoli: ${name}`);
 
-		// const shouldContinue = await this.validateCannoli(
-		// 	graph,
-		// 	file,
-		// 	name,
-		// 	canvas
-		// );
+		const shouldContinue = await this.validateCannoli(
+			graph,
+			file,
+			name,
+			canvas
+		);
 
-		const shouldContinue = true;
+		// const shouldContinue = true;
 
 		if (shouldContinue) {
 			await this.runCannoli(graph, file, name, canvas);

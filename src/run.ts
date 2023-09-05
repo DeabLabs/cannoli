@@ -431,12 +431,12 @@ export class Run {
 			async (): Promise<ChatCompletionMessage | Error> => {
 				// Only call LLM if we're not mocking
 				if (this.isMock || !this.openai) {
-					return {
-						role: "assistant",
-						content: "Mock response",
-					};
+					// return {
+					// 	role: "assistant",
+					// 	content: "Mock response",
+					// };
 
-					//return this.createMockFunctionResponse(request);
+					return this.createMockFunctionResponse(request);
 				}
 
 				// Catch any errors
@@ -488,164 +488,172 @@ export class Run {
 		);
 	}
 
-	// createMockFunctionResponse(
-	// 	request: ChatCompletionCreateParamsNonStreaming
-	// ): ChatCompletionMessage {
-	// 	let textMessages = "";
+	createMockFunctionResponse(
+		request: ChatCompletionCreateParamsNonStreaming
+	): ChatCompletionMessage {
+		let textMessages = "";
 
-	// 	// For each message, convert it to a string, including the role and the content, and a function call if present
-	// 	for (const message of request.messages) {
-	// 		if (message.function_call) {
-	// 			textMessages += `${message.role}: ${message.content} ${message.function_call} `;
-	// 		} else {
-	// 			textMessages += `${message.role}: ${message.content} `;
-	// 		}
-	// 	}
+		// For each message, convert it to a string, including the role and the content, and a function call if present
+		for (const message of request.messages) {
+			if (message.function_call) {
+				textMessages += `${message.role}: ${message.content} ${message.function_call} `;
+			} else {
+				textMessages += `${message.role}: ${message.content} `;
+			}
+		}
 
-	// 	// Estimate the tokens using the rule of thumb that 4 characters is 1 token
-	// 	const promptTokens = textMessages.length / 4;
+		// Estimate the tokens using the rule of thumb that 4 characters is 1 token
+		const promptTokens = textMessages.length / 4;
 
-	// 	if (!this.usage[request.model]) {
-	// 		// Find the right model from this.models
-	// 		const model = this.modelInfo[request.model];
+		if (!this.usage[request.model]) {
+			// Find the right model from this.models
+			const model = this.modelInfo[request.model];
 
-	// 		this.usage[request.model] = {
-	// 			model: model,
-	// 			modelUsage: {
-	// 				promptTokens: 0,
-	// 				completionTokens: 0,
-	// 				apiCalls: 0,
-	// 				totalCost: 0,
-	// 			},
-	// 		};
-	// 	}
+			this.usage[request.model] = {
+				model: model,
+				modelUsage: {
+					promptTokens: 0,
+					completionTokens: 0,
+					apiCalls: 0,
+					totalCost: 0,
+				},
+			};
+		}
 
-	// 	this.usage[request.model].modelUsage.promptTokens += promptTokens;
-	// 	this.usage[request.model].modelUsage.apiCalls += 1;
+		this.usage[request.model].modelUsage.promptTokens += promptTokens;
+		this.usage[request.model].modelUsage.apiCalls += 1;
 
-	// 	let calledFunction = "";
+		let calledFunction = "";
 
-	// 	if (request.functions && request.functions.length > 0) {
-	// 		calledFunction = request.functions[0].name;
-	// 	}
+		if (request.functions && request.functions.length > 0) {
+			calledFunction = request.functions[0].name;
+		}
 
-	// 	if (calledFunction) {
-	// 		if (calledFunction === "enter_choice") {
-	// 			// Find the choice function
-	// 			const choiceFunction = request.functions?.find(
-	// 				(fn) => fn.name === "enter_choice"
-	// 			);
+		if (calledFunction) {
+			if (calledFunction === "enter_choice") {
+				// Find the choice function
+				const choiceFunction = request.functions?.find(
+					(fn) => fn.name === "enter_choice"
+				);
 
-	// 			if (!choiceFunction) {
-	// 				throw Error("No choice function found");
-	// 			}
+				if (!choiceFunction) {
+					throw Error("No choice function found");
+				}
 
-	// 			return this.createMockChoiceFunctionResponse(
-	// 				choiceFunction
-	// 			) as ChatCompletionMessage;
-	// 		} else if (calledFunction === "enter_answers") {
-	// 			// Find the answers function
-	// 			const listFunction = request.functions?.find(
-	// 				(fn) => fn.name === "enter_answers"
-	// 			);
+				return this.createMockChoiceFunctionResponse(
+					choiceFunction
+				) as ChatCompletionMessage;
+			} else if (calledFunction === "enter_answers") {
+				// Find the answers function
+				const listFunction = request.functions?.find(
+					(fn) => fn.name === "enter_answers"
+				);
 
-	// 			if (!listFunction) {
-	// 				throw Error("No list function found");
-	// 			}
+				if (!listFunction) {
+					throw Error("No list function found");
+				}
 
-	// 			return this.createMockListFunctionResponse(
-	// 				listFunction
-	// 			) as ChatCompletionMessage;
-	// 		} else if (calledFunction === "enter_note_name") {
-	// 			// Find the note name function
-	// 			const noteNameFunction = request.functions?.find(
-	// 				(fn) => fn.name === "enter_note_name"
-	// 			);
+				return this.createMockListFunctionResponse(
+					listFunction
+				) as ChatCompletionMessage;
+			} else if (calledFunction === "enter_note_name") {
+				// Find the note name function
+				const noteNameFunction = request.functions?.find(
+					(fn) => fn.name === "enter_note_name"
+				);
 
-	// 			if (!noteNameFunction) {
-	// 				throw Error("No note name function found");
-	// 			}
+				if (!noteNameFunction) {
+					throw Error("No note name function found");
+				}
 
-	// 			return this.createMockNoteNameFunctionResponse(
-	// 				noteNameFunction
-	// 			) as ChatCompletionMessage;
-	// 		}
-	// 	}
+				return this.createMockNoteNameFunctionResponse(
+					noteNameFunction
+				) as ChatCompletionMessage;
+			}
+		}
 
-	// 	return {
-	// 		role: "assistant",
-	// 		content: "Mock response",
-	// 	};
-	// }
+		return {
+			role: "assistant",
+			content: "Mock response",
+		};
+	}
 
-	// createMockChoiceFunctionResponse(choiceFunction: ChatCompletionCreateParams.Function) {
-	// 	if(!choiceFunction.parameters?.properties.choice.enum) {
+	createMockChoiceFunctionResponse(
+		choiceFunction: ChatCompletionCreateParams.Function
+	) {
+		const parsedProperties = JSON.parse(
+			JSON.stringify(choiceFunction?.parameters["properties"])
+		);
 
-	// 	// Pick one of the choices randomly
-	// 	const randomChoice =
-	// 		choiceFunction?.parameters?.properties.choice.enum[
-	// 			Math.floor(
-	// 				Math.random() *
-	// 					choiceFunction.parameters.properties.choice.enum.length
-	// 			)
-	// 		];
+		// Pick one of the choices randomly
+		const randomChoice =
+			parsedProperties.choice.enum[
+				Math.floor(Math.random() * parsedProperties.choice.enum.length)
+			];
 
-	// 	return {
-	// 		role: "assistant",
-	// 		function_call: {
-	// 			name: "enter_choice",
-	// 			arguments: `{
-	// 				"choice" : "${randomChoice}"
-	// 				}`,
-	// 		},
-	// 	};
-	// }
+		return {
+			role: "assistant",
+			function_call: {
+				name: "enter_choice",
+				arguments: `{
+					"choice" : "${randomChoice}"
+					}`,
+			},
+		};
+	}
 
-	// createMockListFunctionResponse(listFunction: ChatCompletionCreateParams.Function) {
-	// 	const args: { [key: string]: string }[] = [];
+	createMockListFunctionResponse(
+		listFunction: ChatCompletionCreateParams.Function
+	) {
+		const args: { [key: string]: string }[] = [];
 
-	// 	// Go through the properties of the function and enter a mock string
-	// 	for (const property of Object.keys(
-	// 		listFunction?.parameters?.properties ?? {}
-	// 	)) {
-	// 		args.push({
-	// 			[property]: "Mock answer",
-	// 		});
-	// 	}
+		// Go through the properties of the function and enter a mock string
+		for (const property of Object.keys(
+			listFunction?.parameters["properties"] ?? {}
+		)) {
+			args.push({
+				[property]: "Mock answer",
+			});
+		}
 
-	// 	return {
-	// 		role: "assistant",
-	// 		function_call: {
-	// 			name: "enter_answers",
-	// 			arguments: JSON.stringify(args),
-	// 		},
-	// 	};
-	// }
+		return {
+			role: "assistant",
+			function_call: {
+				name: "enter_answers",
+				arguments: JSON.stringify(args),
+			},
+		};
+	}
 
-	// createMockNoteNameFunctionResponse(noteFunction: ChatCompletionCreateParams.Function) {
-	// 	const args: { [key: string]: string }[] = [];
+	createMockNoteNameFunctionResponse(
+		noteFunction: ChatCompletionCreateParams.Function
+	) {
+		const args: { [key: string]: string }[] = [];
 
-	// 	// Pick one of the options in note.enum randomly
-	// 	const randomNote =
-	// 		noteFunction?.parameters?.properties["note"].enum[
-	// 			Math.floor(
-	// 				Math.random() *
-	// 					noteFunction?.parameters?.properties["note"].enum.length
-	// 			)
-	// 		];
+		console.log(JSON.stringify(noteFunction, null, 2));
 
-	// 	args.push({
-	// 		note: randomNote,
-	// 	});
+		const parsedProperties = JSON.parse(
+			JSON.stringify(noteFunction?.parameters["properties"])
+		);
 
-	// 	return {
-	// 		role: "assistant",
-	// 		function_call: {
-	// 			name: "enter_note_names",
-	// 			arguments: JSON.stringify(args),
-	// 		},
-	// 	};
-	// }
+		// Pick one of the options in note.enum randomly
+		const randomNote =
+			parsedProperties.note.enum[
+				Math.random() * parsedProperties.note.enum.length
+			];
+
+		args.push({
+			note: randomNote,
+		});
+
+		return {
+			role: "assistant",
+			function_call: {
+				name: "enter_note_names",
+				arguments: JSON.stringify(args),
+			},
+		};
+	}
 
 	createChoiceFunction(
 		choices: string[]
