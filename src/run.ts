@@ -8,10 +8,13 @@ import { CannoliObjectStatus } from "./models/graph";
 import { HttpTemplate } from "main";
 import Cannoli from "main";
 import {
+	ChatCompletionChunk,
 	ChatCompletionCreateParams,
 	ChatCompletionCreateParamsNonStreaming,
+	ChatCompletionCreateParamsStreaming,
 	ChatCompletionMessage,
 } from "openai/resources/chat";
+import { Stream } from "openai/streaming";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -486,6 +489,25 @@ export class Run {
 				}
 			}
 		);
+	}
+
+	async callLLMStream(
+		request: ChatCompletionCreateParamsStreaming
+	): Promise<Stream<ChatCompletionChunk> | string | Error> {
+		// console.log(`Request: ${JSON.stringify(request, null, 2)}`);
+
+		if (this.isMock || !this.openai) {
+			// Return mock stream
+			return "Mock response";
+		}
+
+		try {
+			const response = await this.openai.chat.completions.create(request);
+
+			return response ? response : Error("No message returned");
+		} catch (e) {
+			return e;
+		}
 	}
 
 	createMockFunctionResponse(

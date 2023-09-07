@@ -1,6 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./object";
 import { ChatRole, type OpenAIConfig } from "src/run";
-import { CannoliEdge, LoggingEdge } from "./edge";
+import { CannoliEdge, ChatConverterEdge, LoggingEdge } from "./edge";
 import {} from "openai";
 import { CannoliGroup } from "./group";
 import {
@@ -18,6 +18,7 @@ import {
 import {
 	ChatCompletionCreateParams,
 	ChatCompletionCreateParamsNonStreaming,
+	ChatCompletionCreateParamsStreaming,
 	ChatCompletionMessage,
 } from "openai/resources/chat";
 
@@ -803,41 +804,123 @@ export class CallNode extends CannoliNode {
 
 		const request = await this.createLLMRequest();
 
-		const message = (await this.run.callLLM(
-			request
-		)) as ChatCompletionMessage;
+		// If the node has an outgoing chatConverter edge, call with streaming
+		const chatConverterEdges = this.getOutgoingEdges().filter(
+			(edge) => edge.type === EdgeType.ChatConverter
+		);
 
-		if (message instanceof Error) {
-			this.error(`Error calling LLM:\n${message.message}`);
-			return;
-		}
+		if (chatConverterEdges.length > 0) {
+			console.log("Calling LLM with streaming");
 
-		if (!message) {
-			this.error(`Error calling LLM: no message returned.`);
-			return;
-		}
+			request.stream = true;
 
-		request.messages.push(message);
+			const stream = await this.run.callLLMStream(
+				request as ChatCompletionCreateParamsStreaming
+			);
 
-		if (message.function_call?.arguments) {
-			if (message.function_call.name === "enter_note_name") {
-				const args = JSON.parse(message.function_call.arguments);
+			if (stream instanceof Error) {
+				this.error(`Error calling LLM:\n${stream.message}`);
+				return;
+			}
 
-				// Put double brackets around the note name
-				args.note = `[[${args.note}]]`;
+			if (!stream) {
+				this.error(`Error calling LLM: no stream returned.`);
+				return;
+			}
 
-				this.loadOutgoingEdges(args.note, request);
+			if (typeof stream === "string") {
+				this.loadOutgoingEdges(stream, request);
+				this.completed();
+				return;
+			}
+
+			// Create an empty assistant message
+			const message: ChatCompletionMessage = {
+				role: "assistant",
+				content: "",
+			};
+
+			// Push it to the request messages
+			request.messages.push(message);
+
+			// Create message content string
+			let messageContent = "";
+
+			// Process the stream. For each part, add the message to the request, and load the outgoing edges
+			for await (const part of stream) {
+				if (part instanceof Error) {
+					this.error(`Error calling LLM:\n${part.message}`);
+					return;
+				}
+
+				if (!part) {
+					this.error(`Error calling LLM: no part returned.`);
+					return;
+				}
+
+				// If the stream is done, break out of the loop
+				if (part.choices[0].finish_reason) {
+					continue;
+				}
+
+				// Add the part to the message content
+				messageContent += part.choices[0].delta.content;
+
+				// Update the message content of the message
+				message.content = messageContent;
+
+				// Load outgoing chatConverter edges
+				for (const edge of this.outgoingEdges) {
+					const edgeObject = this.graph[edge];
+					if (edgeObject instanceof ChatConverterEdge) {
+						edgeObject.load({
+							content: messageContent,
+							request: request,
+						});
+					}
+				}
+			}
+			// After the stream is done, load the outgoing edges
+			this.loadOutgoingEdges(messageContent, request);
+		} else {
+			delete request.stream;
+
+			const message = (await this.run.callLLM(
+				request as ChatCompletionCreateParamsNonStreaming
+			)) as ChatCompletionMessage;
+
+			if (message instanceof Error) {
+				this.error(`Error calling LLM:\n${message.message}`);
+				return;
+			}
+
+			if (!message) {
+				this.error(`Error calling LLM: no message returned.`);
+				return;
+			}
+
+			request.messages.push(message);
+
+			if (message.function_call?.arguments) {
+				if (message.function_call.name === "enter_note_name") {
+					const args = JSON.parse(message.function_call.arguments);
+
+					// Put double brackets around the note name
+					args.note = `[[${args.note}]]`;
+
+					this.loadOutgoingEdges(args.note, request);
+				} else {
+					this.loadOutgoingEdges(message.content ?? "", request);
+				}
 			} else {
 				this.loadOutgoingEdges(message.content ?? "", request);
 			}
-		} else {
-			this.loadOutgoingEdges(message.content ?? "", request);
 		}
 
 		this.completed();
 	}
 
-	async createLLMRequest(): Promise<ChatCompletionCreateParamsNonStreaming> {
+	async createLLMRequest(): Promise<ChatCompletionCreateParams> {
 		const config = this.getConfig();
 
 		const messages = this.getPrependedMessages();
@@ -1154,18 +1237,19 @@ export class ContentNode extends CannoliNode {
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
-		// If the dependency is a logging edge not crossing out of a forEach group, execute regardless of this node's status
+		// If the dependency is a logging edge not crossing out of a forEach group or a chatConverter edge, execute regardless of this node's status
 		if (
-			dependency instanceof LoggingEdge &&
-			!dependency.crossingOutGroups.some((group) => {
-				const groupObject = this.graph[group];
-				if (!(groupObject instanceof CannoliGroup)) {
-					throw new Error(
-						`Error on object ${groupObject.id}: object is not a group.`
-					);
-				}
-				return groupObject.type === GroupType.ForEach;
-			})
+			(dependency instanceof LoggingEdge &&
+				!dependency.crossingOutGroups.some((group) => {
+					const groupObject = this.graph[group];
+					if (!(groupObject instanceof CannoliGroup)) {
+						throw new Error(
+							`Error on object ${groupObject.id}: object is not a group.`
+						);
+					}
+					return groupObject.type === GroupType.ForEach;
+				})) ||
+			dependency instanceof ChatConverterEdge
 		) {
 			this.execute();
 		} else if (

@@ -157,6 +157,8 @@ export class ChatConverterEdge extends CannoliEdge {
 
 		this.content = messageString;
 		this.messages = messages;
+
+		this.execute();
 	}
 
 	arrayToString(
