@@ -288,6 +288,17 @@ export class CannoliNode extends CannoliVertex {
 			variableValues.push(currentNoteVariableValue);
 		}
 
+		// Add the "AUDIO" variable
+		if (this.run.audioTranscription && includeGroupEdges) {
+			const audioVariableValue = {
+				name: "AUDIO",
+				content: this.run.audioTranscription,
+				edgeId: "",
+			};
+
+			variableValues.push(audioVariableValue);
+		}
+
 		// Resolve variable conflicts
 		const resolvedVariableValues =
 			this.resolveVariableConflicts(variableValues);
