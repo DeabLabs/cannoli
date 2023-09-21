@@ -1,6 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./object";
 import { ChatRole, type OpenAIConfig } from "src/run";
-import { CannoliEdge, ChatConverterEdge, LoggingEdge } from "./edge";
+import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
 import {} from "openai";
 import { CannoliGroup } from "./group";
 import {
@@ -349,7 +349,10 @@ export class CannoliNode extends CannoliVertex {
 	loadOutgoingEdges(content: string, request?: ChatCompletionCreateParams) {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
-			if (edgeObject instanceof CannoliEdge) {
+			if (
+				edgeObject instanceof CannoliEdge &&
+				!(edgeObject instanceof ChatResponseEdge)
+			) {
 				edgeObject.load({
 					content: content,
 					request: request,
@@ -815,14 +818,12 @@ export class CallNode extends CannoliNode {
 
 		const request = await this.createLLMRequest();
 
-		// If the node has an outgoing chatConverter edge, call with streaming
-		const chatConverterEdges = this.getOutgoingEdges().filter(
-			(edge) => edge.type === EdgeType.ChatConverter
+		// If the node has an outgoing chatResponse edge, call with streaming
+		const chatResponseEdges = this.getOutgoingEdges().filter(
+			(edge) => edge.type === EdgeType.ChatResponse
 		);
 
-		if (chatConverterEdges.length > 0) {
-			console.log("Calling LLM with streaming");
-
+		if (chatResponseEdges.length > 0) {
 			request.stream = true;
 
 			const stream = await this.run.callLLMStream(
@@ -845,15 +846,6 @@ export class CallNode extends CannoliNode {
 				return;
 			}
 
-			// Create an empty assistant message
-			const message: ChatCompletionMessage = {
-				role: "assistant",
-				content: "",
-			};
-
-			// Push it to the request messages
-			request.messages.push(message);
-
 			// Create message content string
 			let messageContent = "";
 
@@ -871,26 +863,35 @@ export class CallNode extends CannoliNode {
 
 				// If the stream is done, break out of the loop
 				if (part.choices[0].finish_reason) {
+					// Load outgoing chatResponse edges with the message "END OF STREAM"
+					for (const edge of chatResponseEdges) {
+						edge.load({
+							content: "END OF STREAM",
+							request: request,
+						});
+					}
+
 					continue;
 				}
 
 				// Add the part to the message content
 				messageContent += part.choices[0].delta.content;
 
-				// Update the message content of the message
-				message.content = messageContent;
-
-				// Load outgoing chatConverter edges
-				for (const edge of this.outgoingEdges) {
-					const edgeObject = this.graph[edge];
-					if (edgeObject instanceof ChatConverterEdge) {
-						edgeObject.load({
-							content: messageContent,
-							request: request,
-						});
-					}
+				// Load outgoing chatResponse edges with the part
+				for (const edge of chatResponseEdges) {
+					edge.load({
+						content: part.choices[0].delta.content ?? "",
+						request: request,
+					});
 				}
 			}
+
+			// Add an assistant message to the messages array of the request
+			request.messages.push({
+				role: "assistant",
+				content: messageContent,
+			});
+
 			// After the stream is done, load the outgoing edges
 			this.loadOutgoingEdges(messageContent, request);
 		} else {
@@ -1248,7 +1249,7 @@ export class ContentNode extends CannoliNode {
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
-		// If the dependency is a logging edge not crossing out of a forEach group or a chatConverter edge, execute regardless of this node's status
+		// If the dependency is a logging edge not crossing out of a forEach group or a chatResponse edge, execute regardless of this node's status
 		if (
 			(dependency instanceof LoggingEdge &&
 				!dependency.crossingOutGroups.some((group) => {
@@ -1260,7 +1261,7 @@ export class ContentNode extends CannoliNode {
 					}
 					return groupObject.type === GroupType.ForEach;
 				})) ||
-			dependency instanceof ChatConverterEdge
+			dependency instanceof ChatResponseEdge
 		) {
 			this.execute();
 		} else if (
@@ -1298,12 +1299,13 @@ export class ContentNode extends CannoliNode {
 			return content;
 		}
 
-		// Filter out all non-write and non-logging edges
+		// Filter out all non-write, non-logging, non-chatResponse edges, as well as any edges that aren't complete
 		const filteredEdges = incomingEdges.filter(
 			(edge) =>
-				edge.type === EdgeType.Write ||
-				edge.type === EdgeType.Logging ||
-				edge.type === EdgeType.ChatConverter
+				(edge.type === EdgeType.Write ||
+					edge.type === EdgeType.Logging ||
+					edge.type === EdgeType.ChatResponse) &&
+				this.graph[edge.id].status === CannoliObjectStatus.Complete
 		);
 
 		if (filteredEdges.length === 0) {
@@ -1459,7 +1461,12 @@ export class ReferenceNode extends ContentNode {
 		}
 
 		if (content) {
-			await this.editContent(content);
+			// Append is dependent on if there is an incoming edge of type ChatResponse
+			const append = this.getIncomingEdges().some(
+				(edge) => edge.type === EdgeType.ChatResponse
+			);
+
+			await this.editContent(content, append);
 		}
 
 		const fetchedContent = await this.getContent();
@@ -1613,12 +1620,13 @@ export class ReferenceNode extends ContentNode {
 		}
 	}
 
-	async editContent(newContent: string): Promise<void> {
+	async editContent(newContent: string, append?: boolean): Promise<void> {
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
 				const edit = await this.run.editNote(
 					this.reference.name,
-					newContent
+					newContent,
+					append
 				);
 
 				if (edit !== null) {

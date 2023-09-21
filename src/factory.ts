@@ -90,6 +90,7 @@ export class CannoliFactory {
 		[EdgeType.Category]: false,
 		[EdgeType.Logging]: false,
 		[EdgeType.Write]: false,
+		[EdgeType.ChatResponse]: false,
 	};
 
 	groupPrefixMap: Record<string, GroupType> = {
@@ -1252,7 +1253,28 @@ export class CannoliFactory {
 					// return this.getKeyEdgeSubtype(edge);
 					return EdgeType.Key;
 				}
+				// If the type from the color map is chatconverter, return the subtype
+				else if (
+					this.edgeColorMap[edge.color] === EdgeType.ChatConverter
+				) {
+					// If the source is a call node and the target is a content node, return chatResponse
 
+					const sourceNode = this.getNode(edge.fromNode);
+					const targetNode = this.getNode(edge.toNode);
+					if (
+						sourceNode &&
+						this.getNodeIndicatedType(sourceNode) ===
+							IndicatedNodeType.Call &&
+						targetNode &&
+						this.getNodeIndicatedType(targetNode) ===
+							IndicatedNodeType.Content
+					) {
+						return EdgeType.ChatResponse;
+					} else {
+						// Otherwise, return chatConverter
+						return EdgeType.ChatConverter;
+					}
+				}
 				// If the type from the color map is config
 				else if (this.edgeColorMap[edge.color] === EdgeType.Config) {
 					// If the edge has a label

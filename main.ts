@@ -521,7 +521,7 @@ export default class Cannoli extends Plugin {
 				audioTranscription: audioTranscription,
 			});
 
-			run.logGraph();
+			// run.logGraph();
 
 			this.runningCannolis[file.basename] = run;
 

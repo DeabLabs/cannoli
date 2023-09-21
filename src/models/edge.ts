@@ -141,72 +141,23 @@ export class ChatConverterEdge extends CannoliEdge {
 		request?: ChatCompletionCreateParams;
 	}): void {
 		const format = this.run.chatFormatString;
-		let messageString = "";
+		const messageString = "";
 		let messages: ChatCompletionMessage[] = [];
 
-		if (request?.messages && format) {
-			// Convert messages to string using the format
-			messageString = this.arrayToString(request.messages, format);
-		} else if (content && format) {
+		if (content && format) {
 			// Convert content to messages using the format
 			messages = this.stringToArray(content as string, format);
+		} else {
+			throw new Error(
+				"Chat converter edge was loaded without a content or messages"
+			);
 		}
-
-		// console.log(`Converted messages: ${JSON.stringify(messages, null, 2)}`);
-		// console.log(`Converted string: ${messageString}`);
 
 		this.content = messageString;
 		this.messages = messages;
-
-		this.execute();
-	}
-
-	arrayToString(
-		messages: ChatCompletionMessage[],
-		format: string,
-		showSystemMessages = false
-	): string {
-		let messageStr = "";
-		let isFirstMessage = true;
-
-		for (const message of messages) {
-			if (message.role === "system" && !showSystemMessages) {
-				continue;
-			}
-
-			// Capitalize the role
-			const capRole =
-				message.role.charAt(0).toUpperCase() + message.role.slice(1);
-
-			const formattedMessage = format
-				.replace("{{role}}", capRole)
-				.replace("{{content}}", message.content ?? "");
-
-			// Add a newline separator if this isn't the first message
-			if (!isFirstMessage) {
-				messageStr += "\n\n";
-			}
-
-			messageStr += formattedMessage;
-
-			isFirstMessage = false;
-		}
-
-		// Create a user template for the next message
-		const userTemplate = format
-			.replace("{{role}}", "User")
-			.replace("{{content}}", "");
-
-		// Append the user template to the message string, considering whether it's empty
-		const completeStr = messageStr
-			? messageStr + "\n\n" + userTemplate
-			: userTemplate;
-
-		return completeStr.trimStart();
 	}
 
 	stringToArray(str: string, format: string): ChatCompletionMessage[] {
-		// Use regex only to match the roles and their immediate line break
 		const rolePattern = format
 			.replace("{{role}}", "(System|User|Assistant)")
 			.replace("{{content}}", "")
@@ -217,14 +168,21 @@ export class ChatConverterEdge extends CannoliEdge {
 		const messages: ChatCompletionMessage[] = [];
 		let lastIndex = 0;
 
-		// First loop to get roles
+		let firstMatch = true;
+
 		while ((match = regex.exec(str)) !== null) {
 			const [, role] = match;
 
-			// Starting index for this role's content
-			const start = regex.lastIndex;
+			// If this is the first match and there's text before it, add that text as a 'user' message
+			if (firstMatch && match.index > 0) {
+				messages.push({
+					role: "user" as ChatRole,
+					content: str.substring(0, match.index).trim(),
+				});
+			}
+			firstMatch = false;
 
-			// Find the ending index of this role's content
+			const start = regex.lastIndex;
 			let end;
 			const nextMatch = regex.exec(str);
 			if (nextMatch) {
@@ -232,15 +190,11 @@ export class ChatConverterEdge extends CannoliEdge {
 			} else {
 				end = str.length;
 			}
-			regex.lastIndex = start; // reset for the next loop
+			regex.lastIndex = start;
 
-			// Extract and trim the content
 			const content = str.substring(start, end).trim();
-
-			// Uncapitalize the role
 			const uncapRole = role.charAt(0).toLowerCase() + role.slice(1);
 
-			// Push to messages array
 			messages.push({
 				role: uncapRole as ChatRole,
 				content,
@@ -249,7 +203,6 @@ export class ChatConverterEdge extends CannoliEdge {
 			lastIndex = end;
 		}
 
-		// If no roles were found, treat the entire string as a user message
 		if (messages.length === 0) {
 			messages.push({
 				role: "user" as ChatRole,
@@ -258,7 +211,6 @@ export class ChatConverterEdge extends CannoliEdge {
 			return messages;
 		}
 
-		// Check for any remaining text
 		if (lastIndex < str.length - 1) {
 			messages.push({
 				role: "user" as ChatRole,
@@ -267,6 +219,52 @@ export class ChatConverterEdge extends CannoliEdge {
 		}
 
 		return messages;
+	}
+}
+
+export class ChatResponseEdge extends CannoliEdge {
+	beginningOfStream = true;
+
+	load({
+		content,
+		request,
+	}: {
+		content?: string | Record<string, string>;
+		request?: ChatCompletionCreateParams;
+	}): void {
+		const format = this.run.chatFormatString;
+
+		if (!format) {
+			throw new Error(
+				"Chat response edge was loaded without a format string"
+			);
+		}
+
+		if (content && typeof content === "string") {
+			if (!this.beginningOfStream) {
+				// If the content is the string "END OF STREAM"
+				if (content === "END OF STREAM") {
+					// Create a user template for the next message
+					const userTemplate = format
+						.replace("{{role}}", "User")
+						.replace("{{content}}", "");
+
+					this.content = "\n\n" + userTemplate;
+				} else {
+					this.content = content;
+				}
+			} else {
+				const assistantTemplate = format
+					.replace("{{role}}", "Assistant")
+					.replace("{{content}}", content);
+
+				this.content = "\n\n" + assistantTemplate;
+
+				this.beginningOfStream = false;
+			}
+
+			this.execute();
+		}
 	}
 }
 

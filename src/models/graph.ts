@@ -24,6 +24,7 @@ import {
 import {
 	CannoliEdge,
 	ChatConverterEdge,
+	ChatResponseEdge,
 	LoggingEdge,
 	SystemMessageEdge,
 } from "./edge";
@@ -45,6 +46,7 @@ export enum GroupType {
 export enum EdgeType {
 	Chat = "chat",
 	ChatConverter = "chat-converter",
+	ChatResponse = "chat-response",
 	SystemMessage = "system-message",
 	Write = "write",
 	Variable = "variable",
@@ -330,6 +332,14 @@ export class CannoliGraph {
 						edge as VerifiedCannoliCanvasEdgeData;
 					this.graph[edge.id] = new ChatConverterEdge(
 						chatConverterEdge
+					);
+					break;
+				}
+				case EdgeType.ChatResponse: {
+					const chatResponseEdge =
+						edge as VerifiedCannoliCanvasEdgeData;
+					this.graph[edge.id] = new ChatResponseEdge(
+						chatResponseEdge
 					);
 					break;
 				}

@@ -1002,27 +1002,15 @@ export class Run {
 		});
 	}
 
-	async editNote(name: string, newContent: string): Promise<void | null> {
+	async editNote(
+		name: string,
+		newContent: string,
+		append?: boolean
+	): Promise<void | null> {
 		// Only edit the file if we're not mocking
 		if (this.isMock) {
 			return;
 		}
-
-		// // Split the content into lines
-		// const lines = newContent.split("\n");
-
-		// // Find the index of the header line that matches the name
-		// const headerIndex = lines.findIndex(
-		// 	(line) => line.startsWith("# ") && line.slice(2) === name
-		// );
-
-		// // If the header is found, remove everything before it
-		// if (headerIndex !== -1) {
-		// 	newContent = lines
-		// 		.slice(headerIndex + 1)
-		// 		.join("\n")
-		// 		.trim();
-		// }
 
 		// Get the file
 		const filename = name.replace("[[", "").replace("]]", "");
@@ -1035,15 +1023,34 @@ export class Run {
 			return null;
 		}
 
-		await this.app.vault.modify(file, newContent);
+		if (append) {
+			await this.app.vault.process(file, (content) => {
+				return content + newContent;
+			});
+			// If the active file is the file we just edited, update the editor
+			if (
+				this.app.workspace.activeEditor?.file?.basename ===
+				file.basename
+			) {
+				// If the content is a user template, wait a bit and then move the cursor to the end of the file
+				const userTemplate =
+					"\n\n" +
+					this.chatFormatString
+						?.replace("{{role}}", "User")
+						.replace("{{content}}", "");
 
-		// If the active file is the file we just edited, update the editor
-		if (this.app.workspace.activeEditor?.file?.basename === file.basename) {
-			// Set the cursor to the end of the file
-			this.app.workspace.activeEditor?.editor?.setCursor(
-				this.app.workspace.activeEditor?.editor?.lineCount() || 0,
-				0
-			);
+				if (newContent === userTemplate) {
+					await new Promise((resolve) => setTimeout(resolve, 40));
+				}
+
+				// Set the cursor to the end of the file
+				this.app.workspace.activeEditor?.editor?.setCursor(
+					this.app.workspace.activeEditor?.editor?.lineCount() || 0,
+					0
+				);
+			}
+		} else {
+			await this.app.vault.modify(file, newContent);
 		}
 
 		return;
