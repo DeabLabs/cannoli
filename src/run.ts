@@ -2,7 +2,7 @@ import { OpenAI } from "openai";
 import { Canvas } from "./canvas";
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
-import { Vault, requestUrl } from "obsidian";
+import { App, requestUrl } from "obsidian";
 import pLimit from "p-limit";
 import { CannoliObjectStatus } from "./models/graph";
 import { HttpTemplate } from "main";
@@ -79,7 +79,7 @@ export function isValidKey(
 export class Run {
 	graph: Record<string, CannoliObject> = {};
 	onFinish: (stoppage: Stoppage) => void;
-	vault: Vault;
+	app: App;
 
 	openai: OpenAI | null;
 	llmLimit: Limit;
@@ -125,7 +125,7 @@ export class Run {
 	constructor({
 		graph,
 		onFinish,
-		vault,
+		app,
 		isMock,
 		canvas,
 		openai,
@@ -139,7 +139,7 @@ export class Run {
 		audioTranscription,
 	}: {
 		graph: Record<string, CannoliObject>;
-		vault: Vault;
+		app: App;
 		cannoli: Cannoli;
 
 		onFinish?: (stoppage: Stoppage) => void;
@@ -157,7 +157,7 @@ export class Run {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
 		this.isMock = isMock ?? false;
-		this.vault = vault;
+		this.app = app;
 		this.canvas = canvas ?? null;
 		this.openai = openai ?? null;
 		this.usage = {};
@@ -1035,7 +1035,16 @@ export class Run {
 			return null;
 		}
 
-		await this.vault.modify(file, newContent);
+		await this.app.vault.modify(file, newContent);
+
+		// If the active file is the file we just edited, update the editor
+		if (this.app.workspace.activeEditor?.file?.basename === file.basename) {
+			// Set the cursor to the end of the file
+			this.app.workspace.activeEditor?.editor?.setCursor(
+				this.app.workspace.activeEditor?.editor?.lineCount() || 0,
+				0
+			);
+		}
 
 		return;
 	}
@@ -1058,9 +1067,9 @@ export class Run {
 		}
 
 		// Read the file
-		let content = await this.vault.read(file);
+		let content = await this.app.vault.read(file);
 
-		// If addFilenameAsHeader is true, prepend the note's name as a header
+		// If addFilenameAsHeader is true, add the filename as a header
 		if (this.addFilenameAsHeader) {
 			const header = `# ${file.basename}\n`;
 			content = header + content;
@@ -1094,7 +1103,7 @@ export class Run {
 		}
 
 		// Create the note
-		await this.vault.create(fullPath, content ?? "");
+		await this.app.vault.create(fullPath, content ?? "");
 
 		if (verbose) {
 			console.log(`Note "${noteName}" created at path "${fullPath}"`);
@@ -1113,7 +1122,7 @@ export class Run {
 		const fullPath = `${path}/${noteName}.md`;
 
 		// Create the note
-		await this.vault.create(fullPath, content ?? "");
+		await this.app.vault.create(fullPath, content ?? "");
 
 		if (verbose) {
 			console.log(`Note "${noteName}" created at path "${fullPath}"`);
@@ -1124,14 +1133,14 @@ export class Run {
 
 	async createFolder(path: string, verbose = false): Promise<boolean> {
 		// Check if the path already exists
-		const folder = this.vault.getAbstractFileByPath(path);
+		const folder = this.app.vault.getAbstractFileByPath(path);
 
 		if (folder) {
 			return false;
 		}
 
 		// Create the folder
-		this.vault.createFolder(path);
+		this.app.vault.createFolder(path);
 
 		if (verbose) {
 			console.log(`Folder created at path "${path}"`);
@@ -1162,7 +1171,7 @@ export class Run {
 		}
 
 		// Move the note
-		await this.vault.rename(note, newFullPath);
+		await this.app.vault.rename(note, newFullPath);
 
 		if (verbose) {
 			console.log(
