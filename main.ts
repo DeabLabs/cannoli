@@ -66,6 +66,8 @@ export default class Cannoli extends Plugin {
 
 		this.createCannoliCommands();
 
+		this.createFrontMatterCommand();
+
 		// Rerun the createCannoliCommands function whenever a file is renamed to be a cannoli file
 		this.registerEvent(
 			this.app.vault.on("rename", (file: TFile, oldPath: string) => {
@@ -162,6 +164,51 @@ export default class Cannoli extends Plugin {
 					this.startCannoli(file);
 				},
 			});
+		});
+	};
+
+	createFrontMatterCommand = () => {
+		this.addCommand({
+			id: "frontmatter-cannoli",
+			name: "Run cannoli defined in frontmatter",
+			checkCallback: (checking: boolean) => {
+				const activeFile = this.app.workspace.getActiveFile();
+
+				const isMDFile = activeFile?.path.endsWith(".md");
+
+				if (isMDFile && activeFile) {
+					if (checking) return true;
+
+					this.app.fileManager.processFrontMatter(
+						activeFile,
+						(frontmatter) => {
+							if (frontmatter.cannoli) {
+								// Get the file
+								// Only take before the first pipe, if there is one
+								const filename = frontmatter.cannoli
+									.replace("[[", "")
+									.replace("]]", "")
+									.split("|")[0];
+								console.log(`Starting cannoli: ${filename}`);
+
+								const file =
+									this.app.metadataCache.getFirstLinkpathDest(
+										filename,
+										""
+									);
+
+								if (!file) {
+									return null;
+								}
+
+								this.startCannoli(file);
+							}
+						}
+					);
+				} else {
+					return false;
+				}
+			},
 		});
 	};
 
