@@ -90,7 +90,6 @@ export class Run {
 	addFilenameAsHeader = false;
 	chatFormatString: string | null = null;
 	currentNote: string | null = null;
-	audioTranscription: string | null = null;
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4": {
@@ -167,7 +166,6 @@ export class Run {
 		this.addFilenameAsHeader = addFilenameAsHeader ?? false;
 		this.chatFormatString = chatFormatString ?? null;
 		this.currentNote = currentNote ?? null;
-		this.audioTranscription = audioTranscription ?? null;
 
 		// Set the default openai config
 		this.openaiConfig = openAiConfig ? openAiConfig : this.openaiConfig;

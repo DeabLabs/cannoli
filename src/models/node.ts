@@ -288,17 +288,6 @@ export class CannoliNode extends CannoliVertex {
 			variableValues.push(currentNoteVariableValue);
 		}
 
-		// Add the "AUDIO" variable
-		if (this.run.audioTranscription && includeGroupEdges) {
-			const audioVariableValue = {
-				name: "AUDIO",
-				content: this.run.audioTranscription,
-				edgeId: "",
-			};
-
-			variableValues.push(audioVariableValue);
-		}
-
 		// Resolve variable conflicts
 		const resolvedVariableValues =
 			this.resolveVariableConflicts(variableValues);
@@ -660,8 +649,8 @@ export class CallNode extends CannoliNode {
 	async getNewMessage(role?: string): Promise<ChatCompletionMessage | null> {
 		const content = await this.processReferences();
 
-		// If the role is system and there is no content, return null
-		if (role === "system" && !content) {
+		// If there is no content, return null
+		if (!content) {
 			return null;
 		}
 

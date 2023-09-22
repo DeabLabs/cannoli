@@ -27,8 +27,6 @@ interface CannoliSettings {
 	addFilenameAsHeader: boolean;
 	chatFormatString: string;
 	enableAudioTriggeredCannolis?: boolean;
-	audioTriggeredCannoliFilename?: string;
-	askForConfirmationBeforeAudioTriggeredCannolis?: boolean;
 	deleteAudioFilesAfterAudioTriggeredCannolis?: boolean;
 	transcriptionPrompt?: string;
 }
@@ -40,10 +38,8 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	defaultTemperature: 1,
 	httpTemplates: [],
 	addFilenameAsHeader: false,
-	chatFormatString: `\n#### <u>{{role}}</u>:\n{{content}}\n`,
+	chatFormatString: `---\n## <u>{{role}}</u>:\n\n{{content}}`,
 	enableAudioTriggeredCannolis: false,
-	audioTriggeredCannoliFilename: "Audio Cannoli",
-	askForConfirmationBeforeAudioTriggeredCannolis: true,
 	deleteAudioFilesAfterAudioTriggeredCannolis: false,
 };
 
@@ -189,7 +185,6 @@ export default class Cannoli extends Plugin {
 									.replace("[[", "")
 									.replace("]]", "")
 									.split("|")[0];
-								console.log(`Starting cannoli: ${filename}`);
 
 								const file =
 									this.app.metadataCache.getFirstLinkpathDest(
@@ -231,92 +226,109 @@ export default class Cannoli extends Plugin {
 		this.startCannoli(activeFile);
 	};
 
-	newAudioFile = async (file: TFile) => {
-		// If the confirmation setting is enabled, ask for confirmation before starting the cannoli
-		if (this.settings.askForConfirmationBeforeAudioTriggeredCannolis) {
-			// Make a simple confirmation modal
-			const modal = new Modal(this.app);
-			const { contentEl } = modal;
+	newAudioFile = async (audio: TFile) => {
+		// Get the current active file
+		const activeFile = this.app.workspace.getActiveFile();
 
-			contentEl.createEl("h1", { text: "New audio file" });
-			contentEl.createEl("p", {
-				text: `A new audio file was created. Transcribe and trigger "${this.settings.audioTriggeredCannoliFilename}"?`,
-			});
-
-			const panel = new Setting(contentEl);
-
-			panel.addButton((btn) =>
-				btn.setButtonText("Cancel").onClick(() => {
-					modal.close();
-				})
-			);
-
-			panel.addButton((btn) =>
-				btn
-					.setButtonText("Start")
-					.setCta()
-					.onClick(() => {
-						modal.close();
-						this.startAudioCannoli(file);
-					})
-			);
-
-			modal.open();
-		} else {
-			this.startAudioCannoli(file);
+		// If it isn't a markdown file, return
+		if (!activeFile || !activeFile.path.endsWith(".md")) {
+			return;
 		}
+
+		// If the current file doesn't have a cannoli in the frontmatter, return
+		this.app.fileManager.processFrontMatter(
+			activeFile,
+			async (frontmatter) => {
+				if (frontmatter.cannoli) {
+					// Get the file
+					// Only take before the first pipe, if there is one
+					const cannoliFilename = frontmatter.cannoli
+						.replace("[[", "")
+						.replace("]]", "")
+						.split("|")[0];
+
+					// If the file isn't a canvas file, return
+					if (!cannoliFilename.endsWith(".canvas")) {
+						return null;
+					}
+
+					const cannoliFile =
+						this.app.metadataCache.getFirstLinkpathDest(
+							cannoliFilename,
+							""
+						);
+
+					if (!cannoliFile) {
+						return null;
+					}
+
+					await this.replaceAudioWithTranscript(activeFile, audio);
+
+					this.startCannoli(cannoliFile);
+				} else {
+					return null;
+				}
+			}
+		);
 	};
 
-	startAudioCannoli = async (audio: TFile) => {
-		// Find the cannoli file with the name specified in the settings
-		const cannoliFile = this.app.vault
-			.getFiles()
-			.find(
-				(file) =>
-					file.name === this.settings.audioTriggeredCannoliFilename
-			);
+	async replaceAudioWithTranscript(file: TFile, audio: TFile) {
+		// Transcribe the audio
+		const transcript = await this.generateTranscript(audio);
 
-		// If no file was found, send a notice
-		if (!cannoliFile) {
-			new Notice(
-				`No canvas file found with the name "${this.settings.audioTriggeredCannoliFilename}"`
-			);
+		if (!transcript) {
 			return;
 		}
 
-		// If the api key is the default, send a notice telling the user to add their key
-		if (this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
-			new Notice(
-				"Please enter your OpenAI API key in the Cannoli settings"
-			);
+		// Max number of polling attempts
+		const maxAttempts = 10;
+		// Time delay between polling attempts in milliseconds
+		const delay = 500;
+		let attempts = 0;
+
+		// Function to check if the reference exists in the content
+		const checkReferenceExists = async () => {
+			let exists = false;
+			await this.app.vault.process(file, (content) => {
+				exists = content.includes(`![[${audio.name}]]`);
+				return content; // No modification
+			});
+			return exists;
+		};
+
+		// Polling loop
+		while (attempts < maxAttempts) {
+			if (await checkReferenceExists()) {
+				break;
+			}
+			await new Promise((resolve) => setTimeout(resolve, delay));
+			attempts++;
+		}
+
+		// If reference doesn't appear after max attempts, exit function
+		if (attempts === maxAttempts) {
 			return;
 		}
 
-		// Create an instance of OpenAI
-		this.openai = new OpenAI({
-			apiKey: this.settings.openaiAPIKey,
-			dangerouslyAllowBrowser: true,
+		// Replace the reference to the audio file with the transcript
+		await this.app.vault.process(file, (content) => {
+			const newContent = content.replace(
+				`\n![[${audio.name}]]\n`,
+				transcript
+			);
+			return newContent;
 		});
 
-		try {
-			// Generate the transcript
-			const transcript = await this.generateTranscript(audio);
-
-			// If the delete setting is enabled, delete the audio file
-			if (this.settings.deleteAudioFilesAfterAudioTriggeredCannolis) {
-				this.app.vault.delete(audio);
-			}
-
-			// Start the cannoli
-			this.startCannoli(cannoliFile, transcript);
-		} catch (error) {
-			new Notice(`Error transcribing audio file: ${error.message}`);
-			console.error(error);
-			return;
+		// If the delete setting is enabled, delete the audio file
+		if (this.settings.deleteAudioFilesAfterAudioTriggeredCannolis) {
+			this.app.vault.delete(audio);
 		}
-	};
+	}
 
 	async generateTranscript(file: TFile) {
+		// Send notice
+		new Notice("Transcribing audio");
+
 		if (!file) {
 			console.error("File not found");
 			return;
@@ -365,7 +377,7 @@ export default class Cannoli extends Plugin {
 
 		try {
 			const response = await requestUrl(options);
-			if ("text" in response.json) return response.json.text;
+			if ("text" in response.json) return response.json.text as string;
 			else throw new Error("Error. " + JSON.stringify(response.json));
 		} catch (error) {
 			console.error(error);
@@ -950,11 +962,11 @@ class CannoliSettingTab extends PluginSettingTab {
 		// Chat format string setting, error if invalid
 		new Setting(containerEl)
 			.setName("Chat format string")
+			.setDesc(
+				"This string will be used to format chat messages when using chat arrows. This string must contain the placeholders {{role}} and {{content}}, which will be replaced with the role and content of the message, respectively."
+			)
 			.addTextArea((text) =>
 				text
-					.setPlaceholder(
-						"Enter a format string for extracting chat infromation from notes. Use {{role}} and {{content}} to define where to look for those values."
-					)
 					.setValue(this.plugin.settings.chatFormatString)
 					.onChange(async (value) => {
 						// Check if the format string is valid
@@ -992,9 +1004,9 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Toggle voice recording triggered cannolis
 		new Setting(containerEl)
-			.setName("Enable audio recording triggered cannolis")
+			.setName("Enable audio recorder triggered cannolis")
 			.setDesc(
-				"Enable cannolis to be triggered by audio recordings. The audio file will be transcribed using Whisper and accesible in the cannoli as {{AUDIO}}."
+				"Enable cannolis to be triggered by audio recordings. When you make a recording in a note with a cannoli defined in the frontmatter, the audio file will be transcribed using Whisper, the reference will be replaced with the transcript, and the cannoli defined in the frontmatter will run."
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -1004,47 +1016,6 @@ class CannoliSettingTab extends PluginSettingTab {
 					)
 					.onChange(async (value) => {
 						this.plugin.settings.enableAudioTriggeredCannolis =
-							value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		// Audio cannoli filename
-		new Setting(containerEl)
-			.addText((text) =>
-				text
-					.setPlaceholder("Enter a filename for audio cannolis")
-					.setValue(
-						this.plugin.settings.audioTriggeredCannoliFilename || ""
-					)
-					.onChange(async (value) => {
-						this.plugin.settings.audioTriggeredCannoliFilename =
-							value;
-						await this.plugin.saveSettings();
-					})
-			)
-			.setName("Audio cannoli filename")
-			.setDesc(
-				"Enter a filename for the cannoli that will be triggered by audio recordings."
-			);
-
-		// Toggle asking for confirmation before starting an audio triggered cannoli
-		new Setting(containerEl)
-			.setName("Confirm before starting audio triggered cannolis")
-			.setDesc(
-				"After a recording is finished, ask for confirmation before starting the cannoli."
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(
-						this.plugin.settings
-							.askForConfirmationBeforeAudioTriggeredCannolis ||
-							false
-
-						// eslint-disable-next-line no-mixed-spaces-and-tabs
-					)
-					.onChange(async (value) => {
-						this.plugin.settings.askForConfirmationBeforeAudioTriggeredCannolis =
 							value;
 						await this.plugin.saveSettings();
 					})
@@ -1065,13 +1036,13 @@ class CannoliSettingTab extends PluginSettingTab {
 			)
 			.setName("Transcription prompt")
 			.setDesc(
-				"Enter a prompt to improve transcription accuracy. Use this prompt to guide the style and vocabulary of the transcription."
+				"Use this prompt to guide the style and vocabulary of the transcription."
 			);
 
 		// Toggle deleting audio files after starting an audio triggered cannoli
 		new Setting(containerEl)
-			.setName("Delete audio files after starting cannolis")
-			.setDesc("After a recording is finished, delete the audio file.")
+			.setName("Delete audio files after transcription")
+			.setDesc("After a recording is transcribed, delete the audio file.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(
