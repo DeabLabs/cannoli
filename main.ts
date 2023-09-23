@@ -165,8 +165,8 @@ export default class Cannoli extends Plugin {
 
 	createFrontMatterCommand = () => {
 		this.addCommand({
-			id: "frontmatter-cannoli",
-			name: "Run cannoli defined in frontmatter",
+			id: "property-cannoli",
+			name: "Run cannoli defined in properties",
 			checkCallback: (checking: boolean) => {
 				const activeFile = this.app.workspace.getActiveFile();
 
@@ -1006,7 +1006,7 @@ class CannoliSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Enable audio recorder triggered cannolis")
 			.setDesc(
-				"Enable cannolis to be triggered by audio recordings. When you make a recording in a note with a cannoli defined in the frontmatter, the audio file will be transcribed using Whisper, the reference will be replaced with the transcript, and the cannoli defined in the frontmatter will run."
+				"Enable cannolis to be triggered by audio recordings. When you make a recording in a note with a cannoli property, the audio file will be transcribed using Whisper, the reference will be replaced with the transcript, and then the cannoli defined in the property will run."
 			)
 			.addToggle((toggle) =>
 				toggle

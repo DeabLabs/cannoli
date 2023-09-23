@@ -633,7 +633,7 @@ export class Run {
 
 		// Go through the properties of the function and enter a mock string
 		for (const property of Object.keys(
-			listFunction?.parameters["properties"] ?? {}
+			listFunction?.parameters["properties"] as Record<string, string>
 		)) {
 			args.push({
 				[property]: "Mock answer",
