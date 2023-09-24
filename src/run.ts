@@ -135,7 +135,6 @@ export class Run {
 		addFilenameAsHeader,
 		chatFormatString,
 		currentNote,
-		audioTranscription,
 	}: {
 		graph: Record<string, CannoliObject>;
 		app: App;
@@ -151,7 +150,6 @@ export class Run {
 		addFilenameAsHeader?: boolean;
 		chatFormatString?: string;
 		currentNote?: string;
-		audioTranscription?: string;
 	}) {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});

@@ -62,8 +62,6 @@ export default class Cannoli extends Plugin {
 
 		this.createCannoliCommands();
 
-		this.createFrontMatterCommand();
-
 		// Rerun the createCannoliCommands function whenever a file is renamed to be a cannoli file
 		this.registerEvent(
 			this.app.vault.on("rename", (file: TFile, oldPath: string) => {
@@ -95,33 +93,15 @@ export default class Cannoli extends Plugin {
 		);
 
 		// Add command for running a cannoli
-		this.addCommand({
-			id: "current",
-			name: "Start/Stop this cannoli",
-			checkCallback: (checking: boolean) => {
-				const isCanvasOpen = this.app.workspace
-					.getActiveFile()
-					?.path.endsWith(".canvas");
-
-				if (isCanvasOpen) {
-					if (!checking) {
-						this.startOrStopCannoli();
-					}
-
-					return true;
-				}
-
-				return false;
-			},
-		});
+		this.createStartCommand();
 
 		addIcon("cannoli", cannoliIcon);
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon(
 			"cannoli",
-			"Start/Stop this cannoli",
-			this.startOrStopCannoli
+			"Start/Stop cannoli",
+			this.startActiveCannoliCommand
 		);
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
@@ -163,67 +143,79 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
-	createFrontMatterCommand = () => {
+	createStartCommand = () => {
 		this.addCommand({
-			id: "property-cannoli",
-			name: "Run cannoli defined in properties",
-			checkCallback: (checking: boolean) => {
-				const activeFile = this.app.workspace.getActiveFile();
-
-				const isMDFile = activeFile?.path.endsWith(".md");
-
-				if (isMDFile && activeFile) {
-					if (checking) return true;
-
-					this.app.fileManager.processFrontMatter(
-						activeFile,
-						(frontmatter) => {
-							if (frontmatter.cannoli) {
-								// Get the file
-								// Only take before the first pipe, if there is one
-								const filename = frontmatter.cannoli
-									.replace("[[", "")
-									.replace("]]", "")
-									.split("|")[0];
-
-								const file =
-									this.app.metadataCache.getFirstLinkpathDest(
-										filename,
-										""
-									);
-
-								if (!file) {
-									return null;
-								}
-
-								this.startCannoli(file);
-							}
-						}
-					);
-				} else {
-					return false;
-				}
-			},
+			id: "start",
+			name: "Start/Stop cannoli",
+			checkCallback: this.startCannoliCommand,
 		});
 	};
 
-	startOrStopCannoli = async () => {
+	startActiveCannoliCommand = () => {
+		this.startCannoliCommand(false);
+	};
+
+	startCannoliCommand = (checking: boolean) => {
 		const activeFile = this.app.workspace.getActiveFile();
 
+		const isMDFile = activeFile?.path.endsWith(".md");
+
+		const isCanvasFile = activeFile?.path.endsWith(".canvas");
+
+		if (!activeFile) return false;
+
+		if (isMDFile) {
+			if (checking) return true;
+
+			this.app.fileManager.processFrontMatter(
+				activeFile,
+				(frontmatter) => {
+					if (frontmatter.cannoli) {
+						// Get the file
+						// Only take before the first pipe, if there is one
+						const filename = frontmatter.cannoli
+							.replace("[[", "")
+							.replace("]]", "")
+							.split("|")[0];
+
+						const file =
+							this.app.metadataCache.getFirstLinkpathDest(
+								filename,
+								""
+							);
+
+						if (!file) {
+							return null;
+						}
+
+						this.startOrStopCannoli(file);
+					}
+				}
+			);
+		} else if (isCanvasFile) {
+			if (checking) return true;
+
+			this.startOrStopCannoli(activeFile);
+		} else {
+			return false;
+		}
+	};
+
+	startOrStopCannoli = async (cannoli: TFile) => {
 		// Check if file is a .canvas file
-		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
-			new Notice("Move to a canvas file to start a cannoli");
+		if (!cannoli || !cannoli.path.endsWith(".canvas")) {
+			new Notice("This file is not a canvas");
 			return;
 		}
 
 		// Check if the cannoli is already running
-		if (this.runningCannolis[activeFile.basename]) {
-			this.runningCannolis[activeFile.basename].stop();
-			delete this.runningCannolis[activeFile.basename];
+		if (this.runningCannolis[cannoli.basename]) {
+			this.runningCannolis[cannoli.basename].stop();
+			delete this.runningCannolis[cannoli.basename];
 			return;
 		}
 
-		this.startCannoli(activeFile);
+		this.startCannoli(cannoli);
 	};
 
 	newAudioFile = async (audio: TFile) => {
@@ -384,7 +376,7 @@ export default class Cannoli extends Plugin {
 		}
 	}
 
-	startCannoli = async (file: TFile, audioTranscription?: string) => {
+	startCannoli = async (file: TFile) => {
 		// If the api key is the default, send a notice telling the user to add their key
 		if (this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
 			new Notice(
@@ -429,20 +421,13 @@ export default class Cannoli extends Plugin {
 			graph,
 			file,
 			name,
-			canvas,
-			audioTranscription
+			canvas
 		);
 
 		// const shouldContinue = true;
 
 		if (shouldContinue) {
-			await this.runCannoli(
-				graph,
-				file,
-				name,
-				canvas,
-				audioTranscription
-			);
+			await this.runCannoli(graph, file, name, canvas);
 		}
 	};
 
@@ -507,7 +492,6 @@ export default class Cannoli extends Plugin {
 					this.app.workspace.getActiveFile()?.basename
 				}]]`,
 				chatFormatString: this.settings.chatFormatString,
-				audioTranscription: audioTranscription,
 			});
 
 			// console.log("Starting validation run");
@@ -577,7 +561,6 @@ export default class Cannoli extends Plugin {
 					this.app.workspace.getActiveFile()?.basename
 				}]]`,
 				chatFormatString: this.settings.chatFormatString,
-				audioTranscription: audioTranscription,
 			});
 
 			// run.logGraph();
