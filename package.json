@@ -7,7 +7,8 @@
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"build-college": "node scripts/fileGen.js"
+		"build-college": "node scripts/fileGen.js",
+		"release": "node scripts/release.mjs"
 	},
 	"keywords": [],
 	"author": "",
