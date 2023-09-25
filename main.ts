@@ -24,7 +24,8 @@ interface CannoliSettings {
 	defaultModel: string;
 	defaultTemperature: number;
 	httpTemplates: HttpTemplate[];
-	addFilenameAsHeader: boolean;
+	includeFilenameAsHeader: boolean;
+	includePropertiesInExtractedNotes: boolean;
 	chatFormatString: string;
 	enableAudioTriggeredCannolis?: boolean;
 	deleteAudioFilesAfterAudioTriggeredCannolis?: boolean;
@@ -37,8 +38,9 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	defaultModel: "gpt-3.5-turbo",
 	defaultTemperature: 1,
 	httpTemplates: [],
-	addFilenameAsHeader: false,
-	chatFormatString: `---\n## <u>{{role}}</u>:\n\n{{content}}`,
+	includeFilenameAsHeader: false,
+	includePropertiesInExtractedNotes: false,
+	chatFormatString: `---\n## <u>{{role}}</u>\n\n{{content}}`,
 	enableAudioTriggeredCannolis: false,
 	deleteAudioFilesAfterAudioTriggeredCannolis: false,
 };
@@ -415,8 +417,6 @@ export default class Cannoli extends Plugin {
 		const graph = factory.getCannoliData();
 		// console.log(JSON.stringify(graph, null, 2));
 
-		console.log(`Starting cannoli: ${name}`);
-
 		const shouldContinue = await this.validateCannoli(
 			graph,
 			file,
@@ -484,14 +484,8 @@ export default class Cannoli extends Plugin {
 				graph: validationGraph.graph,
 				isMock: true,
 				canvas: canvas,
-				app: this.app,
 				onFinish: onFinish,
-				httpTemplates: this.settings.httpTemplates,
 				cannoli: this,
-				currentNote: `[[${
-					this.app.workspace.getActiveFile()?.basename
-				}]]`,
-				chatFormatString: this.settings.chatFormatString,
 			});
 
 			// console.log("Starting validation run");
@@ -504,8 +498,7 @@ export default class Cannoli extends Plugin {
 		graph: VerifiedCannoliCanvasData,
 		file: TFile,
 		name: string,
-		canvas: Canvas,
-		audioTranscription?: string
+		canvas: Canvas
 	) => {
 		return new Promise<void>((resolve) => {
 			// Create callback function to trigger notice
@@ -529,10 +522,6 @@ export default class Cannoli extends Plugin {
 					new Notice(`Cannoli stopped: ${name}${costString}`);
 				}
 
-				console.log(
-					`${name} finished with cost: ${stoppage.totalCost}`
-				);
-
 				// Resolve the promise to continue the async function
 				resolve();
 			};
@@ -552,15 +541,8 @@ export default class Cannoli extends Plugin {
 				},
 				isMock: false,
 				canvas: canvas,
-				app: this.app,
 				onFinish: onFinish,
-				httpTemplates: this.settings.httpTemplates,
 				cannoli: this,
-				addFilenameAsHeader: this.settings.addFilenameAsHeader,
-				currentNote: `[[${
-					this.app.workspace.getActiveFile()?.basename
-				}]]`,
-				chatFormatString: this.settings.chatFormatString,
 			});
 
 			// run.logGraph();
@@ -880,6 +862,8 @@ class CannoliSettingTab extends PluginSettingTab {
 				})
 			);
 
+		containerEl.createEl("h1", { text: "LLM" });
+
 		new Setting(containerEl)
 			.setName("OpenAI API key")
 			.setDesc(
@@ -942,6 +926,9 @@ class CannoliSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Put header here
+		containerEl.createEl("h1", { text: "Note extraction" });
+
 		// Chat format string setting, error if invalid
 		new Setting(containerEl)
 			.setName("Chat format string")
@@ -972,24 +959,47 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Toggle adding filenames as headers when extracting text from files
 		new Setting(containerEl)
-			.setName("Add filenames as headers to extracted notes")
+			.setName("Include filenames as headers in extracted notes")
 			.setDesc(
-				"When extracting a note in a node, add the filename as a header."
+				"When extracting a note in a cannoli, include the filename as a top-level header."
 			)
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.plugin.settings.addFilenameAsHeader || false)
+					.setValue(
+						this.plugin.settings.includeFilenameAsHeader || false
+					)
 					.onChange(async (value) => {
-						this.plugin.settings.addFilenameAsHeader = value;
+						this.plugin.settings.includeFilenameAsHeader = value;
 						await this.plugin.saveSettings();
 					})
 			);
+
+		// Toggle including properties (YAML frontmatter) when extracting text from files
+		new Setting(containerEl)
+			.setName("Include properties in extracted notes")
+			.setDesc(
+				"When extracting a note in a node, include the properties (YAML frontmatter)."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(
+						this.plugin.settings
+							.includePropertiesInExtractedNotes || false
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.includePropertiesInExtractedNotes =
+							value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		containerEl.createEl("h1", { text: "Transcription" });
 
 		// Toggle voice recording triggered cannolis
 		new Setting(containerEl)
 			.setName("Enable audio recorder triggered cannolis")
 			.setDesc(
-				"Enable cannolis to be triggered by audio recordings. When you make a recording in a note with a cannoli property, the audio file will be transcribed using Whisper, the reference will be replaced with the transcript, and then the cannoli defined in the property will run."
+				`Enable cannolis to be triggered by audio recordings. When you make a recording in a note with a cannoli property: (1) The audio file will be transcribed using Whisper. (2) The file reference will be replaced with the transcript. (3) The cannoli defined in the property will run.`
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -1001,46 +1011,55 @@ class CannoliSettingTab extends PluginSettingTab {
 						this.plugin.settings.enableAudioTriggeredCannolis =
 							value;
 						await this.plugin.saveSettings();
+						this.display();
 					})
 			);
 
-		// Transcription prompt
-		new Setting(containerEl)
-			.addTextArea((text) =>
-				text
-					.setPlaceholder(
-						"Enter a prompt to improve transcription accuracy."
-					)
-					.setValue(this.plugin.settings.transcriptionPrompt || "")
-					.onChange(async (value) => {
-						this.plugin.settings.transcriptionPrompt = value;
-						await this.plugin.saveSettings();
-					})
-			)
-			.setName("Transcription prompt")
-			.setDesc(
-				"Use this prompt to guide the style and vocabulary of the transcription."
-			);
+		if (this.plugin.settings.enableAudioTriggeredCannolis) {
+			// Transcription prompt
+			new Setting(containerEl)
+				.addTextArea((text) =>
+					text
+						.setPlaceholder(
+							"Enter prompt to improve transcription accuracy"
+						)
+						.setValue(
+							this.plugin.settings.transcriptionPrompt || ""
+						)
+						.onChange(async (value) => {
+							this.plugin.settings.transcriptionPrompt = value;
+							await this.plugin.saveSettings();
+						})
+				)
+				.setName("Transcription prompt")
+				.setDesc(
+					"Use this prompt to guide the style and vocabulary of the transcription. (i.e. the level of punctuation, format and spelling of uncommon words in the prompt will be mimicked in the transcription)"
+				);
 
-		// Toggle deleting audio files after starting an audio triggered cannoli
-		new Setting(containerEl)
-			.setName("Delete audio files after transcription")
-			.setDesc("After a recording is transcribed, delete the audio file.")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(
-						this.plugin.settings
-							.deleteAudioFilesAfterAudioTriggeredCannolis ||
-							false
+			// Toggle deleting audio files after starting an audio triggered cannoli
+			new Setting(containerEl)
+				.setName("Delete audio files after transcription")
+				.setDesc(
+					"After a recording is transcribed, delete the audio file."
+				)
+				.addToggle((toggle) =>
+					toggle
+						.setValue(
+							this.plugin.settings
+								.deleteAudioFilesAfterAudioTriggeredCannolis ||
+								false
 
-						// eslint-disable-next-line no-mixed-spaces-and-tabs
-					)
-					.onChange(async (value) => {
-						this.plugin.settings.deleteAudioFilesAfterAudioTriggeredCannolis =
-							value;
-						await this.plugin.saveSettings();
-					})
-			);
+							// eslint-disable-next-line no-mixed-spaces-and-tabs
+						)
+						.onChange(async (value) => {
+							this.plugin.settings.deleteAudioFilesAfterAudioTriggeredCannolis =
+								value;
+							await this.plugin.saveSettings();
+						})
+				);
+		}
+
+		containerEl.createEl("h1", { text: "Action nodes" });
 
 		new Setting(containerEl)
 			.setName("Action node templates")

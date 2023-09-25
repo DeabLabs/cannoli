@@ -140,7 +140,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		request?: ChatCompletionCreateParams;
 	}): void {
-		const format = this.run.chatFormatString;
+		const format = this.run.cannoli.settings.chatFormatString;
 		const messageString = "";
 		let messages: ChatCompletionMessage[] = [];
 
@@ -232,7 +232,7 @@ export class ChatResponseEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		request?: ChatCompletionCreateParams;
 	}): void {
-		const format = this.run.chatFormatString;
+		const format = this.run.cannoli.settings.chatFormatString;
 
 		if (!format) {
 			throw new Error(

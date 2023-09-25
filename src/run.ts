@@ -2,7 +2,7 @@ import { OpenAI } from "openai";
 import { Canvas } from "./canvas";
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
-import { App, requestUrl } from "obsidian";
+import { requestUrl } from "obsidian";
 import pLimit from "p-limit";
 import { CannoliObjectStatus } from "./models/graph";
 import { HttpTemplate } from "main";
@@ -79,16 +79,13 @@ export function isValidKey(
 export class Run {
 	graph: Record<string, CannoliObject> = {};
 	onFinish: (stoppage: Stoppage) => void;
-	app: App;
+	cannoli: Cannoli;
 
 	openai: OpenAI | null;
 	llmLimit: Limit;
 	canvas: Canvas | null;
 	isMock: boolean;
 	isStopped = false;
-	httpTemplates: HttpTemplate[] = [];
-	addFilenameAsHeader = false;
-	chatFormatString: string | null = null;
 	currentNote: string | null = null;
 
 	modelInfo: Record<string, Model> = {
@@ -119,25 +116,17 @@ export class Run {
 
 	usage: Record<string, Usage>;
 
-	cannoli: Cannoli;
-
 	constructor({
 		graph,
 		onFinish,
-		app,
 		isMock,
 		canvas,
 		openai,
 		openAiConfig,
 		llmLimit,
-		httpTemplates,
 		cannoli,
-		addFilenameAsHeader,
-		chatFormatString,
-		currentNote,
 	}: {
 		graph: Record<string, CannoliObject>;
-		app: App;
 		cannoli: Cannoli;
 
 		onFinish?: (stoppage: Stoppage) => void;
@@ -146,24 +135,18 @@ export class Run {
 		openai?: OpenAI;
 		openAiConfig?: OpenAIConfig;
 		llmLimit?: number;
-		httpTemplates?: HttpTemplate[];
-		addFilenameAsHeader?: boolean;
-		chatFormatString?: string;
-		currentNote?: string;
 	}) {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
 		this.isMock = isMock ?? false;
-		this.app = app;
+		this.cannoli = cannoli;
 		this.canvas = canvas ?? null;
 		this.openai = openai ?? null;
 		this.usage = {};
 		this.llmLimit = pLimit(llmLimit ?? 10);
-		this.httpTemplates = httpTemplates ?? [];
-		this.cannoli = cannoli;
-		this.addFilenameAsHeader = addFilenameAsHeader ?? false;
-		this.chatFormatString = chatFormatString ?? null;
-		this.currentNote = currentNote ?? null;
+		this.currentNote = `[[${
+			this.cannoli.app.workspace.getActiveFile()?.basename
+		}]]`;
 
 		// Set the default openai config
 		this.openaiConfig = openAiConfig ? openAiConfig : this.openaiConfig;
@@ -843,14 +826,14 @@ export class Run {
 		}
 
 		// If we don't have an httpTemplates array, we can't execute commands
-		if (!this.httpTemplates) {
+		if (!this.cannoli.settings.httpTemplates) {
 			return new Error(
 				"No HTTP templates available. You can add them in Cannoli Plugin settings."
 			);
 		}
 
 		// Find the template by name
-		const template = this.httpTemplates.find(
+		const template = this.cannoli.settings.httpTemplates.find(
 			(template) => template.name === name
 		);
 
@@ -1020,18 +1003,18 @@ export class Run {
 		}
 
 		if (append) {
-			await this.app.vault.process(file, (content) => {
+			await this.cannoli.app.vault.process(file, (content) => {
 				return content + newContent;
 			});
 			// If the active file is the file we just edited, update the editor
 			if (
-				this.app.workspace.activeEditor?.file?.basename ===
+				this.cannoli.app.workspace.activeEditor?.file?.basename ===
 				file.basename
 			) {
 				// If the content is a user template, wait a bit and then move the cursor to the end of the file
 				const userTemplate =
 					"\n\n" +
-					this.chatFormatString
+					this.cannoli.settings.chatFormatString
 						?.replace("{{role}}", "User")
 						.replace("{{content}}", "");
 
@@ -1040,19 +1023,24 @@ export class Run {
 				}
 
 				// Set the cursor to the end of the file
-				this.app.workspace.activeEditor?.editor?.setCursor(
-					this.app.workspace.activeEditor?.editor?.lineCount() || 0,
+				this.cannoli.app.workspace.activeEditor?.editor?.setCursor(
+					this.cannoli.app.workspace.activeEditor?.editor?.lineCount() ||
+						0,
 					0
 				);
 			}
 		} else {
-			await this.app.vault.modify(file, newContent);
+			await this.cannoli.app.vault.modify(file, newContent);
 		}
 
 		return;
 	}
 
-	async getNote(name: string): Promise<string | null> {
+	async getNote(
+		name: string,
+		includeProperties = false,
+		includeFilenameAsHeader = false
+	): Promise<string | null> {
 		// If we're mocking, return a mock response
 		if (this.isMock) {
 			return `# ${name}\nMock note content`;
@@ -1070,10 +1058,27 @@ export class Run {
 		}
 
 		// Read the file
-		let content = await this.app.vault.read(file);
+		let content = await this.cannoli.app.vault.read(file);
 
-		// If addFilenameAsHeader is true, add the filename as a header
-		if (this.addFilenameAsHeader) {
+		// If includeProperties is false, check for yaml frontmatter and remove it
+		if (
+			includeProperties ??
+			this.cannoli.settings.includePropertiesInExtractedNotes
+		) {
+			// Empty
+		} else {
+			const yamlFrontmatter = content.match(/^---\n[\s\S]*?\n---\n/)?.[0];
+
+			if (yamlFrontmatter) {
+				content = content.replace(yamlFrontmatter, "");
+			}
+		}
+
+		// If includeFilenameAsHeader is true, add the filename as a header
+		if (
+			includeFilenameAsHeader ??
+			this.cannoli.settings.includeFilenameAsHeader
+		) {
 			const header = `# ${file.basename}\n`;
 			content = header + content;
 		}
@@ -1106,7 +1111,7 @@ export class Run {
 		}
 
 		// Create the note
-		await this.app.vault.create(fullPath, content ?? "");
+		await this.cannoli.app.vault.create(fullPath, content ?? "");
 
 		if (verbose) {
 			console.log(`Note "${noteName}" created at path "${fullPath}"`);
@@ -1125,7 +1130,7 @@ export class Run {
 		const fullPath = `${path}/${noteName}.md`;
 
 		// Create the note
-		await this.app.vault.create(fullPath, content ?? "");
+		await this.cannoli.app.vault.create(fullPath, content ?? "");
 
 		if (verbose) {
 			console.log(`Note "${noteName}" created at path "${fullPath}"`);
@@ -1136,14 +1141,14 @@ export class Run {
 
 	async createFolder(path: string, verbose = false): Promise<boolean> {
 		// Check if the path already exists
-		const folder = this.app.vault.getAbstractFileByPath(path);
+		const folder = this.cannoli.app.vault.getAbstractFileByPath(path);
 
 		if (folder) {
 			return false;
 		}
 
 		// Create the folder
-		this.app.vault.createFolder(path);
+		this.cannoli.app.vault.createFolder(path);
 
 		if (verbose) {
 			console.log(`Folder created at path "${path}"`);
@@ -1174,7 +1179,7 @@ export class Run {
 		}
 
 		// Move the note
-		await this.app.vault.rename(note, newFullPath);
+		await this.cannoli.app.vault.rename(note, newFullPath);
 
 		if (verbose) {
 			console.log(

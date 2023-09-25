@@ -1227,9 +1227,9 @@ export class ContentNode extends CannoliNode {
 
 		if (content !== null && content !== undefined && content !== "") {
 			this.text = content;
+		} else {
+			content = await this.processReferences();
 		}
-
-		content = this.text;
 
 		// Load all outgoing edges
 		this.loadOutgoingEdges(content);
