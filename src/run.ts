@@ -4,7 +4,7 @@ import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import { requestUrl } from "obsidian";
 import pLimit from "p-limit";
-import { CannoliObjectStatus } from "./models/graph";
+import { CannoliObjectStatus, Reference } from "./models/graph";
 import { HttpTemplate } from "main";
 import Cannoli from "main";
 import {
@@ -982,7 +982,7 @@ export class Run {
 	}
 
 	async editNote(
-		name: string,
+		reference: Reference,
 		newContent: string,
 		append?: boolean
 	): Promise<void | null> {
@@ -992,7 +992,7 @@ export class Run {
 		}
 
 		// Get the file
-		const filename = name.replace("[[", "").replace("]]", "");
+		const filename = reference.name.replace("[[", "").replace("]]", "");
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			filename,
 			""
@@ -1030,24 +1030,35 @@ export class Run {
 				);
 			}
 		} else {
-			await this.cannoli.app.vault.modify(file, newContent);
+			if (reference.includeProperties) {
+				await this.cannoli.app.vault.modify(file, newContent);
+			} else {
+				await this.cannoli.app.vault.process(file, (content) => {
+					// If includeProperties is false, the edit shouldn't change the yaml frontmatter
+					const yamlFrontmatter = content.match(
+						/^---\n[\s\S]*?\n---\n/
+					)?.[0];
+
+					if (yamlFrontmatter) {
+						return yamlFrontmatter + newContent;
+					} else {
+						return newContent;
+					}
+				});
+			}
 		}
 
 		return;
 	}
 
-	async getNote(
-		name: string,
-		includeProperties = false,
-		includeFilenameAsHeader = false
-	): Promise<string | null> {
+	async getNote(reference: Reference): Promise<string | null> {
 		// If we're mocking, return a mock response
 		if (this.isMock) {
-			return `# ${name}\nMock note content`;
+			return `# ${reference.name}\nMock note content`;
 		}
 
 		// Get the file
-		const filename = name.replace("[[", "").replace("]]", "");
+		const filename = reference.name.replace("[[", "").replace("]]", "");
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			filename,
 			""
@@ -1062,7 +1073,7 @@ export class Run {
 
 		// If includeProperties is false, check for yaml frontmatter and remove it
 		if (
-			includeProperties ??
+			reference.includeProperties ??
 			this.cannoli.settings.includePropertiesInExtractedNotes
 		) {
 			// Empty
@@ -1076,7 +1087,7 @@ export class Run {
 
 		// If includeFilenameAsHeader is true, add the filename as a header
 		if (
-			includeFilenameAsHeader ??
+			reference.includeName ??
 			this.cannoli.settings.includeFilenameAsHeader
 		) {
 			const header = `# ${file.basename}\n`;

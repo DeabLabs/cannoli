@@ -65,8 +65,8 @@ export class CannoliNode extends CannoliVertex {
 		return renderFunction;
 	}
 
-	async getContentFromNote(name: string): Promise<string | null> {
-		const note = await this.run.getNote(name);
+	async getContentFromNote(reference: Reference): Promise<string | null> {
+		const note = await this.run.getNote(reference);
 
 		if (!note) {
 			return null;
@@ -131,9 +131,13 @@ export class CannoliNode extends CannoliVertex {
 						(variable) => variable.name === reference.name
 					);
 					if (variable && variable.content) {
-						const noteContent = await this.getContentFromNote(
-							variable.content
-						);
+						const ref = {
+							name: variable.content,
+							type: ReferenceType.Variable,
+							shouldExtract: true,
+						};
+
+						const noteContent = await this.getContentFromNote(ref);
 						if (noteContent) {
 							content = noteContent;
 						} else {
@@ -149,7 +153,7 @@ export class CannoliNode extends CannoliVertex {
 				} else if (reference.type === ReferenceType.Note) {
 					if (reference.shouldExtract) {
 						const noteContent = await this.getContentFromNote(
-							reference.name
+							reference
 						);
 						if (noteContent) {
 							content = noteContent;
@@ -394,6 +398,47 @@ export class CannoliNode extends CannoliVertex {
 		}
 
 		return null;
+
+		// const noteOrFloatingPattern = /^{{(\[\[|\[)?([^\]]+)\]\]}([#$]?)$/;
+		// const currentNotePattern = /^{{NOTE}}$/;
+		// const strippedText = this.text.trim();
+
+		// const match = strippedText.match(noteOrFloatingPattern);
+
+		// if (match) {
+		// 	const ref: Reference = {
+		// 		name: match[2],
+		// 		shouldExtract: false,
+		// 		type:
+		// 			match[1] === "[["
+		// 				? ReferenceType.Note
+		// 				: ReferenceType.Floating,
+		// 	};
+
+		// 	switch (match[3]) {
+		// 		case "#":
+		// 			ref.includeName = true;
+		// 			break;
+		// 		case "$":
+		// 			ref.includeProperties = true;
+		// 			break;
+		// 		default:
+		// 			break;
+		// 	}
+
+		// 	return ref;
+		// } else if (
+		// 	strippedText.match(currentNotePattern) &&
+		// 	this.run.currentNote
+		// ) {
+		// 	return {
+		// 		name: this.run.currentNote,
+		// 		type: ReferenceType.Note,
+		// 		shouldExtract: false,
+		// 	};
+		// }
+
+		// return null;
 	}
 
 	logDetails(): string {
@@ -1388,9 +1433,7 @@ export class ReferenceNode extends ContentNode {
 			const reference = this.getNoteOrFloatingReference();
 
 			if (reference === null) {
-				throw new Error(
-					`Error on reference node ${this.id}: could not find reference.`
-				);
+				this.error(`Could not find reference.`);
 			} else {
 				this.reference = reference;
 			}
@@ -1469,9 +1512,7 @@ export class ReferenceNode extends ContentNode {
 	async getContent(): Promise<string> {
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
-				const content = await this.getContentFromNote(
-					this.reference.name
-				);
+				const content = await this.getContentFromNote(this.reference);
 				if (content) {
 					return content;
 				} else {
@@ -1613,7 +1654,7 @@ export class ReferenceNode extends ContentNode {
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
 				const edit = await this.run.editNote(
-					this.reference.name,
+					this.reference,
 					newContent,
 					append
 				);

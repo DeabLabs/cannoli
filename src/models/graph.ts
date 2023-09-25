@@ -102,6 +102,8 @@ export interface Reference {
 	name: string;
 	type: ReferenceType;
 	shouldExtract: boolean;
+	includeName?: boolean;
+	includeProperties?: boolean;
 }
 
 export enum VaultModifier {
