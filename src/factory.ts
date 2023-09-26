@@ -37,6 +37,7 @@ export enum IndicatedNodeType {
 
 export class CannoliFactory {
 	cannoliData: CannoliCanvasData;
+	activeNote: string;
 
 	vaultModifierMap: Record<string, VaultModifier> = {
 		"[": VaultModifier.Note,
@@ -101,8 +102,9 @@ export class CannoliFactory {
 		"5": GroupType.SignifiedForEach,
 	};
 
-	constructor(canvas: CanvasData) {
+	constructor(canvas: CanvasData, activeNote: string) {
 		this.cannoliData = canvas;
+		this.activeNote = activeNote;
 	}
 
 	getCannoliData(): VerifiedCannoliCanvasData {
@@ -1577,7 +1579,13 @@ export class CannoliFactory {
 			};
 
 			let innerMatch: RegExpExecArray | null;
-			if ((innerMatch = /^\[\[(.*?)\]\]([\W]*)$/.exec(content))) {
+			if ((innerMatch = /^NOTE([\W]*)$/.exec(content))) {
+				// Special "NOTE" reference
+				reference.type = ReferenceType.Note;
+				reference.shouldExtract = false;
+				reference.name = this.activeNote;
+				this.handleModifiers(reference, innerMatch[1]);
+			} else if ((innerMatch = /^\[\[(.*?)\]\]([\W]*)$/.exec(content))) {
 				// Note reference
 				reference.type = ReferenceType.Note;
 				reference.shouldExtract = true;
@@ -1594,11 +1602,6 @@ export class CannoliFactory {
 				reference.shouldExtract = true;
 				reference.name = innerMatch[1];
 				this.handleModifiers(reference, innerMatch[2]);
-			} else if ((innerMatch = /^NOTE([\W]*)$/.exec(content))) {
-				// Special "NOTE" reference
-				reference.type = ReferenceType.Note;
-				reference.shouldExtract = false;
-				this.handleModifiers(reference, innerMatch[1]);
 			} else {
 				// Standard variable
 				reference.name = content;

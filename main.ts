@@ -412,7 +412,11 @@ export default class Cannoli extends Plugin {
 		const canvas = new Canvas(file);
 		await canvas.fetchData();
 
-		const factory = new CannoliFactory(canvas.getCanvasData());
+		const factory = new CannoliFactory(
+			canvas.getCanvasData(),
+			`[[${this.app.workspace.getActiveFile()?.basename}]]` ??
+				"No active note"
+		);
 
 		const graph = factory.getCannoliData();
 		// console.log(JSON.stringify(graph, null, 2));
