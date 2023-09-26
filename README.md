@@ -24,14 +24,14 @@ Cannolis can be run in several ways:
 
 ![Icon](/assets/icon.png)
 
--   Click the Cannoli ribbon icon - If you're on a canvas file, it will be run as a cannoli
+- Click the Cannoli ribbon icon
+    - If you're on a canvas file, it will be run as a cannoli
+	- If you're on a note with a "cannoli" property, the canvas file in that property will be run as a cannoli
 
-    -   If you're on a note with a "cannoli" property, the canvas file in that property will be run as a cannoli
-
--   Run the "Start/Stop cannoli" command in the command palette (functions the same as the ribbon icon)
--   If a canvas file name ends with ".cno", it will have its own run command in the command palette
--   Make an audio recording on a note with a "cannoli" property
-    -   That recording will be (1) transcribed, (2) replace the reference, and (3) trigger the cannoli defined in the property.
+- Run the "Start/Stop cannoli" command in the command palette (functions the same as the ribbon icon)
+- If a canvas file name ends with ".cno", it will have its own run command in the command palette
+- Make an audio recording on a note with a "cannoli" property
+ 	- That recording will be (1) transcribed, (2) replace the reference, and (3) trigger the cannoli defined in the property.
 
 ## Network Use
 
