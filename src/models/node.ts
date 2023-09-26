@@ -58,7 +58,7 @@ export class CannoliNode extends CannoliVertex {
 				// Retrieve the reference by index
 				const reference = this.references[Number(index)];
 				// Retrieve the content from the varMap using the reference's name
-				return varMap.get(reference.name) || "{{invalid reference}}";
+				return varMap.get(reference.name) || "{{invalid}}";
 			});
 		};
 
@@ -131,13 +131,19 @@ export class CannoliNode extends CannoliVertex {
 						(variable) => variable.name === reference.name
 					);
 					if (variable && variable.content) {
-						const ref = {
-							name: variable.content,
-							type: ReferenceType.Variable,
-							shouldExtract: true,
-						};
+						// Save original variable name
+						const originalName = reference.name;
 
-						const noteContent = await this.getContentFromNote(ref);
+						// Set reference name to the content of the variable
+						reference.name = variable.content;
+
+						// Get the content from the note
+						const noteContent = await this.getContentFromNote(
+							reference
+						);
+
+						// Restore original variable name
+						reference.name = originalName;
 						if (noteContent) {
 							content = noteContent;
 						} else {
@@ -364,81 +370,73 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	getNoteOrFloatingReference(): Reference | null {
-		const notePattern = /^{{\[\[([^\]]+)\]\]}}$/;
+		const notePattern = /^{{\[\[([^\]]+)\]\]([\W]*)}}$/;
 		const floatingPattern = /^{{\[([^\]]+)\]}}$/;
-		const currentNotePattern = /^{{NOTE}}$/;
+		const currentNotePattern = /^{{NOTE([\W]*)}}$/;
 
 		const strippedText = this.text.trim();
 
-		let match = strippedText.match(notePattern);
+		let match = notePattern.exec(strippedText);
 		if (match) {
-			return {
+			const reference: Reference = {
 				name: match[1],
 				type: ReferenceType.Note,
 				shouldExtract: false,
 			};
+
+			const modifiers = match[2];
+			if (modifiers) {
+				if (modifiers.includes("!#")) {
+					reference.includeName = false;
+				} else if (modifiers.includes("#")) {
+					reference.includeName = true;
+				}
+
+				if (modifiers.includes("!$")) {
+					reference.includeProperties = false;
+				} else if (modifiers.includes("$")) {
+					reference.includeProperties = true;
+				}
+			}
+			return reference;
 		}
 
-		match = strippedText.match(floatingPattern);
+		match = floatingPattern.exec(strippedText);
 		if (match) {
-			return {
+			const reference = {
 				name: match[1],
 				type: ReferenceType.Floating,
 				shouldExtract: false,
 			};
+			return reference;
 		}
 
-		match = strippedText.match(currentNotePattern);
+		match = currentNotePattern.exec(strippedText);
 		if (match && this.run.currentNote) {
-			return {
+			const reference: Reference = {
 				name: this.run.currentNote,
 				type: ReferenceType.Note,
 				shouldExtract: false,
 			};
+
+			const modifiers = match[1];
+			if (modifiers) {
+				if (modifiers.includes("!#")) {
+					reference.includeName = false;
+				} else if (modifiers.includes("#")) {
+					reference.includeName = true;
+				}
+
+				if (modifiers.includes("!$")) {
+					reference.includeProperties = false;
+				} else if (modifiers.includes("$")) {
+					reference.includeProperties = true;
+				}
+			}
+			return reference;
 		}
 
 		return null;
-
-		// const noteOrFloatingPattern = /^{{(\[\[|\[)?([^\]]+)\]\]}([#$]?)$/;
-		// const currentNotePattern = /^{{NOTE}}$/;
-		// const strippedText = this.text.trim();
-
-		// const match = strippedText.match(noteOrFloatingPattern);
-
-		// if (match) {
-		// 	const ref: Reference = {
-		// 		name: match[2],
-		// 		shouldExtract: false,
-		// 		type:
-		// 			match[1] === "[["
-		// 				? ReferenceType.Note
-		// 				: ReferenceType.Floating,
-		// 	};
-
-		// 	switch (match[3]) {
-		// 		case "#":
-		// 			ref.includeName = true;
-		// 			break;
-		// 		case "$":
-		// 			ref.includeProperties = true;
-		// 			break;
-		// 		default:
-		// 			break;
-		// 	}
-
-		// 	return ref;
-		// } else if (
-		// 	strippedText.match(currentNotePattern) &&
-		// 	this.run.currentNote
-		// ) {
-		// 	return {
-		// 		name: this.run.currentNote,
-		// 		type: ReferenceType.Note,
-		// 		shouldExtract: false,
-		// 	};
-		// }
-
-		// return null;
 	}
 
 	logDetails(): string {
@@ -1420,6 +1418,12 @@ export class ReferenceNode extends ContentNode {
 	) {
 		super(nodeData);
 
+		if (this.references.length !== 1) {
+			this.error(`Could not find reference.`);
+		} else {
+			this.reference = this.references[0];
+		}
+
 		// If the text matches "{{@variable name}}" then it is dynamic
 		this.isDynamic = this.text.match(/{{@.*}}/) !== null;
 	}
@@ -1429,14 +1433,6 @@ export class ReferenceNode extends ContentNode {
 
 		if (this.isDynamic) {
 			await this.loadDynamicReference();
-		} else {
-			const reference = this.getNoteOrFloatingReference();
-
-			if (reference === null) {
-				this.error(`Could not find reference.`);
-			} else {
-				this.reference = reference;
-			}
 		}
 
 		let content = "";
@@ -1641,11 +1637,9 @@ export class ReferenceNode extends ContentNode {
 
 			// If noteName isn't empty, create a Reference object with the note
 			if (noteName.name) {
-				this.reference = {
-					name: noteName.name,
-					type: ReferenceType.Note,
-					shouldExtract: false,
-				};
+				this.reference.name = noteName.name;
+				this.reference.type = ReferenceType.Note;
+				this.reference.shouldExtract = false;
 			}
 		}
 	}

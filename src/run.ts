@@ -635,8 +635,6 @@ export class Run {
 	) {
 		const args: { [key: string]: string }[] = [];
 
-		console.log(JSON.stringify(noteFunction, null, 2));
-
 		const parsedProperties = JSON.parse(
 			JSON.stringify(noteFunction?.parameters["properties"])
 		);
@@ -915,10 +913,6 @@ export class Run {
 		template: HttpTemplate,
 		body: string | Record<string, string> | null
 	): Promise<string> {
-		console.log(
-			`Executing HTTP template: ${JSON.stringify(template, null, 2)}`
-		);
-
 		return new Promise((resolve, reject) => {
 			// Prepare body
 			let requestBody: string;

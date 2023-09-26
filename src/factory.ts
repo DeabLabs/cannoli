@@ -1561,53 +1561,67 @@ export class CannoliFactory {
 	}
 
 	parseNodeReferences(node: CannoliCanvasTextData): Reference[] {
-		const regex =
-			/\{\{\[\[(.+?)\]\]\}\}|\{\{\[(.+?)\]\}\}|\{\{@(.+?)\}\}|{{(.+?)}}/g;
+		// Unified regex to capture any type of reference within double curly braces
+		const unifiedPattern = /{{(.*?)}}/g;
 
-		let match: RegExpExecArray | null;
 		const references: Reference[] = [];
-		let textCopy = node.text;
+		const textCopy = node.text;
+		let match: RegExpExecArray | null;
 
-		const replacements: string[] = [];
-		while ((match = regex.exec(textCopy)) !== null) {
-			let name = "";
-			let type: ReferenceType = ReferenceType.Variable;
-			let shouldExtract = false;
-
-			if (match[1]) {
-				type = ReferenceType.Note;
-				name = match[1];
-				shouldExtract = true;
-			} else if (match[2]) {
-				type = ReferenceType.Floating;
-				name = match[2];
-				shouldExtract = true;
-			} else if (match[3]) {
-				// Updated condition
-				name = match[3];
-				shouldExtract = true; // Extraction based on new pattern
-			} else if (match[4]) {
-				name = match[4];
-			}
-
+		while ((match = unifiedPattern.exec(textCopy)) !== null) {
+			const content = match[1];
 			const reference: Reference = {
-				name,
-				type,
-				shouldExtract,
+				name: "",
+				type: ReferenceType.Variable, // default type
+				shouldExtract: false,
 			};
 
-			references.push(reference);
-			replacements.push(`{{${references.length - 1}}}`);
-		}
+			let innerMatch: RegExpExecArray | null;
+			if ((innerMatch = /^\[\[(.*?)\]\]([\W]*)$/.exec(content))) {
+				// Note reference
+				reference.type = ReferenceType.Note;
+				reference.shouldExtract = true;
+				reference.name = innerMatch[1];
+				this.handleModifiers(reference, innerMatch[2]);
+			} else if ((innerMatch = /^\[(.*?)\]$/.exec(content))) {
+				// Floating reference
+				reference.type = ReferenceType.Floating;
+				reference.shouldExtract = true;
+				reference.name = innerMatch[1];
+			} else if ((innerMatch = /^@(.*?)([\W]*)$/.exec(content))) {
+				// Dynamic reference
+				reference.type = ReferenceType.Variable;
+				reference.shouldExtract = true;
+				reference.name = innerMatch[1];
+				this.handleModifiers(reference, innerMatch[2]);
+			} else if ((innerMatch = /^NOTE([\W]*)$/.exec(content))) {
+				// Special "NOTE" reference
+				reference.type = ReferenceType.Note;
+				reference.shouldExtract = false;
+				this.handleModifiers(reference, innerMatch[1]);
+			} else {
+				// Standard variable
+				reference.name = content;
+			}
 
-		for (let i = 0; i < replacements.length; i++) {
-			textCopy = textCopy.replace(
-				`{{${references[i].name}}}`,
-				replacements[i]
-			);
+			references.push(reference);
 		}
 
 		return references;
+	}
+
+	handleModifiers(reference: Reference, modifiers: string) {
+		if (modifiers.includes("!#")) {
+			reference.includeName = false;
+		} else if (modifiers.includes("#")) {
+			reference.includeName = true;
+		}
+
+		if (modifiers.includes("!^")) {
+			reference.includeProperties = false;
+		} else if (modifiers.includes("^")) {
+			reference.includeProperties = true;
+		}
 	}
 
 	getIncomingEdges(id: string): CannoliCanvasEdgeData[] {
