@@ -20,11 +20,13 @@ You can access a walkthrough folder of sample cannolis in the plugin settings (f
 
 Cannolis can be run in several ways:
 
--   Click the Cannoli ribbon icon to run the current Canvas file as a cannoli
+- Click the Cannoli ribbon icon
+  	- If you're on a canvas file, it will be run as a cannoli
+ 	- If you're on a note with a "cannoli" property, the canvas file in that property will be run as a cannoli
 
 ![Icon](/assets/icon.png)
 
--   Run the "Start/Stop this Cannoli" command in the command palette to run the current Canvas file as a cannoli
+-   Run the "Start/Stop cannoli" command in the command palette (functions the same as the ribbon icon)
 -   If a canvas file name ends with ".cno", it will have its own run command in the command palette
 
 ## Network Use
