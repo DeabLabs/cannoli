@@ -31,7 +31,7 @@ Cannolis can be run in several ways:
 - Run the "Start/Stop cannoli" command in the command palette (functions the same as the ribbon icon)
 - If a canvas file name ends with ".cno", it will have its own run command in the command palette
 - Make an audio recording on a note with a "cannoli" property
- 	- That recording will be (1) transcribed, (2) replace the reference, and (3) trigger the cannoli defined in the property.
+ 	- That recording will be (1) transcribed using Whisper, (2) replace the reference, and (3) trigger the cannoli defined in the property.
 
 ## Network Use
 
