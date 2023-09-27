@@ -2,21 +2,25 @@
 	"nodes":[
 		{"type":"group","id":"ac03334c4c9efbbf","x":-300,"y":320,"width":871,"height":540,"label":"Other details"},
 		{"type":"group","id":"bb74df853c72868d","x":-240,"y":-80,"width":600,"height":328,"label":"Key arrows"},
+		{"id":"e99e3653182dfbf5","type":"group","x":-313,"y":940,"width":449,"height":279,"label":"Properties from reference nodes"},
 		{"type":"text","text":"What's a good fruit to eat for each meal?","id":"bf2f302f415a57a7","x":-97,"y":-60,"width":250,"height":60},
 		{"type":"text","text":"","id":"8eee16509fba3a49","x":-214,"y":168,"width":140,"height":60,"color":"6"},
 		{"type":"text","text":"When a call node has field arrows leaving it, that call will include a function that gives the LLM fields to fill out for each field name you provide.","id":"c812856c4f5cfe60","x":-560,"y":-80,"width":309,"height":158},
 		{"type":"text","text":"Choosing field arrow names is its own kind of prompting. Experiment with different ways of naming the arrows to get better results.","id":"bf823c055e81ed66","x":-560,"y":97,"width":309,"height":143},
 		{"type":"text","text":"Purple arrows are field arrows. Field arrows are a special kind of variable arrow that allow you to name a field for the LLM to fill. \n\nThey use openai's function calling feature to get structured responses based on the arrow labels.","id":"972a9b4042c99aff","x":-160,"y":-320,"width":444,"height":186},
 		{"type":"text","text":"Rank the top 2 most famous historical battles","id":"912a11d4e1afa3c1","x":-74,"y":340,"width":250,"height":60},
-		{"type":"text","text":"","id":"7fcb2dd5de840465","x":-280,"y":600,"width":332,"height":241,"color":"6"},
-		{"type":"text","text":"What makes the {{battle 1}} famous?","id":"b9016ed068d8f3df","x":-214,"y":496,"width":254,"height":60},
 		{"type":"text","text":"","id":"fc3f0539962083c5","x":-33,"y":168,"width":122,"height":60,"color":"6"},
 		{"type":"text","text":"","id":"303f2609904e9a78","x":153,"y":168,"width":180,"height":60,"color":"6"},
+		{"type":"text","text":"","id":"7fcb2dd5de840465","x":-280,"y":600,"width":332,"height":241,"color":"6"},
+		{"type":"text","text":"What makes the {{battle 1}} famous?","id":"b9016ed068d8f3df","x":-214,"y":496,"width":254,"height":60},
 		{"type":"text","text":"","id":"b58f716ac95e1bd3","x":81,"y":600,"width":339,"height":241,"color":"6"},
 		{"type":"text","text":"What makes the {{battle 2}} famous?","id":"355f89d3338915a0","x":89,"y":496,"width":271,"height":60},
 		{"type":"text","text":"{\n  \"battle 1\": \"Battle of Waterloo\",\n  \"battle 2\": \"Battle of Stalingrad\"\n}","id":"602c0eb10399429c","x":251,"y":340,"width":301,"height":120,"color":"6"},
 		{"type":"text","text":"Non-field arrows will just carry the response as a JSON string.","id":"05a12136e3510af7","x":580,"y":340,"width":250,"height":98},
-		{"type":"text","text":"Similarly to variable arrows, by default field arrows don't pass chat history. Override this with a \"|\" symbol at the end.","id":"e385c431c950a822","x":-600,"y":435,"width":277,"height":121}
+		{"type":"text","text":"Similarly to variable arrows, by default field arrows don't pass chat history. Override this with a \"|\" symbol at the end.","id":"e385c431c950a822","x":-600,"y":435,"width":277,"height":121},
+		{"id":"bb1f18b6cea22a07","type":"text","text":"{{[[Meeting Notes]]}}","x":-223,"y":959,"width":250,"height":60,"color":"6"},
+		{"id":"beecc62882441344","type":"text","text":"","x":-223,"y":1118,"width":250,"height":60,"color":"6"},
+		{"id":"ef3a50a24085d5a7","type":"text","text":"Field arrows can also be used to get property values from reference nodes ([[4. Reference nodes.canvas|4. Reference nodes]]).","x":-624,"y":961,"width":288,"height":157}
 	],
 	"edges":[
 		{"id":"f243e7ecc26dddf0","fromNode":"bf2f302f415a57a7","fromSide":"bottom","toNode":"8eee16509fba3a49","toSide":"top","color":"6","label":"breakfast"},
@@ -26,6 +30,7 @@
 		{"id":"de82f8c9cc47e515","fromNode":"912a11d4e1afa3c1","fromSide":"bottom","toNode":"355f89d3338915a0","toSide":"top","color":"6","label":"battle 2|"},
 		{"id":"1a9662bf2fcaaeca","fromNode":"b9016ed068d8f3df","fromSide":"bottom","toNode":"7fcb2dd5de840465","toSide":"top","color":"2"},
 		{"id":"7f6b2d929334d325","fromNode":"355f89d3338915a0","fromSide":"bottom","toNode":"b58f716ac95e1bd3","toSide":"top","color":"2"},
-		{"id":"0d6c132ba45af90d","fromNode":"912a11d4e1afa3c1","fromSide":"right","toNode":"602c0eb10399429c","toSide":"left"}
+		{"id":"0d6c132ba45af90d","fromNode":"912a11d4e1afa3c1","fromSide":"right","toNode":"602c0eb10399429c","toSide":"left"},
+		{"id":"5a1727dab80dc2af","fromNode":"bb1f18b6cea22a07","fromSide":"bottom","toNode":"beecc62882441344","toSide":"top","color":"6","label":"Date"}
 	]
 }

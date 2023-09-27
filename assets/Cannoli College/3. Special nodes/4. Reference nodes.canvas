@@ -1,18 +1,23 @@
 {
 	"nodes":[
 		{"type":"group","id":"546578b6fae29490","x":-420,"y":-160,"width":580,"height":640,"label":"Reference nodes"},
-		{"type":"text","text":"Write a poem about walking","id":"fba8c017a84a0a74","x":-380,"y":-124,"width":250,"height":60},
-		{"type":"text","text":"{{[[Walking Poem]]}}","id":"e8e998b3d784e3a1","x":-380,"y":6,"width":250,"height":60,"color":"6"},
-		{"type":"text","text":"Reference nodes can be used to write to and read from notes in your vault or floating nodes on the cannoli.","id":"28c071d10dfda17f","x":-333,"y":-340,"width":379,"height":122},
-		{"type":"text","text":"[Current state]\nNot much going on","id":"e08885cd2f146f7d","x":-113,"y":203,"width":250,"height":92},
+		{"id":"8fd4e3f6e22304ba","type":"group","x":-420,"y":560,"width":290,"height":259,"label":"Getting properties"},
 		{"type":"text","text":"{{[Current state]}}","id":"079588e3f7e0afa0","x":-393,"y":203,"width":250,"height":60,"color":"6"},
 		{"type":"text","text":"Does this change our plan at all:\n{{a}}","id":"e9768515f6295d9b","x":-393,"y":333,"width":250,"height":100},
 		{"type":"text","text":"Reference nodes can reference floating nodes or notes from your vault.","id":"a8346a9d96a737bb","x":-692,"y":238,"width":262,"height":114},
 		{"type":"text","text":"Reference nodes are content nodes surrounded by double curly braces.","id":"a9ea85b101bc8776","x":-686,"y":-149,"width":250,"height":111},
-		{"type":"text","text":"You can write or read from them the same way you use normal content nodes.","id":"be5c114d263a0107","x":-686,"y":66,"width":250,"height":97}
+		{"type":"text","text":"You can write or read from them the same way you use normal content nodes.","id":"be5c114d263a0107","x":-686,"y":66,"width":250,"height":97},
+		{"type":"text","text":"Write a poem about walking","id":"fba8c017a84a0a74","x":-380,"y":-124,"width":250,"height":60},
+		{"type":"text","text":"{{[[Walking Poem]]}}","id":"e8e998b3d784e3a1","x":-380,"y":6,"width":250,"height":60,"color":"6"},
+		{"type":"text","text":"Reference nodes can be used to write to and read from notes in your vault or floating nodes on the cannoli.","id":"28c071d10dfda17f","x":-333,"y":-340,"width":379,"height":122},
+		{"type":"text","text":"[Current state]\nNot much going on","id":"e08885cd2f146f7d","x":-113,"y":203,"width":250,"height":92},
+		{"id":"963eacfd11f92b34","type":"text","text":"{{[[Meeting Notes]]}}","x":-400,"y":580,"width":250,"height":60,"color":"6"},
+		{"id":"ef10f47160ceb92a","type":"text","text":"","x":-400,"y":739,"width":250,"height":60,"color":"6"},
+		{"id":"f85bdd621bacd536","type":"text","text":"You can use purple field arrows to retrieve the associated property of the same name from a note.","x":-763,"y":580,"width":318,"height":111}
 	],
 	"edges":[
 		{"id":"bc3f3aa5abc3914d","fromNode":"fba8c017a84a0a74","fromSide":"bottom","toNode":"e8e998b3d784e3a1","toSide":"top"},
-		{"id":"c98efd6bf2dff5d4","fromNode":"079588e3f7e0afa0","fromSide":"bottom","toNode":"e9768515f6295d9b","toSide":"top","label":"a"}
+		{"id":"c98efd6bf2dff5d4","fromNode":"079588e3f7e0afa0","fromSide":"bottom","toNode":"e9768515f6295d9b","toSide":"top","label":"a"},
+		{"id":"20b93bd61e36c19f","fromNode":"963eacfd11f92b34","fromSide":"bottom","toNode":"ef10f47160ceb92a","toSide":"top","color":"6","label":"Date"}
 	]
 }

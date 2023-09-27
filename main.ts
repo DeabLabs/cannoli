@@ -967,7 +967,7 @@ class CannoliSettingTab extends PluginSettingTab {
 				"Include filenames as headers in extracted notes by default"
 			)
 			.setDesc(
-				`"When extracting a note in a cannoli, include the filename as a top-level header. This default an be overridden by adding "#" or "!#" after the note link in a reference like this: {{[[Stuff]]#}} or {{[[Stuff]]!#}}.`
+				`"When extracting a note in a cannoli, include the filename as a top-level header. This default can be overridden by adding "#" or "!#" after the note link in a reference like this: {{[[Stuff]]#}} or {{[[Stuff]]!#}}.`
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -982,9 +982,11 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Toggle including properties (YAML frontmatter) when extracting text from files
 		new Setting(containerEl)
-			.setName("Include properties in extracted notes by default")
+			.setName(
+				"Include properties when extracting or editing notes by default"
+			)
 			.setDesc(
-				`When extracting a note in a node, include the properties (YAML frontmatter). This default can be overridden by adding "^" or "!^" after the note link in a reference like this: {{[[Stuff]]^}} or {{[[Stuff]]!^}}.`
+				`When extracting or editing a note in a cannoli, include the note's properties (YAML frontmatter). This default can be overridden by adding "^" or "!^" after the note link in a reference like this: {{[[Stuff]]^}} or {{[[Stuff]]!^}}.`
 			)
 			.addToggle((toggle) =>
 				toggle

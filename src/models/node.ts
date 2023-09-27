@@ -1392,7 +1392,6 @@ export class ContentNode extends CannoliNode {
 			this.getOutgoingEdges().some(
 				(edge) =>
 					edge.type === EdgeType.List ||
-					edge.type === EdgeType.Key ||
 					edge.type === EdgeType.Category ||
 					edge.type === EdgeType.Function ||
 					edge.type === EdgeType.Choice ||
@@ -1500,7 +1499,7 @@ export class ReferenceNode extends ContentNode {
 		const fetchedContent = await this.getContent();
 
 		// Load all outgoing edges
-		this.loadOutgoingEdges(fetchedContent);
+		await this.loadOutgoingEdges(fetchedContent);
 
 		this.completed();
 	}
@@ -1676,6 +1675,41 @@ export class ReferenceNode extends ContentNode {
 				this.error(
 					`Invalid reference. Could not find floating node ${this.reference.name}`
 				);
+			}
+		}
+	}
+
+	async loadOutgoingEdges(
+		content: string,
+		request?: ChatCompletionCreateParams | undefined
+	) {
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge];
+			if (!(edgeObject instanceof CannoliEdge)) {
+				continue;
+			}
+
+			if (edgeObject.type === EdgeType.Key) {
+				// Get value of the property with the same name as the edge
+				const value = await this.run.getPropertyOfNote(
+					this.reference.name,
+					edgeObject.text
+				);
+
+				if (value) {
+					edgeObject.load({
+						content: value ?? "",
+						request: request,
+					});
+				}
+			} else if (
+				edgeObject instanceof CannoliEdge &&
+				!(edgeObject instanceof ChatResponseEdge)
+			) {
+				edgeObject.load({
+					content: content,
+					request: request,
+				});
 			}
 		}
 	}

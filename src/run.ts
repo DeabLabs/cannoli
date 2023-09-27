@@ -1091,6 +1091,58 @@ export class Run {
 		return content;
 	}
 
+	async getPropertyOfNote(
+		noteName: string,
+		propertyName: string
+	): Promise<string | null> {
+		// Mock response
+		if (this.isMock) {
+			return "Mock property";
+		}
+
+		// Get the file
+		const filename = noteName.replace("[[", "").replace("]]", "");
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			filename,
+			""
+		);
+
+		if (!file) {
+			return null;
+		}
+
+		try {
+			// Read the file to get the frontmatter
+			let frontmatter: Record<string, unknown> = {};
+			await this.cannoli.app.fileManager.processFrontMatter(
+				file,
+				(content) => {
+					frontmatter = content;
+					return content;
+				}
+			);
+
+			// If frontmatter is null or undefined, return null
+			if (!frontmatter) {
+				return null;
+			}
+
+			const property = frontmatter[propertyName];
+
+			if (typeof property !== "string") {
+				return JSON.stringify(frontmatter[propertyName], null, 2);
+			} else {
+				return property;
+			}
+		} catch (error) {
+			console.error(
+				"An error occurred while fetching frontmatter:",
+				error
+			);
+			return null;
+		}
+	}
+
 	async createNoteAtExistingPath(
 		noteName: string,
 		path?: string,
