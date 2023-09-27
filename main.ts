@@ -275,9 +275,9 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Max number of polling attempts
-		const maxAttempts = 10;
+		const maxAttempts = 50;
 		// Time delay between polling attempts in milliseconds
-		const delay = 500;
+		const delay = 100;
 		let attempts = 0;
 
 		// Function to check if the reference exists in the content
@@ -362,8 +362,8 @@ export default class Cannoli extends Plugin {
 		const options: RequestUrlParam = {
 			url: "https://api.openai.com/v1/audio/transcriptions",
 			method: "POST",
-			contentType: `multipart/form-data; boundary=----${randomBoundryString}`,
 			headers: {
+				"Content-Type": `multipart/form-data; boundary=----${randomBoundryString}`,
 				Authorization: "Bearer " + this.settings.openaiAPIKey,
 			},
 			body: concatenated,
