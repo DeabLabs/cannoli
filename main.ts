@@ -341,7 +341,7 @@ export default class Cannoli extends Plugin {
 				)
 				.slice(0, N);
 
-		const pre_string = `------${randomBoundryString}\r\nContent-Disposition: form-data; name="file"; filename="audio.webm"\r\nContent-Type: "application/octet-stream"\r\n\r\n`;
+		const pre_string = `------${randomBoundryString}\r\nContent-Disposition: form-data; name="file"; filename="audio.${file.extension}"\r\nContent-Type: "application/octet-stream"\r\n\r\n`;
 		let post_string = `\r\n------${randomBoundryString}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1`;
 
 		if (this.settings.transcriptionPrompt) {
