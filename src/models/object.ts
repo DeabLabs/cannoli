@@ -1,4 +1,3 @@
-import { EventEmitter } from "events";
 import type { CannoliEdge } from "./edge";
 import type { CannoliGroup } from "./group";
 import type { Run } from "src/run";
@@ -12,7 +11,7 @@ import {
 	NodeType,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
-export class CannoliObject extends EventEmitter {
+export class CannoliObject extends EventTarget {
 	run: Run;
 	id: string;
 	text: string;
@@ -54,9 +53,16 @@ export class CannoliObject extends EventEmitter {
 		// For each dependency
 		for (const dependency of this.dependencies) {
 			// Set up a listener for the dependency's completion event
-			this.graph[dependency].on("update", (obj, status) => {
-				this.dependencyUpdated(obj, status);
-			});
+			this.graph[dependency].addEventListener(
+				"update",
+				(event: CustomEvent) => {
+					// Assuming that 'obj' and 'status' are properties in the detail of the CustomEvent
+					this.dependencyUpdated(
+						event.detail.obj,
+						event.detail.status
+					);
+				}
+			);
 		}
 	}
 
@@ -179,22 +185,34 @@ export class CannoliObject extends EventEmitter {
 
 	executing() {
 		this.status = CannoliObjectStatus.Executing;
-		this.emit("update", this, CannoliObjectStatus.Executing);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Executing },
+		});
+		this.dispatchEvent(event);
 	}
 
 	completed() {
 		this.status = CannoliObjectStatus.Complete;
-		this.emit("update", this, CannoliObjectStatus.Complete);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Complete },
+		});
+		this.dispatchEvent(event);
 	}
 
 	pending() {
 		this.status = CannoliObjectStatus.Pending;
-		this.emit("update", this, CannoliObjectStatus.Pending);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Pending },
+		});
+		this.dispatchEvent(event);
 	}
 
 	reject() {
 		this.status = CannoliObjectStatus.Rejected;
-		this.emit("update", this, CannoliObjectStatus.Rejected);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Rejected },
+		});
+		this.dispatchEvent(event);
 	}
 
 	tryReject() {
@@ -249,7 +267,10 @@ export class CannoliObject extends EventEmitter {
 
 	reset() {
 		this.status = CannoliObjectStatus.Pending;
-		this.emit("update", this, CannoliObjectStatus.Pending);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Pending },
+		});
+		this.dispatchEvent(event);
 	}
 
 	dependencyRejected(dependency: CannoliObject) {
@@ -337,14 +358,28 @@ export class CannoliVertex extends CannoliObject {
 
 	error(message: string) {
 		this.status = CannoliObjectStatus.Error;
-		this.emit("update", this, CannoliObjectStatus.Error, message);
+		const event = new CustomEvent("update", {
+			detail: {
+				obj: this,
+				status: CannoliObjectStatus.Error,
+				message: message,
+			},
+		});
+		this.dispatchEvent(event);
 		console.error(message);
 	}
 
 	warning(message: string) {
 		this.status = CannoliObjectStatus.Warning;
-		this.emit("update", this, CannoliObjectStatus.Warning, message);
-		console.error(message);
+		const event = new CustomEvent("update", {
+			detail: {
+				obj: this,
+				status: CannoliObjectStatus.Warning,
+				message: message,
+			},
+		});
+		this.dispatchEvent(event);
+		console.error(message); // Consider changing this to console.warn(message);
 	}
 
 	validate() {

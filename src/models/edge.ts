@@ -1,5 +1,4 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import {} from "openai";
 import { ForEachGroup, RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,

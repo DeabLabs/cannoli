@@ -1,7 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./object";
 import { ChatRole, type OpenAIConfig } from "src/run";
 import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
-import {} from "openai";
 import { CannoliGroup } from "./group";
 import {
 	CannoliObjectStatus,
@@ -1872,8 +1871,10 @@ export class FloatingNode extends CannoliNode {
 		const firstLine = this.text.split("\n")[0];
 		this.text = `${firstLine}\n${newContent}`;
 
-		// Emit an update event
-		this.emit("update", this, this.status);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: this.status },
+		});
+		this.dispatchEvent(event);
 	}
 
 	logDetails(): string {

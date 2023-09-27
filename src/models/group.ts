@@ -111,7 +111,10 @@ export class CannoliGroup extends CannoliVertex {
 
 	async execute(): Promise<void> {
 		this.status = CannoliObjectStatus.Complete;
-		this.emit("update", this, CannoliObjectStatus.Complete);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Complete },
+		});
+		this.dispatchEvent(event);
 	}
 
 	membersFinished() {}
@@ -304,7 +307,10 @@ export class ForEachGroup extends CannoliGroup {
 
 	async execute(): Promise<void> {
 		this.status = CannoliObjectStatus.Executing;
-		this.emit("update", this, CannoliObjectStatus.Executing);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Executing },
+		});
+		this.dispatchEvent(event);
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
@@ -356,7 +362,10 @@ export class RepeatGroup extends CannoliGroup {
 
 	async execute(): Promise<void> {
 		this.status = CannoliObjectStatus.Executing;
-		this.emit("update", this, CannoliObjectStatus.Executing);
+		const event = new CustomEvent("update", {
+			detail: { obj: this, status: CannoliObjectStatus.Executing },
+		});
+		this.dispatchEvent(event);
 	}
 
 	resetMembers() {
@@ -395,7 +404,10 @@ export class RepeatGroup extends CannoliGroup {
 			}
 		} else {
 			this.status = CannoliObjectStatus.Complete;
-			this.emit("update", this, CannoliObjectStatus.Complete);
+			const event = new CustomEvent("update", {
+				detail: { obj: this, status: CannoliObjectStatus.Complete },
+			});
+			this.dispatchEvent(event);
 		}
 	}
 

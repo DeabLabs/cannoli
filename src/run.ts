@@ -235,8 +235,12 @@ export class Run {
 
 	setupListeners() {
 		for (const object of Object.values(this.graph)) {
-			object.on("update", (obj, status, message) => {
-				this.objectUpdated(obj, status, message);
+			object.addEventListener("update", (event: CustomEvent) => {
+				this.objectUpdated(
+					event.detail.obj,
+					event.detail.status,
+					event.detail.message
+				);
 			});
 		}
 	}
