@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	httpTemplates: [],
 	includeFilenameAsHeader: false,
 	includePropertiesInExtractedNotes: false,
-	chatFormatString: `---\n## <u>{{role}}</u>\n\n{{content}}`,
+	chatFormatString: `---\n# <u>{{role}}</u>\n\n{{content}}`,
 	enableAudioTriggeredCannolis: false,
 	deleteAudioFilesAfterAudioTriggeredCannolis: false,
 };

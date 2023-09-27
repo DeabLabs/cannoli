@@ -214,7 +214,9 @@ export class CannoliFactory {
 
 		const text = universalText || "";
 		const references =
-			node.type === "text" ? this.parseNodeReferences(node) : [];
+			node.type === "text" || node.type === "file"
+				? this.parseNodeReferences(node)
+				: [];
 		const incomingEdges = this.getIncomingEdges(node.id).map(
 			(edge) => edge.id
 		);
@@ -1562,7 +1564,9 @@ export class CannoliFactory {
 		};
 	}
 
-	parseNodeReferences(node: CannoliCanvasTextData): Reference[] {
+	parseNodeReferences(
+		node: CannoliCanvasTextData | CannoliCanvasFileData
+	): Reference[] {
 		// Unified regex to capture any type of reference within double curly braces
 		const unifiedPattern = /{{(.*?)}}/g;
 
