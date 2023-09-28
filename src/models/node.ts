@@ -74,13 +74,22 @@ export class CannoliNode extends CannoliVertex {
 
 		if (embeddedNotes) {
 			for (const embeddedNote of embeddedNotes) {
-				const noteName = embeddedNote
+				let noteName = embeddedNote
 					.replace("![[", "")
 					.replace("]]", "");
 
+				let subpath;
+
 				// If there's a pipe, split and use the first part as the note name
 				if (noteName.includes("|")) {
-					noteName.split("|")[0];
+					noteName = noteName.split("|")[0];
+				}
+
+				// If there's a "#", split and use the first part as the note name, and the second part as the heading
+				if (noteName.includes("#")) {
+					const split = noteName.split("#");
+					noteName = split[0];
+					subpath = split[1];
 				}
 
 				const noteContent = await this.run.getNote({
@@ -88,6 +97,7 @@ export class CannoliNode extends CannoliVertex {
 					type: ReferenceType.Note,
 					shouldExtract: true,
 					includeName: true,
+					subpath: subpath,
 				});
 
 				if (noteContent) {

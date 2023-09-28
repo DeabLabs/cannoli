@@ -2,7 +2,7 @@ import { OpenAI } from "openai";
 import { Canvas } from "./canvas";
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
-import { requestUrl } from "obsidian";
+import { requestUrl, resolveSubpath } from "obsidian";
 import pLimit from "p-limit";
 import { CannoliObjectStatus, Reference, ReferenceType } from "./models/graph";
 import { HttpTemplate } from "main";
@@ -1075,27 +1075,60 @@ export class Run {
 		// Read the file
 		let content = await this.cannoli.app.vault.read(file);
 
-		// If includeProperties is false, check for yaml frontmatter and remove it
-		if (
-			reference.includeProperties ??
-			this.cannoli.settings.includePropertiesInExtractedNotes
-		) {
-			// Empty
-		} else {
-			const yamlFrontmatter = content.match(/^---\n[\s\S]*?\n---\n/)?.[0];
+		if (reference.subpath) {
+			const metadata = this.cannoli.app.metadataCache.getCache(file.path);
 
-			if (yamlFrontmatter) {
-				content = content.replace(yamlFrontmatter, "");
+			if (!metadata) return null;
+
+			const subpath = resolveSubpath(metadata, reference.subpath);
+
+			if (!subpath) return null;
+
+			const startLine = subpath.start.line;
+			const endLine: number | null = subpath.end?.line ?? null;
+
+			const lines = content.split("\n");
+
+			if (endLine) {
+				if (startLine === endLine) {
+					return lines[startLine].trim();
+				} else {
+					content = lines.slice(startLine, endLine).join("\n");
+				}
+			} else {
+				content = lines.slice(startLine).join("\n");
 			}
-		}
 
-		// If includeFilenameAsHeader is true, add the filename as a header
-		if (
-			reference.includeName ??
-			this.cannoli.settings.includeFilenameAsHeader
-		) {
-			const header = `# ${file.basename}\n`;
-			content = header + content;
+			content = content.trim();
+
+			if (content === "") {
+				return null;
+			}
+		} else {
+			// If includeProperties is false, check for yaml frontmatter and remove it
+			if (
+				reference.includeProperties ??
+				this.cannoli.settings.includePropertiesInExtractedNotes
+			) {
+				// Empty
+			} else {
+				const yamlFrontmatter = content.match(
+					/^---\n[\s\S]*?\n---\n/
+				)?.[0];
+
+				if (yamlFrontmatter) {
+					content = content.replace(yamlFrontmatter, "");
+				}
+			}
+
+			// If includeFilenameAsHeader is true, add the filename as a header
+			if (
+				reference.includeName ??
+				this.cannoli.settings.includeFilenameAsHeader
+			) {
+				const header = `# ${file.basename}\n`;
+				content = header + content;
+			}
 		}
 
 		const embeddedNotes = content.match(/!\[\[[\s\S]*?\]\]/g);
@@ -1106,9 +1139,18 @@ export class Run {
 					.replace("![[", "")
 					.replace("]]", "");
 
+				let subpath;
+
 				// If there's a pipe, split and use the first part as the note name
 				if (noteName.includes("|")) {
 					noteName = noteName.split("|")[0];
+				}
+
+				// If there's a "#", split and use the first part as the note name, and the second part as the heading
+				if (noteName.includes("#")) {
+					const split = noteName.split("#");
+					noteName = split[0];
+					subpath = split[1];
 				}
 
 				// Check for recursive embedded notes
@@ -1130,6 +1172,7 @@ export class Run {
 						type: ReferenceType.Note,
 						shouldExtract: true,
 						includeName: true,
+						subpath: subpath,
 					},
 					recursionCount + 1
 				);
