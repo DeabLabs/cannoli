@@ -30,10 +30,11 @@ interface CannoliSettings {
 	enableAudioTriggeredCannolis?: boolean;
 	deleteAudioFilesAfterAudioTriggeredCannolis?: boolean;
 	transcriptionPrompt?: string;
+	autoScrollWithTokenStream: boolean;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
-	openaiAPIKey: "Paste key here",
+	openaiAPIKey: "",
 	costThreshold: 0.5,
 	defaultModel: "gpt-3.5-turbo",
 	defaultTemperature: 1,
@@ -43,6 +44,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	chatFormatString: `---\n# <u>{{role}}</u>\n\n{{content}}`,
 	enableAudioTriggeredCannolis: false,
 	deleteAudioFilesAfterAudioTriggeredCannolis: false,
+	autoScrollWithTokenStream: false,
 };
 
 export interface HttpTemplate {
@@ -102,7 +104,7 @@ export default class Cannoli extends Plugin {
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon(
 			"cannoli",
-			"Start/Stop cannoli",
+			"Start/stop cannoli",
 			this.startActiveCannoliCommand
 		);
 
@@ -148,7 +150,7 @@ export default class Cannoli extends Plugin {
 	createStartCommand = () => {
 		this.addCommand({
 			id: "start",
-			name: "Start/Stop cannoli",
+			name: "Start/stop cannoli",
 			checkCallback: this.startCannoliCommand,
 		});
 	};
@@ -858,7 +860,7 @@ class CannoliSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Add Cannoli College")
 			.setDesc(
-				"Add a folder of sample cannolis to your vault to walk you through the basics of Cannoli."
+				"Add a folder of sample cannolis to your vault to walk you through the basics of Cannoli. (Delete and re-add this folder to get the latest version after an update.)"
 			)
 			.addButton((button) =>
 				button.setButtonText("Add").onClick(() => {
@@ -876,6 +878,7 @@ class CannoliSettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.openaiAPIKey)
+					.setPlaceholder("sk-...")
 					.onChange(async (value) => {
 						this.plugin.settings.openaiAPIKey = value;
 						await this.plugin.saveSettings();
@@ -933,34 +936,6 @@ class CannoliSettingTab extends PluginSettingTab {
 		// Put header here
 		containerEl.createEl("h1", { text: "Note extraction" });
 
-		// Chat format string setting, error if invalid
-		new Setting(containerEl)
-			.setName("Chat format string")
-			.setDesc(
-				"This string will be used to format chat messages when using chat arrows. This string must contain the placeholders {{role}} and {{content}}, which will be replaced with the role and content of the message, respectively."
-			)
-			.addTextArea((text) =>
-				text
-					.setValue(this.plugin.settings.chatFormatString)
-					.onChange(async (value) => {
-						// Check if the format string is valid
-						const rolePlaceholder = "{{role}}";
-						const contentPlaceholder = "{{content}}";
-						if (
-							!value.includes(rolePlaceholder) ||
-							!value.includes(contentPlaceholder)
-						) {
-							alert(
-								`Invalid format string. Please include both ${rolePlaceholder} and ${contentPlaceholder}.`
-							);
-							return;
-						}
-
-						this.plugin.settings.chatFormatString = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
 		// Toggle adding filenames as headers when extracting text from files
 		new Setting(containerEl)
 			.setName(
@@ -997,6 +972,52 @@ class CannoliSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.includePropertiesInExtractedNotes =
 							value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		containerEl.createEl("h1", { text: "Chat cannolis" });
+
+		// Chat format string setting, error if invalid
+		new Setting(containerEl)
+			.setName("Chat format string")
+			.setDesc(
+				"This string will be used to format chat messages when using chat arrows. This string must contain the placeholders {{role}} and {{content}}, which will be replaced with the role and content of the message, respectively."
+			)
+			.addTextArea((text) =>
+				text
+					.setValue(this.plugin.settings.chatFormatString)
+					.onChange(async (value) => {
+						// Check if the format string is valid
+						const rolePlaceholder = "{{role}}";
+						const contentPlaceholder = "{{content}}";
+						if (
+							!value.includes(rolePlaceholder) ||
+							!value.includes(contentPlaceholder)
+						) {
+							alert(
+								`Invalid format string. Please include both ${rolePlaceholder} and ${contentPlaceholder}.`
+							);
+							return;
+						}
+
+						this.plugin.settings.chatFormatString = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Auto-scroll with token stream")
+			.setDesc(
+				"Move the cursor forward every time a token is streamed in from a chat arrow. This will lock the scroll position to the bottom of the note."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(
+						this.plugin.settings.autoScrollWithTokenStream || false
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.autoScrollWithTokenStream = value;
 						await this.plugin.saveSettings();
 					})
 			);

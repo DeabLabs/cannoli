@@ -4,7 +4,7 @@ import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import { requestUrl } from "obsidian";
 import pLimit from "p-limit";
-import { CannoliObjectStatus, Reference } from "./models/graph";
+import { CannoliObjectStatus, Reference, ReferenceType } from "./models/graph";
 import { HttpTemplate } from "main";
 import Cannoli from "main";
 import {
@@ -1020,12 +1020,15 @@ export class Run {
 					await new Promise((resolve) => setTimeout(resolve, 40));
 				}
 
-				// Set the cursor to the end of the file
-				this.cannoli.app.workspace.activeEditor?.editor?.setCursor(
-					this.cannoli.app.workspace.activeEditor?.editor?.lineCount() ||
-						0,
-					0
-				);
+				// If the setting is enabled, scroll to the end of the file
+				if (this.cannoli.settings.autoScrollWithTokenStream) {
+					// Set the cursor to the end of the file
+					this.cannoli.app.workspace.activeEditor?.editor?.setCursor(
+						this.cannoli.app.workspace.activeEditor?.editor?.lineCount() ||
+							0,
+						0
+					);
+				}
 			}
 		} else {
 			if (reference.includeProperties) {
@@ -1049,7 +1052,10 @@ export class Run {
 		return;
 	}
 
-	async getNote(reference: Reference): Promise<string | null> {
+	async getNote(
+		reference: Reference,
+		recursionCount = 0
+	): Promise<string | null> {
 		// If we're mocking, return a mock response
 		if (this.isMock) {
 			return `# ${reference.name}\nMock note content`;
@@ -1090,6 +1096,53 @@ export class Run {
 		) {
 			const header = `# ${file.basename}\n`;
 			content = header + content;
+		}
+
+		const embeddedNotes = content.match(/!\[\[[\s\S]*?\]\]/g);
+
+		if (embeddedNotes) {
+			for (const embeddedNote of embeddedNotes) {
+				let noteName = embeddedNote
+					.replace("![[", "")
+					.replace("]]", "");
+
+				// If there's a pipe, split and use the first part as the note name
+				if (noteName.includes("|")) {
+					noteName = noteName.split("|")[0];
+				}
+
+				// Check for recursive embedded notes
+				if (noteName === reference.name) {
+					continue;
+				}
+
+				// Check for recursion limit (hardcoded to 10 for now)
+				if (recursionCount > 10) {
+					console.error(
+						`Recursion limit reached while extracting note "${noteName}".`
+					);
+					continue;
+				}
+
+				const noteContent = await this.getNote(
+					{
+						name: noteName,
+						type: ReferenceType.Note,
+						shouldExtract: true,
+						includeName: true,
+					},
+					recursionCount + 1
+				);
+
+				if (noteContent) {
+					const blockquotedNoteContent =
+						"> " + noteContent.replace(/\n/g, "\n> ");
+					content = content.replace(
+						embeddedNote,
+						blockquotedNoteContent
+					);
+				}
+			}
 		}
 
 		return content;

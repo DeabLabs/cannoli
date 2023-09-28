@@ -43,6 +43,7 @@ export class CannoliNode extends CannoliVertex {
 	buildRenderFunction() {
 		// Replace references with placeholders using an index-based system
 		let textCopy = this.text;
+
 		let index = 0;
 		textCopy = textCopy.replace(/\{\{[^{}]+\}\}/g, () => `{{${index++}}}`); // Updated regex pattern to match {{thing}}
 
@@ -50,6 +51,9 @@ export class CannoliNode extends CannoliVertex {
 		const renderFunction = async (
 			variables: { name: string; content: string }[]
 		) => {
+			// Process embedded notes
+			textCopy = await this.processEmbeds(textCopy);
+
 			// Create a map to look up variable content by name
 			const varMap = new Map(variables.map((v) => [v.name, v.content]));
 			// Replace the indexed placeholders with the content from the variables
@@ -62,6 +66,42 @@ export class CannoliNode extends CannoliVertex {
 		};
 
 		return renderFunction;
+	}
+
+	async processEmbeds(content: string): Promise<string> {
+		// Check for embedded notes (e.g. ![[Note Name]]), and replace them with the note content
+		const embeddedNotes = content.match(/!\[\[[\s\S]*?\]\]/g);
+
+		if (embeddedNotes) {
+			for (const embeddedNote of embeddedNotes) {
+				const noteName = embeddedNote
+					.replace("![[", "")
+					.replace("]]", "");
+
+				// If there's a pipe, split and use the first part as the note name
+				if (noteName.includes("|")) {
+					noteName.split("|")[0];
+				}
+
+				const noteContent = await this.run.getNote({
+					name: noteName,
+					type: ReferenceType.Note,
+					shouldExtract: true,
+					includeName: true,
+				});
+
+				if (noteContent) {
+					const blockquotedNoteContent =
+						"> " + noteContent.replace(/\n/g, "\n> ");
+					content = content.replace(
+						embeddedNote,
+						blockquotedNoteContent
+					);
+				}
+			}
+		}
+
+		return content;
 	}
 
 	async getContentFromNote(reference: Reference): Promise<string | null> {
