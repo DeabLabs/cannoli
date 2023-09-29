@@ -59,12 +59,9 @@ export interface HttpTemplate {
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
 	runningCannolis: { [key: string]: Run } = {};
-	openai: OpenAI;
 
 	async onload() {
 		await this.loadSettings();
-
-		this.createCannoliCommands();
 
 		// Rerun the createCannoliCommands function whenever a file is renamed to be a cannoli file
 		this.registerEvent(
@@ -96,10 +93,12 @@ export default class Cannoli extends Plugin {
 			})
 		);
 
+		addIcon("cannoli", cannoliIcon);
+
 		// Add command for running a cannoli
 		this.createStartCommand();
 
-		addIcon("cannoli", cannoliIcon);
+		this.createCannoliCommands();
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon(
@@ -143,6 +142,7 @@ export default class Cannoli extends Plugin {
 				callback: async () => {
 					this.startCannoli(file);
 				},
+				icon: "cannoli",
 			});
 		});
 	};
@@ -152,6 +152,7 @@ export default class Cannoli extends Plugin {
 			id: "start",
 			name: "Start/stop cannoli",
 			checkCallback: this.startCannoliCommand,
+			icon: "cannoli",
 		});
 	};
 
@@ -390,7 +391,7 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Create an instance of OpenAI
-		this.openai = new OpenAI({
+		const openai = new OpenAI({
 			apiKey: this.settings.openaiAPIKey,
 			dangerouslyAllowBrowser: true,
 		});
@@ -433,7 +434,7 @@ export default class Cannoli extends Plugin {
 		// const shouldContinue = true;
 
 		if (shouldContinue) {
-			await this.runCannoli(graph, file, name, canvas);
+			await this.runCannoli(graph, file, name, canvas, openai);
 		}
 	};
 
@@ -504,7 +505,8 @@ export default class Cannoli extends Plugin {
 		graph: VerifiedCannoliCanvasData,
 		file: TFile,
 		name: string,
-		canvas: Canvas
+		canvas: Canvas,
+		openai?: OpenAI
 	) => {
 		return new Promise<void>((resolve) => {
 			// Create callback function to trigger notice
@@ -539,7 +541,7 @@ export default class Cannoli extends Plugin {
 			// Create live run
 			const run = new Run({
 				graph: liveGraph.graph,
-				openai: this.openai,
+				openai: openai,
 				openAiConfig: {
 					model: this.settings.defaultModel,
 					temperature: this.settings.defaultTemperature,
@@ -942,7 +944,7 @@ class CannoliSettingTab extends PluginSettingTab {
 				"Include filenames as headers in extracted notes by default"
 			)
 			.setDesc(
-				`"When extracting a note in a cannoli, include the filename as a top-level header. This default can be overridden by adding "#" or "!#" after the note link in a reference like this: {{[[Stuff]]#}} or {{[[Stuff]]!#}}.`
+				`When extracting a note in a cannoli, include the filename as a top-level header. This default can be overridden by adding "#" or "!#" after the note link in a reference like this: {{[[Stuff]]#}} or {{[[Stuff]]!#}}.`
 			)
 			.addToggle((toggle) =>
 				toggle

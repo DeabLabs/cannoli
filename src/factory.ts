@@ -41,9 +41,7 @@ export class CannoliFactory {
 
 	vaultModifierMap: Record<string, VaultModifier> = {
 		"[": VaultModifier.Note,
-		"+[": VaultModifier.CreateNote,
 		"/": VaultModifier.Folder,
-		"+/": VaultModifier.CreateFolder,
 	};
 
 	nodeColorMap: Record<string, IndicatedNodeType> = {
@@ -1603,6 +1601,12 @@ export class CannoliFactory {
 			} else if ((innerMatch = /^@(.*?)([\W]*)$/.exec(content))) {
 				// Dynamic reference
 				reference.type = ReferenceType.Variable;
+				reference.shouldExtract = true;
+				reference.name = innerMatch[1];
+				this.handleModifiers(reference, innerMatch[2]);
+			} else if ((innerMatch = /^\+@(.*?)([\W]*)$/.exec(content))) {
+				// Create note reference
+				reference.type = ReferenceType.CreateNote;
 				reference.shouldExtract = true;
 				reference.name = innerMatch[1];
 				this.handleModifiers(reference, innerMatch[2]);

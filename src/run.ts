@@ -1195,11 +1195,6 @@ export class Run {
 		noteName: string,
 		propertyName: string
 	): Promise<string | null> {
-		// Mock response
-		if (this.isMock) {
-			return "Mock property";
-		}
-
 		// Get the file
 		const filename = noteName.replace("[[", "").replace("]]", "");
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
@@ -1248,24 +1243,35 @@ export class Run {
 		path?: string,
 		content?: string,
 		verbose = false
-	): Promise<boolean> {
-		// If path isn't given, use root
-		if (!path) {
-			path = "/";
+	): Promise<string | null> {
+		// // Attempt to create the note, adding or incrementing a number at the end of the note name if it already exists
+		// let i = 1;
+
+		// while (
+		// 	this.cannoli.app.metadataCache.getFirstLinkpathDest(noteName, "")
+		// ) {
+		// 	// If the note already exists, add a number to the end of the note name, or increment the number if it already exists
+		// 	// If the note name ends with " n", remove the " n" and increment n
+		// 	if (noteName.match(/ \d+$/)) {
+		// 		noteName = noteName.replace(/ \d+$/, ` ${i.toString()}`);
+		// 	} else {
+		// 		noteName = `${noteName} ${i.toString()}`;
+		// 	}
+		// 	i++;
+		// }
+
+		// Return false if the note already exists
+		if (
+			this.cannoli.app.metadataCache.getFirstLinkpathDest(
+				noteName,
+				""
+			) !== null
+		) {
+			return null;
 		}
 
 		// Create the path by appending the note name to the path with .md
-		const fullPath = `${path}/${noteName}.md`;
-
-		// Check if a note already exists at the path
-		const note = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			fullPath,
-			""
-		);
-
-		if (note) {
-			return false;
-		}
+		const fullPath = `${path ?? ""}/${noteName}.md`;
 
 		// Create the note
 		await this.cannoli.app.vault.create(fullPath, content ?? "");
@@ -1274,7 +1280,7 @@ export class Run {
 			console.log(`Note "${noteName}" created at path "${fullPath}"`);
 		}
 
-		return true;
+		return noteName;
 	}
 
 	async createNoteAtNewPath(

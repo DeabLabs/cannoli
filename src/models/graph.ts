@@ -96,6 +96,7 @@ export enum ReferenceType {
 	Variable = "variable",
 	Floating = "floating",
 	Note = "note",
+	CreateNote = "create-note",
 }
 
 export interface Reference {
@@ -109,11 +110,8 @@ export interface Reference {
 
 export enum VaultModifier {
 	Note = "note",
-	CreateNote = "create-note",
 	Folder = "folder",
-	CreateFolder = "create-folder",
-	EditProperty = "edit-property",
-	CreateProperty = "create-property",
+	Property = "edit-property",
 }
 
 export interface CannoliData {

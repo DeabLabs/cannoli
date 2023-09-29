@@ -1456,7 +1456,6 @@ export class ContentNode extends CannoliNode {
 
 export class ReferenceNode extends ContentNode {
 	reference: Reference;
-	isDynamic: boolean;
 
 	constructor(
 		nodeData:
@@ -1471,17 +1470,10 @@ export class ReferenceNode extends ContentNode {
 		} else {
 			this.reference = this.references[0];
 		}
-
-		// If the text matches "{{@variable name}}" then it is dynamic
-		this.isDynamic = this.text.match(/{{@.*}}/) !== null;
 	}
 
 	async execute(): Promise<void> {
 		this.executing();
-
-		if (this.isDynamic) {
-			await this.loadDynamicReference();
-		}
 
 		let content = "";
 
@@ -1490,24 +1482,17 @@ export class ReferenceNode extends ContentNode {
 		const variableValues = this.getVariableValues(false);
 
 		if (variableValues.length > 0) {
-			// If the variable value's id has a vaultModifier of note, createNote, folder, or createFolder, ignore it
 			// First, get the edges of the variable values
 			const variableValueEdges = variableValues.map((variableValue) => {
 				return this.graph[variableValue.edgeId] as CannoliEdge;
 			});
 
-			// Then, filter out the edges that have a vaultModifier of note, createNote, folder, or createFolder
+			// Then, filter out the edges that have the same name as the reference, or are of type folder
 			const filteredVariableValueEdges = variableValueEdges.filter(
 				(variableValueEdge) => {
 					return (
-						variableValueEdge.vaultModifier !==
-							VaultModifier.Note &&
-						variableValueEdge.vaultModifier !==
-							VaultModifier.CreateNote &&
-						variableValueEdge.vaultModifier !==
-							VaultModifier.Folder &&
-						variableValueEdge.vaultModifier !==
-							VaultModifier.CreateFolder
+						variableValueEdge.text !== this.reference.name &&
+						variableValueEdge.vaultModifier !== VaultModifier.Folder
 					);
 				}
 			);
@@ -1542,18 +1527,39 @@ export class ReferenceNode extends ContentNode {
 				(edge) => edge.type === EdgeType.ChatResponse
 			);
 
-			await this.editContent(content, append);
+			if (
+				this.reference.type === ReferenceType.CreateNote ||
+				this.reference.type === ReferenceType.Variable
+			) {
+				await this.processDynamicReference(content);
+			} else {
+				await this.editContent(content, append);
+			}
+
+			// Load all outgoing edges
+			await this.loadOutgoingEdges(content);
+		} else {
+			if (
+				this.reference.type === ReferenceType.CreateNote ||
+				this.reference.type === ReferenceType.Variable
+			) {
+				await this.processDynamicReference("");
+				await this.loadOutgoingEdges("");
+			} else {
+				const fetchedContent = await this.getContent();
+				await this.loadOutgoingEdges(fetchedContent);
+			}
 		}
 
-		const fetchedContent = await this.getContent();
-
 		// Load all outgoing edges
-		await this.loadOutgoingEdges(fetchedContent);
-
 		this.completed();
 	}
 
 	async getContent(): Promise<string> {
+		if (this.run.isMock) {
+			return `Mock content`;
+		}
+
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
 				const content = await this.getContentFromNote(this.reference);
@@ -1564,7 +1570,7 @@ export class ReferenceNode extends ContentNode {
 						`Invalid reference. Could not find note "${this.reference.name}"`
 					);
 				}
-			} else {
+			} else if (this.reference.type === ReferenceType.Floating) {
 				const content = this.getContentFromFloatingNode(
 					this.reference.name
 				);
@@ -1575,124 +1581,72 @@ export class ReferenceNode extends ContentNode {
 						`Invalid reference. Could not find floating node "${this.reference.name}"`
 					);
 				}
+			} else if (
+				this.reference.type === ReferenceType.Variable ||
+				this.reference.type === ReferenceType.CreateNote
+			) {
+				this.error(`Dynamic reference did not process correctly.`);
 			}
 		}
 
 		return `Could not find reference.`;
 	}
 
-	async loadDynamicReference() {
-		// Search the incoming edges for any that have a vault modifier of type "note" or "create note"
+	async processDynamicReference(content: string) {
+		if (this.run.isMock) {
+			return;
+		}
+
 		const incomingEdges = this.getIncomingEdges();
-		const vaultModifierEdges = incomingEdges.filter(
-			(edge) => edge.vaultModifier !== null
+
+		// Find the incoming edge with the same name as the reference name
+		const referenceNameEdge = incomingEdges.find(
+			(edge) => edge.text === this.reference.name
 		);
 
-		if (vaultModifierEdges.length > 0) {
-			// Find the edges with the vault modifier of "note" or "create note"
-			const noteVaultModifierEdges = vaultModifierEdges.filter(
-				(edge) =>
-					edge.vaultModifier === VaultModifier.Note ||
-					edge.vaultModifier === VaultModifier.CreateNote
+		if (!referenceNameEdge) {
+			this.error(`Could not find note name arrow.`);
+			return;
+		}
+
+		if (
+			referenceNameEdge.content === null ||
+			referenceNameEdge.content === undefined ||
+			typeof referenceNameEdge.content !== "string"
+		) {
+			this.error(`Note name arrow has invalid content.`);
+			return;
+		}
+
+		// If this reference is a create note type, create the note
+		if (this.reference.type === ReferenceType.CreateNote) {
+			const noteName = await this.run.createNoteAtExistingPath(
+				referenceNameEdge.content,
+				"",
+				content
 			);
 
-			// Find the edges with the vault modifier of "folder" or "create folder"
-			const folderVaultModifierEdges = vaultModifierEdges.filter(
-				(edge) =>
-					edge.vaultModifier === VaultModifier.Folder ||
-					edge.vaultModifier === VaultModifier.CreateFolder
-			);
-
-			// If there's more than one of either, throw an error
-			if (noteVaultModifierEdges.length > 1) {
-				this.error(
-					`Invalid reference node. More than one incoming edge with a vault modifier of "note" or "create note".`
-				);
-			}
-
-			if (folderVaultModifierEdges.length > 1) {
-				this.error(
-					`Invalid reference node. More than one incoming edge with a vault modifier of "folder" or "create folder".`
-				);
-			}
-
-			let noteName = {
-				name: "",
-				create: false,
-			};
-			let path = {
-				path: "",
-				create: false,
-			};
-
-			// If there's a note vault modifier edge, use that to get the note name and whether or not to create it
-			if (noteVaultModifierEdges.length === 1) {
-				const noteVaultModifierEdge = noteVaultModifierEdges[0];
-
-				noteName = {
-					name:
-						typeof noteVaultModifierEdge.content === "string"
-							? noteVaultModifierEdge.content
-							: "",
-					create:
-						noteVaultModifierEdge.vaultModifier ===
-						VaultModifier.CreateNote,
-				};
-			}
-
-			// If there's a folder vault modifier edge, use that to get the path and whether or not to create it
-			if (folderVaultModifierEdges.length === 1) {
-				const folderVaultModifierEdge = folderVaultModifierEdges[0];
-				path = {
-					path:
-						typeof folderVaultModifierEdge.content === "string"
-							? folderVaultModifierEdge.content
-							: "",
-					create:
-						folderVaultModifierEdge.vaultModifier ===
-						VaultModifier.CreateFolder,
-				};
-			}
-
-			// Use the noteName and path variables to decide between the functions: createNoteAtExistingPath, createNoteAtNewPath, createFolder, moveNote
-			if (noteName.name && path.path) {
-				if (noteName.create && path.create) {
-					await this.run.createNoteAtNewPath(
-						noteName.name,
-						path.path
-					);
-				} else if (noteName.create && !path.create) {
-					await this.run.createNoteAtExistingPath(
-						noteName.name,
-						path.path
-					);
-				} else if (!noteName.create && path.create) {
-					await this.run.createFolder(path.path);
-					await this.run.moveNote(noteName.name, path.path);
-				} else {
-					await this.run.moveNote(noteName.name, path.path, false);
-				}
-			} else if (noteName.name && !path.path) {
-				if (noteName.create) {
-					// Create it at the root
-					await this.run.createNoteAtExistingPath(noteName.name);
-				}
-			} else if (!noteName.name && path.path) {
-				if (path.create) {
-					await this.run.createFolder(path.path);
-				}
-			}
-
-			// If noteName isn't empty, create a Reference object with the note
-			if (noteName.name) {
-				this.reference.name = noteName.name;
+			if (!noteName) {
+				this.error(`"${referenceNameEdge.content}" already exists.`);
+			} else {
+				this.reference.name = noteName;
 				this.reference.type = ReferenceType.Note;
-				this.reference.shouldExtract = false;
 			}
+		} else {
+			// Transform the reference
+			this.reference.name = referenceNameEdge.content;
+			this.reference.type = ReferenceType.Note;
+
+			// Edit the note
+			await this.editContent(content, false);
 		}
 	}
 
 	async editContent(newContent: string, append?: boolean): Promise<void> {
+		if (this.run.isMock) {
+			return;
+		}
+
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
 				const edit = await this.run.editNote(
@@ -1724,6 +1678,11 @@ export class ReferenceNode extends ContentNode {
 				this.error(
 					`Invalid reference. Could not find floating node ${this.reference.name}`
 				);
+			} else if (
+				this.reference.type === ReferenceType.Variable ||
+				this.reference.type === ReferenceType.CreateNote
+			) {
+				this.error(`Dynamic reference did not process correctly.`);
 			}
 		}
 	}
