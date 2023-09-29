@@ -1618,13 +1618,40 @@ export class ReferenceNode extends ContentNode {
 			return;
 		}
 
+		// Look for an incoming edge with a vault modifier of type folder
+		const folderEdge = incomingEdges.find(
+			(edge) => edge.vaultModifier === VaultModifier.Folder
+		);
+
+		let path = "";
+
+		if (folderEdge) {
+			if (
+				folderEdge.content === null ||
+				folderEdge.content === undefined ||
+				typeof folderEdge.content !== "string"
+			) {
+				this.error(`Folder arrow has invalid content.`);
+				return;
+			}
+
+			path = folderEdge.content;
+		}
+
 		// If this reference is a create note type, create the note
 		if (this.reference.type === ReferenceType.CreateNote) {
-			const noteName = await this.run.createNoteAtExistingPath(
-				referenceNameEdge.content,
-				"",
-				content
-			);
+			let noteName;
+
+			try {
+				noteName = await this.run.createNoteAtExistingPath(
+					referenceNameEdge.content,
+					path,
+					content
+				);
+			} catch (e) {
+				this.error(`Could not create note: ${e.message}`);
+				return;
+			}
 
 			if (!noteName) {
 				this.error(`"${referenceNameEdge.content}" already exists.`);

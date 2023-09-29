@@ -17,7 +17,7 @@
 		{"type":"text","text":"What makes the {{battle 2}} famous?","id":"355f89d3338915a0","x":89,"y":496,"width":271,"height":60},
 		{"type":"text","text":"{\n  \"battle 1\": \"Battle of Waterloo\",\n  \"battle 2\": \"Battle of Stalingrad\"\n}","id":"602c0eb10399429c","x":251,"y":340,"width":301,"height":120,"color":"6"},
 		{"type":"text","text":"Non-field arrows will just carry the response as a JSON string.","id":"05a12136e3510af7","x":580,"y":340,"width":250,"height":98},
-		{"type":"text","text":"Similarly to variable arrows, by default field arrows don't pass chat history. Override this with a \"|\" symbol at the end.","id":"e385c431c950a822","x":-600,"y":435,"width":277,"height":121},
+		{"type":"text","text":"Similarly to variable arrows, by default field arrows don't pass chat history. Override this with a \"|\" symbol at the end.","id":"e385c431c950a822","x":-600,"y":435,"width":277,"height":155},
 		{"id":"bb1f18b6cea22a07","type":"text","text":"{{[[Meeting Notes]]}}","x":-223,"y":959,"width":250,"height":60,"color":"6"},
 		{"id":"beecc62882441344","type":"text","text":"","x":-223,"y":1118,"width":250,"height":60,"color":"6"},
 		{"id":"ef3a50a24085d5a7","type":"text","text":"Field arrows can also be used to get property values from reference nodes ([[4. Reference nodes.canvas|4. Reference nodes]]).","x":-624,"y":961,"width":288,"height":157}
