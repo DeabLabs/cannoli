@@ -1244,30 +1244,19 @@ export class Run {
 		content?: string,
 		verbose = false
 	): Promise<string | null> {
-		// // Attempt to create the note, adding or incrementing a number at the end of the note name if it already exists
-		// let i = 1;
+		// Attempt to create the note, adding or incrementing a number at the end of the note name if it already exists
+		let i = 1;
 
-		// while (
-		// 	this.cannoli.app.metadataCache.getFirstLinkpathDest(noteName, "")
-		// ) {
-		// 	// If the note already exists, add a number to the end of the note name, or increment the number if it already exists
-		// 	// If the note name ends with " n", remove the " n" and increment n
-		// 	if (noteName.match(/ \d+$/)) {
-		// 		noteName = noteName.replace(/ \d+$/, ` ${i.toString()}`);
-		// 	} else {
-		// 		noteName = `${noteName} ${i.toString()}`;
-		// 	}
-		// 	i++;
-		// }
-
-		// Return false if the note already exists
-		if (
-			this.cannoli.app.metadataCache.getFirstLinkpathDest(
-				noteName,
-				""
-			) !== null
+		while (
+			this.cannoli.app.metadataCache.getFirstLinkpathDest(noteName, "")
 		) {
-			return null;
+			// If the note name ends with " n", remove the " n" and increment n
+			if (noteName.match(/ \d+$/)) {
+				noteName = noteName.replace(/ \d+$/, ` ${i.toString()}`);
+			} else {
+				noteName = `${noteName} ${i.toString()}`;
+			}
+			i++;
 		}
 
 		// Create the path by appending the note name to the path with .md

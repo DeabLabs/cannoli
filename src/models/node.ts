@@ -1380,12 +1380,13 @@ export class ContentNode extends CannoliNode {
 			return content;
 		}
 
-		// Filter out all non-write, non-logging, non-chatResponse edges, as well as any edges that aren't complete
+		// Filter for incoming complete edges of type write, logging, or chatResponse, as well as edges with no text
 		const filteredEdges = incomingEdges.filter(
 			(edge) =>
 				(edge.type === EdgeType.Write ||
 					edge.type === EdgeType.Logging ||
-					edge.type === EdgeType.ChatResponse) &&
+					edge.type === EdgeType.ChatResponse ||
+					edge.text.length === 0) &&
 				this.graph[edge.id].status === CannoliObjectStatus.Complete
 		);
 
@@ -1737,6 +1738,12 @@ export class ReferenceNode extends ContentNode {
 						request: request,
 					});
 				}
+			} else if (edgeObject.vaultModifier === VaultModifier.Note) {
+				// Load the edge with the name of the note, in double brackets
+				edgeObject.load({
+					content: `[[${this.reference.name}]]`,
+					request: request,
+				});
 			} else if (
 				edgeObject instanceof CannoliEdge &&
 				!(edgeObject instanceof ChatResponseEdge)
