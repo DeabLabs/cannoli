@@ -42,6 +42,7 @@ export class CannoliFactory {
 	vaultModifierMap: Record<string, VaultModifier> = {
 		"[": VaultModifier.Note,
 		"/": VaultModifier.Folder,
+		":": VaultModifier.Property,
 	};
 
 	nodeColorMap: Record<string, IndicatedNodeType> = {
@@ -58,7 +59,7 @@ export class CannoliFactory {
 		"?": EdgeType.Choice,
 		"@": EdgeType.ChatConverter,
 		"<": EdgeType.List,
-		":": EdgeType.Key,
+		"=": EdgeType.Key,
 	};
 
 	edgeColorMap: Record<string, EdgeType> = {

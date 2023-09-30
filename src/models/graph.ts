@@ -111,7 +111,7 @@ export interface Reference {
 export enum VaultModifier {
 	Note = "note",
 	Folder = "folder",
-	Property = "edit-property",
+	Property = "property",
 }
 
 export interface CannoliData {

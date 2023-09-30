@@ -15,6 +15,7 @@ import {
 	ChatCompletionMessage,
 } from "openai/resources/chat";
 import { Stream } from "openai/streaming";
+import * as yaml from "js-yaml";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -1193,7 +1194,8 @@ export class Run {
 
 	async getPropertyOfNote(
 		noteName: string,
-		propertyName: string
+		propertyName: string,
+		yamlFormat = false
 	): Promise<string | null> {
 		// Get the file
 		const filename = noteName.replace("[[", "").replace("]]", "");
@@ -1225,9 +1227,58 @@ export class Run {
 			const property = frontmatter[propertyName];
 
 			if (typeof property !== "string") {
-				return JSON.stringify(frontmatter[propertyName], null, 2);
+				if (yamlFormat) {
+					return yaml.dump(property);
+				} else {
+					return JSON.stringify(frontmatter[propertyName], null, 2);
+				}
 			} else {
 				return property;
+			}
+		} catch (error) {
+			console.error(
+				"An error occurred while fetching frontmatter:",
+				error
+			);
+			return null;
+		}
+	}
+
+	async getAllPropertiesOfNote(
+		noteName: string,
+		yamlFormat = false
+	): Promise<string | null> {
+		// Get the file
+		const filename = noteName.replace("[[", "").replace("]]", "");
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			filename,
+			""
+		);
+
+		if (!file) {
+			return null;
+		}
+
+		try {
+			// Read the file to get the frontmatter
+			let frontmatter: Record<string, unknown> = {};
+			await this.cannoli.app.fileManager.processFrontMatter(
+				file,
+				(content) => {
+					frontmatter = content;
+					return content;
+				}
+			);
+
+			// If frontmatter is null or undefined, return null
+			if (!frontmatter) {
+				return null;
+			}
+
+			if (!yamlFormat) {
+				return JSON.stringify(frontmatter, null, 2);
+			} else {
+				return yaml.dump(frontmatter);
 			}
 		} catch (error) {
 			console.error(
@@ -1289,6 +1340,20 @@ export class Run {
 		}
 
 		return true;
+	}
+
+	async getNotePath(noteName: string): Promise<string | null> {
+		const filename = noteName.replace("[[", "").replace("]]", "");
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			filename,
+			""
+		);
+
+		if (!file) {
+			return null;
+		}
+
+		return file.path;
 	}
 
 	async createFolder(path: string, verbose = false): Promise<boolean> {

@@ -1,25 +1,38 @@
 {
 	"nodes":[
 		{"type":"group","id":"546578b6fae29490","x":-420,"y":-160,"width":580,"height":640,"label":"Reference nodes"},
-		{"id":"8fd4e3f6e22304ba","type":"group","x":-420,"y":560,"width":290,"height":259,"label":"Getting properties"},
+		{"id":"8d414d7be725ce11","type":"group","x":-420,"y":880,"width":610,"height":259,"label":"Getting properties"},
+		{"id":"8fd4e3f6e22304ba","type":"group","x":-420,"y":560,"width":290,"height":259,"label":"Getting note name"},
+		{"id":"8c0fb44530075f7d","type":"group","x":-420,"y":1200,"width":290,"height":259,"label":"Getting note path"},
 		{"type":"text","text":"{{[Current state]}}","id":"079588e3f7e0afa0","x":-393,"y":203,"width":250,"height":60,"color":"6"},
 		{"type":"text","text":"Reference nodes can reference floating nodes or notes from your vault.","id":"a8346a9d96a737bb","x":-692,"y":238,"width":262,"height":114},
 		{"type":"text","text":"Reference nodes are content nodes surrounded by double curly braces.","id":"a9ea85b101bc8776","x":-686,"y":-149,"width":250,"height":129},
 		{"type":"text","text":"You can write or read from them the same way you use normal content nodes.","id":"be5c114d263a0107","x":-686,"y":66,"width":250,"height":137},
-		{"type":"text","text":"Write a poem about walking","id":"fba8c017a84a0a74","x":-380,"y":-124,"width":250,"height":60},
+		{"type":"text","text":"Write a poem about walking","id":"fba8c017a84a0a74","x":-380,"y":-124,"width":250,"height":60,"color":"0"},
 		{"type":"text","text":"{{[[Walking Poem]]}}","id":"e8e998b3d784e3a1","x":-380,"y":6,"width":250,"height":60,"color":"6"},
 		{"type":"text","text":"Reference nodes can be used to write to and read from notes in your vault or floating nodes on the cannoli.","id":"28c071d10dfda17f","x":-333,"y":-340,"width":379,"height":122},
 		{"type":"text","text":"[Current state]\nNot much going on","id":"e08885cd2f146f7d","x":-113,"y":203,"width":250,"height":92},
 		{"id":"344bb3da359269a4","type":"text","text":"","x":-100,"y":327,"width":237,"height":113,"color":"6"},
-		{"type":"text","text":"Does this change our plan at all:\n{{a}}","id":"e9768515f6295d9b","x":-393,"y":333,"width":250,"height":100},
+		{"type":"text","text":"Does this change our plan at all:\n{{a}}","id":"e9768515f6295d9b","x":-393,"y":333,"width":250,"height":100,"color":"0"},
 		{"id":"963eacfd11f92b34","type":"text","text":"{{[[Meeting Notes]]}}","x":-400,"y":580,"width":250,"height":60,"color":"6"},
 		{"id":"ef10f47160ceb92a","type":"text","text":"","x":-400,"y":739,"width":250,"height":60,"color":"6"},
-		{"id":"f85bdd621bacd536","type":"text","text":"You can use purple field arrows to retrieve the associated property of the same name from a note.","x":-763,"y":580,"width":318,"height":111}
+		{"id":"f85bdd621bacd536","type":"text","text":"If a variable arrow coming from a reference node starts with a square bracket, it will extract the link for the reference.\n\nThis is uses in cases when you dynamically create nodes and need to get their link reliably.","x":-763,"y":580,"width":318,"height":239},
+		{"id":"da10ade6ef9ec7fb","type":"text","text":"{{[[Meeting Notes]]}}","x":-400,"y":900,"width":250,"height":60,"color":"6"},
+		{"id":"d0e83b31dc2a1576","type":"text","text":"{{[[Meeting Notes]]}}","x":-90,"y":900,"width":250,"height":60,"color":"6"},
+		{"id":"1566407420c6d37d","type":"text","text":"","x":-400,"y":1059,"width":250,"height":60,"color":"6"},
+		{"id":"68e42dd6d4721f26","type":"text","text":"","x":-90,"y":1059,"width":250,"height":60,"color":"6"},
+		{"id":"28a0281c87a0c588","type":"text","text":"{{[[Meeting Notes]]}}","x":-400,"y":1220,"width":250,"height":60,"color":"6"},
+		{"id":"babacacceece0d0f","type":"text","text":"","x":-400,"y":1379,"width":250,"height":60,"color":"6"},
+		{"id":"bad9bf674fca2bfa","type":"text","text":"You can use arrows that start with \":\" to retrieve the associated property of the same name from a note.\n\nIf there is nothing on the arrow other than \":\", all properties will be retrieved. ","x":-763,"y":900,"width":318,"height":239},
+		{"id":"b6b1e156ad3548a2","type":"text","text":"You can use arrows that start with \"/\" to retrieve the path of a reference node.\n\nThis could be useful for creating notes in the same folder as dynamically selected notes.","x":-763,"y":1220,"width":318,"height":219}
 	],
 	"edges":[
 		{"id":"bc3f3aa5abc3914d","fromNode":"fba8c017a84a0a74","fromSide":"bottom","toNode":"e8e998b3d784e3a1","toSide":"top"},
 		{"id":"c98efd6bf2dff5d4","fromNode":"079588e3f7e0afa0","fromSide":"bottom","toNode":"e9768515f6295d9b","toSide":"top","label":"a"},
-		{"id":"20b93bd61e36c19f","fromNode":"963eacfd11f92b34","fromSide":"bottom","toNode":"ef10f47160ceb92a","toSide":"top","color":"6","label":"Date"},
-		{"id":"d1ab9632f705d309","fromNode":"e9768515f6295d9b","fromSide":"right","toNode":"344bb3da359269a4","toSide":"left","color":"2"}
+		{"id":"20b93bd61e36c19f","fromNode":"963eacfd11f92b34","fromSide":"bottom","toNode":"ef10f47160ceb92a","toSide":"top","label":"["},
+		{"id":"d1ab9632f705d309","fromNode":"e9768515f6295d9b","fromSide":"right","toNode":"344bb3da359269a4","toSide":"left","color":"2"},
+		{"id":"4320417bc6736dd9","fromNode":"da10ade6ef9ec7fb","fromSide":"bottom","toNode":"1566407420c6d37d","toSide":"top","label":":Date"},
+		{"id":"e56ac04c2a7ef6da","fromNode":"d0e83b31dc2a1576","fromSide":"bottom","toNode":"68e42dd6d4721f26","toSide":"top","label":":"},
+		{"id":"06d6a4450c69c049","fromNode":"28a0281c87a0c588","fromSide":"bottom","toNode":"babacacceece0d0f","toSide":"top","label":"/"}
 	]
 }

@@ -525,12 +525,12 @@ export class CannoliNode extends CannoliVertex {
 	validate(): void {
 		super.validate();
 
-		// All special outgoing edges must be homogeneous
-		if (!this.specialOutgoingEdgesAreHomogeneous()) {
-			this.error(
-				`If a call node has an outgoing variable edge, all outgoing variable edges must be of the same type. (Custom function edges are an exception.)`
-			);
-		}
+		// // All special outgoing edges must be homogeneous
+		// if (this.type ===   !this.specialOutgoingEdgesAreHomogeneous()) {
+		// 	this.error(
+		// 		`If a call node has an outgoing variable edge, all outgoing variable edges must be of the same type. (Custom function edges are an exception.)`
+		// 	);
+		// }
 
 		// If there are any incoming list edges, there must only be one
 		if (
@@ -1725,12 +1725,22 @@ export class ReferenceNode extends ContentNode {
 				continue;
 			}
 
-			if (edgeObject.type === EdgeType.Key) {
-				// Get value of the property with the same name as the edge
-				const value = await this.run.getPropertyOfNote(
-					this.reference.name,
-					edgeObject.text
-				);
+			if (edgeObject.vaultModifier === VaultModifier.Property) {
+				let value;
+
+				if (edgeObject.text.length === 0) {
+					value = await this.run.getAllPropertiesOfNote(
+						this.reference.name,
+						true
+					);
+				} else {
+					// Get value of the property with the same name as the edge
+					value = await this.run.getPropertyOfNote(
+						this.reference.name,
+						edgeObject.text,
+						true
+					);
+				}
 
 				if (value) {
 					edgeObject.load({
@@ -1744,6 +1754,15 @@ export class ReferenceNode extends ContentNode {
 					content: `[[${this.reference.name}]]`,
 					request: request,
 				});
+			} else if (edgeObject.vaultModifier === VaultModifier.Folder) {
+				const path = await this.run.getNotePath(this.reference.name);
+
+				if (path) {
+					edgeObject.load({
+						content: path,
+						request: request,
+					});
+				}
 			} else if (
 				edgeObject instanceof CannoliEdge &&
 				!(edgeObject instanceof ChatResponseEdge)
