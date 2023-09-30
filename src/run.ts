@@ -1289,6 +1289,50 @@ export class Run {
 		}
 	}
 
+	async editPropertyOfNote(
+		noteName: string,
+		propertyName: string,
+		newValue: string
+	): Promise<void> {
+		// Get the file
+		const filename = noteName.replace("[[", "").replace("]]", "");
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			filename,
+			""
+		);
+
+		if (!file) {
+			return;
+		}
+
+		try {
+			await this.cannoli.app.fileManager.processFrontMatter(
+				file,
+				(content) => {
+					// Parse the frontmatter
+					let frontmatter: Record<string, unknown> = {};
+
+					if (content) {
+						frontmatter = content;
+					}
+
+					// Set the property
+					frontmatter[propertyName] = newValue;
+
+					// Write the frontmatter
+					return frontmatter;
+				}
+			);
+			return;
+		} catch (error) {
+			console.error(
+				"An error occurred while editing frontmatter:",
+				error
+			);
+			return;
+		}
+	}
+
 	async createNoteAtExistingPath(
 		noteName: string,
 		path?: string,
