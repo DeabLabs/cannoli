@@ -117,7 +117,7 @@ export class CannoliNode extends CannoliVertex {
 	async getContentFromNote(reference: Reference): Promise<string | null> {
 		const note = await this.run.getNote(reference);
 
-		if (!note) {
+		if (note === null) {
 			return null;
 		}
 
@@ -1545,7 +1545,9 @@ export class ReferenceNode extends ContentNode {
 				this.reference.type === ReferenceType.Variable
 			) {
 				await this.processDynamicReference("");
-				await this.loadOutgoingEdges("");
+
+				const fetchedContent = await this.getContent();
+				await this.loadOutgoingEdges(fetchedContent);
 			} else {
 				const fetchedContent = await this.getContent();
 				await this.loadOutgoingEdges(fetchedContent);
@@ -1564,7 +1566,7 @@ export class ReferenceNode extends ContentNode {
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
 				const content = await this.getContentFromNote(this.reference);
-				if (content) {
+				if (content !== null && content !== undefined) {
 					return content;
 				} else {
 					this.error(
@@ -1606,7 +1608,7 @@ export class ReferenceNode extends ContentNode {
 		);
 
 		if (!referenceNameEdge) {
-			this.error(`Could not find note name arrow.`);
+			this.error(`Could not find arrow containing note name.`);
 			return;
 		}
 
@@ -1665,8 +1667,10 @@ export class ReferenceNode extends ContentNode {
 			this.reference.name = referenceNameEdge.content;
 			this.reference.type = ReferenceType.Note;
 
-			// Edit the note
-			await this.editContent(content, false);
+			// If content is not empty, edit the note
+			if (content !== "") {
+				await this.editContent(content, false);
+			}
 		}
 	}
 
