@@ -124,7 +124,6 @@ export class Run {
 		canvas,
 		openai,
 		openAiConfig,
-		llmLimit,
 		cannoli,
 	}: {
 		graph: Record<string, CannoliObject>;
@@ -135,7 +134,6 @@ export class Run {
 		canvas?: Canvas;
 		openai?: OpenAI;
 		openAiConfig?: OpenAIConfig;
-		llmLimit?: number;
 	}) {
 		this.graph = graph;
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
@@ -144,7 +142,7 @@ export class Run {
 		this.canvas = canvas ?? null;
 		this.openai = openai ?? null;
 		this.usage = {};
-		this.llmLimit = pLimit(llmLimit ?? 10);
+		this.llmLimit = pLimit(this.cannoli.settings.pLimit);
 		this.currentNote = `[[${
 			this.cannoli.app.workspace.getActiveFile()?.basename
 		}]]`;

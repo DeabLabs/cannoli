@@ -166,7 +166,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		const regex = new RegExp(rolePattern, "g");
 
 		let match;
-		const messages: ChatCompletionMessage[] = [];
+		let messages: ChatCompletionMessage[] = [];
 		let lastIndex = 0;
 
 		let firstMatch = true;
@@ -219,7 +219,57 @@ export class ChatConverterEdge extends CannoliEdge {
 			});
 		}
 
+		if (this.text.length > 0) {
+			messages = this.limitMessages(messages);
+		}
+
 		return messages;
+	}
+
+	limitMessages(messages: ChatCompletionMessage[]): ChatCompletionMessage[] {
+		let isTokenBased = false;
+		let originalText = this.text;
+
+		if (originalText.startsWith("#")) {
+			isTokenBased = true;
+			originalText = originalText.substring(1);
+		}
+
+		const limitValue = Number(originalText);
+
+		if (isNaN(limitValue) || limitValue < 0) {
+			return messages;
+		}
+
+		let outputMessages: ChatCompletionMessage[];
+
+		if (isTokenBased) {
+			const maxCharacters = limitValue * 4;
+			let totalCharacters = 0;
+			let index = 0;
+
+			for (let i = messages.length - 1; i >= 0; i--) {
+				const message = messages[i];
+				if (message.content) {
+					totalCharacters += message.content.length;
+				}
+
+				if (totalCharacters > maxCharacters) {
+					index = i + 1;
+					break;
+				}
+			}
+			outputMessages = messages.slice(index);
+		} else {
+			outputMessages = messages.slice(-Math.max(limitValue, 1));
+		}
+
+		// Safeguard to always include at least one message
+		if (outputMessages.length === 0 && messages.length > 0) {
+			outputMessages = [messages[messages.length - 1]];
+		}
+
+		return outputMessages;
 	}
 }
 

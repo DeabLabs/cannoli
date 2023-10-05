@@ -31,6 +31,7 @@ interface CannoliSettings {
 	deleteAudioFilesAfterAudioTriggeredCannolis?: boolean;
 	transcriptionPrompt?: string;
 	autoScrollWithTokenStream: boolean;
+	pLimit: number;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -45,6 +46,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	enableAudioTriggeredCannolis: false,
 	deleteAudioFilesAfterAudioTriggeredCannolis: false,
 	autoScrollWithTokenStream: false,
+	pLimit: 50,
 };
 
 export interface HttpTemplate {
@@ -895,10 +897,23 @@ class CannoliSettingTab extends PluginSettingTab {
 			)
 			.addText((text) =>
 				text
-					.setValue(this.plugin.settings.costThreshold.toString())
+					.setValue(
+						!isNaN(this.plugin.settings.costThreshold)
+							? this.plugin.settings.costThreshold.toString()
+							: DEFAULT_SETTINGS.costThreshold.toString()
+					)
 					.onChange(async (value) => {
-						this.plugin.settings.costThreshold = parseFloat(value);
-						await this.plugin.saveSettings();
+						// If it's not empty and it's a number, save it
+						if (!isNaN(parseFloat(value))) {
+							this.plugin.settings.costThreshold =
+								parseFloat(value);
+							await this.plugin.saveSettings();
+						} else {
+							// Otherwise, reset it to the default
+							this.plugin.settings.costThreshold =
+								DEFAULT_SETTINGS.costThreshold;
+							await this.plugin.saveSettings();
+						}
 					})
 			);
 
@@ -926,12 +941,49 @@ class CannoliSettingTab extends PluginSettingTab {
 			.addText((text) =>
 				text
 					.setValue(
-						this.plugin.settings.defaultTemperature.toString()
+						!isNaN(this.plugin.settings.defaultTemperature) &&
+							this.plugin.settings.defaultTemperature
+							? this.plugin.settings.defaultTemperature.toString()
+							: DEFAULT_SETTINGS.defaultTemperature.toString()
 					)
 					.onChange(async (value) => {
-						this.plugin.settings.defaultTemperature =
-							parseFloat(value);
-						await this.plugin.saveSettings();
+						// If it's not empty and it's a number, save it
+						if (!isNaN(parseFloat(value))) {
+							this.plugin.settings.defaultTemperature =
+								parseFloat(value);
+							await this.plugin.saveSettings();
+						} else {
+							// Otherwise, reset it to the default
+							this.plugin.settings.defaultTemperature =
+								DEFAULT_SETTINGS.defaultTemperature;
+							await this.plugin.saveSettings();
+						}
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("LLM call concurrency limit (pLimit)")
+			.setDesc(
+				"The maximum number of LLM calls that can be made at once. Decrease this if you are running into rate limiting issues."
+			)
+			.addText((text) =>
+				text
+					.setValue(
+						Number.isInteger(this.plugin.settings.pLimit)
+							? this.plugin.settings.pLimit.toString()
+							: DEFAULT_SETTINGS.pLimit.toString()
+					)
+					.onChange(async (value) => {
+						// If it's not empty and it's a positive integer, save it
+						if (!isNaN(parseInt(value)) && parseInt(value) > 0) {
+							this.plugin.settings.pLimit = parseInt(value);
+							await this.plugin.saveSettings();
+						} else {
+							// Otherwise, reset it to the default
+							this.plugin.settings.pLimit =
+								DEFAULT_SETTINGS.pLimit;
+							await this.plugin.saveSettings();
+						}
 					})
 			);
 
