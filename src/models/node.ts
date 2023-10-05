@@ -20,6 +20,7 @@ import {
 	ChatCompletionCreateParamsStreaming,
 	ChatCompletionMessage,
 } from "openai/resources/chat";
+import * as yaml from "js-yaml";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
@@ -1488,12 +1489,15 @@ export class ReferenceNode extends ContentNode {
 				return this.graph[variableValue.edgeId] as CannoliEdge;
 			});
 
-			// Then, filter out the edges that have the same name as the reference, or are of type folder
+			// Then, filter out the edges that have the same name as the reference, or are of type folder or property
 			const filteredVariableValueEdges = variableValueEdges.filter(
 				(variableValueEdge) => {
 					return (
 						variableValueEdge.text !== this.reference.name &&
-						variableValueEdge.vaultModifier !== VaultModifier.Folder
+						variableValueEdge.vaultModifier !==
+							VaultModifier.Folder &&
+						variableValueEdge.vaultModifier !==
+							VaultModifier.Property
 					);
 				}
 			);
@@ -1522,6 +1526,11 @@ export class ReferenceNode extends ContentNode {
 			content = writeOrLoggingContent;
 		}
 
+		// Get the property edges
+		const propertyEdges = this.getIncomingEdges().filter(
+			(edge) => edge.vaultModifier === VaultModifier.Property
+		);
+
 		if (content) {
 			// Append is dependent on if there is an incoming edge of type ChatResponse
 			const append = this.getIncomingEdges().some(
@@ -1535,6 +1544,22 @@ export class ReferenceNode extends ContentNode {
 				await this.processDynamicReference(content);
 			} else {
 				await this.editContent(content, append);
+
+				// If there are property edges, edit the properties
+				if (propertyEdges.length > 0) {
+					for (const edge of propertyEdges) {
+						if (
+							edge.content === null ||
+							edge.content === undefined ||
+							typeof edge.content !== "string"
+						) {
+							this.error(`Property arrow has invalid content.`);
+							return;
+						}
+
+						await this.editProperty(edge.text, edge.content);
+					}
+				}
 			}
 
 			// Load all outgoing edges
@@ -1551,6 +1576,22 @@ export class ReferenceNode extends ContentNode {
 			} else {
 				const fetchedContent = await this.getContent();
 				await this.loadOutgoingEdges(fetchedContent);
+			}
+
+			// If there are property edges, edit the properties
+			if (propertyEdges.length > 0) {
+				for (const edge of propertyEdges) {
+					if (
+						edge.content === null ||
+						edge.content === undefined ||
+						typeof edge.content !== "string"
+					) {
+						this.error(`Property arrow has invalid content.`);
+						return;
+					}
+
+					await this.editProperty(edge.text, edge.content);
+				}
 			}
 		}
 
@@ -1641,9 +1682,43 @@ export class ReferenceNode extends ContentNode {
 			path = folderEdge.content;
 		}
 
+		// Look for incoming edges with a vault modifier of type property
+		const propertyEdges = incomingEdges.filter(
+			(edge) => edge.vaultModifier === VaultModifier.Property
+		);
+
 		// If this reference is a create note type, create the note
 		if (this.reference.type === ReferenceType.CreateNote) {
 			let noteName;
+
+			// If there are properties edges, create a yaml frontmatter section, and fill it with the properties, where the key is the edge.text and the value is the edge.content
+			if (propertyEdges.length > 0) {
+				let yamlFrontmatter = "---\n";
+
+				for (const edge of propertyEdges) {
+					if (
+						edge.content === null ||
+						edge.content === undefined ||
+						typeof edge.content !== "string"
+					) {
+						this.error(`Property arrow has invalid content.`);
+						return;
+					}
+
+					// If the edge.content is a list (starts with a dash), add a newline and two spaces, and replace all newlines with newlines and two spaces
+					if (edge.content.startsWith("-")) {
+						yamlFrontmatter += `${edge.text}: \n  ${edge.content
+							.replace(/\n/g, "\n  ")
+							.trim()}\n`;
+					} else {
+						yamlFrontmatter += `${edge.text}: "${edge.content}"\n`;
+					}
+				}
+
+				yamlFrontmatter += "---\n";
+
+				content = yamlFrontmatter + content;
+			}
 
 			try {
 				noteName = await this.run.createNoteAtExistingPath(
@@ -1670,6 +1745,22 @@ export class ReferenceNode extends ContentNode {
 			// If content is not empty, edit the note
 			if (content !== "") {
 				await this.editContent(content, false);
+			}
+
+			// If there are property edges, edit the properties
+			if (propertyEdges.length > 0) {
+				for (const edge of propertyEdges) {
+					if (
+						edge.content === null ||
+						edge.content === undefined ||
+						typeof edge.content !== "string"
+					) {
+						this.error(`Property arrow has invalid content.`);
+						return;
+					}
+
+					await this.editProperty(edge.text, edge.content);
+				}
 			}
 		}
 	}
@@ -1719,10 +1810,61 @@ export class ReferenceNode extends ContentNode {
 		}
 	}
 
+	async editProperty(
+		propertyName: string,
+		newContent: string
+	): Promise<void> {
+		if (this.run.isMock) {
+			return;
+		}
+
+		if (this.reference) {
+			if (this.reference.type === ReferenceType.Note) {
+				const edit = await this.run.editPropertyOfNote(
+					this.reference.name,
+					propertyName,
+					newContent.trim()
+				);
+
+				if (edit !== null) {
+					return;
+				} else {
+					this.error(
+						`Invalid reference. Could not edit property ${propertyName} of note ${this.reference.name}`
+					);
+				}
+			} else if (this.reference.type === ReferenceType.Floating) {
+				// Search through all nodes for a floating node with the correct name
+
+				for (const objectId in this.graph) {
+					const object = this.graph[objectId];
+					if (
+						object instanceof FloatingNode &&
+						object.getName() === this.reference.name
+					) {
+						object.editProperty(propertyName, newContent.trim());
+						return;
+					}
+				}
+			} else if (
+				this.reference.type === ReferenceType.Variable ||
+				this.reference.type === ReferenceType.CreateNote
+			) {
+				this.error(`Dynamic reference did not process correctly.`);
+			}
+		}
+	}
+
 	async loadOutgoingEdges(
 		content: string,
 		request?: ChatCompletionCreateParams | undefined
 	) {
+		// If this is a floating node, load all outgoing edges with the content
+		if (this.reference.type === ReferenceType.Floating) {
+			this.loadOutgoingEdgesFloating(content, request);
+			return;
+		}
+
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (!(edgeObject instanceof CannoliEdge)) {
@@ -1764,6 +1906,54 @@ export class ReferenceNode extends ContentNode {
 				if (path) {
 					edgeObject.load({
 						content: path,
+						request: request,
+					});
+				}
+			} else if (
+				edgeObject instanceof CannoliEdge &&
+				!(edgeObject instanceof ChatResponseEdge)
+			) {
+				edgeObject.load({
+					content: content,
+					request: request,
+				});
+			}
+		}
+	}
+
+	loadOutgoingEdgesFloating(
+		content: string,
+		request?: ChatCompletionCreateParams | undefined
+	) {
+		for (const edge of this.outgoingEdges) {
+			const edgeObject = this.graph[edge];
+			if (!(edgeObject instanceof CannoliEdge)) {
+				continue;
+			}
+
+			// If the edge has a note modifier, load it with the name of the floating node
+			if (edgeObject.vaultModifier === VaultModifier.Note) {
+				edgeObject.load({
+					content: `${this.reference.name}`,
+					request: request,
+				});
+			} else if (edgeObject.vaultModifier === VaultModifier.Property) {
+				// Find the floating node with the same name as this reference
+				let propertyContent = "";
+
+				for (const objectId in this.graph) {
+					const object = this.graph[objectId];
+					if (
+						object instanceof FloatingNode &&
+						object.getName() === this.reference.name
+					) {
+						propertyContent = object.getProperty(edgeObject.text);
+					}
+				}
+
+				if (propertyContent) {
+					edgeObject.load({
+						content: propertyContent,
 						request: request,
 					});
 				}
@@ -1941,6 +2131,61 @@ export class FloatingNode extends CannoliNode {
 			detail: { obj: this, status: this.status },
 		});
 		this.dispatchEvent(event);
+	}
+
+	editProperty(propertyName: string, newContent: string): void {
+		// Find the frontmatter from the content
+		const frontmatter = this.getContent().split("---")[1];
+
+		if (!frontmatter) {
+			return;
+		}
+
+		const parsedFrontmatter: Record<string, string> = yaml.load(
+			frontmatter
+		) as Record<string, string>;
+
+		// If the parsed frontmatter is null, return
+		if (!parsedFrontmatter) {
+			return;
+		}
+
+		// Set the property to the new content
+		parsedFrontmatter[propertyName] = newContent;
+
+		// Stringify the frontmatter and add it back to the content
+		const newFrontmatter = yaml.dump(parsedFrontmatter);
+
+		const newProps = `---\n${newFrontmatter}---\n${
+			this.getContent().split("---")[2]
+		}`;
+
+		this.editContent(newProps);
+	}
+
+	getProperty(propertyName: string): string {
+		// If property name is empty, return the entire frontmatter
+		if (propertyName.length === 0) {
+			return this.getContent().split("---")[1];
+		}
+
+		// Find the frontmatter from the content
+		const frontmatter = this.getContent().split("---")[1];
+
+		if (!frontmatter) {
+			return "";
+		}
+
+		const parsedFrontmatter: Record<string, string> = yaml.load(
+			frontmatter
+		) as Record<string, string>;
+
+		// If the parsed frontmatter is null, return
+		if (!parsedFrontmatter) {
+			return "";
+		}
+
+		return parsedFrontmatter[propertyName];
 	}
 
 	logDetails(): string {

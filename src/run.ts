@@ -1305,6 +1305,17 @@ export class Run {
 			return;
 		}
 
+		let parsedNewValue: string[] | string | number | boolean | null =
+			newValue;
+
+		// If the new value is a yaml list (starts with "- "), parse it into an array and remove any empty items
+		if (newValue.startsWith("- ")) {
+			parsedNewValue = newValue
+				.split("\n")
+				.map((item) => item.replace("- ", "").trim())
+				.filter((item) => item !== "");
+		}
+
 		try {
 			await this.cannoli.app.fileManager.processFrontMatter(
 				file,
@@ -1317,7 +1328,7 @@ export class Run {
 					}
 
 					// Set the property
-					frontmatter[propertyName] = newValue;
+					frontmatter[propertyName] = parsedNewValue;
 
 					// Write the frontmatter
 					return frontmatter;

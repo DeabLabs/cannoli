@@ -44,7 +44,9 @@ export class CannoliEdge extends CannoliObject {
 		// Overrwite the addMessages for certain types of edges
 		if (
 			this.type === EdgeType.Chat ||
-			this.type === EdgeType.SystemMessage
+			this.type === EdgeType.SystemMessage ||
+			this.type === EdgeType.ChatResponse ||
+			this.type === EdgeType.ChatConverter
 		) {
 			this.addMessages = true;
 		}
