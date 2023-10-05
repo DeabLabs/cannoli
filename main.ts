@@ -65,11 +65,20 @@ export default class Cannoli extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		// Rerun the createCannoliCommands function whenever a file is renamed to be a cannoli file
+		// Create a command whenever a file is renamed to be a cannoli file
 		this.registerEvent(
 			this.app.vault.on("rename", (file: TFile, oldPath: string) => {
 				if (file.name.includes(".cno.canvas")) {
-					this.createCannoliCommands();
+					this.createCannoliCommandForFile(file);
+				}
+			})
+		);
+
+		// Create a command whenever a file is created and is a cannoli file
+		this.registerEvent(
+			this.app.vault.on("create", (file: TFile) => {
+				if (file.name.includes(".cno.canvas")) {
+					this.createCannoliCommandForFile(file);
 				}
 			})
 		);
@@ -138,14 +147,18 @@ export default class Cannoli extends Plugin {
 
 		// Create a command for each cannoli file
 		cannoliFiles.forEach((file) => {
-			this.addCommand({
-				id: `run-cannoli-${file.path}`,
-				name: `Run ${file.basename.slice(0, -4)}`,
-				callback: async () => {
-					this.startCannoli(file);
-				},
-				icon: "cannoli",
-			});
+			this.createCannoliCommandForFile(file);
+		});
+	};
+
+	createCannoliCommandForFile = async (file: TFile) => {
+		this.addCommand({
+			id: `run-cannoli-${file.path}`,
+			name: `Run ${file.basename.slice(0, -4)}`,
+			callback: async () => {
+				this.startCannoli(file);
+			},
+			icon: "cannoli",
 		});
 	};
 
