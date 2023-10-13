@@ -538,10 +538,10 @@ export class Run {
 		}
 
 		if (calledFunction) {
-			if (calledFunction === "enter_choice") {
+			if (calledFunction === "choice") {
 				// Find the choice function
 				const choiceFunction = request.functions?.find(
-					(fn) => fn.name === "enter_choice"
+					(fn) => fn.name === "choice"
 				);
 
 				if (!choiceFunction) {
@@ -551,27 +551,27 @@ export class Run {
 				return this.createMockChoiceFunctionResponse(
 					choiceFunction
 				) as ChatCompletionMessage;
-			} else if (calledFunction === "enter_answers") {
+			} else if (calledFunction === "form") {
 				// Find the answers function
-				const listFunction = request.functions?.find(
-					(fn) => fn.name === "enter_answers"
+				const formFunction = request.functions?.find(
+					(fn) => fn.name === "form"
 				);
 
-				if (!listFunction) {
-					throw Error("No list function found");
+				if (!formFunction) {
+					throw Error("No form function found");
 				}
 
-				return this.createMockListFunctionResponse(
-					listFunction
+				return this.createMockFormFunctionResponse(
+					formFunction
 				) as ChatCompletionMessage;
-			} else if (calledFunction === "enter_note_name") {
+			} else if (calledFunction === "note_select") {
 				// Find the note name function
 				const noteNameFunction = request.functions?.find(
-					(fn) => fn.name === "enter_note_name"
+					(fn) => fn.name === "note_select"
 				);
 
 				if (!noteNameFunction) {
-					throw Error("No note name function found");
+					throw Error("No note select function found");
 				}
 
 				return this.createMockNoteNameFunctionResponse(
@@ -602,7 +602,7 @@ export class Run {
 		return {
 			role: "assistant",
 			function_call: {
-				name: "enter_choice",
+				name: "choice",
 				arguments: `{
 					"choice" : "${randomChoice}"
 					}`,
@@ -610,7 +610,7 @@ export class Run {
 		};
 	}
 
-	createMockListFunctionResponse(
+	createMockFormFunctionResponse(
 		listFunction: ChatCompletionCreateParams.Function
 	) {
 		const args: { [key: string]: string }[] = [];
@@ -627,7 +627,7 @@ export class Run {
 		return {
 			role: "assistant",
 			function_call: {
-				name: "enter_answers",
+				name: "form",
 				arguments: JSON.stringify(args),
 			},
 		};
@@ -655,7 +655,7 @@ export class Run {
 		return {
 			role: "assistant",
 			function_call: {
-				name: "enter_note_names",
+				name: "note_select",
 				arguments: JSON.stringify(args),
 			},
 		};
@@ -665,9 +665,8 @@ export class Run {
 		choices: string[]
 	): ChatCompletionCreateParams.Function {
 		return {
-			name: "enter_choice",
-			description:
-				"Enter your answer to the question above using this function.",
+			name: "choice",
+			description: "Enter your choice using this function.",
 			parameters: {
 				type: "object",
 				properties: {
@@ -681,7 +680,7 @@ export class Run {
 		};
 	}
 
-	createListFunction(
+	createFormFunction(
 		tags: { name: string; noteNames?: string[] }[]
 	): ChatCompletionCreateParams.Function {
 		const properties: Record<string, { type: string; enum?: string[] }> =
@@ -701,7 +700,7 @@ export class Run {
 		});
 
 		return {
-			name: "enter_answers",
+			name: "form",
 			description:
 				"Use this function to enter the requested information for each key.",
 			parameters: {
@@ -716,7 +715,7 @@ export class Run {
 		notes: string[]
 	): ChatCompletionCreateParams.Function {
 		return {
-			name: "enter_note_name",
+			name: "note_select",
 			description: "Enter one of the provided valid note names.",
 			parameters: {
 				type: "object",
@@ -1348,6 +1347,9 @@ export class Run {
 		content?: string,
 		verbose = false
 	): Promise<string | null> {
+		// If there are double brackets, remove them
+		noteName = noteName.replace("[[", "").replace("]]", "");
+
 		// Attempt to create the note, adding or incrementing a number at the end of the note name if it already exists
 		let i = 1;
 

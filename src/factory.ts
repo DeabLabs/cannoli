@@ -59,7 +59,7 @@ export class CannoliFactory {
 		"?": EdgeType.Choice,
 		"@": EdgeType.ChatConverter,
 		"<": EdgeType.List,
-		"=": EdgeType.Key,
+		"=": EdgeType.Field,
 	};
 
 	edgeColorMap: Record<string, EdgeType> = {
@@ -67,7 +67,7 @@ export class CannoliFactory {
 		"3": EdgeType.Choice,
 		"4": EdgeType.ChatConverter,
 		"5": EdgeType.List,
-		"6": EdgeType.Key,
+		"6": EdgeType.Field,
 	};
 
 	addMessagesModifierMap: Record<string, boolean> = {
@@ -83,7 +83,7 @@ export class CannoliFactory {
 
 		[EdgeType.Function]: false,
 		[EdgeType.Config]: false,
-		[EdgeType.Key]: false,
+		[EdgeType.Field]: false,
 		[EdgeType.List]: false,
 		[EdgeType.Merge]: false,
 		[EdgeType.Variable]: false,
@@ -682,7 +682,7 @@ export class CannoliFactory {
 			edge.toNode = duplicateGroup.id;
 			duplicateGroup.cannoliData.incomingEdges.push(edge.id);
 			if (edge.cannoliData.type === EdgeType.List) {
-				edge.cannoliData.type = EdgeType.Key;
+				edge.cannoliData.type = EdgeType.Field;
 				edge.cannoliData.text = `${edge.cannoliData.text} ${index}`;
 			}
 
@@ -1105,30 +1105,30 @@ export class CannoliFactory {
 					return CallNodeType.Choose;
 				}
 			}
-			// If it has any outgoing key or list edges, it's a distribute node
+			// If it has any outgoing field or list edges, it's a form node
 			else if (
 				outgoingEdges.some(
 					(edge) =>
-						this.getEdgeType(edge) === EdgeType.Key ||
+						this.getEdgeType(edge) === EdgeType.Field ||
 						this.getEdgeType(edge) === EdgeType.List
 				)
 			) {
-				return CallNodeType.Distribute;
+				return CallNodeType.Form;
 			}
 			// Otherwise, it's an accumulate node
 			else {
 				return CallNodeType.Accumulate;
 			}
 		} else {
-			// If it has any outgoing key or list edges, it's a distribute node
+			// If it has any outgoing field or list edges, it's a form node
 			if (
 				outgoingEdges.some(
 					(edge) =>
-						this.getEdgeType(edge) === EdgeType.Key ||
+						this.getEdgeType(edge) === EdgeType.Field ||
 						this.getEdgeType(edge) === EdgeType.List
 				)
 			) {
-				return CallNodeType.Distribute;
+				return CallNodeType.Form;
 			}
 			// If it has any outgoing choice edges, it's a choose node
 			else if (
@@ -1251,10 +1251,10 @@ export class CannoliFactory {
 				if (this.edgeColorMap[edge.color] === EdgeType.Choice) {
 					return this.getChoiceEdgeSubtype(edge);
 				}
-				// If the type from the color map is key, return the subtype
-				else if (this.edgeColorMap[edge.color] === EdgeType.Key) {
+				// If the type from the color map is field, return the subtype
+				else if (this.edgeColorMap[edge.color] === EdgeType.Field) {
 					// return this.getKeyEdgeSubtype(edge);
-					return EdgeType.Key;
+					return EdgeType.Field;
 				}
 				// If the type from the color map is chatconverter, return the subtype
 				else if (
@@ -1299,7 +1299,7 @@ export class CannoliFactory {
 					return this.getChoiceEdgeSubtype(edge);
 				}
 				// If the type from the color map is key, return the subtype
-				else if (this.edgePrefixMap[edge.label[0]] === EdgeType.Key) {
+				else if (this.edgePrefixMap[edge.label[0]] === EdgeType.Field) {
 					return this.getKeyEdgeSubtype(edge);
 				}
 				// If the type from the color map is config
@@ -1409,7 +1409,7 @@ export class CannoliFactory {
 			return EdgeType.List;
 		}
 
-		return EdgeType.Key;
+		return EdgeType.Field;
 	}
 
 	getGroupType(group: CannoliCanvasGroupData): GroupType {

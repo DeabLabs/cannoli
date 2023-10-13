@@ -293,7 +293,7 @@ export class CannoliNode extends CannoliVertex {
 				if (
 					!(edgeObject.status === CannoliObjectStatus.Rejected) ||
 					!edgeObject.isReflexive ||
-					!edgeObject.content
+					edgeObject.content === null
 				) {
 					continue;
 				}
@@ -301,7 +301,7 @@ export class CannoliNode extends CannoliVertex {
 
 			let content: string;
 
-			if (!edgeObject.content) {
+			if (edgeObject.content === null) {
 				continue;
 			}
 
@@ -547,7 +547,7 @@ export class CannoliNode extends CannoliVertex {
 		// Get all special outgoing edges
 		const specialOutgoingEdges = this.getOutgoingEdges().filter((edge) => {
 			return (
-				edge.type === EdgeType.Key ||
+				edge.type === EdgeType.Field ||
 				edge.type === EdgeType.Choice ||
 				edge.type === EdgeType.Category ||
 				edge.type === EdgeType.Merge ||
@@ -996,7 +996,7 @@ export class CallNode extends CannoliNode {
 			request.messages.push(message);
 
 			if (message.function_call?.arguments) {
-				if (message.function_call.name === "enter_note_name") {
+				if (message.function_call.name === "note_select") {
 					const args = JSON.parse(message.function_call.arguments);
 
 					// Put double brackets around the note name
@@ -1068,51 +1068,51 @@ export class CallNode extends CannoliNode {
 	}
 }
 
-export class DistributeNode extends CallNode {
+export class FormNode extends CallNode {
 	getFunctions(
 		messages: ChatCompletionMessage[]
 	): ChatCompletionCreateParams.Function[] {
-		// Get the name of the list items
-		const listItems = this.getListItems();
+		// Get the names of the fields
+		const fields = this.getFields();
 
-		const items: { name: string; noteNames?: string[] }[] = [];
+		const fieldsWithNotes: { name: string; noteNames?: string[] }[] = [];
 
-		// If one of the outgoing edges has a vault modifier of type "note", get the note names and pass it into that list item
+		// If one of the outgoing edges has a vault modifier of type "note", get the note names and pass it into that field
 		const noteEdges = this.getOutgoingEdges().filter(
 			(edge) => edge.vaultModifier === VaultModifier.Note
 		);
 
-		for (const item of listItems) {
+		for (const item of fields) {
 			// If the item matches the name of one of the note edges
 			if (noteEdges.find((edge) => edge.text === item)) {
 				// Get the note names
 				const noteNames = this.findNoteReferencesInMessages(messages);
 
-				items.push({ name: item, noteNames: noteNames });
+				fieldsWithNotes.push({ name: item, noteNames: noteNames });
 			} else {
-				items.push({ name: item });
+				fieldsWithNotes.push({ name: item });
 			}
 		}
 
-		// Generate the list function
-		const listFunc = this.run.createListFunction(items);
+		// Generate the form function
+		const formFunc = this.run.createFormFunction(fieldsWithNotes);
 
-		return [listFunc];
+		return [formFunc];
 	}
 
-	getListItems(): string[] {
-		// Get the unique names of all outgoing listitem edges
-		const outgoingListItemEdges = this.getOutgoingEdges().filter((edge) => {
-			return edge.type === EdgeType.Key;
+	getFields(): string[] {
+		// Get the unique names of all outgoing field edges
+		const outgoingFieldEdges = this.getOutgoingEdges().filter((edge) => {
+			return edge.type === EdgeType.Field;
 		});
 
 		const uniqueNames = new Set<string>();
 
-		for (const edge of outgoingListItemEdges) {
+		for (const edge of outgoingFieldEdges) {
 			const edgeObject = this.graph[edge.id];
 			if (!(edgeObject instanceof CannoliEdge)) {
 				throw new Error(
-					`Error on object ${edgeObject.id}: object is not a key edge.`
+					`Error on object ${edgeObject.id}: object is not a field edge.`
 				);
 			}
 
@@ -1132,41 +1132,51 @@ export class DistributeNode extends CallNode {
 	): void {
 		const messages = request.messages;
 
-		// Get the list items from the last message
-		const listFunctionArgs =
+		// Get the fields from the last message
+		const formFunctionArgs =
 			messages[messages.length - 1].function_call?.arguments;
 
-		if (!listFunctionArgs) {
-			this.error(`List function call has no arguments.`);
+		if (!formFunctionArgs) {
+			this.error(`Form function call has no arguments.`);
 			return;
 		}
 
-		// Parse the list items from the arguments
-		const listItems = JSON.parse(listFunctionArgs);
+		// Parse the fields from the arguments
+		const fields = JSON.parse(formFunctionArgs);
 
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (edgeObject instanceof CannoliEdge) {
-				// If the edge is a list item edge, load it with the content of the corresponding list item name
+				// If the edge is a field edge, load it with the content of the corresponding field
 				if (
 					edgeObject instanceof CannoliEdge &&
-					edgeObject.type === EdgeType.Key
+					edgeObject.type === EdgeType.Field
 				) {
 					const name = edgeObject.text;
 
 					if (name) {
-						const listItemContent = listItems[name];
+						const fieldContent = fields[name];
 
-						if (listItemContent) {
-							edgeObject.load({
-								content: listItemContent,
-								request: request,
-							});
+						if (fieldContent) {
+							// If it has a note modifier, add double brackets around the note name
+							if (
+								edgeObject.vaultModifier === VaultModifier.Note
+							) {
+								edgeObject.load({
+									content: `[[${fieldContent}]]`,
+									request: request,
+								});
+							} else {
+								edgeObject.load({
+									content: fieldContent,
+									request: request,
+								});
+							}
 						}
 					}
 				} else {
 					edgeObject.load({
-						content: listFunctionArgs,
+						content: formFunctionArgs,
 						request: request,
 					});
 				}
@@ -1175,18 +1185,18 @@ export class DistributeNode extends CallNode {
 	}
 
 	logDetails(): string {
-		return super.logDetails() + `Subtype: List\n`;
+		return super.logDetails() + `Subtype: Form\n`;
 	}
 
 	validate() {
 		super.validate();
 		// If there are no outgoing key edges, error
 
-		if (
-			!this.getOutgoingEdges().some((edge) => edge.type === EdgeType.Key)
-		) {
-			this.error(`List nodes must have at least one outgoing list edge.`);
-		}
+		// if (
+		// 	!this.getOutgoingEdges().some((edge) => edge.type === EdgeType.Key)
+		// ) {
+		// 	this.error(`List nodes must have at least one outgoing list edge.`);
+		// }
 	}
 }
 
@@ -1372,7 +1382,7 @@ export class ContentNode extends CannoliNode {
 			for (const edge of incomingEdges) {
 				const edgeObject = this.graph[edge.id];
 				if (edgeObject instanceof LoggingEdge) {
-					if (edgeObject.content) {
+					if (edgeObject.content !== null) {
 						content += edgeObject.content;
 					}
 				}
@@ -1400,7 +1410,7 @@ export class ContentNode extends CannoliNode {
 		const firstEdgeObject = this.graph[firstEdge.id];
 		if (firstEdgeObject instanceof CannoliEdge) {
 			if (
-				firstEdgeObject.content &&
+				firstEdgeObject.content !== null &&
 				typeof firstEdgeObject.content === "string"
 			) {
 				return firstEdgeObject.content;
@@ -1439,20 +1449,20 @@ export class ContentNode extends CannoliNode {
 		// }
 
 		// Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
-		if (
-			this.getOutgoingEdges().some(
-				(edge) =>
-					edge.type === EdgeType.List ||
-					edge.type === EdgeType.Category ||
-					edge.type === EdgeType.Function ||
-					edge.type === EdgeType.Choice ||
-					edge.type === EdgeType.Logging
-			)
-		) {
-			this.error(
-				`Content nodes cannot have any outgoing list, choice, or function edges.`
-			);
-		}
+		// if (
+		// 	this.getOutgoingEdges().some(
+		// 		(edge) =>
+		// 			edge.type === EdgeType.List ||
+		// 			edge.type === EdgeType.Category ||
+		// 			edge.type === EdgeType.Function ||
+		// 			edge.type === EdgeType.Choice ||
+		// 			edge.type === EdgeType.Logging
+		// 	)
+		// ) {
+		// 	this.error(
+		// 		`Content nodes cannot have any outgoing list, choice, or function edges.`
+		// 	);
+		// }
 	}
 }
 
@@ -1519,16 +1529,18 @@ export class ReferenceNode extends ContentNode {
 			if (filteredVariableValues.length > 0) {
 				// Then, get the content of the first variable value
 				content = filteredVariableValues[0].content;
-			} else if (writeOrLoggingContent) {
+			} else if (writeOrLoggingContent !== null) {
 				content = writeOrLoggingContent;
 			}
-		} else if (writeOrLoggingContent) {
+		} else if (writeOrLoggingContent !== null) {
 			content = writeOrLoggingContent;
 		}
 
 		// Get the property edges
 		const propertyEdges = this.getIncomingEdges().filter(
-			(edge) => edge.vaultModifier === VaultModifier.Property
+			(edge) =>
+				edge.vaultModifier === VaultModifier.Property &&
+				edge.text !== this.reference.name
 		);
 
 		if (content) {
@@ -1684,7 +1696,9 @@ export class ReferenceNode extends ContentNode {
 
 		// Look for incoming edges with a vault modifier of type property
 		const propertyEdges = incomingEdges.filter(
-			(edge) => edge.vaultModifier === VaultModifier.Property
+			(edge) =>
+				edge.vaultModifier === VaultModifier.Property &&
+				edge.text !== this.reference.name
 		);
 
 		// If this reference is a create note type, create the note
@@ -1742,8 +1756,8 @@ export class ReferenceNode extends ContentNode {
 			this.reference.name = referenceNameEdge.content;
 			this.reference.type = ReferenceType.Note;
 
-			// If content is not empty, edit the note
-			if (content !== "") {
+			// If content is not null, edit the note
+			if (content !== null) {
 				await this.editContent(content, false);
 			}
 

@@ -67,7 +67,8 @@ export class CannoliEdge extends CannoliObject {
 		content?: string | Record<string, string>;
 		request?: ChatCompletionCreateParams;
 	}): void {
-		this.content = content ? content : null;
+		this.content =
+			content !== null && content !== undefined ? content : null;
 
 		if (this.addMessages) {
 			this.messages =

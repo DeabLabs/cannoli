@@ -15,7 +15,7 @@ import {
 	CannoliNode,
 	ChooseNode,
 	ContentNode,
-	DistributeNode,
+	FormNode,
 	FloatingNode,
 	FormatterNode,
 	HttpNode,
@@ -50,7 +50,7 @@ export enum EdgeType {
 	SystemMessage = "system-message",
 	Write = "write",
 	Variable = "variable",
-	Key = "key",
+	Field = "field",
 	List = "list",
 	Merge = "merge",
 	Choice = "choice",
@@ -76,7 +76,7 @@ export enum CallNodeType {
 	Select = "select",
 	Categorize = "categorize",
 	Choose = "choose",
-	Distribute = "distribute",
+	Form = "form",
 	Accumulate = "accumulate",
 }
 
@@ -274,10 +274,9 @@ export class CannoliGraph {
 					this.graph[node.id] = new ChooseNode(chooseNode);
 					break;
 				}
-				case CallNodeType.Distribute: {
-					const distributeNode =
-						node as VerifiedCannoliCanvasTextData;
-					this.graph[node.id] = new DistributeNode(distributeNode);
+				case CallNodeType.Form: {
+					const formNode = node as VerifiedCannoliCanvasTextData;
+					this.graph[node.id] = new FormNode(formNode);
 					break;
 				}
 				case CallNodeType.Accumulate: {
