@@ -214,6 +214,8 @@ export class CannoliNode extends CannoliVertex {
 							this.warning(`Note "${reference.name}" not found`);
 							content = `{{${reference.name}}}`;
 						}
+					} else {
+						content = reference.name;
 					}
 				} else if (reference.type === ReferenceType.Floating) {
 					if (reference.shouldExtract) {
@@ -1936,9 +1938,9 @@ export class ReferenceNode extends ContentNode {
 					});
 				}
 			} else if (edgeObject.vaultModifier === VaultModifier.Note) {
-				// Load the edge with the name of the note, in double brackets
+				// Load the edge with the name of the note
 				edgeObject.load({
-					content: `[[${this.reference.name}]]`,
+					content: `${this.reference.name}`,
 					request: request,
 				});
 			} else if (edgeObject.vaultModifier === VaultModifier.Folder) {
