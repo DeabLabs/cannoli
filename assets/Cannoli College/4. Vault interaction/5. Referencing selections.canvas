@@ -1,0 +1,18 @@
+{
+	"nodes":[
+		{"id":"8c02946171040e71","type":"group","x":30,"y":-145,"width":350,"height":345,"label":"Special \"SELECTION\" variable"},
+		{"id":"a0047756f6bf199f","type":"group","x":30,"y":280,"width":350,"height":320,"label":"Replacing selections"},
+		{"id":"28278bc5135af80c","type":"text","text":"Respond with a more concise version of this text:\n{{SELECTION}}","x":75,"y":-125,"width":250,"height":120},
+		{"id":"9b5312d8361c2f5e","type":"text","text":"","x":75,"y":40,"width":250,"height":130,"color":"6"},
+		{"id":"6f34b064907441fd","type":"text","text":"This works in any workspace where you can select text, including canvas files.\n\nTry it on the sentence above.","x":-313,"y":-100,"width":324,"height":140},
+		{"id":"21dc5d31fab5298f","type":"text","text":"You can reference the current selection (the text highlighted by your cursor when you started the cannoli) using the {{SELECTION}} variable","x":11,"y":-360,"width":378,"height":142},
+		{"id":"2deb4b62d41bbfb7","type":"text","text":"Respond with a more concise version of this text:\n{{SELECTION}}","x":75,"y":300,"width":250,"height":120},
+		{"id":"6e8591393bf5e285","type":"text","text":"You can write to a selection reference node just like a Note reference node. \n\nWriting to a {{SELECTION}} node will replace the text if there is a selection, or insert it at the cursor if there isn't.","x":-340,"y":325,"width":351,"height":175},
+		{"id":"880831fc3c8b5e93","type":"text","text":"{{SELECTION}}","x":75,"y":500,"width":250,"height":60,"color":"6"},
+		{"id":"c940877ff5ddd66f","type":"text","text":"Note that if you click away from a selection before the cannoli reaches this node, it will change where the replacement happens, so be wary of long cannolis that use this feature.","x":389,"y":346,"width":404,"height":133}
+	],
+	"edges":[
+		{"id":"ff57adf1f2f08d4d","fromNode":"28278bc5135af80c","fromSide":"bottom","toNode":"9b5312d8361c2f5e","toSide":"top"},
+		{"id":"e6c1d0371468967e","fromNode":"2deb4b62d41bbfb7","fromSide":"bottom","toNode":"880831fc3c8b5e93","toSide":"top"}
+	]
+}
