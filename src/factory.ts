@@ -101,9 +101,25 @@ export class CannoliFactory {
 		"5": GroupType.SignifiedForEach,
 	};
 
-	constructor(canvas: CanvasData, activeNote: string) {
+	constructor(
+		canvas: CanvasData,
+		activeNote: string,
+		contentIsColorless: boolean
+	) {
 		this.cannoliData = canvas;
 		this.activeNote = activeNote;
+
+		// If contentIsColorless is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
+		if (contentIsColorless) {
+			this.nodeColorMap = {
+				"0": IndicatedNodeType.Content,
+				"1": IndicatedNodeType.Call,
+				"2": IndicatedNodeType.Content,
+				"3": IndicatedNodeType.Call,
+				"4": IndicatedNodeType.Call,
+				"6": IndicatedNodeType.Call,
+			};
+		}
 	}
 
 	getCannoliData(): VerifiedCannoliCanvasData {
@@ -1230,13 +1246,12 @@ export class CannoliFactory {
 			case "link":
 				return IndicatedNodeType.Content;
 			case "text":
-				if (vertex.color) {
-					// Check against the node color map
-					if (this.nodeColorMap[vertex.color]) {
-						return this.nodeColorMap[vertex.color];
-					}
-				} else {
-					return IndicatedNodeType.Call;
+				if (!vertex.color) {
+					vertex.color = "0";
+				}
+				// Check against the node color map
+				if (this.nodeColorMap[vertex.color]) {
+					return this.nodeColorMap[vertex.color ?? "0"];
 				}
 		}
 

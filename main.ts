@@ -32,6 +32,7 @@ interface CannoliSettings {
 	transcriptionPrompt?: string;
 	autoScrollWithTokenStream: boolean;
 	pLimit: number;
+	contentIsColorless: boolean;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -47,6 +48,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	deleteAudioFilesAfterAudioTriggeredCannolis: false,
 	autoScrollWithTokenStream: false,
 	pLimit: 50,
+	contentIsColorless: false,
 };
 
 export interface HttpTemplate {
@@ -433,7 +435,8 @@ export default class Cannoli extends Plugin {
 		const factory = new CannoliFactory(
 			canvas.getCanvasData(),
 			`[[${this.app.workspace.getActiveFile()?.basename}]]` ??
-				"No active note"
+				"No active note",
+			this.settings.contentIsColorless ?? false
 		);
 
 		const graph = factory.getCannoliData();
@@ -997,6 +1000,26 @@ class CannoliSettingTab extends PluginSettingTab {
 								DEFAULT_SETTINGS.pLimit;
 							await this.plugin.saveSettings();
 						}
+					})
+			);
+
+		containerEl.createEl("h1", { text: "Canvas preferences" });
+
+		// Add toggle for contentIsColorless
+		new Setting(containerEl)
+			.setName("Parse colorless nodes as content nodes")
+			.setDesc(
+				"Toggle this if you'd like colorless (grey) nodes to be interpreted as content nodes rather than call nodes. Purple nodes will then be interpreted as call nodes."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(
+						this.plugin.settings.contentIsColorless ??
+							DEFAULT_SETTINGS.contentIsColorless
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.contentIsColorless = value;
+						await this.plugin.saveSettings();
 					})
 			);
 
