@@ -97,6 +97,7 @@ export enum ReferenceType {
 	Floating = "floating",
 	Note = "note",
 	CreateNote = "create-note",
+	Selection = "selection",
 }
 
 export interface Reference {

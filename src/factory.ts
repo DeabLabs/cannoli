@@ -1588,6 +1588,12 @@ export class CannoliFactory {
 				reference.shouldExtract = false;
 				reference.name = this.activeNote;
 				this.handleModifiers(reference, innerMatch[1]);
+			} else if ((innerMatch = /^SELECTION([\W]*)$/.exec(content))) {
+				// Special "SELECTION" reference
+				reference.type = ReferenceType.Selection;
+				reference.shouldExtract = false;
+				reference.name = "SELECTION";
+				this.handleModifiers(reference, innerMatch[1]);
 			} else if ((innerMatch = /^\[\[(.*?)\]\]([\W]*)$/.exec(content))) {
 				// Note reference
 				reference.type = ReferenceType.Note;

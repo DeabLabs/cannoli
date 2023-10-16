@@ -137,18 +137,14 @@ export class CannoliNode extends CannoliVertex {
 	async processReferences() {
 		const variableValues = this.getVariableValues(true);
 
-		// console.log(`References: ${JSON.stringify(this.references, null, 2)}`);
-		// console.log(
-		// 	`Variable values: ${JSON.stringify(variableValues, null, 2)}`
-		// );
-
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
 				let content = "{{invalid reference}}";
 				const { name } = reference;
 
 				if (
-					reference.type === ReferenceType.Variable &&
+					(reference.type === ReferenceType.Variable ||
+						reference.type === ReferenceType.Selection) &&
 					!reference.shouldExtract
 				) {
 					const variable = variableValues.find(
@@ -174,7 +170,8 @@ export class CannoliNode extends CannoliVertex {
 						content = `{{${reference.name}}}`;
 					}
 				} else if (
-					reference.type === ReferenceType.Variable &&
+					(reference.type === ReferenceType.Variable ||
+						reference.type === ReferenceType.Selection) &&
 					reference.shouldExtract
 				) {
 					const variable = variableValues.find(
@@ -346,6 +343,17 @@ export class CannoliNode extends CannoliVertex {
 			};
 
 			variableValues.push(currentNoteVariableValue);
+		}
+
+		// Add the default "SELECTION" variable
+		if (this.run.selection && includeGroupEdges) {
+			const currentSelectionVariableValue = {
+				name: "SELECTION",
+				content: this.run.selection,
+				edgeId: "",
+			};
+
+			variableValues.push(currentSelectionVariableValue);
 		}
 
 		// Resolve variable conflicts
@@ -899,6 +907,14 @@ export class CallNode extends CannoliNode {
 		this.executing();
 
 		const request = await this.createLLMRequest();
+
+		// If the message array is empty, error
+		if (request.messages.length === 0) {
+			this.error(
+				`No messages to send to LLM. Empty call nodes only send the message history they've been passed.`
+			);
+			return;
+		}
 
 		// If the node has an outgoing chatResponse edge, call with streaming
 		const chatResponseEdges = this.getOutgoingEdges().filter(
@@ -1626,6 +1642,14 @@ export class ReferenceNode extends ContentNode {
 						`Invalid reference. Could not find note "${this.reference.name}"`
 					);
 				}
+			} else if (this.reference.type === ReferenceType.Selection) {
+				const content = this.run.selection;
+
+				if (content !== null && content !== undefined) {
+					return content;
+				} else {
+					this.error(`Invalid reference. Could not find selection.`);
+				}
 			} else if (this.reference.type === ReferenceType.Floating) {
 				const content = this.getContentFromFloatingNode(
 					this.reference.name
@@ -1799,6 +1823,9 @@ export class ReferenceNode extends ContentNode {
 						`Invalid reference. Could not edit note ${this.reference.name}`
 					);
 				}
+			} else if (this.reference.type === ReferenceType.Selection) {
+				this.run.editSelection(newContent);
+				return;
 			} else if (this.reference.type === ReferenceType.Floating) {
 				// Search through all nodes for a floating node with the correct name
 				for (const objectId in this.graph) {

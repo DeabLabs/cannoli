@@ -88,6 +88,7 @@ export class Run {
 	isMock: boolean;
 	isStopped = false;
 	currentNote: string | null = null;
+	selection: string | null = null;
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4": {
@@ -146,6 +147,11 @@ export class Run {
 		this.currentNote = `[[${
 			this.cannoli.app.workspace.getActiveFile()?.basename
 		}]]`;
+
+		this.selection =
+			this.cannoli.app.workspace.activeEditor?.editor?.getSelection()
+				? this.cannoli.app.workspace.activeEditor?.editor?.getSelection()
+				: null;
 
 		// Set the default openai config
 		this.openaiConfig = openAiConfig ? openAiConfig : this.openaiConfig;
@@ -1187,6 +1193,20 @@ export class Run {
 		}
 
 		return content;
+	}
+
+	editSelection(newContent: string) {
+		if (this.isMock) {
+			return;
+		}
+
+		if (!this.cannoli.app.workspace.activeEditor) {
+			return;
+		}
+
+		this.cannoli.app.workspace.activeEditor?.editor?.replaceSelection(
+			newContent
+		);
 	}
 
 	async getPropertyOfNote(
