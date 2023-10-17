@@ -1,7 +1,7 @@
 {
   "id": "cannoli",
   "name": "Cannoli",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "minAppVersion": "0.15.0",
   "description": "Create and run LLM scripts on the Obsidian Canvas.",
   "author": "blindmansion",
