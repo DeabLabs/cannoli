@@ -1410,13 +1410,20 @@ export class ContentNode extends CannoliNode {
 		}
 
 		// Filter for incoming complete edges of type write, logging, or chatResponse, as well as edges with no text
-		const filteredEdges = incomingEdges.filter(
+		let filteredEdges = incomingEdges.filter(
 			(edge) =>
 				(edge.type === EdgeType.Write ||
 					edge.type === EdgeType.Logging ||
 					edge.type === EdgeType.ChatResponse ||
 					edge.text.length === 0) &&
 				this.graph[edge.id].status === CannoliObjectStatus.Complete
+		);
+
+		// Remove all edges with a vault modifier of type folder or property
+		filteredEdges = filteredEdges.filter(
+			(edge) =>
+				edge.vaultModifier !== VaultModifier.Folder &&
+				edge.vaultModifier !== VaultModifier.Property
 		);
 
 		if (filteredEdges.length === 0) {
