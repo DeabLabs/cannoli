@@ -91,16 +91,35 @@ export class Run {
 	selection: string | null = null;
 
 	modelInfo: Record<string, Model> = {
+		"gpt-4-1106-preview": {
+			name: "gpt-4-1106-preview",
+			promptTokenPrice: 0.01 / 1000, // $0.01 per 1K tokens
+			completionTokenPrice: 0.03 / 1000, // $0.03 per 1K tokens
+		},
+		"gpt-4-1106-vision-preview": {
+			name: "gpt-4-1106-vision-preview",
+			promptTokenPrice: 0.01 / 1000, // $0.01 per 1K tokens
+			completionTokenPrice: 0.03 / 1000, // $0.03 per 1K tokens
+		},
 		"gpt-4": {
 			name: "gpt-4",
 			promptTokenPrice: 0.03 / 1000, // $0.03 per 1K tokens
 			completionTokenPrice: 0.06 / 1000, // $0.06 per 1K tokens
 		},
-
-		"gpt-3.5-turbo": {
-			name: "gpt-3.5-turbo",
+		"gpt-4-32k": {
+			name: "gpt-4-32k",
+			promptTokenPrice: 0.06 / 1000, // $0.06 per 1K tokens
+			completionTokenPrice: 0.12 / 1000, // $0.12 per 1K tokens
+		},
+		"gpt-3.5-turbo-1106": {
+			name: "gpt-3.5-turbo-1106",
+			promptTokenPrice: 0.001 / 1000, // $0.0010 per 1K tokens
+			completionTokenPrice: 0.002 / 1000, // $0.0020 per 1K tokens
+		},
+		"gpt-3.5-turbo-instruct": {
+			name: "gpt-3.5-turbo-instruct",
 			promptTokenPrice: 0.0015 / 1000, // $0.0015 per 1K tokens
-			completionTokenPrice: 0.002 / 1000, // $0.002 per 1K tokens
+			completionTokenPrice: 0.002 / 1000, // $0.0020 per 1K tokens
 		},
 	};
 
