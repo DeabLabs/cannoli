@@ -111,6 +111,11 @@ export class Run {
 			promptTokenPrice: 0.06 / 1000, // $0.06 per 1K tokens
 			completionTokenPrice: 0.12 / 1000, // $0.12 per 1K tokens
 		},
+		"gpt-3.5-turbo": {
+			name: "gpt-3.5-turbo",
+			promptTokenPrice: 0.001 / 1000, // $0.0010 per 1K tokens
+			completionTokenPrice: 0.002 / 1000, // $0.0020 per 1K tokens
+		},
 		"gpt-3.5-turbo-1106": {
 			name: "gpt-3.5-turbo-1106",
 			promptTokenPrice: 0.001 / 1000, // $0.0010 per 1K tokens
