@@ -236,6 +236,7 @@ export class Llm {
 
 	async getCompletion({
 		messages,
+		model,
 		options: ollamaOptions,
 		...probablyOpenaiConfig
 	}: MixedProviderCompletionParams): Promise<
@@ -246,10 +247,20 @@ export class Llm {
 				throw new Error("OpenAI is not initialized");
 			}
 
+			const castModel = model as ChatCompletionCreateParams["model"];
+
+			const config = {
+				...probablyOpenaiConfig,
+			};
+			
+			// @ts-expect-error
+			delete config.apiKey;
+
 			return (await this.openai.chat.completions.create(
 				{
 					messages,
-					...probablyOpenaiConfig,
+					model: castModel,
+					...config,
 				},
 				{ stream: false }
 			)) as ChatCompletion;
@@ -297,11 +308,18 @@ export class Llm {
 
 			const castModel = model as ChatCompletionCreateParams["model"];
 
+			const config = {
+				...probablyOpenaiConfig,
+			};
+			
+			// @ts-expect-error
+			delete config.apiKey;
+
 			return this.openai.chat.completions.create(
 				{
 					messages,
 					model: castModel,
-					...probablyOpenaiConfig,
+					...config,
 				},
 				{ stream: true }
 			) as APIPromise<Stream<ChatCompletionChunk>>;
