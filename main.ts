@@ -415,7 +415,6 @@ export default class Cannoli extends Plugin {
 
 		// Create an instance of llm
 		let llm: Llm | undefined;
-		console.log("provider:", this.settings.llmProvider);
 		switch (this.settings.llmProvider) {
 			case "openai": {
 				const openAiConfig: OpenAIConfig = {
@@ -482,7 +481,6 @@ export default class Cannoli extends Plugin {
 		// const shouldContinue = true;
 
 		if (shouldContinue) {
-			console.log(llm);
 			await this.runCannoli(graph, file, name, canvas, llm);
 		}
 	};
@@ -1023,35 +1021,6 @@ class CannoliSettingTab extends PluginSettingTab {
 							}
 						})
 				);
-
-			new Setting(containerEl)
-				.setName("LLM call concurrency limit (pLimit)")
-				.setDesc(
-					"The maximum number of LLM calls that can be made at once. Decrease this if you are running into rate limiting issues."
-				)
-				.addText((text) =>
-					text
-						.setValue(
-							Number.isInteger(this.plugin.settings.pLimit)
-								? this.plugin.settings.pLimit.toString()
-								: DEFAULT_SETTINGS.pLimit.toString()
-						)
-						.onChange(async (value) => {
-							// If it's not empty and it's a positive integer, save it
-							if (
-								!isNaN(parseInt(value)) &&
-								parseInt(value) > 0
-							) {
-								this.plugin.settings.pLimit = parseInt(value);
-								await this.plugin.saveSettings();
-							} else {
-								// Otherwise, reset it to the default
-								this.plugin.settings.pLimit =
-									DEFAULT_SETTINGS.pLimit;
-								await this.plugin.saveSettings();
-							}
-						})
-				);
 		} else if (this.plugin.settings.llmProvider === "ollama") {
 			// ollama base url setting
 			new Setting(containerEl)
@@ -1083,6 +1052,32 @@ class CannoliSettingTab extends PluginSettingTab {
 						})
 				);
 		}
+
+		new Setting(containerEl)
+			.setName("LLM call concurrency limit (pLimit)")
+			.setDesc(
+				"The maximum number of LLM calls that can be made at once. Decrease this if you are running into rate limiting issues."
+			)
+			.addText((text) =>
+				text
+					.setValue(
+						Number.isInteger(this.plugin.settings.pLimit)
+							? this.plugin.settings.pLimit.toString()
+							: DEFAULT_SETTINGS.pLimit.toString()
+					)
+					.onChange(async (value) => {
+						// If it's not empty and it's a positive integer, save it
+						if (!isNaN(parseInt(value)) && parseInt(value) > 0) {
+							this.plugin.settings.pLimit = parseInt(value);
+							await this.plugin.saveSettings();
+						} else {
+							// Otherwise, reset it to the default
+							this.plugin.settings.pLimit =
+								DEFAULT_SETTINGS.pLimit;
+							await this.plugin.saveSettings();
+						}
+					})
+			);
 
 		containerEl.createEl("h1", { text: "Canvas preferences" });
 
