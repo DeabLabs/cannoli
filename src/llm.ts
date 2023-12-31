@@ -11,6 +11,7 @@ import {
 import { Stream } from "openai/streaming";
 import invariant from "tiny-invariant";
 
+// https://bugs.chromium.org/p/chromium/issues/detail?id=929585#c10
 // @ts-expect-error polyfill to make streams iterable
 ReadableStream.prototype[Symbol.asyncIterator] = async function* () {
 	const reader = this.getReader();
