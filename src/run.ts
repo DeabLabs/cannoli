@@ -489,7 +489,6 @@ export class Run {
 	}
 
 	async callLLMStream(request: ChatCompletionCreateParamsStreaming) {
-		// console.log(`Request: ${JSON.stringify(request, null, 2)}`);
 
 		if (this.isMock || !this.llm || !this.llm.initialized) {
 			// Return mock stream

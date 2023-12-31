@@ -283,6 +283,7 @@ export class Llm {
 	async getCompletionStream({
 		messages,
 		options: ollamaOptions,
+		model,
 		...probablyOpenaiConfig
 	}: MixedProviderCompletionParams): Promise<
 		| APIPromise<Stream<ChatCompletionChunk>>
@@ -294,9 +295,12 @@ export class Llm {
 				throw new Error("OpenAI is not initialized");
 			}
 
+			const castModel = model as ChatCompletionCreateParams["model"];
+
 			return this.openai.chat.completions.create(
 				{
 					messages,
+					model: castModel,
 					...probablyOpenaiConfig,
 				},
 				{ stream: true }
@@ -304,7 +308,7 @@ export class Llm {
 		} else if (this.provider === "ollama") {
 			invariant(this.ollamaConfig, "Ollama config is required");
 			const rawBody: OllamaChatRequest = {
-				model: this.ollamaConfig.model,
+				model: model,
 				messages: messages.filter(
 					(m) => m.role !== "function"
 				) as OllamaChatRequest["messages"],

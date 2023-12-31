@@ -406,7 +406,7 @@ export default class Cannoli extends Plugin {
 
 	startCannoli = async (file: TFile) => {
 		// If the api key is the default, send a notice telling the user to add their key
-		if (this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
+		if (this.settings.llmProvider === "openai" && this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
 			new Notice(
 				"Please enter your OpenAI API key in the Cannoli settings"
 			);
@@ -475,7 +475,8 @@ export default class Cannoli extends Plugin {
 			graph,
 			file,
 			name,
-			canvas
+			canvas,
+			llm
 		);
 
 		// const shouldContinue = true;
@@ -490,6 +491,7 @@ export default class Cannoli extends Plugin {
 		file: TFile,
 		name: string,
 		canvas: Canvas,
+		llm: Llm,
 		audioTranscription?: string
 	) => {
 		return new Promise<boolean>((resolve) => {
@@ -540,6 +542,7 @@ export default class Cannoli extends Plugin {
 				canvas: canvas,
 				onFinish: onFinish,
 				cannoli: this,
+				llm: llm,
 			});
 
 			// console.log("Starting validation run");
