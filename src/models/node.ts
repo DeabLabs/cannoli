@@ -21,7 +21,7 @@ import {
 	ChatCompletionMessage,
 } from "openai/resources/chat";
 import * as yaml from "js-yaml";
-import { LLMConfig, Llm } from "src/llm";
+import { LLMConfig, Llm, OpenAiChatMessage, OpenAiChatMessages } from "src/llm";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
@@ -623,8 +623,8 @@ export class CannoliNode extends CannoliVertex {
 }
 
 export class CallNode extends CannoliNode {
-	getPrependedMessages(): ChatCompletionMessage[] {
-		const messages: ChatCompletionMessage[] = [];
+	getPrependedMessages(): OpenAiChatMessages {
+		const messages: OpenAiChatMessages = [];
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
@@ -750,7 +750,7 @@ export class CallNode extends CannoliNode {
 		return messages;
 	}
 
-	async getNewMessage(role?: string): Promise<ChatCompletionMessage | null> {
+	async getNewMessage(role?: string): Promise<OpenAiChatMessage | null> {
 		const content = await this.processReferences();
 
 		// If there is no content, return null
@@ -764,13 +764,15 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
-	findNoteReferencesInMessages(messages: ChatCompletionMessage[]): string[] {
+	findNoteReferencesInMessages(messages: OpenAiChatMessages): string[] {
 		const references: string[] = [];
 		const noteRegex = /\[\[(.+?)\]\]/g;
 
 		// Get the contents of each double bracket
 		for (const message of messages) {
-			const matches = message.content?.matchAll(noteRegex);
+			const matches =
+				typeof message.content === "string" &&
+				message.content?.matchAll(noteRegex);
 
 			if (!matches) {
 				continue;
@@ -1055,7 +1057,7 @@ export class CallNode extends CannoliNode {
 	}
 
 	getFunctions(
-		messages: ChatCompletionMessage[]
+		messages: OpenAiChatMessages
 	): ChatCompletionCreateParams.Function[] {
 		if (
 			this.getOutgoingEdges().some(
@@ -1080,7 +1082,7 @@ export class CallNode extends CannoliNode {
 
 export class FormNode extends CallNode {
 	getFunctions(
-		messages: ChatCompletionMessage[]
+		messages: OpenAiChatMessages
 	): ChatCompletionCreateParams.Function[] {
 		// Get the names of the fields
 		const fields = this.getFields();
@@ -1143,8 +1145,10 @@ export class FormNode extends CallNode {
 		const messages = request.messages;
 
 		// Get the fields from the last message
+		const lastMessage = messages[messages.length - 1];
 		const formFunctionArgs =
-			messages[messages.length - 1].function_call?.arguments;
+			"function_call" in lastMessage &&
+			lastMessage.function_call?.arguments;
 
 		if (!formFunctionArgs) {
 			this.error(`Form function call has no arguments.`);
@@ -1217,7 +1221,7 @@ export class AccumulateNode extends CallNode {
 }
 export class ChooseNode extends CallNode {
 	getFunctions(
-		messages: ChatCompletionMessage[]
+		messages: OpenAiChatMessages
 	): ChatCompletionCreateParams.Function[] {
 		const choices = this.getBranchChoices();
 
@@ -1234,8 +1238,10 @@ export class ChooseNode extends CallNode {
 		const messages = request.messages;
 
 		// Get the chosen variable from the last message
+		const lastMessage = messages[messages.length - 1];
 		const choiceFunctionArgs =
-			messages[messages.length - 1].function_call?.arguments;
+			"function_call" in lastMessage &&
+			lastMessage.function_call?.arguments;
 
 		if (!choiceFunctionArgs) {
 			this.error(`Choice function call has no arguments.`);

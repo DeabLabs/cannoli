@@ -26,6 +26,9 @@ ReadableStream.prototype[Symbol.asyncIterator] = async function* () {
 	}
 };
 
+export type OpenAiChatMessage = ChatCompletionCreateParams["messages"][number];
+export type OpenAiChatMessages = ChatCompletionCreateParams["messages"];
+
 export type LLMProvider = "openai" | "ollama";
 
 export type OllamaConfig = {
@@ -253,7 +256,7 @@ export class Llm {
 			const config = {
 				...probablyOpenaiConfig,
 			};
-			
+
 			// @ts-expect-error
 			delete config.apiKey;
 
@@ -312,7 +315,7 @@ export class Llm {
 			const config = {
 				...probablyOpenaiConfig,
 			};
-			
+
 			// @ts-expect-error
 			delete config.apiKey;
 

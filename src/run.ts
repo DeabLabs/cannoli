@@ -10,16 +10,15 @@ import {
 	ChatCompletionCreateParams,
 	ChatCompletionCreateParamsNonStreaming,
 	ChatCompletionCreateParamsStreaming,
-	ChatCompletionMessage,
 } from "openai/resources/chat";
 import * as yaml from "js-yaml";
-import { Llm, OpenAIConfig } from "src/llm";
+import { Llm, OpenAIConfig, OpenAiChatMessage } from "src/llm";
 
 export type StoppageReason = "user" | "error" | "complete";
 
 interface Limit {
-	(fn: () => Promise<ChatCompletionMessage | Error>): Promise<
-		ChatCompletionMessage | Error
+	(fn: () => Promise<OpenAiChatMessage | Error>): Promise<
+		OpenAiChatMessage | Error
 	>;
 }
 
@@ -427,69 +426,63 @@ export class Run {
 	async callLLM(
 		request: ChatCompletionCreateParamsNonStreaming,
 		verbose?: boolean
-	): Promise<ChatCompletionMessage | Error> {
+	): Promise<OpenAiChatMessage | Error> {
 		// console.log(`Request: ${JSON.stringify(request, null, 2)}`);
 
-		return this.llmLimit(
-			async (): Promise<ChatCompletionMessage | Error> => {
-				// Only call LLM if we're not mocking
-				if (this.isMock || !this.llm || !this.llm.initialized) {
-					// return {
-					// 	role: "assistant",
-					// 	content: "Mock response",
-					// };
+		return this.llmLimit(async (): Promise<OpenAiChatMessage | Error> => {
+			// Only call LLM if we're not mocking
+			if (this.isMock || !this.llm || !this.llm.initialized) {
+				// return {
+				// 	role: "assistant",
+				// 	content: "Mock response",
+				// };
 
-					return this.createMockFunctionResponse(request);
-				}
-
-				// Catch any errors
-				try {
-					const response = await this.llm.getCompletion(request);
-					const completion = Llm.getFirstCompletionMessage(response);
-
-					if (verbose) {
-						console.log(
-							"Input Messages:\n" +
-								JSON.stringify(request.messages, null, 2) +
-								"\n\nResponse Message:\n" +
-								JSON.stringify(completion, null, 2)
-						);
-					}
-
-					const responseUsage =
-						Llm.getCompletionResponseUsage(response);
-					if (responseUsage) {
-						const model = this.modelInfo[request.model];
-						if (!this.usage[model.name]) {
-							this.usage[model.name] = {
-								model: model,
-								modelUsage: {
-									promptTokens: 0,
-									completionTokens: 0,
-									apiCalls: 0,
-									totalCost: 0,
-								},
-							};
-						}
-
-						this.usage[model.name].modelUsage.promptTokens +=
-							responseUsage.prompt_tokens;
-						this.usage[model.name].modelUsage.completionTokens +=
-							responseUsage.completion_tokens;
-						this.usage[model.name].modelUsage.apiCalls += 1;
-					}
-					return completion
-						? completion
-						: Error("No message returned");
-				} catch (e) {
-					return e;
-				}
+				return this.createMockFunctionResponse(request);
 			}
-		);
+
+			// Catch any errors
+			try {
+				const response = await this.llm.getCompletion(request);
+				const completion = Llm.getFirstCompletionMessage(response);
+
+				if (verbose) {
+					console.log(
+						"Input Messages:\n" +
+							JSON.stringify(request.messages, null, 2) +
+							"\n\nResponse Message:\n" +
+							JSON.stringify(completion, null, 2)
+					);
+				}
+
+				const responseUsage = Llm.getCompletionResponseUsage(response);
+				if (responseUsage) {
+					const model = this.modelInfo[request.model];
+					if (!this.usage[model.name]) {
+						this.usage[model.name] = {
+							model: model,
+							modelUsage: {
+								promptTokens: 0,
+								completionTokens: 0,
+								apiCalls: 0,
+								totalCost: 0,
+							},
+						};
+					}
+
+					this.usage[model.name].modelUsage.promptTokens +=
+						responseUsage.prompt_tokens;
+					this.usage[model.name].modelUsage.completionTokens +=
+						responseUsage.completion_tokens;
+					this.usage[model.name].modelUsage.apiCalls += 1;
+				}
+				return completion ? completion : Error("No message returned");
+			} catch (e) {
+				return e;
+			}
+		});
 	}
 
 	async callLLMStream(request: ChatCompletionCreateParamsStreaming) {
-
 		if (this.isMock || !this.llm || !this.llm.initialized) {
 			// Return mock stream
 			return "Mock response";
@@ -506,12 +499,12 @@ export class Run {
 
 	createMockFunctionResponse(
 		request: ChatCompletionCreateParamsNonStreaming
-	): ChatCompletionMessage {
+	): OpenAiChatMessage {
 		let textMessages = "";
 
 		// For each message, convert it to a string, including the role and the content, and a function call if present
 		for (const message of request.messages) {
-			if (message.function_call) {
+			if ("function_call" in message && message.function_call) {
 				textMessages += `${message.role}: ${message.content} ${message.function_call} `;
 			} else {
 				textMessages += `${message.role}: ${message.content} `;
@@ -560,7 +553,7 @@ export class Run {
 
 				return this.createMockChoiceFunctionResponse(
 					choiceFunction
-				) as ChatCompletionMessage;
+				) as OpenAiChatMessage;
 			} else if (calledFunction === "form") {
 				// Find the answers function
 				const formFunction = request.functions?.find(
@@ -573,7 +566,7 @@ export class Run {
 
 				return this.createMockFormFunctionResponse(
 					formFunction
-				) as ChatCompletionMessage;
+				) as OpenAiChatMessage;
 			} else if (calledFunction === "note_select") {
 				// Find the note name function
 				const noteNameFunction = request.functions?.find(
@@ -586,7 +579,7 @@ export class Run {
 
 				return this.createMockNoteNameFunctionResponse(
 					noteNameFunction
-				) as ChatCompletionMessage;
+				) as OpenAiChatMessage;
 			}
 		}
 
@@ -600,14 +593,17 @@ export class Run {
 		choiceFunction: ChatCompletionCreateParams.Function
 	) {
 		const parsedProperties = JSON.parse(
-			JSON.stringify(choiceFunction?.parameters["properties"])
+			JSON.stringify(choiceFunction?.parameters?.["properties"] ?? {})
 		);
 
 		// Pick one of the choices randomly
 		const randomChoice =
-			parsedProperties.choice.enum[
-				Math.floor(Math.random() * parsedProperties.choice.enum.length)
-			];
+			parsedProperties?.choice?.enum[
+				Math.floor(
+					Math.random() *
+						(parsedProperties?.choice?.enum?.length ?? 0)
+				)
+			] ?? "N/A";
 
 		return {
 			role: "assistant",
@@ -627,7 +623,10 @@ export class Run {
 
 		// Go through the properties of the function and enter a mock string
 		for (const property of Object.keys(
-			listFunction?.parameters["properties"] as Record<string, string>
+			(listFunction?.parameters?.["properties"] ?? {}) as Record<
+				string,
+				string
+			>
 		)) {
 			args.push({
 				[property]: "Mock answer",
@@ -649,14 +648,14 @@ export class Run {
 		const args: { [key: string]: string }[] = [];
 
 		const parsedProperties = JSON.parse(
-			JSON.stringify(noteFunction?.parameters["properties"])
+			JSON.stringify(noteFunction?.parameters?.["properties"] ?? {})
 		);
 
 		// Pick one of the options in note.enum randomly
 		const randomNote =
-			parsedProperties.note.enum[
-				Math.random() * parsedProperties.note.enum.length
-			];
+			parsedProperties?.note?.enum[
+				Math.random() * (parsedProperties?.note?.enum?.length ?? 0)
+			] ?? "N/A";
 
 		args.push({
 			note: randomNote,

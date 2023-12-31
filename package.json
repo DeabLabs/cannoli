@@ -8,7 +8,8 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"build-college": "node scripts/fileGen.js",
-		"release": "node scripts/release.mjs"
+		"release": "node scripts/release.mjs",
+		"typecheck": "tsc --noEmit"
 	},
 	"keywords": [],
 	"author": "",
@@ -28,7 +29,7 @@
 	"dependencies": {
 		"esbuild-plugin-wat": "^0.2.7",
 		"js-yaml": "^4.1.0",
-		"openai": "^4.0.0",
+		"openai": "^4.24.1",
 		"p-limit": "^4.0.0",
 		"tiny-invariant": "^1.3.1",
 		"uuid": "^9.0.0"
