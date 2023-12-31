@@ -6,11 +6,9 @@ import {
 	VaultModifier,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
-import {
-	ChatCompletionCreateParams,
-	ChatCompletionMessage,
-} from "openai/resources/chat";
+import { ChatCompletionCreateParams } from "openai/resources/chat";
 import { ChatRole } from "src/run";
+import { OpenAiChatMessages } from "src/llm";
 
 export class CannoliEdge extends CannoliObject {
 	source: string;
@@ -21,7 +19,7 @@ export class CannoliEdge extends CannoliObject {
 	addMessages: boolean;
 	vaultModifier: VaultModifier | null;
 	content: string | Record<string, string> | null;
-	messages: ChatCompletionMessage[] | null;
+	messages: OpenAiChatMessages | null;
 
 	constructor(edgeData: VerifiedCannoliCanvasEdgeData) {
 		super(edgeData);
@@ -144,7 +142,7 @@ export class ChatConverterEdge extends CannoliEdge {
 	}): void {
 		const format = this.run.cannoli.settings.chatFormatString;
 		const messageString = "";
-		let messages: ChatCompletionMessage[] = [];
+		let messages: OpenAiChatMessages = [];
 
 		if (content && format) {
 			// Convert content to messages using the format
@@ -159,7 +157,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		this.messages = messages;
 	}
 
-	stringToArray(str: string, format: string): ChatCompletionMessage[] {
+	stringToArray(str: string, format: string): OpenAiChatMessages {
 		const rolePattern = format
 			.replace("{{role}}", "(System|User|Assistant)")
 			.replace("{{content}}", "")
@@ -167,7 +165,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		const regex = new RegExp(rolePattern, "g");
 
 		let match;
-		let messages: ChatCompletionMessage[] = [];
+		let messages: OpenAiChatMessages = [];
 		let lastIndex = 0;
 
 		let firstMatch = true;
@@ -178,7 +176,7 @@ export class ChatConverterEdge extends CannoliEdge {
 			// If this is the first match and there's text before it, add that text as a 'user' message
 			if (firstMatch && match.index > 0) {
 				messages.push({
-					role: "user" as ChatRole,
+					role: "user" as const,
 					content: str.substring(0, match.index).trim(),
 				});
 			}
@@ -227,7 +225,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		return messages;
 	}
 
-	limitMessages(messages: ChatCompletionMessage[]): ChatCompletionMessage[] {
+	limitMessages(messages: OpenAiChatMessages): OpenAiChatMessages {
 		let isTokenBased = false;
 		let originalText = this.text;
 
@@ -242,7 +240,7 @@ export class ChatConverterEdge extends CannoliEdge {
 			return messages;
 		}
 
-		let outputMessages: ChatCompletionMessage[];
+		let outputMessages: OpenAiChatMessages;
 
 		if (isTokenBased) {
 			const maxCharacters = limitValue * 4;
@@ -350,7 +348,7 @@ export class LoggingEdge extends CannoliEdge {
 		// If content exists, save it as the configString
 		let configString = null;
 
-		let messages = [];
+		let messages: OpenAiChatMessages = [];
 
 		if (request) {
 			configString = this.getConfigString(request);
@@ -447,12 +445,12 @@ export class LoggingEdge extends CannoliEdge {
 		return forEachVersionNumbers;
 	}
 
-	formatInteractionHeaders(messages: ChatCompletionMessage[]): string {
+	formatInteractionHeaders(messages: OpenAiChatMessages): string {
 		let formattedString = "";
 		messages.forEach((message) => {
 			const role = message.role;
 			let content = message.content;
-			if (message.function_call) {
+			if ("function_call" in message && message.function_call) {
 				content = `Function Call: **${message.function_call.name}**\nArguments:\n\`\`\`json\n${message.function_call.arguments}\n\`\`\``;
 			}
 			formattedString += `#### <u>${
