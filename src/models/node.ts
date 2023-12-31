@@ -1,5 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { ChatRole, type OpenAIConfig } from "src/run";
+import { ChatRole } from "src/run";
 import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
 import { CannoliGroup } from "./group";
 import {
@@ -21,6 +21,7 @@ import {
 	ChatCompletionMessage,
 } from "openai/resources/chat";
 import * as yaml from "js-yaml";
+import { LLMConfig, Llm } from "src/llm";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
@@ -783,32 +784,21 @@ export class CallNode extends CannoliNode {
 		return references;
 	}
 
-	private getDefaultConfig(): OpenAIConfig {
+	private getDefaultConfig(): LLMConfig {
 		const config = JSON.parse(JSON.stringify(this.run.getDefaultConfig()));
 		return config;
 	}
 
 	private updateConfigWithValue(
-		runConfig: OpenAIConfig,
+		runConfig: LLMConfig,
 		content: string | Record<string, string> | null,
 		setting?: string | null
 	): void {
-		// Sample object to validate keys against
-		const sampleOpenAIConfig: OpenAIConfig = {
-			model: "",
-			frequency_penalty: undefined,
-			presence_penalty: undefined,
-			stop: undefined,
-			function_call: undefined,
-			functions: undefined,
-			temperature: undefined,
-			top_p: undefined,
-			role: "user" || "assistant" || "system",
-		};
+		const sampleConfig = this.run.llm?.getSampleConfig() ?? {};
 
 		// Define the expected types for each key
 		const keyTypeMap: {
-			[key in keyof OpenAIConfig]?: "string" | "number";
+			[key in keyof LLMConfig]?: "string" | "number";
 		} = {
 			frequency_penalty: "number",
 			presence_penalty: "number",
@@ -817,14 +807,14 @@ export class CallNode extends CannoliNode {
 		};
 
 		// Convert value based on its expected type
-		const convertValue = (key: keyof OpenAIConfig, value: string) => {
+		const convertValue = (key: keyof LLMConfig, value: string) => {
 			const expectedType = keyTypeMap[key];
 			return expectedType === "number" ? parseFloat(value) : value;
 		};
 
-		// Type guard to check if a string is a key of OpenAIConfig
-		const isValidKey = (key: string): key is keyof OpenAIConfig => {
-			return key in sampleOpenAIConfig;
+		// Type guard to check if a string is a key of LLMConfig
+		const isValidKey = (key: string): key is keyof LLMConfig => {
+			return key in sampleConfig;
 		};
 
 		if (typeof content === "string") {
@@ -849,7 +839,7 @@ export class CallNode extends CannoliNode {
 	}
 
 	private processSingleEdge(
-		runConfig: OpenAIConfig,
+		runConfig: LLMConfig,
 		edgeObject: CannoliEdge
 	): void {
 		if (
@@ -866,7 +856,7 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processEdges(runConfig: OpenAIConfig, edges: CannoliEdge[]): void {
+	private processEdges(runConfig: LLMConfig, edges: CannoliEdge[]): void {
 		for (const edgeObject of edges) {
 			if (!(edgeObject instanceof CannoliEdge)) {
 				throw new Error(
@@ -877,7 +867,7 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processGroups(runConfig: OpenAIConfig): void {
+	private processGroups(runConfig: LLMConfig): void {
 		for (let i = this.groups.length - 1; i >= 0; i--) {
 			const group = this.graph[this.groups[i]];
 			if (group instanceof CannoliGroup) {
@@ -889,14 +879,14 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processNodes(runConfig: OpenAIConfig): void {
+	private processNodes(runConfig: LLMConfig): void {
 		const configEdges = this.getIncomingEdges().filter(
 			(edge) => edge.type === EdgeType.Config
 		);
 		this.processEdges(runConfig, configEdges);
 	}
 
-	getConfig(): OpenAIConfig {
+	getConfig(): LLMConfig {
 		const runConfig = this.getDefaultConfig();
 
 		this.processGroups(runConfig);
@@ -948,9 +938,10 @@ export class CallNode extends CannoliNode {
 
 			// Create message content string
 			let messageContent = "";
-
 			// Process the stream. For each part, add the message to the request, and load the outgoing edges
-			for await (const part of stream) {
+			for await (const rawPart of stream) {
+				const part = this.run.llm?.getPart(rawPart);
+
 				if (part instanceof Error) {
 					this.error(`Error calling LLM:\n${part.message}`);
 					return;
@@ -962,7 +953,7 @@ export class CallNode extends CannoliNode {
 				}
 
 				// If the stream is done, break out of the loop
-				if (part.choices[0].finish_reason) {
+				if (Llm.getStreamingCompletionFinished(part)) {
 					// Load outgoing chatResponse edges with the message "END OF STREAM"
 					for (const edge of chatResponseEdges) {
 						edge.load({
@@ -975,12 +966,13 @@ export class CallNode extends CannoliNode {
 				}
 
 				// Add the part to the message content
-				messageContent += part.choices[0].delta.content;
+				const delta = Llm.getFirstStreamingCompletionMessageDelta(part);
+				messageContent += delta;
 
 				// Load outgoing chatResponse edges with the part
 				for (const edge of chatResponseEdges) {
 					edge.load({
-						content: part.choices[0].delta.content ?? "",
+						content: delta ?? "",
 						request: request,
 					});
 				}
