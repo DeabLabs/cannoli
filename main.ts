@@ -16,7 +16,7 @@ import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
-import { LLMProvider, Llm, OpenAIConfig } from "src/llm";
+import { LLMProvider, Llm, OllamaConfig, OpenAIConfig } from "src/llm";
 
 interface CannoliSettings {
 	llmProvider: LLMProvider;
@@ -406,7 +406,10 @@ export default class Cannoli extends Plugin {
 
 	startCannoli = async (file: TFile) => {
 		// If the api key is the default, send a notice telling the user to add their key
-		if (this.settings.llmProvider === "openai" && this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
+		if (
+			this.settings.llmProvider === "openai" &&
+			this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey
+		) {
 			new Notice(
 				"Please enter your OpenAI API key in the Cannoli settings"
 			);
@@ -417,7 +420,7 @@ export default class Cannoli extends Plugin {
 		let llm: Llm | undefined;
 		switch (this.settings.llmProvider) {
 			case "openai": {
-				const openAiConfig: OpenAIConfig = {
+				const openAiConfig: OpenAIConfig & { apiKey: string } = {
 					apiKey: this.settings.openaiAPIKey,
 					model: this.settings.defaultModel,
 					temperature: this.settings.defaultTemperature,
@@ -430,7 +433,7 @@ export default class Cannoli extends Plugin {
 				break;
 			}
 			case "ollama": {
-				const ollamaConfig = {
+				const ollamaConfig: OllamaConfig & { baseURL: string } = {
 					baseURL: this.settings.ollamaBaseUrl,
 					model: this.settings.ollamaModel,
 				};

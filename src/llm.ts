@@ -10,6 +10,7 @@ import {
 } from "openai/resources/chat";
 import { Stream } from "openai/streaming";
 import invariant from "tiny-invariant";
+import { z } from "zod";
 
 // https://bugs.chromium.org/p/chromium/issues/detail?id=929585#c10
 // @ts-expect-error polyfill to make streams iterable
@@ -31,48 +32,116 @@ export type OpenAiChatMessages = ChatCompletionCreateParams["messages"];
 
 export type LLMProvider = "openai" | "ollama";
 
-export type OllamaConfig = {
-	baseURL: string;
-	model: string;
-	stream?: boolean;
-	role?: "system" | "user" | "assistant";
-	// options
-	options?: {
-		microstat?: number;
-		microstat_eta?: number;
-		microstat_tau?: number;
-		num_ctx?: number;
-		num_gqa?: number;
-		num_gpu?: number;
-		num_thread?: number;
-		repeat_last_n?: number;
-		repeat_penalty?: number;
-		temperature?: number;
-		seed?: number;
-		stop?: string;
-		tfs_z?: number;
-		num_predict?: number;
-		top_k?: number;
-		top_p?: number;
-	};
+const OllamaConfigSchema = z.object({
+	model: z.string(),
+	role: z.enum(["system", "user", "assistant"]).optional(),
+	options: z
+		.object({
+			microstat: z.number().optional().nullable(),
+			microstat_eta: z.number().optional().nullable(),
+			microstat_tau: z.number().optional().nullable(),
+			num_ctx: z.number().optional().nullable(),
+			num_gqa: z.number().optional().nullable(),
+			num_gpu: z.number().optional().nullable(),
+			num_thread: z.number().optional().nullable(),
+			repeat_last_n: z.number().optional().nullable(),
+			repeat_penalty: z.number().optional().nullable(),
+			temperature: z.number().optional().nullable(),
+			seed: z.number().optional().nullable(),
+			stop: z.union([
+				z.array(z.string()),
+				z.string().optional().nullable(),
+			]),
+			tfs_z: z.number().optional().nullable(),
+			num_predict: z.number().optional().nullable(),
+			top_k: z.number().optional().nullable(),
+			top_p: z.number().optional().nullable(),
+		})
+		.optional(),
+});
+
+export type OllamaConfig = z.infer<typeof OllamaConfigSchema>;
+
+const FlattenedOllamaConfigSchema = OllamaConfigSchema.transform(
+	({ options, ...s }) => ({
+		...s,
+		...options,
+	})
+);
+
+export type FlattenedOllamaConfig = z.infer<typeof FlattenedOllamaConfigSchema>;
+
+export const OpenAIConfigSchema = z.object({
+	model: z.string(),
+	role: z.enum(["system", "user", "assistant"]).optional(),
+	frequency_penalty: z.number().optional().nullable(),
+	presence_penalty: z.number().optional().nullable(),
+	stop: z
+		.union([z.array(z.string()), z.string(), z.null(), z.undefined()])
+		.optional()
+		.nullable(),
+	function_call: z
+		.union([
+			z.literal("none"),
+			z.literal("auto"),
+			z.object({ name: z.string() }),
+		])
+		.optional(),
+	functions: z
+		.array(
+			z.object({
+				name: z.string(),
+				description: z.string().optional(),
+				parameters: z.record(z.unknown()).optional(),
+			})
+		)
+		.optional(),
+	temperature: z.number().optional().nullable(),
+	top_p: z.number().optional().nullable(),
+});
+
+export type OpenAIConfig = z.infer<typeof OpenAIConfigSchema>;
+
+// a combination of both configs that can be transformed into either
+const LLMConfigSchema = z.intersection(
+	OpenAIConfigSchema,
+	FlattenedOllamaConfigSchema
+);
+
+export type LLMConfig = z.infer<typeof LLMConfigSchema>;
+
+const transformLLMConfigIntoOpenAIConfig = (llmConfig: LLMConfig) => {
+	return OpenAIConfigSchema.parse(llmConfig);
 };
 
-export type OpenAIConfig = {
-	apiKey: string;
-	model: string;
-	stream?: boolean;
-	// options
-	role?: "system" | "user" | "assistant";
-	frequency_penalty?: number | undefined;
-	presence_penalty?: number | undefined;
-	stop?: string[] | undefined;
-	function_call?: string | undefined;
-	functions?: ChatCompletionCreateParams.Function[] | undefined;
-	temperature?: number | undefined;
-	top_p?: number | undefined;
+const transformLLMConfigIntoOllamaConfig = (llmConfig: LLMConfig) => {
+	return OllamaConfigSchema.parse(
+		LLMConfigSchema.transform((c) => {
+			// we need to move the options back into an options object
+			return {
+				...c,
+				options: {
+					microstat: c.microstat,
+					microstat_eta: c.microstat_eta,
+					microstat_tau: c.microstat_tau,
+					num_ctx: c.num_ctx,
+					num_gqa: c.num_gqa,
+					num_gpu: c.num_gpu,
+					num_thread: c.num_thread,
+					repeat_last_n: c.repeat_last_n,
+					repeat_penalty: c.repeat_penalty,
+					temperature: c.temperature,
+					seed: c.seed,
+					stop: c.stop,
+					tfs_z: c.tfs_z,
+					num_predict: c.num_predict,
+					top_k: c.top_k,
+					top_p: c.top_p,
+				},
+			};
+		}).parse(llmConfig)
+	);
 };
-
-export type LLMConfig = OpenAIConfig & OllamaConfig;
 
 export type OllamaChatRequest = {
 	model: string;
@@ -125,8 +194,9 @@ export type OllamaStreamingChatFinalResponse = {
 	eval_duration: number;
 };
 
-export type MixedProviderCompletionParams = ChatCompletionCreateParams & {
-	options?: OllamaConfig["options"];
+export type MixedProviderCompletionParams = LLMConfig & {
+	stream?: boolean | null;
+	messages: OpenAiChatMessages | OllamaChatRequest["messages"];
 };
 
 export type MixedProviderCompletionResponse =
@@ -140,7 +210,6 @@ export type MixedProviderStreamingCompletionResponse =
 
 // Sample object to validate keys against
 export const makeSampleOpenAIConfig = (): OpenAIConfig => ({
-	apiKey: "",
 	model: "",
 	frequency_penalty: undefined,
 	presence_penalty: undefined,
@@ -151,33 +220,31 @@ export const makeSampleOpenAIConfig = (): OpenAIConfig => ({
 	top_p: undefined,
 	role: "user" || "assistant" || "system",
 });
-export const makeSampleOllamaConfig = (): OllamaConfig => ({
-	baseURL: "",
+export const makeSampleOllamaConfig = (): FlattenedOllamaConfig => ({
 	model: "",
-	options: {
-		microstat: undefined,
-		microstat_eta: undefined,
-		microstat_tau: undefined,
-		num_ctx: undefined,
-		num_gqa: undefined,
-		num_gpu: undefined,
-		num_thread: undefined,
-		repeat_last_n: undefined,
-		repeat_penalty: undefined,
-		temperature: undefined,
-		seed: undefined,
-		stop: undefined,
-		tfs_z: undefined,
-		num_predict: undefined,
-		top_k: undefined,
-		top_p: undefined,
-	},
+	microstat: undefined,
+	microstat_eta: undefined,
+	microstat_tau: undefined,
+	num_ctx: undefined,
+	num_gqa: undefined,
+	num_gpu: undefined,
+	num_thread: undefined,
+	repeat_last_n: undefined,
+	repeat_penalty: undefined,
+	temperature: undefined,
+	seed: undefined,
+	stop: undefined,
+	tfs_z: undefined,
+	num_predict: undefined,
+	top_k: undefined,
+	top_p: undefined,
 });
 
 export class Llm {
 	provider: LLMProvider;
 	openaiConfig?: OpenAIConfig;
 	ollamaConfig?: OllamaConfig;
+	ollamaBaseURL?: string;
 	openai: OpenAI | null;
 	initialized = false;
 
@@ -187,8 +254,8 @@ export class Llm {
 		openaiConfig,
 	}: {
 		provider: LLMProvider;
-		ollamaConfig?: OllamaConfig;
-		openaiConfig?: OpenAIConfig;
+		ollamaConfig?: OllamaConfig & { baseURL: string };
+		openaiConfig?: OpenAIConfig & { apiKey: string };
 	}) {
 		this.provider = provider;
 		switch (provider) {
@@ -196,9 +263,10 @@ export class Llm {
 				if (!openaiConfig) {
 					throw new Error("OpenAI config is required");
 				}
-				this.openaiConfig = openaiConfig;
+				const { apiKey, ...restConfig } = openaiConfig;
+				this.openaiConfig = restConfig;
 				this.openai = new OpenAI({
-					apiKey: openaiConfig.apiKey,
+					apiKey,
 					dangerouslyAllowBrowser: true,
 				});
 				this.initialized = true;
@@ -208,7 +276,9 @@ export class Llm {
 				if (!ollamaConfig) {
 					throw new Error("Ollama config is required");
 				}
-				this.ollamaConfig = ollamaConfig;
+				const { baseURL, ...restConfig } = ollamaConfig;
+				this.ollamaBaseURL = baseURL;
+				this.ollamaConfig = restConfig;
 				this.initialized = true;
 				break;
 			}
@@ -240,9 +310,7 @@ export class Llm {
 
 	async getCompletion({
 		messages,
-		model,
-		options: ollamaOptions,
-		...probablyOpenaiConfig
+		...llmConfig
 	}: MixedProviderCompletionParams): Promise<
 		ChatCompletion | OllamaChatResponse
 	> {
@@ -251,35 +319,29 @@ export class Llm {
 				throw new Error("OpenAI is not initialized");
 			}
 
-			const castModel = model as ChatCompletionCreateParams["model"];
+			const openaiConfig = transformLLMConfigIntoOpenAIConfig(llmConfig);
 
-			const config = {
-				...probablyOpenaiConfig,
-			};
-
-			// @ts-expect-error
-			delete config.apiKey;
-
+			console.log(openaiConfig);
 			return (await this.openai.chat.completions.create(
 				{
 					messages,
-					model: castModel,
-					...config,
+					...openaiConfig,
 				},
 				{ stream: false }
 			)) as ChatCompletion;
 		} else if (this.provider === "ollama") {
-			invariant(this.ollamaConfig, "Ollama config is required");
+			invariant(this.ollamaBaseURL, "Ollama base URL is required");
+			const ollamaConfig = transformLLMConfigIntoOllamaConfig(llmConfig);
 			const rawBody: OllamaChatRequest = {
-				model: this.ollamaConfig.model,
 				messages: messages.filter(
 					(m) => m.role !== "function"
 				) as OllamaChatRequest["messages"],
-				options: ollamaOptions,
+				...ollamaConfig,
 				stream: false,
 			};
+			console.log(rawBody);
 			const options: RequestUrlParam = {
-				url: `${this.ollamaConfig.baseURL}/api/chat`,
+				url: `${this.ollamaBaseURL}/api/chat`,
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
@@ -297,9 +359,7 @@ export class Llm {
 
 	async getCompletionStream({
 		messages,
-		options: ollamaOptions,
-		model,
-		...probablyOpenaiConfig
+		...llmConfig
 	}: MixedProviderCompletionParams): Promise<
 		| APIPromise<Stream<ChatCompletionChunk>>
 		| ReadableStream<Uint8Array>
@@ -310,35 +370,25 @@ export class Llm {
 				throw new Error("OpenAI is not initialized");
 			}
 
-			const castModel = model as ChatCompletionCreateParams["model"];
+			const openaiConfig = transformLLMConfigIntoOpenAIConfig(llmConfig);
 
-			const config = {
-				...probablyOpenaiConfig,
-			};
-
-			// @ts-expect-error
-			delete config.apiKey;
-
-			return this.openai.chat.completions.create(
-				{
-					messages,
-					model: castModel,
-					...config,
-				},
-				{ stream: true }
-			) as APIPromise<Stream<ChatCompletionChunk>>;
+			return this.openai.chat.completions.create({
+				messages,
+				...openaiConfig,
+				stream: true,
+			});
 		} else if (this.provider === "ollama") {
-			invariant(this.ollamaConfig, "Ollama config is required");
+			invariant(this.ollamaBaseURL, "Ollama baseUrl is required");
+			const ollamaConfig = transformLLMConfigIntoOllamaConfig(llmConfig);
 			const rawBody: OllamaChatRequest = {
-				model: model,
 				messages: messages.filter(
 					(m) => m.role !== "function"
 				) as OllamaChatRequest["messages"],
-				options: ollamaOptions,
+				...ollamaConfig,
 				stream: true,
 			};
 			const options: RequestUrlParam = {
-				url: `${this.ollamaConfig.baseURL}/api/chat`,
+				url: `${this.ollamaBaseURL}/api/chat`,
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
