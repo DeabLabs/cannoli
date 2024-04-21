@@ -321,7 +321,6 @@ export class Llm {
 
 			const openaiConfig = transformLLMConfigIntoOpenAIConfig(llmConfig);
 
-			console.log(openaiConfig);
 			return (await this.openai.chat.completions.create(
 				{
 					messages,
@@ -339,7 +338,7 @@ export class Llm {
 				...ollamaConfig,
 				stream: false,
 			};
-			console.log(rawBody);
+
 			const options: RequestUrlParam = {
 				url: `${this.ollamaBaseURL}/api/chat`,
 				method: "POST",
