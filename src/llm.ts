@@ -30,7 +30,34 @@ ReadableStream.prototype[Symbol.asyncIterator] = async function* () {
 export type OpenAiChatMessage = ChatCompletionCreateParams["messages"][number];
 export type OpenAiChatMessages = ChatCompletionCreateParams["messages"];
 
-export type LLMProvider = "openai" | "ollama";
+export type LLMProvider = "openai" | "ollama" | "gemini";
+
+const GeminiConfigSchema = z.object({
+	role: z.string().optional().nullable(),
+	generationConfig: z
+		.object({
+			topP: z.number().optional().nullable(),
+			topK: z.number().optional().nullable(),
+			maxOutputTokens: z.number().optional().nullable(),
+			temperature: z.number().optional().nullable(),
+			stopSequences: z.union([
+				z.array(z.string()),
+				z.string().optional().nullable(),
+			]),
+		})
+		.optional(),
+});
+
+export type GeminiConfig = z.infer<typeof GeminiConfigSchema>;
+
+const FlattenGeminiConfigSchema = GeminiConfigSchema.transform(
+	({ generationConfig, ...s }) => ({
+		...s,
+		...generationConfig,
+	})
+);
+
+export type FlattenedGeminiConfig = z.infer<typeof FlattenGeminiConfigSchema>;
 
 const OllamaConfigSchema = z.object({
 	model: z.string(),
@@ -102,13 +129,31 @@ export const OpenAIConfigSchema = z.object({
 
 export type OpenAIConfig = z.infer<typeof OpenAIConfigSchema>;
 
-// a combination of both configs that can be transformed into either
+// a combination of all configs that can be transformed into either
 const LLMConfigSchema = z.intersection(
-	OpenAIConfigSchema,
-	FlattenedOllamaConfigSchema
+	z.intersection(OpenAIConfigSchema, FlattenedOllamaConfigSchema),
+	FlattenGeminiConfigSchema
 );
 
 export type LLMConfig = z.infer<typeof LLMConfigSchema>;
+
+const transformLLMConfigIntoGeminiConfig = (llmConfig: LLMConfig) => {
+	return GeminiConfigSchema.parse(
+		LLMConfigSchema.transform((c) => {
+			// we need to move the options back into a generationConfig object
+			return {
+				...c,
+				generationConfig: {
+					topP: c.topP || c.top_p,
+					topK: c.topK || c.top_k,
+					maxOutputTokens: c.maxOutputTokens,
+					temperature: c.temperature,
+					stopSequences: c.stopSequences || c.stop,
+				},
+			};
+		}).parse(llmConfig)
+	);
+};
 
 const transformLLMConfigIntoOpenAIConfig = (llmConfig: LLMConfig) => {
 	return OpenAIConfigSchema.parse(llmConfig);
@@ -141,6 +186,33 @@ const transformLLMConfigIntoOllamaConfig = (llmConfig: LLMConfig) => {
 			};
 		}).parse(llmConfig)
 	);
+};
+
+export type GeminiChatRequest = {
+	contents: {
+		role: "user" | "model";
+		parts: [
+			{
+				text: string;
+			}
+		];
+	}[];
+	generationConfig: GeminiConfig["generationConfig"];
+};
+
+export type GeminiChatResponse = {
+	candidates: [
+		{
+			content: {
+				role: "user" | "model";
+				parts: [
+					{
+						text: string;
+					}
+				];
+			};
+		}
+	];
 };
 
 export type OllamaChatRequest = {
@@ -200,6 +272,7 @@ export type MixedProviderCompletionParams = LLMConfig & {
 };
 
 export type MixedProviderCompletionResponse =
+	| GeminiChatResponse
 	| OllamaChatResponse
 	| ChatCompletion;
 
@@ -220,6 +293,7 @@ export const makeSampleOpenAIConfig = (): OpenAIConfig => ({
 	top_p: undefined,
 	role: "user" || "assistant" || "system",
 });
+
 export const makeSampleOllamaConfig = (): FlattenedOllamaConfig => ({
 	model: "",
 	microstat: undefined,
@@ -240,11 +314,22 @@ export const makeSampleOllamaConfig = (): FlattenedOllamaConfig => ({
 	top_p: undefined,
 });
 
+export const makeSampleGeminiConfig = (): FlattenedGeminiConfig => ({
+	role: "user",
+	topP: undefined,
+	topK: undefined,
+	maxOutputTokens: undefined,
+	temperature: undefined,
+	stopSequences: undefined,
+});
+
 export class Llm {
 	provider: LLMProvider;
 	openaiConfig?: OpenAIConfig;
 	ollamaConfig?: OllamaConfig;
 	ollamaBaseURL?: string;
+	geminiConfig?: GeminiConfig;
+	geminiBaseURL?: string;
 	openai: OpenAI | null;
 	initialized = false;
 
@@ -252,10 +337,16 @@ export class Llm {
 		provider,
 		ollamaConfig,
 		openaiConfig,
+		geminiConfig,
 	}: {
 		provider: LLMProvider;
 		ollamaConfig?: OllamaConfig & { baseURL: string };
 		openaiConfig?: OpenAIConfig & { apiKey: string };
+		geminiConfig?: GeminiConfig & {
+			baseURL: string;
+			apiKey: string;
+			model: string;
+		};
 	}) {
 		this.provider = provider;
 		switch (provider) {
@@ -282,6 +373,20 @@ export class Llm {
 				this.initialized = true;
 				break;
 			}
+			case "gemini": {
+				if (!geminiConfig) {
+					throw new Error("Gemini config is required");
+				}
+				const { baseURL, ...restConfig } = geminiConfig;
+				this.geminiBaseURL = `${
+					baseURL.endsWith("/") ? baseURL : baseURL + "/"
+				}${geminiConfig.model}:generateContent?key=${
+					geminiConfig.apiKey
+				}`;
+				this.geminiConfig = restConfig;
+				this.initialized = true;
+				break;
+			}
 			default: {
 				throw new Error("Invalid LLM provider");
 			}
@@ -293,6 +398,8 @@ export class Llm {
 			return this.openaiConfig;
 		} else if (this.provider === "ollama") {
 			return this.ollamaConfig;
+		} else if (this.provider === "gemini") {
+			return this.geminiConfig;
 		} else {
 			throw new Error("Invalid LLM provider");
 		}
@@ -303,6 +410,8 @@ export class Llm {
 			return makeSampleOpenAIConfig();
 		} else if (this.provider === "ollama") {
 			return makeSampleOllamaConfig();
+		} else if (this.provider === "gemini") {
+			return makeSampleGeminiConfig();
 		} else {
 			throw new Error("Invalid LLM provider");
 		}
@@ -312,7 +421,7 @@ export class Llm {
 		messages,
 		...llmConfig
 	}: MixedProviderCompletionParams): Promise<
-		ChatCompletion | OllamaChatResponse
+		ChatCompletion | OllamaChatResponse | GeminiChatResponse
 	> {
 		if (this.provider === "openai") {
 			if (!this.openai) {
@@ -351,6 +460,32 @@ export class Llm {
 			const response = await requestUrl(options);
 
 			return response.json as OllamaChatResponse;
+		} else if (this.provider === "gemini") {
+			invariant(this.geminiBaseURL, "Gemini base URL is required");
+			const geminiConfig = transformLLMConfigIntoGeminiConfig(llmConfig);
+			if (messages.some(m => m.role === "system")) {
+				throw new Error("Gemini does not support system messages");
+			}
+			const rawBody: GeminiChatRequest = {
+				contents: messages.map((m) => ({
+					role: m.role.replace("assistant", "model") as GeminiChatRequest["contents"][number]["role"],
+					parts: [{ text: m.content as string }],
+				})),
+				generationConfig: geminiConfig.generationConfig,
+			};
+			const options: RequestUrlParam = {
+				url: this.geminiBaseURL,
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(rawBody),
+			};
+			console.log(rawBody)
+
+			const response = await requestUrl(options);
+
+			return response.json as GeminiChatResponse;
 		} else {
 			throw new Error("Invalid LLM provider");
 		}
@@ -398,6 +533,8 @@ export class Llm {
 			const response = await fetch(options.url, options);
 
 			return response.body as ReadableStream<Uint8Array>;
+		} else if (this.provider === "gemini") {
+			throw new Error("Provider does not support streaming");
 		}
 
 		return new Error("Provider does not support streaming");
@@ -406,10 +543,17 @@ export class Llm {
 	static getFirstCompletionMessage(
 		completionResponse: MixedProviderCompletionResponse
 	): ChatCompletionMessage | OllamaChatResponse["message"] {
+		console.log(completionResponse);
 		if ("choices" in completionResponse) {
 			return completionResponse.choices[0].message;
 		} else if ("message" in completionResponse) {
 			return completionResponse.message;
+		} else if ("candidates" in completionResponse) {
+			return {
+				// @ts-expect-error
+				role: completionResponse?.candidates?.[0]?.content?.role,
+				content: completionResponse?.candidates?.[0]?.content?.parts?.[0]?.text,
+			};
 		} else {
 			throw new Error("Invalid LLM provider");
 		}

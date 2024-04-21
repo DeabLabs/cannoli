@@ -20,6 +20,9 @@ import { LLMProvider, Llm, OllamaConfig, OpenAIConfig } from "src/llm";
 
 interface CannoliSettings {
 	llmProvider: LLMProvider;
+	geminiBaseUrl: string;
+	geminiAPIKey: string;
+	geminiModel: string;
 	ollamaBaseUrl: string;
 	ollamaModel: string;
 	openaiAPIKey: string;
@@ -40,6 +43,9 @@ interface CannoliSettings {
 
 const DEFAULT_SETTINGS: CannoliSettings = {
 	llmProvider: "openai",
+	geminiBaseUrl: "https://generativelanguage.googleapis.com/v1beta/models/",
+	geminiModel: "gemini-pro",
+	geminiAPIKey: "",
 	ollamaBaseUrl: "http://127.0.0.1:11434",
 	ollamaModel: "llama2",
 	openaiAPIKey: "",
@@ -443,6 +449,21 @@ export default class Cannoli extends Plugin {
 				});
 				break;
 			}
+			case "gemini": {
+				const geminiConfig = {
+					baseURL: this.settings.geminiBaseUrl,
+					model: this.settings.geminiModel,
+					apiKey: this.settings.geminiAPIKey,
+				};
+				llm = new Llm({
+					provider: "gemini",
+					geminiConfig: geminiConfig,
+				});
+				break;
+			}
+			default:
+				throw new Error("Invalid LLM provider");
+				break;
 		}
 
 		// If the file's basename ends with .cno, don't include the extension in the notice
@@ -927,6 +948,7 @@ class CannoliSettingTab extends PluginSettingTab {
 			.addDropdown((dropdown) => {
 				dropdown.addOption("openai", "OpenAI");
 				dropdown.addOption("ollama", "Ollama");
+				dropdown.addOption("gemini", "Gemini");
 				dropdown.setValue(
 					this.plugin.settings.llmProvider ??
 						DEFAULT_SETTINGS.llmProvider
@@ -1054,6 +1076,51 @@ class CannoliSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.ollamaModel)
 						.onChange(async (value) => {
 							this.plugin.settings.ollamaModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "gemini") {
+			// gemini api key setting
+			new Setting(containerEl)
+				.setName("Gemini API key")
+				.setDesc(
+					"This key will be used to make all gemini LLM calls. Be aware that complex cannolis can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.geminiAPIKey)
+						.setPlaceholder("abc123")
+						.onChange(async (value) => {
+							this.plugin.settings.geminiAPIKey = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// gemini base url setting
+			new Setting(containerEl)
+				.setName("Gemini base url")
+				.setDesc(
+					"This url will be used to make all gemini LLM calls. Cannoli will append your configured model to this base url before making the call."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.geminiBaseUrl)
+						.setPlaceholder("https://generativelanguage.googleapis.com/v1beta/models/")
+						.onChange(async (value) => {
+							this.plugin.settings.geminiBaseUrl = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// gemini model setting
+			new Setting(containerEl)
+				.setName("Gemini model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow. (Note that special arrow types rely on function calling, which is not available in all models.)"
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.geminiModel)
+						.onChange(async (value) => {
+							this.plugin.settings.geminiModel = value;
 							await this.plugin.saveSettings();
 						})
 				);
