@@ -113,18 +113,6 @@ export class Run {
 		},
 	};
 
-	// openaiConfig: OpenAIConfig = {
-	// 	model: "gpt-3.5-turbo",
-	// 	frequency_penalty: undefined,
-	// 	presence_penalty: undefined,
-	// 	stop: undefined,
-	// 	function_call: undefined,
-	// 	functions: undefined,
-	// 	temperature: undefined,
-	// 	top_p: undefined,
-	// 	role: "user",
-	// };
-
 	usage: Record<string, Usage>;
 
 	constructor({
@@ -456,6 +444,16 @@ export class Run {
 
 				const responseUsage = Llm.getCompletionResponseUsage(response);
 				if (responseUsage) {
+					// If the model doesn't exist in modelInfo, add it
+					if (!this.modelInfo[request.model]) {
+						this.modelInfo[request.model] = {
+							name: request.model,
+							promptTokenPrice: 0,
+							completionTokenPrice: 0,
+						};
+					}
+
+					
 					const model = this.modelInfo[request.model];
 					if (!this.usage[model.name]) {
 						this.usage[model.name] = {
@@ -516,6 +514,15 @@ export class Run {
 
 		if (this.llm?.provider === "openai" && !this.usage[request.model]) {
 			// Find the right model from this.models
+
+			if (!this.modelInfo[request.model]) {
+				this.modelInfo[request.model] = {
+					name: request.model,
+					promptTokenPrice: 0,
+					completionTokenPrice: 0,
+				};
+			}
+
 			const model = this.modelInfo[request.model];
 
 			this.usage[request.model] = {
@@ -747,7 +754,7 @@ export class Run {
 	}
 
 	calculateLLMCostForModel(usage: Usage): number {
-		if (this.llm?.provider === "ollama") return 0;
+		if (this.llm?.provider === "ollama" || !usage || !usage.model || !usage.modelUsage) return 0;
 
 		const promptCost =
 			usage.model.promptTokenPrice * usage.modelUsage.promptTokens;
