@@ -10,15 +10,18 @@ import {
 	addIcon,
 	requestUrl,
 } from "obsidian";
-import OpenAI from "openai";
 import { Canvas } from "src/canvas";
 import { CannoliFactory } from "src/factory";
 import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
+import { LLMProvider, Llm, OllamaConfig, OpenAIConfig } from "src/llm";
 
 interface CannoliSettings {
+	llmProvider: LLMProvider;
+	ollamaBaseUrl: string;
+	ollamaModel: string;
 	openaiAPIKey: string;
 	costThreshold: number;
 	defaultModel: string;
@@ -36,6 +39,9 @@ interface CannoliSettings {
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
+	llmProvider: "openai",
+	ollamaBaseUrl: "http://127.0.0.1:11434",
+	ollamaModel: "llama2",
 	openaiAPIKey: "",
 	costThreshold: 0.5,
 	defaultModel: "gpt-3.5-turbo",
@@ -400,18 +406,44 @@ export default class Cannoli extends Plugin {
 
 	startCannoli = async (file: TFile) => {
 		// If the api key is the default, send a notice telling the user to add their key
-		if (this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey) {
+		if (
+			this.settings.llmProvider === "openai" &&
+			this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey
+		) {
 			new Notice(
 				"Please enter your OpenAI API key in the Cannoli settings"
 			);
 			return;
 		}
 
-		// Create an instance of OpenAI
-		const openai = new OpenAI({
-			apiKey: this.settings.openaiAPIKey,
-			dangerouslyAllowBrowser: true,
-		});
+		// Create an instance of llm
+		let llm: Llm | undefined;
+		switch (this.settings.llmProvider) {
+			case "openai": {
+				const openAiConfig: OpenAIConfig & { apiKey: string } = {
+					apiKey: this.settings.openaiAPIKey,
+					model: this.settings.defaultModel,
+					temperature: this.settings.defaultTemperature,
+					role: "user",
+				};
+				llm = new Llm({
+					provider: "openai",
+					openaiConfig: openAiConfig,
+				});
+				break;
+			}
+			case "ollama": {
+				const ollamaConfig: OllamaConfig & { baseURL: string } = {
+					baseURL: this.settings.ollamaBaseUrl,
+					model: this.settings.ollamaModel,
+				};
+				llm = new Llm({
+					provider: "ollama",
+					ollamaConfig: ollamaConfig,
+				});
+				break;
+			}
+		}
 
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
@@ -446,13 +478,14 @@ export default class Cannoli extends Plugin {
 			graph,
 			file,
 			name,
-			canvas
+			canvas,
+			llm
 		);
 
 		// const shouldContinue = true;
 
 		if (shouldContinue) {
-			await this.runCannoli(graph, file, name, canvas, openai);
+			await this.runCannoli(graph, file, name, canvas, llm);
 		}
 	};
 
@@ -461,6 +494,7 @@ export default class Cannoli extends Plugin {
 		file: TFile,
 		name: string,
 		canvas: Canvas,
+		llm: Llm,
 		audioTranscription?: string
 	) => {
 		return new Promise<boolean>((resolve) => {
@@ -511,6 +545,7 @@ export default class Cannoli extends Plugin {
 				canvas: canvas,
 				onFinish: onFinish,
 				cannoli: this,
+				llm: llm,
 			});
 
 			// console.log("Starting validation run");
@@ -524,7 +559,7 @@ export default class Cannoli extends Plugin {
 		file: TFile,
 		name: string,
 		canvas: Canvas,
-		openai?: OpenAI
+		llm?: Llm
 	) => {
 		return new Promise<void>((resolve) => {
 			// Create callback function to trigger notice
@@ -559,12 +594,7 @@ export default class Cannoli extends Plugin {
 			// Create live run
 			const run = new Run({
 				graph: liveGraph.graph,
-				openai: openai,
-				openAiConfig: {
-					model: this.settings.defaultModel,
-					temperature: this.settings.defaultTemperature,
-					role: "user",
-				},
+				llm: llm,
 				isMock: false,
 				canvas: canvas,
 				onFinish: onFinish,
@@ -888,94 +918,146 @@ class CannoliSettingTab extends PluginSettingTab {
 				})
 			);
 
+		// Add dropdown for AI provider with options OpenAI and Ollama
+		new Setting(containerEl)
+			.setName("AI provider")
+			.setDesc(
+				"Select the AI provider you'd like to use for your cannolis."
+			)
+			.addDropdown((dropdown) => {
+				dropdown.addOption("openai", "OpenAI");
+				dropdown.addOption("ollama", "Ollama");
+				dropdown.setValue(
+					this.plugin.settings.llmProvider ??
+						DEFAULT_SETTINGS.llmProvider
+				);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.llmProvider = value as LLMProvider;
+					await this.plugin.saveSettings();
+					this.display();
+				});
+			});
+
 		containerEl.createEl("h1", { text: "LLM" });
 
-		new Setting(containerEl)
-			.setName("OpenAI API key")
-			.setDesc(
-				"This key will be used to make all openai LLM calls. Be aware that complex cannolis, especially those with many GPT-4 calls, can be expensive to run."
-			)
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.openaiAPIKey)
-					.setPlaceholder("sk-...")
-					.onChange(async (value) => {
-						this.plugin.settings.openaiAPIKey = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		if (this.plugin.settings.llmProvider === "openai") {
+			new Setting(containerEl)
+				.setName("OpenAI API key")
+				.setDesc(
+					"This key will be used to make all openai LLM calls. Be aware that complex cannolis, especially those with many GPT-4 calls, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.openaiAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.openaiAPIKey = value;
+							await this.plugin.saveSettings();
+						})
+				);
 
-		// Cost threshold setting. This is the cost at which the user will be alerted before running a Cannoli
-		new Setting(containerEl)
-			.setName("Cost threshold")
-			.setDesc(
-				"If the cannoli you are about to run is estimated to cost more than this amount (USD$), you will be alerted before running it."
-			)
-			.addText((text) =>
-				text
-					.setValue(
-						!isNaN(this.plugin.settings.costThreshold)
-							? this.plugin.settings.costThreshold.toString()
-							: DEFAULT_SETTINGS.costThreshold.toString()
-					)
-					.onChange(async (value) => {
-						// If it's not empty and it's a number, save it
-						if (!isNaN(parseFloat(value))) {
-							this.plugin.settings.costThreshold =
-								parseFloat(value);
-							await this.plugin.saveSettings();
-						} else {
-							// Otherwise, reset it to the default
-							this.plugin.settings.costThreshold =
-								DEFAULT_SETTINGS.costThreshold;
-							await this.plugin.saveSettings();
-						}
-					})
-			);
+			// Cost threshold setting. This is the cost at which the user will be alerted before running a Cannoli
+			new Setting(containerEl)
+				.setName("Cost threshold")
+				.setDesc(
+					"If the cannoli you are about to run is estimated to cost more than this amount (USD$), you will be alerted before running it."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.costThreshold)
+								? this.plugin.settings.costThreshold.toString()
+								: DEFAULT_SETTINGS.costThreshold.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.costThreshold =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.costThreshold =
+									DEFAULT_SETTINGS.costThreshold;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
 
-		// Default LLM model setting
-		new Setting(containerEl)
-			.setName("Default LLM model")
-			.setDesc(
-				"This model will be used for all LLM nodes unless overridden with a config arrow. (Note that special arrow types rely on function calling, which is not available in all models.)"
-			)
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.defaultModel)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultModel = value;
-						await this.plugin.saveSettings();
-					})
-			);
+			// Default LLM model setting
+			new Setting(containerEl)
+				.setName("Default LLM model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow. (Note that special arrow types rely on function calling, which is not available in all models.)"
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.defaultModel)
+						.onChange(async (value) => {
+							this.plugin.settings.defaultModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
 
-		// Default LLM temperature setting
-		new Setting(containerEl)
-			.setName("Default LLM temperature")
-			.setDesc(
-				"This temperature will be used for all LLM nodes unless overridden with a config arrow."
-			)
-			.addText((text) =>
-				text
-					.setValue(
-						!isNaN(this.plugin.settings.defaultTemperature) &&
-							this.plugin.settings.defaultTemperature
-							? this.plugin.settings.defaultTemperature.toString()
-							: DEFAULT_SETTINGS.defaultTemperature.toString()
-					)
-					.onChange(async (value) => {
-						// If it's not empty and it's a number, save it
-						if (!isNaN(parseFloat(value))) {
-							this.plugin.settings.defaultTemperature =
-								parseFloat(value);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.defaultTemperature) &&
+								this.plugin.settings.defaultTemperature
+								? this.plugin.settings.defaultTemperature.toString()
+								: DEFAULT_SETTINGS.defaultTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.defaultTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.defaultTemperature =
+									DEFAULT_SETTINGS.defaultTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "ollama") {
+			// ollama base url setting
+			new Setting(containerEl)
+				.setName("Ollama base url")
+				.setDesc(
+					"This url will be used to make all ollama LLM calls. Be aware that ollama models have different features and capabilities that may not be compatible with all features of cannoli."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.ollamaBaseUrl)
+						.setPlaceholder("https://ollama.com")
+						.onChange(async (value) => {
+							this.plugin.settings.ollamaBaseUrl = value;
 							await this.plugin.saveSettings();
-						} else {
-							// Otherwise, reset it to the default
-							this.plugin.settings.defaultTemperature =
-								DEFAULT_SETTINGS.defaultTemperature;
+						})
+				);
+			// ollama model setting
+			new Setting(containerEl)
+				.setName("Ollama model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow. (Note that special arrow types rely on function calling, which is not available in all models.)"
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.ollamaModel)
+						.onChange(async (value) => {
+							this.plugin.settings.ollamaModel = value;
 							await this.plugin.saveSettings();
-						}
-					})
-			);
+						})
+				);
+		}
 
 		new Setting(containerEl)
 			.setName("LLM call concurrency limit (pLimit)")

@@ -1,5 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { ChatRole, type OpenAIConfig } from "src/run";
+import { ChatRole } from "src/run";
 import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
 import { CannoliGroup } from "./group";
 import {
@@ -21,6 +21,7 @@ import {
 	ChatCompletionMessage,
 } from "openai/resources/chat";
 import * as yaml from "js-yaml";
+import { LLMConfig, Llm, OpenAiChatMessage, OpenAiChatMessages } from "src/llm";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
@@ -622,8 +623,8 @@ export class CannoliNode extends CannoliVertex {
 }
 
 export class CallNode extends CannoliNode {
-	getPrependedMessages(): ChatCompletionMessage[] {
-		const messages: ChatCompletionMessage[] = [];
+	getPrependedMessages(): OpenAiChatMessages {
+		const messages: OpenAiChatMessages = [];
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
@@ -749,7 +750,7 @@ export class CallNode extends CannoliNode {
 		return messages;
 	}
 
-	async getNewMessage(role?: string): Promise<ChatCompletionMessage | null> {
+	async getNewMessage(role?: string): Promise<OpenAiChatMessage | null> {
 		const content = await this.processReferences();
 
 		// If there is no content, return null
@@ -763,13 +764,15 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
-	findNoteReferencesInMessages(messages: ChatCompletionMessage[]): string[] {
+	findNoteReferencesInMessages(messages: OpenAiChatMessages): string[] {
 		const references: string[] = [];
 		const noteRegex = /\[\[(.+?)\]\]/g;
 
 		// Get the contents of each double bracket
 		for (const message of messages) {
-			const matches = message.content?.matchAll(noteRegex);
+			const matches =
+				typeof message.content === "string" &&
+				message.content?.matchAll(noteRegex);
 
 			if (!matches) {
 				continue;
@@ -783,32 +786,21 @@ export class CallNode extends CannoliNode {
 		return references;
 	}
 
-	private getDefaultConfig(): OpenAIConfig {
+	private getDefaultConfig(): LLMConfig {
 		const config = JSON.parse(JSON.stringify(this.run.getDefaultConfig()));
 		return config;
 	}
 
 	private updateConfigWithValue(
-		runConfig: OpenAIConfig,
+		runConfig: LLMConfig,
 		content: string | Record<string, string> | null,
 		setting?: string | null
 	): void {
-		// Sample object to validate keys against
-		const sampleOpenAIConfig: OpenAIConfig = {
-			model: "",
-			frequency_penalty: undefined,
-			presence_penalty: undefined,
-			stop: undefined,
-			function_call: undefined,
-			functions: undefined,
-			temperature: undefined,
-			top_p: undefined,
-			role: "user" || "assistant" || "system",
-		};
+		const sampleConfig = this.run.llm?.getSampleConfig() ?? {};
 
 		// Define the expected types for each key
 		const keyTypeMap: {
-			[key in keyof OpenAIConfig]?: "string" | "number";
+			[key in keyof LLMConfig]?: "string" | "number";
 		} = {
 			frequency_penalty: "number",
 			presence_penalty: "number",
@@ -817,14 +809,14 @@ export class CallNode extends CannoliNode {
 		};
 
 		// Convert value based on its expected type
-		const convertValue = (key: keyof OpenAIConfig, value: string) => {
+		const convertValue = (key: keyof LLMConfig, value: string) => {
 			const expectedType = keyTypeMap[key];
 			return expectedType === "number" ? parseFloat(value) : value;
 		};
 
-		// Type guard to check if a string is a key of OpenAIConfig
-		const isValidKey = (key: string): key is keyof OpenAIConfig => {
-			return key in sampleOpenAIConfig;
+		// Type guard to check if a string is a key of LLMConfig
+		const isValidKey = (key: string): key is keyof LLMConfig => {
+			return key in sampleConfig;
 		};
 
 		if (typeof content === "string") {
@@ -849,7 +841,7 @@ export class CallNode extends CannoliNode {
 	}
 
 	private processSingleEdge(
-		runConfig: OpenAIConfig,
+		runConfig: LLMConfig,
 		edgeObject: CannoliEdge
 	): void {
 		if (
@@ -866,7 +858,7 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processEdges(runConfig: OpenAIConfig, edges: CannoliEdge[]): void {
+	private processEdges(runConfig: LLMConfig, edges: CannoliEdge[]): void {
 		for (const edgeObject of edges) {
 			if (!(edgeObject instanceof CannoliEdge)) {
 				throw new Error(
@@ -877,7 +869,7 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processGroups(runConfig: OpenAIConfig): void {
+	private processGroups(runConfig: LLMConfig): void {
 		for (let i = this.groups.length - 1; i >= 0; i--) {
 			const group = this.graph[this.groups[i]];
 			if (group instanceof CannoliGroup) {
@@ -889,14 +881,14 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processNodes(runConfig: OpenAIConfig): void {
+	private processNodes(runConfig: LLMConfig): void {
 		const configEdges = this.getIncomingEdges().filter(
 			(edge) => edge.type === EdgeType.Config
 		);
 		this.processEdges(runConfig, configEdges);
 	}
 
-	getConfig(): OpenAIConfig {
+	getConfig(): LLMConfig {
 		const runConfig = this.getDefaultConfig();
 
 		this.processGroups(runConfig);
@@ -948,9 +940,10 @@ export class CallNode extends CannoliNode {
 
 			// Create message content string
 			let messageContent = "";
-
 			// Process the stream. For each part, add the message to the request, and load the outgoing edges
-			for await (const part of stream) {
+			for await (const rawPart of stream) {
+				const part = this.run.llm?.getPart(rawPart);
+
 				if (part instanceof Error) {
 					this.error(`Error calling LLM:\n${part.message}`);
 					return;
@@ -962,7 +955,7 @@ export class CallNode extends CannoliNode {
 				}
 
 				// If the stream is done, break out of the loop
-				if (part.choices[0].finish_reason) {
+				if (Llm.getStreamingCompletionFinished(part)) {
 					// Load outgoing chatResponse edges with the message "END OF STREAM"
 					for (const edge of chatResponseEdges) {
 						edge.load({
@@ -975,12 +968,13 @@ export class CallNode extends CannoliNode {
 				}
 
 				// Add the part to the message content
-				messageContent += part.choices[0].delta.content;
+				const delta = Llm.getFirstStreamingCompletionMessageDelta(part);
+				messageContent += delta;
 
 				// Load outgoing chatResponse edges with the part
 				for (const edge of chatResponseEdges) {
 					edge.load({
-						content: part.choices[0].delta.content ?? "",
+						content: delta ?? "",
 						request: request,
 					});
 				}
@@ -1035,6 +1029,20 @@ export class CallNode extends CannoliNode {
 	async createLLMRequest(): Promise<ChatCompletionCreateParams> {
 		const config = this.getConfig();
 
+		// Check if this node is a form or choice node
+		if (this instanceof FormNode || this instanceof ChooseNode) {
+			// Check the cannoli settings
+			const isOpenAI = this.run.cannoli.settings.llmProvider == "openai";
+
+			// If it's not OpenAI, error
+
+			if (!isOpenAI) {
+				this.error(
+					`Form and Choice nodes are only supported with OpenAI. Support for function calling with Ollama coming soon.`
+				);
+			}
+		}
+
 		const messages = this.getPrependedMessages();
 
 		const newMessage = await this.getNewMessage(config.role);
@@ -1063,7 +1071,7 @@ export class CallNode extends CannoliNode {
 	}
 
 	getFunctions(
-		messages: ChatCompletionMessage[]
+		messages: OpenAiChatMessages
 	): ChatCompletionCreateParams.Function[] {
 		if (
 			this.getOutgoingEdges().some(
@@ -1088,7 +1096,7 @@ export class CallNode extends CannoliNode {
 
 export class FormNode extends CallNode {
 	getFunctions(
-		messages: ChatCompletionMessage[]
+		messages: OpenAiChatMessages
 	): ChatCompletionCreateParams.Function[] {
 		// Get the names of the fields
 		const fields = this.getFields();
@@ -1151,8 +1159,10 @@ export class FormNode extends CallNode {
 		const messages = request.messages;
 
 		// Get the fields from the last message
+		const lastMessage = messages[messages.length - 1];
 		const formFunctionArgs =
-			messages[messages.length - 1].function_call?.arguments;
+			"function_call" in lastMessage &&
+			lastMessage.function_call?.arguments;
 
 		if (!formFunctionArgs) {
 			this.error(`Form function call has no arguments.`);
@@ -1225,7 +1235,7 @@ export class AccumulateNode extends CallNode {
 }
 export class ChooseNode extends CallNode {
 	getFunctions(
-		messages: ChatCompletionMessage[]
+		messages: OpenAiChatMessages
 	): ChatCompletionCreateParams.Function[] {
 		const choices = this.getBranchChoices();
 
@@ -1242,8 +1252,10 @@ export class ChooseNode extends CallNode {
 		const messages = request.messages;
 
 		// Get the chosen variable from the last message
+		const lastMessage = messages[messages.length - 1];
 		const choiceFunctionArgs =
-			messages[messages.length - 1].function_call?.arguments;
+			"function_call" in lastMessage &&
+			lastMessage.function_call?.arguments;
 
 		if (!choiceFunctionArgs) {
 			this.error(`Choice function call has no arguments.`);
