@@ -14,5 +14,5 @@
 		"lib": ["DOM", "ES5", "ES6", "ES7"]
 	},
 	"include": ["**/*.ts"],
-	"exclude": ["node_modules", "scripts", "assets"]
+	"exclude": ["node_modules", "scripts"]
 }

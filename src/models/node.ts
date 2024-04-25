@@ -14,14 +14,13 @@ import {
 	VerifiedCannoliCanvasLinkData,
 	VerifiedCannoliCanvasTextData,
 } from "./graph";
-import {
-	ChatCompletionCreateParams,
-	ChatCompletionCreateParamsNonStreaming,
-	ChatCompletionCreateParamsStreaming,
-	ChatCompletionMessage,
-} from "openai/resources/chat";
 import * as yaml from "js-yaml";
-import { LLMConfig, Llm, OpenAiChatMessage, OpenAiChatMessages } from "src/llm";
+import {
+	GenericCompletionParams,
+	GenericCompletionResponse,
+	GenericFunctionCall,
+	GenericModelConfig,
+} from "src/providers";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
@@ -406,7 +405,7 @@ export class CannoliNode extends CannoliVertex {
 		return finalVariables;
 	}
 
-	loadOutgoingEdges(content: string, request?: ChatCompletionCreateParams) {
+	loadOutgoingEdges(content: string, request?: GenericCompletionParams) {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
 			if (
@@ -623,8 +622,8 @@ export class CannoliNode extends CannoliVertex {
 }
 
 export class CallNode extends CannoliNode {
-	getPrependedMessages(): OpenAiChatMessages {
-		const messages: OpenAiChatMessages = [];
+	getPrependedMessages(): GenericCompletionResponse[] {
+		const messages: GenericCompletionResponse[] = [];
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
@@ -750,7 +749,9 @@ export class CallNode extends CannoliNode {
 		return messages;
 	}
 
-	async getNewMessage(role?: string): Promise<OpenAiChatMessage | null> {
+	async getNewMessage(
+		role?: string
+	): Promise<GenericCompletionResponse | null> {
 		const content = await this.processReferences();
 
 		// If there is no content, return null
@@ -764,7 +765,9 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
-	findNoteReferencesInMessages(messages: OpenAiChatMessages): string[] {
+	findNoteReferencesInMessages(
+		messages: GenericCompletionResponse[]
+	): string[] {
 		const references: string[] = [];
 		const noteRegex = /\[\[(.+?)\]\]/g;
 
@@ -786,13 +789,13 @@ export class CallNode extends CannoliNode {
 		return references;
 	}
 
-	private getDefaultConfig(): LLMConfig {
+	private getDefaultConfig(): GenericModelConfig {
 		const config = JSON.parse(JSON.stringify(this.run.getDefaultConfig()));
 		return config;
 	}
 
 	private updateConfigWithValue(
-		runConfig: LLMConfig,
+		runConfig: GenericModelConfig,
 		content: string | Record<string, string> | null,
 		setting?: string | null
 	): void {
@@ -800,7 +803,7 @@ export class CallNode extends CannoliNode {
 
 		// Define the expected types for each key
 		const keyTypeMap: {
-			[key in keyof LLMConfig]?: "string" | "number";
+			[key in keyof GenericModelConfig]?: "string" | "number";
 		} = {
 			frequency_penalty: "number",
 			presence_penalty: "number",
@@ -809,13 +812,13 @@ export class CallNode extends CannoliNode {
 		};
 
 		// Convert value based on its expected type
-		const convertValue = (key: keyof LLMConfig, value: string) => {
+		const convertValue = (key: keyof GenericModelConfig, value: string) => {
 			const expectedType = keyTypeMap[key];
 			return expectedType === "number" ? parseFloat(value) : value;
 		};
 
 		// Type guard to check if a string is a key of LLMConfig
-		const isValidKey = (key: string): key is keyof LLMConfig => {
+		const isValidKey = (key: string): key is keyof GenericModelConfig => {
 			return key in sampleConfig;
 		};
 
@@ -841,7 +844,7 @@ export class CallNode extends CannoliNode {
 	}
 
 	private processSingleEdge(
-		runConfig: LLMConfig,
+		runConfig: GenericModelConfig,
 		edgeObject: CannoliEdge
 	): void {
 		if (
@@ -858,7 +861,10 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processEdges(runConfig: LLMConfig, edges: CannoliEdge[]): void {
+	private processEdges(
+		runConfig: GenericModelConfig,
+		edges: CannoliEdge[]
+	): void {
 		for (const edgeObject of edges) {
 			if (!(edgeObject instanceof CannoliEdge)) {
 				throw new Error(
@@ -869,7 +875,7 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processGroups(runConfig: LLMConfig): void {
+	private processGroups(runConfig: GenericModelConfig): void {
 		for (let i = this.groups.length - 1; i >= 0; i--) {
 			const group = this.graph[this.groups[i]];
 			if (group instanceof CannoliGroup) {
@@ -881,14 +887,14 @@ export class CallNode extends CannoliNode {
 		}
 	}
 
-	private processNodes(runConfig: LLMConfig): void {
+	private processNodes(runConfig: GenericModelConfig): void {
 		const configEdges = this.getIncomingEdges().filter(
 			(edge) => edge.type === EdgeType.Config
 		);
 		this.processEdges(runConfig, configEdges);
 	}
 
-	getConfig(): LLMConfig {
+	getConfig(): GenericModelConfig {
 		const runConfig = this.getDefaultConfig();
 
 		this.processGroups(runConfig);
@@ -916,11 +922,7 @@ export class CallNode extends CannoliNode {
 		);
 
 		if (chatResponseEdges.length > 0) {
-			request.stream = true;
-
-			const stream = await this.run.callLLMStream(
-				request as ChatCompletionCreateParamsStreaming
-			);
+			const stream = await this.run.callLLMStream(request);
 
 			if (stream instanceof Error) {
 				this.error(`Error calling LLM:\n${stream.message}`);
@@ -941,43 +943,30 @@ export class CallNode extends CannoliNode {
 			// Create message content string
 			let messageContent = "";
 			// Process the stream. For each part, add the message to the request, and load the outgoing edges
-			for await (const rawPart of stream) {
-				const part = this.run.llm?.getPart(rawPart);
-
-				if (part instanceof Error) {
-					this.error(`Error calling LLM:\n${part.message}`);
-					return;
-				}
-
-				if (!part) {
-					this.error(`Error calling LLM: no part returned.`);
-					return;
-				}
-
-				// If the stream is done, break out of the loop
-				if (Llm.getStreamingCompletionFinished(part)) {
-					// Load outgoing chatResponse edges with the message "END OF STREAM"
-					for (const edge of chatResponseEdges) {
-						edge.load({
-							content: "END OF STREAM",
-							request: request,
-						});
-					}
-
+			for await (const part of stream) {
+				if (!part || typeof part !== "string") {
+					// deltas might be empty, that's okay, just get the next one
 					continue;
 				}
 
 				// Add the part to the message content
-				const delta = Llm.getFirstStreamingCompletionMessageDelta(part);
-				messageContent += delta;
+				messageContent += part;
 
 				// Load outgoing chatResponse edges with the part
 				for (const edge of chatResponseEdges) {
 					edge.load({
-						content: delta ?? "",
+						content: part ?? "",
 						request: request,
 					});
 				}
+			}
+
+			// Load outgoing chatResponse edges with the message "END OF STREAM"
+			for (const edge of chatResponseEdges) {
+				edge.load({
+					content: "END OF STREAM",
+					request: request,
+				});
 			}
 
 			// Add an assistant message to the messages array of the request
@@ -989,11 +978,7 @@ export class CallNode extends CannoliNode {
 			// After the stream is done, load the outgoing edges
 			this.loadOutgoingEdges(messageContent, request);
 		} else {
-			delete request.stream;
-
-			const message = (await this.run.callLLM(
-				request as ChatCompletionCreateParamsNonStreaming
-			)) as ChatCompletionMessage;
+			const message = await this.run.callLLM(request);
 
 			if (message instanceof Error) {
 				this.error(`Error calling LLM:\n${message.message}`);
@@ -1026,7 +1011,7 @@ export class CallNode extends CannoliNode {
 		this.completed();
 	}
 
-	async createLLMRequest(): Promise<ChatCompletionCreateParams> {
+	async createLLMRequest(): Promise<GenericCompletionParams> {
 		const config = this.getConfig();
 
 		// Check if this node is a form or choice node
@@ -1070,9 +1055,7 @@ export class CallNode extends CannoliNode {
 		};
 	}
 
-	getFunctions(
-		messages: OpenAiChatMessages
-	): ChatCompletionCreateParams.Function[] {
+	getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
 		if (
 			this.getOutgoingEdges().some(
 				(edge) => edge.vaultModifier === VaultModifier.Note
@@ -1096,8 +1079,8 @@ export class CallNode extends CannoliNode {
 
 export class FormNode extends CallNode {
 	getFunctions(
-		messages: OpenAiChatMessages
-	): ChatCompletionCreateParams.Function[] {
+		messages: GenericCompletionResponse[]
+	): GenericFunctionCall[] {
 		// Get the names of the fields
 		const fields = this.getFields();
 
@@ -1152,10 +1135,7 @@ export class FormNode extends CallNode {
 		return Array.from(uniqueNames);
 	}
 
-	loadOutgoingEdges(
-		content: string,
-		request: ChatCompletionCreateParams
-	): void {
+	loadOutgoingEdges(content: string, request: GenericCompletionParams): void {
 		const messages = request.messages;
 
 		// Get the fields from the last message
@@ -1234,9 +1214,7 @@ export class AccumulateNode extends CallNode {
 	}
 }
 export class ChooseNode extends CallNode {
-	getFunctions(
-		messages: OpenAiChatMessages
-	): ChatCompletionCreateParams.Function[] {
+	getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
 		const choices = this.getBranchChoices();
 
 		// Create choice function
@@ -1245,10 +1223,7 @@ export class ChooseNode extends CallNode {
 		return [choiceFunc];
 	}
 
-	loadOutgoingEdges(
-		content: string,
-		request: ChatCompletionCreateParams
-	): void {
+	loadOutgoingEdges(content: string, request: GenericCompletionParams): void {
 		const messages = request.messages;
 
 		// Get the chosen variable from the last message
@@ -1542,9 +1517,9 @@ export class ReferenceNode extends ContentNode {
 					return (
 						variableValueEdge.text !== this.reference.name &&
 						variableValueEdge.vaultModifier !==
-							VaultModifier.Folder &&
+						VaultModifier.Folder &&
 						variableValueEdge.vaultModifier !==
-							VaultModifier.Property
+						VaultModifier.Property
 					);
 				}
 			);
@@ -1919,7 +1894,7 @@ export class ReferenceNode extends ContentNode {
 
 	async loadOutgoingEdges(
 		content: string,
-		request?: ChatCompletionCreateParams | undefined
+		request?: GenericCompletionParams | undefined
 	) {
 		// If this is a floating node, load all outgoing edges with the content
 		if (this.reference.type === ReferenceType.Floating) {
@@ -1985,7 +1960,7 @@ export class ReferenceNode extends ContentNode {
 
 	loadOutgoingEdgesFloating(
 		content: string,
-		request?: ChatCompletionCreateParams | undefined
+		request?: GenericCompletionParams | undefined
 	) {
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
@@ -2218,9 +2193,8 @@ export class FloatingNode extends CannoliNode {
 		// Stringify the frontmatter and add it back to the content
 		const newFrontmatter = yaml.dump(parsedFrontmatter);
 
-		const newProps = `---\n${newFrontmatter}---\n${
-			this.getContent().split("---")[2]
-		}`;
+		const newProps = `---\n${newFrontmatter}---\n${this.getContent().split("---")[2]
+			}`;
 
 		this.editContent(newProps);
 	}

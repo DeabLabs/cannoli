@@ -16,10 +16,11 @@ import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
-import { LLMProvider, Llm, OllamaConfig, OpenAIConfig } from "src/llm";
+import { GenericModelConfig, LLMProvider, SupportedProviders } from "src/providers";
+import invariant from "tiny-invariant";
 
 interface CannoliSettings {
-	llmProvider: LLMProvider;
+	llmProvider: SupportedProviders;
 	ollamaBaseUrl: string;
 	ollamaModel: string;
 	openaiAPIKey: string;
@@ -130,7 +131,7 @@ export default class Cannoli extends Plugin {
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
 	}
 
-	onunload() {}
+	onunload() { }
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -417,33 +418,34 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Create an instance of llm
-		let llm: Llm | undefined;
+		let llm: LLMProvider | undefined;
 		switch (this.settings.llmProvider) {
 			case "openai": {
-				const openAiConfig: OpenAIConfig & { apiKey: string } = {
+				const openAiConfig: GenericModelConfig = {
 					apiKey: this.settings.openaiAPIKey,
 					model: this.settings.defaultModel,
 					temperature: this.settings.defaultTemperature,
 					role: "user",
 				};
-				llm = new Llm({
+				llm = new LLMProvider({
 					provider: "openai",
-					openaiConfig: openAiConfig,
+					baseConfig: openAiConfig,
 				});
 				break;
 			}
 			case "ollama": {
-				const ollamaConfig: OllamaConfig & { baseURL: string } = {
+				const ollamaConfig: GenericModelConfig = {
 					baseURL: this.settings.ollamaBaseUrl,
 					model: this.settings.ollamaModel,
 				};
-				llm = new Llm({
+				llm = new LLMProvider({
 					provider: "ollama",
-					ollamaConfig: ollamaConfig,
+					baseConfig: ollamaConfig,
 				});
 				break;
 			}
 		}
+		invariant(llm, "LLM provider not found");
 
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
@@ -467,7 +469,7 @@ export default class Cannoli extends Plugin {
 		const factory = new CannoliFactory(
 			canvas.getCanvasData(),
 			`[[${this.app.workspace.getActiveFile()?.basename}]]` ??
-				"No active note",
+			"No active note",
 			this.settings.contentIsColorless ?? false
 		);
 
@@ -494,7 +496,7 @@ export default class Cannoli extends Plugin {
 		file: TFile,
 		name: string,
 		canvas: Canvas,
-		llm: Llm,
+		llm: LLMProvider,
 		audioTranscription?: string
 	) => {
 		return new Promise<boolean>((resolve) => {
@@ -559,7 +561,7 @@ export default class Cannoli extends Plugin {
 		file: TFile,
 		name: string,
 		canvas: Canvas,
-		llm?: Llm
+		llm?: LLMProvider
 	) => {
 		return new Promise<void>((resolve) => {
 			// Create callback function to trigger notice
@@ -796,14 +798,14 @@ export class HttpTemplateEditorModal extends Modal {
 
 		const headersValue =
 			this.template.headers &&
-			Object.keys(this.template.headers).length > 0
+				Object.keys(this.template.headers).length > 0
 				? JSON.stringify(this.template.headers, null, 2)
 				: JSON.stringify(
-						{ "Content-Type": "application/json" },
-						null,
-						2
-						// eslint-disable-next-line no-mixed-spaces-and-tabs
-				  );
+					{ "Content-Type": "application/json" },
+					null,
+					2
+					// eslint-disable-next-line no-mixed-spaces-and-tabs
+				);
 
 		const headersInput = contentEl.createEl("textarea", {
 			placeholder: `{ "Content-Type": "application/json" }`,
@@ -929,10 +931,10 @@ class CannoliSettingTab extends PluginSettingTab {
 				dropdown.addOption("ollama", "Ollama");
 				dropdown.setValue(
 					this.plugin.settings.llmProvider ??
-						DEFAULT_SETTINGS.llmProvider
+					DEFAULT_SETTINGS.llmProvider
 				);
 				dropdown.onChange(async (value) => {
-					this.plugin.settings.llmProvider = value as LLMProvider;
+					this.plugin.settings.llmProvider = value as SupportedProviders;
 					await this.plugin.saveSettings();
 					this.display();
 				});
@@ -1097,7 +1099,7 @@ class CannoliSettingTab extends PluginSettingTab {
 				toggle
 					.setValue(
 						this.plugin.settings.contentIsColorless ??
-							DEFAULT_SETTINGS.contentIsColorless
+						DEFAULT_SETTINGS.contentIsColorless
 					)
 					.onChange(async (value) => {
 						this.plugin.settings.contentIsColorless = value;
@@ -1206,7 +1208,7 @@ class CannoliSettingTab extends PluginSettingTab {
 				toggle
 					.setValue(
 						this.plugin.settings.enableAudioTriggeredCannolis ||
-							false
+						false
 					)
 					.onChange(async (value) => {
 						this.plugin.settings.enableAudioTriggeredCannolis =
@@ -1248,7 +1250,7 @@ class CannoliSettingTab extends PluginSettingTab {
 						.setValue(
 							this.plugin.settings
 								.deleteAudioFilesAfterAudioTriggeredCannolis ||
-								false
+							false
 
 							// eslint-disable-next-line no-mixed-spaces-and-tabs
 						)
@@ -1286,7 +1288,7 @@ class CannoliSettingTab extends PluginSettingTab {
 							// Refresh the settings pane to reflect the changes
 							this.display();
 						},
-						() => {}
+						() => { }
 					).open();
 				})
 			);
@@ -1307,7 +1309,7 @@ class CannoliSettingTab extends PluginSettingTab {
 								// Refresh the settings pane to reflect the changes
 								this.display();
 							},
-							() => {}
+							() => { }
 						).open();
 					})
 				)
