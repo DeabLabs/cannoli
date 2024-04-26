@@ -1015,18 +1015,18 @@ export class CallNode extends CannoliNode {
 		const config = this.getConfig();
 
 		// Check if this node is a form or choice node
-		if (this instanceof FormNode || this instanceof ChooseNode) {
-			// Check the cannoli settings
-			const isOpenAI = this.run.cannoli.settings.llmProvider == "openai";
+		// if (this instanceof FormNode || this instanceof ChooseNode) {
+		// 	// Check the cannoli settings
+		// 	const isOpenAI = this.run.cannoli.settings.llmProvider == "openai";
 
-			// If it's not OpenAI, error
+		// 	// If it's not OpenAI, error
 
-			if (!isOpenAI) {
-				this.error(
-					`Form and Choice nodes are only supported with OpenAI. Support for function calling with Ollama coming soon.`
-				);
-			}
-		}
+		// 	if (!isOpenAI) {
+		// 		this.error(
+		// 			`Form and Choice nodes are only supported with OpenAI. Support for function calling with Ollama coming soon.`
+		// 		);
+		// 	}
+		// }
 
 		const messages = this.getPrependedMessages();
 

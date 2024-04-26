@@ -1,5 +1,5 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { ChatOllama } from "@langchain/community/chat_models/ollama";
+import { OllamaFunctions } from "langchain/experimental/chat_models/ollama_functions";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatGroq } from "@langchain/groq";
@@ -11,6 +11,7 @@ import {
 import { AIMessage, ChatMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 import { StringOutputParser } from "@langchain/core/output_parsers";
+import { messagesWithFnCallPrompts } from "src/fn_calling";
 
 const stringParser = new StringOutputParser();
 
@@ -96,6 +97,10 @@ export const makeSampleConfig = (): GenericModelConfig => ({
 	top_k: undefined,
 });
 
+export type LangchainMessages = ReturnType<typeof LLMProvider.convertMessages>;
+
+const SUPPORTED_FN_PROVIDERS = ["openai", "ollama"];
+
 export class LLMProvider {
 	baseConfig: GenericModelConfig;
 	provider: SupportedProviders;
@@ -123,6 +128,7 @@ export class LLMProvider {
 	getSampleConfig() {
 		return makeSampleConfig();
 	}
+
 	getChatClient = (
 		args?: Partial<{
 			configOverrides: GenericModelConfig;
@@ -139,7 +145,7 @@ export class LLMProvider {
 					model: config.model,
 				});
 			case "ollama":
-				return new ChatOllama({
+				return new OllamaFunctions({
 					baseUrl: config.baseURL,
 					model: config.model,
 				});
@@ -165,9 +171,16 @@ export class LLMProvider {
 
 	static convertMessages = (
 		messages: ChatCompletionMessageParam[] | GenericCompletionResponse[]
-	) =>
-		messages.map((m) =>
-			m.role === "user"
+	) => {
+		return messages.map((m) => {
+			if ("function_call" in m) {
+				return new AIMessage({
+					// name: m.function_call?.name ?? "",
+					content: m.function_call?.arguments ?? "",
+				})
+			}
+
+			return m.role === "user"
 				? new HumanMessage({ content: m.content })
 				: m.role === "assistant"
 					? new AIMessage({ content: m.content ?? "" })
@@ -183,9 +196,9 @@ export class LLMProvider {
 									: "",
 						"user"
 					)
+		}
 		);
-
-	fn_call = () => { };
+	}
 
 	getCompletion = async ({
 		messages,
@@ -198,16 +211,78 @@ export class LLMProvider {
 		});
 
 		const convertedMessages = LLMProvider.convertMessages(messages);
-		console.log(convertedMessages)
-		const content = await client
-			.pipe(stringParser)
-			.invoke(convertedMessages);
 
-		return {
-			role: "assistant", // optional when functions included
-			content,
-		};
+		if (configOverrides.functions && configOverrides.function_call) {
+			return await this.fn_call({
+				provider: configOverrides.provider as SupportedProviders || this.provider,
+				convertedMessages,
+				client,
+				functions: configOverrides.functions,
+				function_call: configOverrides.function_call,
+			});
+		} else {
+			const content = await client
+				.pipe(stringParser)
+				.invoke(convertedMessages);
+
+			return {
+				role: "assistant", // optional when functions included
+				content,
+			};
+		}
 	};
+
+	private fn_call = async ({
+		provider,
+		convertedMessages,
+		client,
+		functions,
+		function_call,
+	}:
+		{
+			provider: SupportedProviders,
+			convertedMessages: LangchainMessages,
+			client: BaseChatModel,
+			functions: GenericFunctionCall[],
+			function_call: { name: string }
+		}
+	) => {
+		if (!SUPPORTED_FN_PROVIDERS.includes(provider)) {
+			const fn = functions[0];
+			const fnMessages = messagesWithFnCallPrompts({
+				convertedMessages,
+				fn,
+				function_call,
+			})
+			const response = await client.pipe(stringParser).invoke(fnMessages);
+
+			// parse response string and extract the first json object wrapped in {}
+			const json = response.match(/\{.*\}/)?.[0] ?? "{}";
+
+			return {
+				role: "assistant",
+				content: "",
+				function_call: {
+					arguments: json,
+					name: function_call.name
+				}
+			}
+		} else {
+			const response = await client.invoke(
+				convertedMessages,
+				{
+					// @ts-expect-error
+					function_call,
+					functions: functions,
+				});
+
+			return {
+				role: "assistant",
+				content: "",
+				function_call: response.additional_kwargs.tool_calls ? response.additional_kwargs.tool_calls[0]?.function : response.additional_kwargs.function_call
+			}
+		}
+	}
 
 	getCompletionStream = async ({
 		messages,
