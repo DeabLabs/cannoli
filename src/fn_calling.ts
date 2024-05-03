@@ -17,8 +17,10 @@ export const messagesWithFnCallPrompts = ({ convertedMessages, fn, function_call
 				content:
 					`
 Respond with the choice you would like to make.
-Respond only with json stringified object with the key "choice" and the value of the choice you would like to make.
-If you fail to follow these instructions, the user will not understand your response, and will be stuck waiting for infinity.
+Your output format should strictly adhere to JSON formatting. Here is a type definition of the expected JSON format:
+---
+Record<"choice", string>
+---
 
 example input:
 - A
@@ -26,7 +28,7 @@ example input:
 - C
 
 example output:
-B
+{"choice": "B"}
 
 input:
 ${
@@ -69,6 +71,34 @@ Below, return your JSON output.
 
 """
 `.trim()
+			})]
+		}
+		case "note_select": {
+			return [...convertedMessages, new HumanMessage({
+				content:
+					`
+Respond with the note you would like to select.
+Your output format should strictly adhere to JSON formatting. Here is a type definition of the expected JSON format:
+---
+Record<"note", string>
+---
+
+example input:
+- Note A
+- Note B
+- Note C
+
+example output:
+{"note": "Note B"}
+
+input:
+${
+						// TODO: actually validate fns
+						// @ts-expect-error
+						fn.parameters.properties.note.enum.map((note_name: string) => `- ${note_name}`).join("\n")
+						}
+output:
+`.trimStart()
 			})]
 		}
 		default: {

@@ -271,7 +271,7 @@ export class LLMProvider {
 				fn,
 				function_call,
 			})
-			console.log(fnMessages)
+			console.log(fn, fnMessages)
 			const response = await client.pipe(stringParser).invoke(fnMessages);
 
 			// parse response string and extract the first json object wrapped in {}
