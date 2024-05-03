@@ -247,27 +247,8 @@ export class LLMProvider {
 			function_call: { name: string }
 		}
 	) => {
-		if (!SUPPORTED_FN_PROVIDERS.includes(provider)) {
-			const fn = functions[0];
-			const fnMessages = messagesWithFnCallPrompts({
-				convertedMessages,
-				fn,
-				function_call,
-			})
-			const response = await client.pipe(stringParser).invoke(fnMessages);
-
-			// parse response string and extract the first json object wrapped in {}
-			const json = response.match(/\{.*\}/)?.[0] ?? "{}";
-
-			return {
-				role: "assistant",
-				content: "",
-				function_call: {
-					arguments: json,
-					name: function_call.name
-				}
-			}
-		} else {
+		if (SUPPORTED_FN_PROVIDERS.includes(provider)) {
+			console.log(functions, convertedMessages)
 			const response = await client.invoke(
 				convertedMessages,
 				{
@@ -276,10 +257,34 @@ export class LLMProvider {
 					functions: functions,
 				});
 
+			console.log(response.additional_kwargs.function_call)
+
 			return {
 				role: "assistant",
 				content: "",
 				function_call: response.additional_kwargs.tool_calls ? response.additional_kwargs.tool_calls[0]?.function : response.additional_kwargs.function_call
+			}
+		} else {
+			const fn = functions[0];
+			const fnMessages = messagesWithFnCallPrompts({
+				convertedMessages,
+				fn,
+				function_call,
+			})
+			console.log(fnMessages)
+			const response = await client.pipe(stringParser).invoke(fnMessages);
+
+			// parse response string and extract the first json object wrapped in {}
+			const json = response;
+			console.log(json)
+
+			return {
+				role: "assistant",
+				content: "",
+				function_call: {
+					arguments: json,
+					name: function_call.name
+				}
 			}
 		}
 	}

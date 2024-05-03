@@ -38,6 +38,39 @@ output:
 `.trimStart()
 			})]
 		}
+		case "form": {
+			return [...convertedMessages, new HumanMessage({
+				content: `
+Your task is to generate a value(s) given one or more variable names.
+The format of variables is as follows:
+- variable_name_1
+- variable_name_2
+- variable_name_3
+
+For example, if the variable is "- breakfast",
+then the variable name is "breakfast".
+
+Your output format should strictly adhere to JSON formatting. Here is a type definition of the expected JSON format:
+---
+Record<string, string>
+---
+Do not return anything other then JSON.
+The provided type definition should be respected and only valid JSON should be returned.
+JSON string values should satisfy the objective.
+
+The necessary information to complete the objective is between ---.
+---
+Objective: "Provide the requested information for each key."
+Variables:
+${Object.keys(fn.parameters.properties).map(p => `- ${p}`).join("\n")}
+---
+
+Below, return your JSON output.
+
+"""
+`.trim()
+			})]
+		}
 		default: {
 			console.warn("Function call prompt not implemented for function: ", fn.name)
 			return convertedMessages
