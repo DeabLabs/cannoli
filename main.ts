@@ -1009,7 +1009,7 @@ class CannoliSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.openaiAPIKey = value;
 							await this.plugin.saveSettings();
-						})
+						}).inputEl.setAttribute("type", "password")
 				);
 
 			// Cost threshold setting. This is the cost at which the user will be alerted before running a Cannoli
@@ -1127,7 +1127,7 @@ class CannoliSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.geminiAPIKey = value;
 							await this.plugin.saveSettings();
-						})
+						}).inputEl.setAttribute("type", "password")
 				);
 			// gemini model setting
 			new Setting(containerEl)
@@ -1157,7 +1157,7 @@ class CannoliSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.anthropicAPIKey = value;
 							await this.plugin.saveSettings();
-						})
+						}).inputEl.setAttribute("type", "password")
 				);
 			// anthropic model setting
 			new Setting(containerEl)
@@ -1187,7 +1187,7 @@ class CannoliSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.groqAPIKey = value;
 							await this.plugin.saveSettings();
-						})
+						}).inputEl.setAttribute("type", "password")
 				);
 			// groq model setting
 			new Setting(containerEl)
