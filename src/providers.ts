@@ -248,7 +248,6 @@ export class LLMProvider {
 		}
 	) => {
 		if (SUPPORTED_FN_PROVIDERS.includes(provider)) {
-			console.log(functions, convertedMessages)
 			const response = await client.invoke(
 				convertedMessages,
 				{
@@ -256,8 +255,6 @@ export class LLMProvider {
 					function_call,
 					functions: functions,
 				});
-
-			console.log(response.additional_kwargs.function_call)
 
 			return {
 				role: "assistant",
@@ -271,12 +268,12 @@ export class LLMProvider {
 				fn,
 				function_call,
 			})
-			console.log(fn, fnMessages)
 			const response = await client.pipe(stringParser).invoke(fnMessages);
 
 			// parse response string and extract the first json object wrapped in {}
 			const json = response;
-			console.log(json)
+
+			// TODO add a while loop to keep calling this until json parses as valid json
 
 			return {
 				role: "assistant",

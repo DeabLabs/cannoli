@@ -23,6 +23,12 @@ interface CannoliSettings {
 	llmProvider: SupportedProviders;
 	ollamaBaseUrl: string;
 	ollamaModel: string;
+	geminiModel: string;
+	geminiAPIKey: string;
+	anthropicModel: string;
+	anthropicAPIKey: string;
+	groqModel: string;
+	groqAPIKey: string;
 	openaiAPIKey: string;
 	costThreshold: number;
 	defaultModel: string;
@@ -43,6 +49,12 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	llmProvider: "openai",
 	ollamaBaseUrl: "http://127.0.0.1:11434",
 	ollamaModel: "llama2",
+	geminiModel: "gemini-1.0-pro-latest",
+	geminiAPIKey: "",
+	anthropicModel: "claude-3-opus-20240229",
+	anthropicAPIKey: "",
+	groqModel: "llama3-70b-8192",
+	groqAPIKey: "",
 	openaiAPIKey: "",
 	costThreshold: 0.5,
 	defaultModel: "gpt-3.5-turbo",
@@ -407,12 +419,18 @@ export default class Cannoli extends Plugin {
 
 	startCannoli = async (file: TFile) => {
 		// If the api key is the default, send a notice telling the user to add their key
+		const keyName = this.settings.llmProvider + "APIKey";
 		if (
-			this.settings.llmProvider === "openai" &&
-			this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey
+			this.settings.llmProvider !== "ollama" &&
+			// @ts-expect-error - This is a valid check
+			this.settings?.[keyName] !== undefined &&
+			// @ts-expect-error - Please forgive me
+			DEFAULT_SETTINGS?.[keyName] !== undefined &&
+			// @ts-expect-error - I'm sorry
+			this.settings?.[keyName] === DEFAULT_SETTINGS?.[keyName]
 		) {
 			new Notice(
-				"Please enter your OpenAI API key in the Cannoli settings"
+				`Please enter your ${this.settings.llmProvider} API key in the Cannoli settings`
 			);
 			return;
 		}
@@ -441,6 +459,39 @@ export default class Cannoli extends Plugin {
 				llm = new LLMProvider({
 					provider: "ollama",
 					baseConfig: ollamaConfig,
+				});
+				break;
+			}
+			case "gemini": {
+				const geminiConfig: GenericModelConfig = {
+					apiKey: this.settings.geminiAPIKey,
+					model: this.settings.geminiModel,
+				};
+				llm = new LLMProvider({
+					provider: "gemini",
+					baseConfig: geminiConfig,
+				});
+				break;
+			}
+			case "anthropic": {
+				const anthropicConfig: GenericModelConfig = {
+					apiKey: this.settings.anthropicAPIKey,
+					model: this.settings.anthropicModel,
+				};
+				llm = new LLMProvider({
+					provider: "anthropic",
+					baseConfig: anthropicConfig,
+				});
+				break;
+			}
+			case "groq": {
+				const groqConfig: GenericModelConfig = {
+					apiKey: this.settings.groqAPIKey,
+					model: this.settings.groqModel,
+				};
+				llm = new LLMProvider({
+					provider: "groq",
+					baseConfig: groqConfig,
 				});
 				break;
 			}
@@ -922,13 +973,16 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Add dropdown for AI provider with options OpenAI and Ollama
 		new Setting(containerEl)
-			.setName("AI provider")
+			.setName("Default AI provider")
 			.setDesc(
-				"Select the AI provider you'd like to use for your cannolis."
+				"Select the default AI provider you'd like to use for your cannolis. This can be overridden in the canvas file."
 			)
 			.addDropdown((dropdown) => {
 				dropdown.addOption("openai", "OpenAI");
 				dropdown.addOption("ollama", "Ollama");
+				dropdown.addOption("gemini", "Gemini");
+				dropdown.addOption("anthropic", "Anthropic");
+				dropdown.addOption("groq", "Groq");
 				dropdown.setValue(
 					this.plugin.settings.llmProvider ??
 					DEFAULT_SETTINGS.llmProvider
@@ -1056,6 +1110,96 @@ class CannoliSettingTab extends PluginSettingTab {
 						.setValue(this.plugin.settings.ollamaModel)
 						.onChange(async (value) => {
 							this.plugin.settings.ollamaModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "gemini") {
+			// gemini api key setting
+			new Setting(containerEl)
+				.setName("Gemini API key")
+				.setDesc(
+					"This key will be used to make all Gemini LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.geminiAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.geminiAPIKey = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// gemini model setting
+			new Setting(containerEl)
+				.setName("Gemini model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.geminiModel)
+						.onChange(async (value) => {
+							this.plugin.settings.geminiModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "anthropic") {
+			// anthropic api key setting
+			new Setting(containerEl)
+				.setName("Anthropic API key")
+				.setDesc(
+					"This key will be used to make all Anthropic LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.anthropicAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.anthropicAPIKey = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// anthropic model setting
+			new Setting(containerEl)
+				.setName("Anthropic model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.anthropicModel)
+						.onChange(async (value) => {
+							this.plugin.settings.anthropicModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "groq") {
+			// groq api key setting
+			new Setting(containerEl)
+				.setName("Groq API key")
+				.setDesc(
+					"This key will be used to make all Groq LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.groqAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.groqAPIKey = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// groq model setting
+			new Setting(containerEl)
+				.setName("Groq model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.groqModel)
+						.onChange(async (value) => {
+							this.plugin.settings.groqModel = value;
 							await this.plugin.saveSettings();
 						})
 				);
