@@ -15,6 +15,7 @@ import {
 	LLMProvider as Llm,
 } from "src/providers";
 import invariant from "tiny-invariant";
+import { getAPI } from "obsidian-dataview";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -1218,6 +1219,33 @@ export class Run {
 		}
 
 		return content;
+	}
+
+	/**
+	 * Given a string of content, check for dataview code blocks and replace them with the output of the dataview
+	 * 
+	 * a dataview looks like the following
+	 * \```dataview
+	 * QUERY TEXT
+	 * ```
+	 * 
+	 * The QUERY TEXT is passed to the dataview plugin to get the output of the query
+	 */
+	async replaceDataviewQueries(content: string): Promise<string> {
+		let newContent = content;
+		const dataviews = newContent.match(
+			/```dataview\n([\s\S]*?)\n```/g
+		);
+		const dvApi = getAPI(this.cannoli.app);
+		if (dvApi && dataviews && dataviews.length) {
+			for (const dataview of dataviews) {
+				const sanitizedQuery = dataview.replace("```dataview", "").replace("```", "").trim()
+				const dvContent = await dvApi.queryMarkdown(sanitizedQuery)
+				newContent = dvContent.successful ? newContent.replace(dataview, dvContent.value) : newContent;
+			}
+		}
+
+		return newContent;
 	}
 
 	editSelection(newContent: string) {
