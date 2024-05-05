@@ -22,6 +22,7 @@ import {
 	GenericModelConfig,
 	SupportedProviders,
 } from "src/providers";
+import { getAPI } from "obsidian-dataview";
 import invariant from "tiny-invariant";
 
 type VariableValue = { name: string; content: string; edgeId: string };
@@ -111,6 +112,29 @@ export class CannoliNode extends CannoliVertex {
 						blockquotedNoteContent
 					);
 				}
+			}
+		}
+
+		/**
+		 * Given a string of content, check for dataview code blocks and replace them with the output of the dataview
+		 * 
+		 * a dataview looks like the following
+		 * ```dataview
+		 * QUERY TEXT
+		 * ```
+		 * 
+		 * The QUERY TEXT is passed to the dataview plugin to get the output of the query
+		 */
+		const dataviews = content.match(
+			/```dataview\n([\s\S]*?)\n```/g
+		);
+		const dvApi = getAPI(this.run.cannoli.app);
+		if (dvApi && dataviews && dataviews.length) {
+			for (const dataview of dataviews) {
+				console.log(dataview)
+				const sanitizedQuery = dataview.replace("```dataview", "").replace("```", "").trim()
+				const dvContent = await dvApi.queryMarkdown(sanitizedQuery)
+				content = dvContent.successful ? content.replace(dataview, dvContent.value) : content;
 			}
 		}
 
