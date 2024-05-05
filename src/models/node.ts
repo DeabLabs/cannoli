@@ -131,7 +131,6 @@ export class CannoliNode extends CannoliVertex {
 		const dvApi = getAPI(this.run.cannoli.app);
 		if (dvApi && dataviews && dataviews.length) {
 			for (const dataview of dataviews) {
-				console.log(dataview)
 				const sanitizedQuery = dataview.replace("```dataview", "").replace("```", "").trim()
 				const dvContent = await dvApi.queryMarkdown(sanitizedQuery)
 				content = dvContent.successful ? content.replace(dataview, dvContent.value) : content;
