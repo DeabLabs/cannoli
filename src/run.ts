@@ -1085,6 +1085,11 @@ export class Run {
 			return `# ${reference.name}\nMock note content`;
 		}
 
+		// If the note is formatted with the path, get rid of the path and just use the note name
+		if (reference.name.includes("|")) {
+			reference.name = reference.name.split("|")[1];
+		}
+
 		// Get the file
 		const filename = reference.name.replace("[[", "").replace("]]", "");
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
