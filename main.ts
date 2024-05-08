@@ -16,7 +16,7 @@ import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
-import { GenericModelConfig, LLMProvider, SupportedProviders } from "src/providers";
+import { GenericModelConfig, GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
 import invariant from "tiny-invariant";
 
 interface CannoliSettings {
@@ -435,6 +435,37 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
+		const getConfigByProvider: GetDefaultsByProvider = (p) => {
+			switch (p) {
+				case "openai":
+					return {
+						apiKey: this.settings.openaiAPIKey,
+						model: this.settings.defaultModel,
+						temperature: this.settings.defaultTemperature,
+					};
+				case "ollama":
+					return {
+						baseURL: this.settings.ollamaBaseUrl,
+						model: this.settings.ollamaModel,
+					};
+				case "gemini":
+					return {
+						apiKey: this.settings.geminiAPIKey,
+						model: this.settings.geminiModel,
+					};
+				case "anthropic":
+					return {
+						apiKey: this.settings.anthropicAPIKey,
+						model: this.settings.anthropicModel,
+					};
+				case "groq":
+					return {
+						apiKey: this.settings.groqAPIKey,
+						model: this.settings.groqModel,
+					};
+			}
+		}
+
 		// Create an instance of llm
 		let llm: LLMProvider | undefined;
 		switch (this.settings.llmProvider) {
@@ -448,6 +479,7 @@ export default class Cannoli extends Plugin {
 				llm = new LLMProvider({
 					provider: "openai",
 					baseConfig: openAiConfig,
+					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
@@ -459,6 +491,7 @@ export default class Cannoli extends Plugin {
 				llm = new LLMProvider({
 					provider: "ollama",
 					baseConfig: ollamaConfig,
+					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
@@ -470,6 +503,7 @@ export default class Cannoli extends Plugin {
 				llm = new LLMProvider({
 					provider: "gemini",
 					baseConfig: geminiConfig,
+					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
@@ -481,6 +515,7 @@ export default class Cannoli extends Plugin {
 				llm = new LLMProvider({
 					provider: "anthropic",
 					baseConfig: anthropicConfig,
+					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
@@ -492,6 +527,7 @@ export default class Cannoli extends Plugin {
 				llm = new LLMProvider({
 					provider: "groq",
 					baseConfig: groqConfig,
+					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}

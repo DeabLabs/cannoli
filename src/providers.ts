@@ -1,5 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { OllamaFunctions } from "langchain/experimental/chat_models/ollama_functions";
+import { ChatOllama } from "@langchain/community/chat_models/ollama";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatGroq } from "@langchain/groq";
@@ -57,6 +58,7 @@ export type GenericModelConfig = {
 type ConstructorArgs = {
 	provider: SupportedProviders;
 	baseConfig: GenericModelConfig;
+	getDefaultConfigByProvider: GetDefaultsByProvider;
 };
 
 export type GenericCompletionParams = {
@@ -97,13 +99,21 @@ export const makeSampleConfig = (): GenericModelConfig => ({
 	top_k: undefined,
 });
 
+export type GetDefaultsByProvider = (provider: SupportedProviders) => GenericModelConfig;
+
 export type LangchainMessages = ReturnType<typeof LLMProvider.convertMessages>;
 
 const SUPPORTED_FN_PROVIDERS = ["openai", "ollama"];
 
+const removeUndefinedKeys = <T extends Record<string, unknown>>(obj: T): T => {
+	Object.keys(obj).forEach((key: keyof T) => obj[key] === undefined && delete obj[key]);
+	return obj;
+}
+
 export class LLMProvider {
 	baseConfig: GenericModelConfig;
 	provider: SupportedProviders;
+	getDefaultConfigByProvider: GetDefaultsByProvider;
 	initialized = false;
 
 	constructor(initArgs: ConstructorArgs) {
@@ -114,6 +124,7 @@ export class LLMProvider {
 	init = (initArgs: ConstructorArgs) => {
 		this.provider = initArgs.provider;
 		this.baseConfig = initArgs.baseConfig;
+		this.getDefaultConfigByProvider = initArgs.getDefaultConfigByProvider;
 	};
 
 	static getCompletionResponseUsage = (...args: unknown[]) => ({
@@ -125,19 +136,39 @@ export class LLMProvider {
 
 	getConfig = () => ({ ...this.baseConfig });
 
+	getDefaultsByProvider = (provider: SupportedProviders) => {
+		const defaults = this.getDefaultConfigByProvider(provider);
+
+		removeUndefinedKeys(defaults);
+
+		return defaults;
+	}
+
 	getSampleConfig() {
 		return makeSampleConfig();
+	}
+
+	getMergedConfig = (args?: Partial<{
+		configOverrides: GenericModelConfig;
+		provider: SupportedProviders;
+	}>) => {
+		let { configOverrides = {}, provider } = args || {};
+		if (!provider) provider = this.provider;
+		configOverrides = { ...this.getDefaultsByProvider(provider), ...removeUndefinedKeys(configOverrides), }
+		return { ...this.baseConfig, ...configOverrides, provider };
+
 	}
 
 	getChatClient = (
 		args?: Partial<{
 			configOverrides: GenericModelConfig;
 			provider: SupportedProviders;
+			hasFunctionCall: boolean;
 		}>
 	): BaseChatModel => {
-		const { configOverrides = {}, provider = this.provider } = args || {};
-		// TODO
-		const config = { ...this.baseConfig, ...configOverrides };
+		const config = this.getMergedConfig(args);
+		const provider = config.provider;
+		console.log(`Using ${config.provider}: ${config.model}`)
 		switch (provider) {
 			case "openai":
 				return new ChatOpenAI({
@@ -146,7 +177,14 @@ export class LLMProvider {
 					model: config.model,
 				});
 			case "ollama":
-				return new OllamaFunctions({
+				if (args?.hasFunctionCall) {
+					return new OllamaFunctions({
+						baseUrl: config.baseURL,
+						model: config.model,
+					});
+				}
+
+				return new ChatOllama({
 					baseUrl: config.baseURL,
 					model: config.model,
 				});
@@ -206,10 +244,12 @@ export class LLMProvider {
 		messages,
 		...configOverrides
 	}: GenericCompletionParams): Promise<GenericCompletionResponse> => {
+		const hasFunctionCall = !!configOverrides.functions && !!configOverrides.function_call;
 		const client = this.getChatClient({
 			configOverrides,
 			// @ts-expect-error
 			provider: configOverrides?.provider ?? undefined,
+			hasFunctionCall,
 		});
 
 		const convertedMessages = LLMProvider.convertMessages(messages);
