@@ -168,7 +168,6 @@ export class LLMProvider {
 	): BaseChatModel => {
 		const config = this.getMergedConfig(args);
 		const provider = config.provider;
-		console.log(`Using ${config.provider}: ${config.model}`)
 		switch (provider) {
 			case "openai":
 				return new ChatOpenAI({
