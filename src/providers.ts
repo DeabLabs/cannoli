@@ -136,6 +136,7 @@ export class LLMProvider {
 		}>
 	): BaseChatModel => {
 		const { configOverrides = {}, provider = this.provider } = args || {};
+		// TODO
 		const config = { ...this.baseConfig, ...configOverrides };
 		switch (provider) {
 			case "openai":
@@ -151,6 +152,7 @@ export class LLMProvider {
 				});
 			case "gemini":
 				return new ChatGoogleGenerativeAI({
+					maxRetries: 3,
 					model: config.model,
 					apiKey: config.apiKey,
 				});

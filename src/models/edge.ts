@@ -113,16 +113,14 @@ export class CannoliEdge extends CannoliObject {
 		}
 
 		return (
-			`--> Edge ${this.id} Text: "${
-				this.text ?? "undefined string"
+			`--> Edge ${this.id} Text: "${this.text ?? "undefined string"
 			}"\n"${this.ensureStringLength(
 				this.getSource().text ?? "undefined string",
 				15
 			)}--->"${this.ensureStringLength(
 				this.getTarget().text ?? "undefined string",
 				15
-			)}"\n${crossingGroupsString}\nisReflexive: ${
-				this.isReflexive
+			)}"\n${crossingGroupsString}\nisReflexive: ${this.isReflexive
 			}\nType: ${this.type}\n` + super.logDetails()
 		);
 	}
@@ -406,9 +404,13 @@ export class LoggingEdge extends CannoliEdge {
 		// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
 		for (const key in request) {
 			if (key !== "messages" && request[key as keyof typeof request]) {
-				configString += `${key}: ${
-					request[key as keyof typeof request]
-				}\n`;
+				// If its apiKey, don't log the value
+				if (key === "apiKey") {
+					continue;
+				}
+
+				configString += `${key}: ${request[key as keyof typeof request]
+					}\n`;
 			}
 		}
 
@@ -457,9 +459,8 @@ export class LoggingEdge extends CannoliEdge {
 			if ("function_call" in message && message.function_call) {
 				content = `Function Call: **${message.function_call.name}**\nArguments:\n\`\`\`json\n${message.function_call.arguments}\n\`\`\``;
 			}
-			formattedString += `#### <u>${
-				role.charAt(0).toUpperCase() + role.slice(1)
-			}</u>:\n${content}\n`;
+			formattedString += `#### <u>${role.charAt(0).toUpperCase() + role.slice(1)
+				}</u>:\n${content}\n`;
 		});
 		return formattedString.trim();
 	}

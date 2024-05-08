@@ -973,9 +973,9 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Add dropdown for AI provider with options OpenAI and Ollama
 		new Setting(containerEl)
-			.setName("Default AI provider")
+			.setName("AI Provider")
 			.setDesc(
-				"Select the default AI provider you'd like to use for your cannolis. This can be overridden in the canvas file."
+				"Choose which provider settings to edit. This dropdown will also select your default provider, which can be overridden at the node level using config arrows."
 			)
 			.addDropdown((dropdown) => {
 				dropdown.addOption("openai", "OpenAI");
