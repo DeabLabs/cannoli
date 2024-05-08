@@ -175,34 +175,40 @@ export class LLMProvider {
 					apiKey: config.apiKey,
 					azureOpenAIBasePath: config.baseURL,
 					model: config.model,
+					temperature: config.temperature,
 				});
 			case "ollama":
 				if (args?.hasFunctionCall) {
 					return new OllamaFunctions({
 						baseUrl: config.baseURL,
 						model: config.model,
+						temperature: config.temperature,
 					});
 				}
 
 				return new ChatOllama({
 					baseUrl: config.baseURL,
 					model: config.model,
+					temperature: config.temperature,
 				});
 			case "gemini":
 				return new ChatGoogleGenerativeAI({
 					maxRetries: 3,
 					model: config.model,
 					apiKey: config.apiKey,
+					temperature: config.temperature,
 				});
 			case "anthropic":
 				return new ChatAnthropic({
 					apiKey: config.apiKey,
 					model: config.model,
+					temperature: config.temperature,
 				});
 			case "groq":
 				return new ChatGroq({
 					apiKey: config.apiKey,
 					model: config.model,
+					temperature: config.temperature,
 				});
 			default:
 				throw new Error("Unsupported provider");

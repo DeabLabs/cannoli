@@ -16,19 +16,23 @@ import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
-import { GenericModelConfig, GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
+import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
 import invariant from "tiny-invariant";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
 	ollamaBaseUrl: string;
 	ollamaModel: string;
+	ollamaTemperature: number;
 	geminiModel: string;
 	geminiAPIKey: string;
+	geminiTemperature: number;
 	anthropicModel: string;
 	anthropicAPIKey: string;
+	anthropicTemperature: number;
 	groqModel: string;
 	groqAPIKey: string;
+	groqTemperature: number;
 	openaiAPIKey: string;
 	costThreshold: number;
 	defaultModel: string;
@@ -49,12 +53,16 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	llmProvider: "openai",
 	ollamaBaseUrl: "http://127.0.0.1:11434",
 	ollamaModel: "llama2",
+	ollamaTemperature: 1,
 	geminiModel: "gemini-1.0-pro-latest",
 	geminiAPIKey: "",
+	geminiTemperature: 1,
 	anthropicModel: "claude-3-opus-20240229",
 	anthropicAPIKey: "",
+	anthropicTemperature: 1,
 	groqModel: "llama3-70b-8192",
 	groqAPIKey: "",
+	groqTemperature: 1,
 	openaiAPIKey: "",
 	costThreshold: 0.5,
 	defaultModel: "gpt-3.5-turbo",
@@ -435,6 +443,7 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
+		// map cannoli settings to provider config
 		const getConfigByProvider: GetDefaultsByProvider = (p) => {
 			switch (p) {
 				case "openai":
@@ -447,21 +456,25 @@ export default class Cannoli extends Plugin {
 					return {
 						baseURL: this.settings.ollamaBaseUrl,
 						model: this.settings.ollamaModel,
+						temperature: this.settings.ollamaTemperature,
 					};
 				case "gemini":
 					return {
 						apiKey: this.settings.geminiAPIKey,
 						model: this.settings.geminiModel,
+						temperature: this.settings.geminiTemperature,
 					};
 				case "anthropic":
 					return {
 						apiKey: this.settings.anthropicAPIKey,
 						model: this.settings.anthropicModel,
+						temperature: this.settings.anthropicTemperature,
 					};
 				case "groq":
 					return {
 						apiKey: this.settings.groqAPIKey,
 						model: this.settings.groqModel,
+						temperature: this.settings.groqTemperature,
 					};
 			}
 		}
@@ -470,63 +483,46 @@ export default class Cannoli extends Plugin {
 		let llm: LLMProvider | undefined;
 		switch (this.settings.llmProvider) {
 			case "openai": {
-				const openAiConfig: GenericModelConfig = {
-					apiKey: this.settings.openaiAPIKey,
-					model: this.settings.defaultModel,
-					temperature: this.settings.defaultTemperature,
-					role: "user",
-				};
+				const config = getConfigByProvider("openai");
 				llm = new LLMProvider({
 					provider: "openai",
-					baseConfig: openAiConfig,
+					baseConfig: config,
 					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
 			case "ollama": {
-				const ollamaConfig: GenericModelConfig = {
-					baseURL: this.settings.ollamaBaseUrl,
-					model: this.settings.ollamaModel,
-				};
+				const config = getConfigByProvider("ollama");
 				llm = new LLMProvider({
 					provider: "ollama",
-					baseConfig: ollamaConfig,
+					baseConfig: config,
 					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
 			case "gemini": {
-				const geminiConfig: GenericModelConfig = {
-					apiKey: this.settings.geminiAPIKey,
-					model: this.settings.geminiModel,
-				};
+				const config = getConfigByProvider("gemini");
 				llm = new LLMProvider({
 					provider: "gemini",
-					baseConfig: geminiConfig,
+					baseConfig: config,
 					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
 			case "anthropic": {
-				const anthropicConfig: GenericModelConfig = {
-					apiKey: this.settings.anthropicAPIKey,
-					model: this.settings.anthropicModel,
-				};
+				const config = getConfigByProvider("anthropic");
 				llm = new LLMProvider({
 					provider: "anthropic",
-					baseConfig: anthropicConfig,
+					baseConfig: config,
 					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
 			case "groq": {
-				const groqConfig: GenericModelConfig = {
-					apiKey: this.settings.groqAPIKey,
-					model: this.settings.groqModel,
-				};
+				const config = getConfigByProvider("groq");
 				llm = new LLMProvider({
 					provider: "groq",
-					baseConfig: groqConfig,
+					baseConfig: config,
 					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
@@ -1152,6 +1148,34 @@ class CannoliSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						})
 				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.ollamaTemperature) &&
+								this.plugin.settings.ollamaTemperature
+								? this.plugin.settings.ollamaTemperature.toString()
+								: DEFAULT_SETTINGS.ollamaTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.ollamaTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.ollamaTemperature =
+									DEFAULT_SETTINGS.ollamaTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
 		} else if (this.plugin.settings.llmProvider === "gemini") {
 			// gemini api key setting
 			new Setting(containerEl)
@@ -1180,6 +1204,34 @@ class CannoliSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.geminiModel = value;
 							await this.plugin.saveSettings();
+						})
+				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.geminiTemperature) &&
+								this.plugin.settings.geminiTemperature
+								? this.plugin.settings.geminiTemperature.toString()
+								: DEFAULT_SETTINGS.geminiTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.geminiTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.geminiTemperature =
+									DEFAULT_SETTINGS.geminiTemperature;
+								await this.plugin.saveSettings();
+							}
 						})
 				);
 		} else if (this.plugin.settings.llmProvider === "anthropic") {
@@ -1212,6 +1264,34 @@ class CannoliSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						})
 				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.anthropicTemperature) &&
+								this.plugin.settings.anthropicTemperature
+								? this.plugin.settings.anthropicTemperature.toString()
+								: DEFAULT_SETTINGS.anthropicTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.anthropicTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.anthropicTemperature =
+									DEFAULT_SETTINGS.anthropicTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
 		} else if (this.plugin.settings.llmProvider === "groq") {
 			// groq api key setting
 			new Setting(containerEl)
@@ -1240,6 +1320,34 @@ class CannoliSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.groqModel = value;
 							await this.plugin.saveSettings();
+						})
+				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.groqTemperature) &&
+								this.plugin.settings.groqTemperature
+								? this.plugin.settings.groqTemperature.toString()
+								: DEFAULT_SETTINGS.groqTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.groqTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.groqTemperature =
+									DEFAULT_SETTINGS.groqTemperature;
+								await this.plugin.saveSettings();
+							}
 						})
 				);
 		}
