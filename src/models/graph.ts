@@ -28,7 +28,7 @@ import {
 	LoggingEdge,
 	SystemMessageEdge,
 } from "./edge";
-import { ChatCompletionMessage } from "openai/resources/chat";
+import { GenericCompletionResponse } from "src/providers";
 
 export enum CannoliObjectKind {
 	Node = "node",
@@ -136,7 +136,7 @@ export interface CannoliEdgeData extends CannoliData {
 	addMessages: boolean;
 	isReflexive: boolean;
 	content?: string | Record<string, string>;
-	messages?: ChatCompletionMessage[];
+	messages?: GenericCompletionResponse[];
 	name?: string;
 	vaultModifier?: VaultModifier;
 }

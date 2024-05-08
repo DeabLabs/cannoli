@@ -6,9 +6,11 @@ import {
 	VaultModifier,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
-import { ChatCompletionCreateParams } from "openai/resources/chat";
 import { ChatRole } from "src/run";
-import { OpenAiChatMessages } from "src/llm";
+import {
+	GenericCompletionParams,
+	GenericCompletionResponse,
+} from "src/providers";
 
 export class CannoliEdge extends CannoliObject {
 	source: string;
@@ -19,7 +21,7 @@ export class CannoliEdge extends CannoliObject {
 	addMessages: boolean;
 	vaultModifier: VaultModifier | null;
 	content: string | Record<string, string> | null;
-	messages: OpenAiChatMessages | null;
+	messages: GenericCompletionResponse[] | null;
 
 	constructor(edgeData: VerifiedCannoliCanvasEdgeData) {
 		super(edgeData);
@@ -63,7 +65,7 @@ export class CannoliEdge extends CannoliObject {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: ChatCompletionCreateParams;
+		request?: GenericCompletionParams;
 	}): void {
 		this.content =
 			content !== null && content !== undefined ? content : null;
@@ -111,16 +113,14 @@ export class CannoliEdge extends CannoliObject {
 		}
 
 		return (
-			`--> Edge ${this.id} Text: "${
-				this.text ?? "undefined string"
+			`--> Edge ${this.id} Text: "${this.text ?? "undefined string"
 			}"\n"${this.ensureStringLength(
 				this.getSource().text ?? "undefined string",
 				15
 			)}--->"${this.ensureStringLength(
 				this.getTarget().text ?? "undefined string",
 				15
-			)}"\n${crossingGroupsString}\nisReflexive: ${
-				this.isReflexive
+			)}"\n${crossingGroupsString}\nisReflexive: ${this.isReflexive
 			}\nType: ${this.type}\n` + super.logDetails()
 		);
 	}
@@ -138,11 +138,11 @@ export class ChatConverterEdge extends CannoliEdge {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: ChatCompletionCreateParams;
+		request?: GenericCompletionParams;
 	}): void {
 		const format = this.run.cannoli.settings.chatFormatString;
 		const messageString = "";
-		let messages: OpenAiChatMessages = [];
+		let messages: GenericCompletionResponse[] = [];
 
 		if (content && format) {
 			// Convert content to messages using the format
@@ -157,7 +157,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		this.messages = messages;
 	}
 
-	stringToArray(str: string, format: string): OpenAiChatMessages {
+	stringToArray(str: string, format: string): GenericCompletionResponse[] {
 		const rolePattern = format
 			.replace("{{role}}", "(System|User|Assistant)")
 			.replace("{{content}}", "")
@@ -165,7 +165,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		const regex = new RegExp(rolePattern, "g");
 
 		let match;
-		let messages: OpenAiChatMessages = [];
+		let messages: GenericCompletionResponse[] = [];
 		let lastIndex = 0;
 
 		let firstMatch = true;
@@ -225,7 +225,9 @@ export class ChatConverterEdge extends CannoliEdge {
 		return messages;
 	}
 
-	limitMessages(messages: OpenAiChatMessages): OpenAiChatMessages {
+	limitMessages(
+		messages: GenericCompletionResponse[]
+	): GenericCompletionResponse[] {
 		let isTokenBased = false;
 		let originalText = this.text;
 
@@ -240,7 +242,7 @@ export class ChatConverterEdge extends CannoliEdge {
 			return messages;
 		}
 
-		let outputMessages: OpenAiChatMessages;
+		let outputMessages: GenericCompletionResponse[];
 
 		if (isTokenBased) {
 			const maxCharacters = limitValue * 4;
@@ -280,7 +282,7 @@ export class ChatResponseEdge extends CannoliEdge {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: ChatCompletionCreateParams;
+		request?: GenericCompletionParams;
 	}): void {
 		const format = this.run.cannoli.settings.chatFormatString;
 
@@ -324,7 +326,7 @@ export class SystemMessageEdge extends CannoliEdge {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: ChatCompletionCreateParams;
+		request?: GenericCompletionParams;
 	}): void {
 		if (content) {
 			this.messages = [
@@ -343,12 +345,12 @@ export class LoggingEdge extends CannoliEdge {
 		request,
 	}: {
 		content?: string | Record<string, string>;
-		request?: ChatCompletionCreateParams;
+		request?: GenericCompletionParams;
 	}): void {
 		// If content exists, save it as the configString
 		let configString = null;
 
-		let messages: OpenAiChatMessages = [];
+		let messages: GenericCompletionResponse[] = [];
 
 		if (request) {
 			configString = this.getConfigString(request);
@@ -396,15 +398,19 @@ export class LoggingEdge extends CannoliEdge {
 		}
 	}
 
-	getConfigString(request: ChatCompletionCreateParams) {
+	getConfigString(request: GenericCompletionParams) {
 		let configString = "";
 
 		// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
 		for (const key in request) {
 			if (key !== "messages" && request[key as keyof typeof request]) {
-				configString += `${key}: ${
-					request[key as keyof typeof request]
-				}\n`;
+				// If its apiKey, don't log the value
+				if (key === "apiKey") {
+					continue;
+				}
+
+				configString += `${key}: ${request[key as keyof typeof request]
+					}\n`;
 			}
 		}
 
@@ -445,17 +451,16 @@ export class LoggingEdge extends CannoliEdge {
 		return forEachVersionNumbers;
 	}
 
-	formatInteractionHeaders(messages: OpenAiChatMessages): string {
+	formatInteractionHeaders(messages: GenericCompletionResponse[]): string {
 		let formattedString = "";
 		messages.forEach((message) => {
-			const role = message.role;
+			const role = message.role || "user";
 			let content = message.content;
 			if ("function_call" in message && message.function_call) {
 				content = `Function Call: **${message.function_call.name}**\nArguments:\n\`\`\`json\n${message.function_call.arguments}\n\`\`\``;
 			}
-			formattedString += `#### <u>${
-				role.charAt(0).toUpperCase() + role.slice(1)
-			}</u>:\n${content}\n`;
+			formattedString += `#### <u>${role.charAt(0).toUpperCase() + role.slice(1)
+				}</u>:\n${content}\n`;
 		});
 		return formattedString.trim();
 	}

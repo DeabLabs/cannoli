@@ -6,19 +6,21 @@ import pLimit from "p-limit";
 import { CannoliObjectStatus, Reference, ReferenceType } from "./models/graph";
 import { HttpTemplate } from "main";
 import Cannoli from "main";
-import {
-	ChatCompletionCreateParams,
-	ChatCompletionCreateParamsNonStreaming,
-	ChatCompletionCreateParamsStreaming,
-} from "openai/resources/chat";
 import * as yaml from "js-yaml";
-import { Llm, OpenAIConfig, OpenAiChatMessage } from "src/llm";
+import {
+	GenericCompletionParams,
+	GenericCompletionResponse,
+	GenericFunctionCall,
+	GenericModelConfig,
+	LLMProvider as Llm,
+} from "src/providers";
+import invariant from "tiny-invariant";
 
 export type StoppageReason = "user" | "error" | "complete";
 
 interface Limit {
-	(fn: () => Promise<OpenAiChatMessage | Error>): Promise<
-		OpenAiChatMessage | Error
+	(fn: () => Promise<GenericCompletionResponse | Error>): Promise<
+		GenericCompletionResponse | Error
 	>;
 }
 
@@ -57,8 +59,8 @@ enum DagCheckState {
 
 export function isValidKey(
 	key: string,
-	config: OpenAIConfig
-): key is keyof OpenAIConfig {
+	config: GenericModelConfig
+): key is keyof GenericModelConfig {
 	return key in config;
 }
 
@@ -131,16 +133,15 @@ export class Run {
 		llm?: Llm;
 	}) {
 		this.graph = graph;
-		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
+		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
 		this.cannoli = cannoli;
 		this.canvas = canvas ?? null;
 		this.llm = llm ?? null;
 		this.usage = {};
 		this.llmLimit = pLimit(this.cannoli.settings.pLimit);
-		this.currentNote = `[[${
-			this.cannoli.app.workspace.getActiveFile()?.basename
-		}]]`;
+		this.currentNote = `[[${this.cannoli.app.workspace.getActiveFile()?.basename
+			}]]`;
 
 		this.selection =
 			this.cannoli.app.workspace.activeEditor?.editor?.getSelection()
@@ -412,75 +413,80 @@ export class Run {
 	}
 
 	async callLLM(
-		request: ChatCompletionCreateParamsNonStreaming,
+		request: GenericCompletionParams,
 		verbose?: boolean
-	): Promise<OpenAiChatMessage | Error> {
+	): Promise<GenericCompletionResponse | Error> {
 		// console.log(`Request: ${JSON.stringify(request, null, 2)}`);
 
-		return this.llmLimit(async (): Promise<OpenAiChatMessage | Error> => {
-			// Only call LLM if we're not mocking
-			if (this.isMock || !this.llm || !this.llm.initialized) {
-				// return {
-				// 	role: "assistant",
-				// 	content: "Mock response",
-				// };
+		return this.llmLimit(
+			async (): Promise<GenericCompletionResponse | Error> => {
+				// Only call LLM if we're not mocking
+				if (this.isMock || !this.llm || !this.llm.initialized) {
+					// return {
+					// 	role: "assistant",
+					// 	content: "Mock response",
+					// };
 
-				return this.createMockFunctionResponse(request);
-			}
+					return this.createMockFunctionResponse(request);
+				}
 
-			// Catch any errors
-			try {
-				const response = await this.llm.getCompletion(request);
-				const completion = Llm.getFirstCompletionMessage(response);
+				// Catch any errors
+				try {
+					const response = await this.llm.getCompletion(request);
+					const completion = response;
 
-				if (verbose) {
-					console.log(
-						"Input Messages:\n" +
+					if (verbose) {
+						console.log(
+							"Input Messages:\n" +
 							JSON.stringify(request.messages, null, 2) +
 							"\n\nResponse Message:\n" +
 							JSON.stringify(completion, null, 2)
-					);
-				}
-
-				const responseUsage = Llm.getCompletionResponseUsage(response);
-				if (responseUsage) {
-					// If the model doesn't exist in modelInfo, add it
-					if (!this.modelInfo[request.model]) {
-						this.modelInfo[request.model] = {
-							name: request.model,
-							promptTokenPrice: 0,
-							completionTokenPrice: 0,
-						};
+						);
 					}
 
-					
-					const model = this.modelInfo[request.model];
-					if (!this.usage[model.name]) {
-						this.usage[model.name] = {
-							model: model,
-							modelUsage: {
-								promptTokens: 0,
-								completionTokens: 0,
-								apiCalls: 0,
-								totalCost: 0,
-							},
-						};
+					const responseUsage =
+						Llm.getCompletionResponseUsage(response);
+					if (responseUsage && request.model) {
+						// If the model doesn't exist in modelInfo, add it
+						if (!this.modelInfo[request.model]) {
+							this.modelInfo[request.model] = {
+								name: request.model,
+								promptTokenPrice: 0,
+								completionTokenPrice: 0,
+							};
+						}
+
+						const model = this.modelInfo[request.model];
+						if (!this.usage[model.name]) {
+							this.usage[model.name] = {
+								model: model,
+								modelUsage: {
+									promptTokens: 0,
+									completionTokens: 0,
+									apiCalls: 0,
+									totalCost: 0,
+								},
+							};
+						}
+
+						this.usage[model.name].modelUsage.promptTokens +=
+							responseUsage.prompt_tokens;
+						this.usage[model.name].modelUsage.completionTokens +=
+							responseUsage.completion_tokens;
+						this.usage[model.name].modelUsage.apiCalls += 1;
 					}
 
-					this.usage[model.name].modelUsage.promptTokens +=
-						responseUsage.prompt_tokens;
-					this.usage[model.name].modelUsage.completionTokens +=
-						responseUsage.completion_tokens;
-					this.usage[model.name].modelUsage.apiCalls += 1;
+					invariant(completion, "No message returned");
+
+					return completion;
+				} catch (e) {
+					return e as Error;
 				}
-				return completion ? completion : Error("No message returned");
-			} catch (e) {
-				return e;
 			}
-		});
+		);
 	}
 
-	async callLLMStream(request: ChatCompletionCreateParamsStreaming) {
+	async callLLMStream(request: GenericCompletionParams) {
 		if (this.isMock || !this.llm || !this.llm.initialized) {
 			// Return mock stream
 			return "Mock response";
@@ -489,15 +495,17 @@ export class Run {
 		try {
 			const response = await this.llm.getCompletionStream(request);
 
-			return response ? response : Error("No message returned");
+			invariant(response, "No message returned");
+
+			return response;
 		} catch (e) {
-			return e;
+			return e as Error;
 		}
 	}
 
 	createMockFunctionResponse(
-		request: ChatCompletionCreateParamsNonStreaming
-	): OpenAiChatMessage {
+		request: GenericCompletionParams
+	): GenericCompletionResponse {
 		let textMessages = "";
 
 		// For each message, convert it to a string, including the role and the content, and a function call if present
@@ -512,7 +520,11 @@ export class Run {
 		// Estimate the tokens using the rule of thumb that 4 characters is 1 token
 		const promptTokens = textMessages.length / 4;
 
-		if (this.llm?.provider === "openai" && !this.usage[request.model]) {
+		if (
+			request.model &&
+			this.llm?.provider === "openai" &&
+			!this.usage[request.model]
+		) {
 			// Find the right model from this.models
 
 			if (!this.modelInfo[request.model]) {
@@ -536,7 +548,7 @@ export class Run {
 			};
 		}
 
-		if (this.usage[request.model]) {
+		if (request.model && this.usage[request.model]) {
 			this.usage[request.model].modelUsage.promptTokens += promptTokens;
 			this.usage[request.model].modelUsage.apiCalls += 1;
 		}
@@ -560,7 +572,7 @@ export class Run {
 
 				return this.createMockChoiceFunctionResponse(
 					choiceFunction
-				) as OpenAiChatMessage;
+				) as GenericCompletionResponse;
 			} else if (calledFunction === "form") {
 				// Find the answers function
 				const formFunction = request.functions?.find(
@@ -573,7 +585,7 @@ export class Run {
 
 				return this.createMockFormFunctionResponse(
 					formFunction
-				) as OpenAiChatMessage;
+				) as GenericCompletionResponse;
 			} else if (calledFunction === "note_select") {
 				// Find the note name function
 				const noteNameFunction = request.functions?.find(
@@ -586,7 +598,7 @@ export class Run {
 
 				return this.createMockNoteNameFunctionResponse(
 					noteNameFunction
-				) as OpenAiChatMessage;
+				) as GenericCompletionResponse;
 			}
 		}
 
@@ -596,9 +608,7 @@ export class Run {
 		};
 	}
 
-	createMockChoiceFunctionResponse(
-		choiceFunction: ChatCompletionCreateParams.Function
-	) {
+	createMockChoiceFunctionResponse(choiceFunction: GenericFunctionCall) {
 		const parsedProperties = JSON.parse(
 			JSON.stringify(choiceFunction?.parameters?.["properties"] ?? {})
 		);
@@ -606,10 +616,10 @@ export class Run {
 		// Pick one of the choices randomly
 		const randomChoice =
 			parsedProperties?.choice?.enum[
-				Math.floor(
-					Math.random() *
-						(parsedProperties?.choice?.enum?.length ?? 0)
-				)
+			Math.floor(
+				Math.random() *
+				(parsedProperties?.choice?.enum?.length ?? 0)
+			)
 			] ?? "N/A";
 
 		return {
@@ -623,9 +633,7 @@ export class Run {
 		};
 	}
 
-	createMockFormFunctionResponse(
-		listFunction: ChatCompletionCreateParams.Function
-	) {
+	createMockFormFunctionResponse(listFunction: GenericFunctionCall) {
 		const args: { [key: string]: string }[] = [];
 
 		// Go through the properties of the function and enter a mock string
@@ -649,9 +657,7 @@ export class Run {
 		};
 	}
 
-	createMockNoteNameFunctionResponse(
-		noteFunction: ChatCompletionCreateParams.Function
-	) {
+	createMockNoteNameFunctionResponse(noteFunction: GenericFunctionCall) {
 		const args: { [key: string]: string }[] = [];
 
 		const parsedProperties = JSON.parse(
@@ -661,7 +667,7 @@ export class Run {
 		// Pick one of the options in note.enum randomly
 		const randomNote =
 			parsedProperties?.note?.enum[
-				Math.random() * (parsedProperties?.note?.enum?.length ?? 0)
+			Math.random() * (parsedProperties?.note?.enum?.length ?? 0)
 			] ?? "N/A";
 
 		args.push({
@@ -677,9 +683,7 @@ export class Run {
 		};
 	}
 
-	createChoiceFunction(
-		choices: string[]
-	): ChatCompletionCreateParams.Function {
+	createChoiceFunction(choices: string[]): GenericFunctionCall {
 		return {
 			name: "choice",
 			description: "Enter your choice using this function.",
@@ -698,7 +702,7 @@ export class Run {
 
 	createFormFunction(
 		tags: { name: string; noteNames?: string[] }[]
-	): ChatCompletionCreateParams.Function {
+	): GenericFunctionCall {
 		const properties: Record<string, { type: string; enum?: string[] }> =
 			{};
 
@@ -727,9 +731,7 @@ export class Run {
 		};
 	}
 
-	createNoteNameFunction(
-		notes: string[]
-	): ChatCompletionCreateParams.Function {
+	createNoteNameFunction(notes: string[]): GenericFunctionCall {
 		return {
 			name: "note_select",
 			description: "Enter one of the provided valid note names.",
@@ -754,7 +756,13 @@ export class Run {
 	}
 
 	calculateLLMCostForModel(usage: Usage): number {
-		if (this.llm?.provider === "ollama" || !usage || !usage.model || !usage.modelUsage) return 0;
+		if (
+			this.llm?.provider === "ollama" ||
+			!usage ||
+			!usage.model ||
+			!usage.modelUsage
+		)
+			return 0;
 
 		const promptCost =
 			usage.model.promptTokenPrice * usage.modelUsage.promptTokens;
@@ -1041,7 +1049,7 @@ export class Run {
 					// Set the cursor to the end of the file
 					this.cannoli.app.workspace.activeEditor?.editor?.setCursor(
 						this.cannoli.app.workspace.activeEditor?.editor?.lineCount() ||
-							0,
+						0,
 						0
 					);
 				}

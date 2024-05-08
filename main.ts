@@ -16,12 +16,23 @@ import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
 import { Run, Stoppage, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
-import { LLMProvider, Llm, OllamaConfig, OpenAIConfig } from "src/llm";
+import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
+import invariant from "tiny-invariant";
 
 interface CannoliSettings {
-	llmProvider: LLMProvider;
+	llmProvider: SupportedProviders;
 	ollamaBaseUrl: string;
 	ollamaModel: string;
+	ollamaTemperature: number;
+	geminiModel: string;
+	geminiAPIKey: string;
+	geminiTemperature: number;
+	anthropicModel: string;
+	anthropicAPIKey: string;
+	anthropicTemperature: number;
+	groqModel: string;
+	groqAPIKey: string;
+	groqTemperature: number;
 	openaiAPIKey: string;
 	costThreshold: number;
 	defaultModel: string;
@@ -42,6 +53,16 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	llmProvider: "openai",
 	ollamaBaseUrl: "http://127.0.0.1:11434",
 	ollamaModel: "llama2",
+	ollamaTemperature: 1,
+	geminiModel: "gemini-1.0-pro-latest",
+	geminiAPIKey: "",
+	geminiTemperature: 1,
+	anthropicModel: "claude-3-opus-20240229",
+	anthropicAPIKey: "",
+	anthropicTemperature: 1,
+	groqModel: "llama3-70b-8192",
+	groqAPIKey: "",
+	groqTemperature: 1,
 	openaiAPIKey: "",
 	costThreshold: 0.5,
 	defaultModel: "gpt-3.5-turbo",
@@ -130,7 +151,7 @@ export default class Cannoli extends Plugin {
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
 	}
 
-	onunload() {}
+	onunload() { }
 
 	async loadSettings() {
 		this.settings = Object.assign(
@@ -406,44 +427,108 @@ export default class Cannoli extends Plugin {
 
 	startCannoli = async (file: TFile) => {
 		// If the api key is the default, send a notice telling the user to add their key
+		const keyName = this.settings.llmProvider + "APIKey";
 		if (
-			this.settings.llmProvider === "openai" &&
-			this.settings.openaiAPIKey === DEFAULT_SETTINGS.openaiAPIKey
+			this.settings.llmProvider !== "ollama" &&
+			// @ts-expect-error - This is a valid check
+			this.settings?.[keyName] !== undefined &&
+			// @ts-expect-error - Please forgive me
+			DEFAULT_SETTINGS?.[keyName] !== undefined &&
+			// @ts-expect-error - I'm sorry
+			this.settings?.[keyName] === DEFAULT_SETTINGS?.[keyName]
 		) {
 			new Notice(
-				"Please enter your OpenAI API key in the Cannoli settings"
+				`Please enter your ${this.settings.llmProvider} API key in the Cannoli settings`
 			);
 			return;
 		}
 
+		// map cannoli settings to provider config
+		const getConfigByProvider: GetDefaultsByProvider = (p) => {
+			switch (p) {
+				case "openai":
+					return {
+						apiKey: this.settings.openaiAPIKey,
+						model: this.settings.defaultModel,
+						temperature: this.settings.defaultTemperature,
+					};
+				case "ollama":
+					return {
+						baseURL: this.settings.ollamaBaseUrl,
+						model: this.settings.ollamaModel,
+						temperature: this.settings.ollamaTemperature,
+					};
+				case "gemini":
+					return {
+						apiKey: this.settings.geminiAPIKey,
+						model: this.settings.geminiModel,
+						temperature: this.settings.geminiTemperature,
+					};
+				case "anthropic":
+					return {
+						apiKey: this.settings.anthropicAPIKey,
+						model: this.settings.anthropicModel,
+						temperature: this.settings.anthropicTemperature,
+					};
+				case "groq":
+					return {
+						apiKey: this.settings.groqAPIKey,
+						model: this.settings.groqModel,
+						temperature: this.settings.groqTemperature,
+					};
+			}
+		}
+
 		// Create an instance of llm
-		let llm: Llm | undefined;
+		let llm: LLMProvider | undefined;
 		switch (this.settings.llmProvider) {
 			case "openai": {
-				const openAiConfig: OpenAIConfig & { apiKey: string } = {
-					apiKey: this.settings.openaiAPIKey,
-					model: this.settings.defaultModel,
-					temperature: this.settings.defaultTemperature,
-					role: "user",
-				};
-				llm = new Llm({
+				const config = getConfigByProvider("openai");
+				llm = new LLMProvider({
 					provider: "openai",
-					openaiConfig: openAiConfig,
+					baseConfig: config,
+					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
 			case "ollama": {
-				const ollamaConfig: OllamaConfig & { baseURL: string } = {
-					baseURL: this.settings.ollamaBaseUrl,
-					model: this.settings.ollamaModel,
-				};
-				llm = new Llm({
+				const config = getConfigByProvider("ollama");
+				llm = new LLMProvider({
 					provider: "ollama",
-					ollamaConfig: ollamaConfig,
+					baseConfig: config,
+					getDefaultConfigByProvider: getConfigByProvider,
+				});
+				break;
+			}
+			case "gemini": {
+				const config = getConfigByProvider("gemini");
+				llm = new LLMProvider({
+					provider: "gemini",
+					baseConfig: config,
+					getDefaultConfigByProvider: getConfigByProvider,
+				});
+				break;
+			}
+			case "anthropic": {
+				const config = getConfigByProvider("anthropic");
+				llm = new LLMProvider({
+					provider: "anthropic",
+					baseConfig: config,
+					getDefaultConfigByProvider: getConfigByProvider,
+				});
+				break;
+			}
+			case "groq": {
+				const config = getConfigByProvider("groq");
+				llm = new LLMProvider({
+					provider: "groq",
+					baseConfig: config,
+					getDefaultConfigByProvider: getConfigByProvider,
 				});
 				break;
 			}
 		}
+		invariant(llm, "LLM provider not found");
 
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
@@ -467,7 +552,7 @@ export default class Cannoli extends Plugin {
 		const factory = new CannoliFactory(
 			canvas.getCanvasData(),
 			`[[${this.app.workspace.getActiveFile()?.basename}]]` ??
-				"No active note",
+			"No active note",
 			this.settings.contentIsColorless ?? false
 		);
 
@@ -494,7 +579,7 @@ export default class Cannoli extends Plugin {
 		file: TFile,
 		name: string,
 		canvas: Canvas,
-		llm: Llm,
+		llm: LLMProvider,
 		audioTranscription?: string
 	) => {
 		return new Promise<boolean>((resolve) => {
@@ -559,7 +644,7 @@ export default class Cannoli extends Plugin {
 		file: TFile,
 		name: string,
 		canvas: Canvas,
-		llm?: Llm
+		llm?: LLMProvider
 	) => {
 		return new Promise<void>((resolve) => {
 			// Create callback function to trigger notice
@@ -632,6 +717,9 @@ export default class Cannoli extends Plugin {
 				);
 			}
 		}
+
+		// Send a Notice that the folder has been created
+		new Notice("Cannoli College folder added");
 	};
 }
 
@@ -796,14 +884,14 @@ export class HttpTemplateEditorModal extends Modal {
 
 		const headersValue =
 			this.template.headers &&
-			Object.keys(this.template.headers).length > 0
+				Object.keys(this.template.headers).length > 0
 				? JSON.stringify(this.template.headers, null, 2)
 				: JSON.stringify(
-						{ "Content-Type": "application/json" },
-						null,
-						2
-						// eslint-disable-next-line no-mixed-spaces-and-tabs
-				  );
+					{ "Content-Type": "application/json" },
+					null,
+					2
+					// eslint-disable-next-line no-mixed-spaces-and-tabs
+				);
 
 		const headersInput = contentEl.createEl("textarea", {
 			placeholder: `{ "Content-Type": "application/json" }`,
@@ -920,19 +1008,22 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		// Add dropdown for AI provider with options OpenAI and Ollama
 		new Setting(containerEl)
-			.setName("AI provider")
+			.setName("AI Provider")
 			.setDesc(
-				"Select the AI provider you'd like to use for your cannolis."
+				"Choose which provider settings to edit. This dropdown will also select your default provider, which can be overridden at the node level using config arrows."
 			)
 			.addDropdown((dropdown) => {
 				dropdown.addOption("openai", "OpenAI");
 				dropdown.addOption("ollama", "Ollama");
+				dropdown.addOption("gemini", "Gemini");
+				dropdown.addOption("anthropic", "Anthropic");
+				dropdown.addOption("groq", "Groq");
 				dropdown.setValue(
 					this.plugin.settings.llmProvider ??
-						DEFAULT_SETTINGS.llmProvider
+					DEFAULT_SETTINGS.llmProvider
 				);
 				dropdown.onChange(async (value) => {
-					this.plugin.settings.llmProvider = value as LLMProvider;
+					this.plugin.settings.llmProvider = value as SupportedProviders;
 					await this.plugin.saveSettings();
 					this.display();
 				});
@@ -953,7 +1044,7 @@ class CannoliSettingTab extends PluginSettingTab {
 						.onChange(async (value) => {
 							this.plugin.settings.openaiAPIKey = value;
 							await this.plugin.saveSettings();
-						})
+						}).inputEl.setAttribute("type", "password")
 				);
 
 			// Cost threshold setting. This is the cost at which the user will be alerted before running a Cannoli
@@ -1057,6 +1148,208 @@ class CannoliSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						})
 				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.ollamaTemperature) &&
+								this.plugin.settings.ollamaTemperature
+								? this.plugin.settings.ollamaTemperature.toString()
+								: DEFAULT_SETTINGS.ollamaTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.ollamaTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.ollamaTemperature =
+									DEFAULT_SETTINGS.ollamaTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "gemini") {
+			// gemini api key setting
+			new Setting(containerEl)
+				.setName("Gemini API key")
+				.setDesc(
+					"This key will be used to make all Gemini LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.geminiAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.geminiAPIKey = value;
+							await this.plugin.saveSettings();
+						}).inputEl.setAttribute("type", "password")
+				);
+			// gemini model setting
+			new Setting(containerEl)
+				.setName("Gemini model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.geminiModel)
+						.onChange(async (value) => {
+							this.plugin.settings.geminiModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.geminiTemperature) &&
+								this.plugin.settings.geminiTemperature
+								? this.plugin.settings.geminiTemperature.toString()
+								: DEFAULT_SETTINGS.geminiTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.geminiTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.geminiTemperature =
+									DEFAULT_SETTINGS.geminiTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "anthropic") {
+			// anthropic api key setting
+			new Setting(containerEl)
+				.setName("Anthropic API key")
+				.setDesc(
+					"This key will be used to make all Anthropic LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.anthropicAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.anthropicAPIKey = value;
+							await this.plugin.saveSettings();
+						}).inputEl.setAttribute("type", "password")
+				);
+			// anthropic model setting
+			new Setting(containerEl)
+				.setName("Anthropic model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.anthropicModel)
+						.onChange(async (value) => {
+							this.plugin.settings.anthropicModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.anthropicTemperature) &&
+								this.plugin.settings.anthropicTemperature
+								? this.plugin.settings.anthropicTemperature.toString()
+								: DEFAULT_SETTINGS.anthropicTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.anthropicTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.anthropicTemperature =
+									DEFAULT_SETTINGS.anthropicTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "groq") {
+			// groq api key setting
+			new Setting(containerEl)
+				.setName("Groq API key")
+				.setDesc(
+					"This key will be used to make all Groq LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.groqAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.groqAPIKey = value;
+							await this.plugin.saveSettings();
+						}).inputEl.setAttribute("type", "password")
+				);
+			// groq model setting
+			new Setting(containerEl)
+				.setName("Groq model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.groqModel)
+						.onChange(async (value) => {
+							this.plugin.settings.groqModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("Default LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.groqTemperature) &&
+								this.plugin.settings.groqTemperature
+								? this.plugin.settings.groqTemperature.toString()
+								: DEFAULT_SETTINGS.groqTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.groqTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.groqTemperature =
+									DEFAULT_SETTINGS.groqTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
 		}
 
 		new Setting(containerEl)
@@ -1097,7 +1390,7 @@ class CannoliSettingTab extends PluginSettingTab {
 				toggle
 					.setValue(
 						this.plugin.settings.contentIsColorless ??
-							DEFAULT_SETTINGS.contentIsColorless
+						DEFAULT_SETTINGS.contentIsColorless
 					)
 					.onChange(async (value) => {
 						this.plugin.settings.contentIsColorless = value;
@@ -1206,7 +1499,7 @@ class CannoliSettingTab extends PluginSettingTab {
 				toggle
 					.setValue(
 						this.plugin.settings.enableAudioTriggeredCannolis ||
-							false
+						false
 					)
 					.onChange(async (value) => {
 						this.plugin.settings.enableAudioTriggeredCannolis =
@@ -1248,7 +1541,7 @@ class CannoliSettingTab extends PluginSettingTab {
 						.setValue(
 							this.plugin.settings
 								.deleteAudioFilesAfterAudioTriggeredCannolis ||
-								false
+							false
 
 							// eslint-disable-next-line no-mixed-spaces-and-tabs
 						)
@@ -1286,7 +1579,7 @@ class CannoliSettingTab extends PluginSettingTab {
 							// Refresh the settings pane to reflect the changes
 							this.display();
 						},
-						() => {}
+						() => { }
 					).open();
 				})
 			);
@@ -1307,7 +1600,7 @@ class CannoliSettingTab extends PluginSettingTab {
 								// Refresh the settings pane to reflect the changes
 								this.display();
 							},
-							() => {}
+							() => { }
 						).open();
 					})
 				)
