@@ -685,6 +685,9 @@ export default class Cannoli extends Plugin {
 				);
 			}
 		}
+
+		// Send a Notice that the folder has been created
+		new Notice("Cannoli College folder added");
 	};
 }
 
