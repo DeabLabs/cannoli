@@ -91,7 +91,11 @@ export class Canvas {
 
 		// Loop over all nodes in canvasData and check which nodes are within the given group
 		for (const node of this.canvasData.nodes) {
+			// If the node is the group itself, skip it
 			if (node.id === group.id) continue;
+
+			// If the node is red, it's an error node, skip it
+			if (node.color === "1") continue;
 
 			const nodeRectangle = this.createRectangle(
 				node.x,
