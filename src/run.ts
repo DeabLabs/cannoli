@@ -1218,6 +1218,9 @@ export class Run {
 			}
 		}
 
+		// Render dataview queries
+		content = await this.replaceDataviewQueries(content);
+
 		return content;
 	}
 
