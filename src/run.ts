@@ -15,6 +15,7 @@ import {
 	LLMProvider as Llm,
 } from "src/providers";
 import invariant from "tiny-invariant";
+import { getAPI } from "obsidian-dataview";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -1085,6 +1086,11 @@ export class Run {
 			return `# ${reference.name}\nMock note content`;
 		}
 
+		// If the note is formatted with the path, get rid of the path and just use the note name
+		if (reference.name.includes("|")) {
+			reference.name = reference.name.split("|")[1];
+		}
+
 		// Get the file
 		const filename = reference.name.replace("[[", "").replace("]]", "");
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
@@ -1212,7 +1218,67 @@ export class Run {
 			}
 		}
 
+		// Render dataview queries
+		content = await this.replaceDataviewQueries(content);
+
 		return content;
+	}
+
+	/**
+	 * Given a string of content, check for dataview code blocks and replace them with the output of the dataview
+	 * 
+	 * a dataview looks like the following
+	 * \```dataview
+	 * QUERY TEXT
+	 * ```
+	 * 
+	 * The QUERY TEXT is passed to the dataview plugin to get the output of the query
+	 */
+	async replaceDataviewQueries(content: string): Promise<string> {
+		let newContent = content;
+		const dataviews = newContent.match(
+			/```dataview\n([\s\S]*?)\n```/g
+		);
+		const dvApi = getAPI(this.cannoli.app);
+		if (dvApi && dataviews && dataviews.length) {
+			for (const dataview of dataviews) {
+				const sanitizedQuery = dataview.replace("```dataview", "").replace("```", "").trim()
+
+				const dvContent = await dvApi.queryMarkdown(sanitizedQuery)
+
+				newContent = dvContent.successful ? newContent.replace(dataview, dvContent.value) : newContent;
+			}
+		}
+
+		// Attempting to replace dataviewjs queries
+		// const dataviewsjs = newContent.match(
+		// 	/```dataviewjs\n([\s\S]*?)\n```/g
+		// );
+		// if (dvApi && dataviewsjs && dataviewsjs.length) {
+		// 	for (const dataview of dataviewsjs) {
+		// 		const sanitizedQuery = dataview.replace("```dataviewjs", "").replace("```", "").trim()
+
+		// 		console.log(sanitizedQuery)
+
+		// 		// Make an empty HTML element to render the dataview output
+		// 		const dvOutput = createEl("div");
+
+		// 		// Make an empty/fake component to render the dataview output
+		// 		const dvComponent = new Component();
+
+		// 		dvComponent.onload = () => {
+		// 			// Do nothing
+		// 		}
+
+		// 		const dvContent = await dvApi.executeJs(sanitizedQuery, dvOutput, dvComponent, "")
+
+		// 		newContent = newContent.replace(dataview, dvOutput.innerHTML)
+
+		// 		console.log(dvOutput.innerHTML)
+		// 	}
+		// }
+
+		return newContent;
 	}
 
 	editSelection(newContent: string) {

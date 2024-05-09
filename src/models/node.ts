@@ -60,12 +60,15 @@ export class CannoliNode extends CannoliVertex {
 			// Create a map to look up variable content by name
 			const varMap = new Map(variables.map((v) => [v.name, v.content]));
 			// Replace the indexed placeholders with the content from the variables
-			return textCopy.replace(/\{\{(\d+)\}\}/g, (match, index) => {
+			textCopy = textCopy.replace(/\{\{(\d+)\}\}/g, (match, index) => {
 				// Retrieve the reference by index
 				const reference = this.references[Number(index)];
 				// Retrieve the content from the varMap using the reference's name
 				return varMap.get(reference.name) || "{{invalid}}";
 			});
+
+			// Render dataview queries
+			return await this.run.replaceDataviewQueries(textCopy);
 		};
 
 		return renderFunction;
@@ -102,6 +105,8 @@ export class CannoliNode extends CannoliVertex {
 					includeName: true,
 					subpath: subpath,
 				});
+
+
 
 				if (noteContent) {
 					const blockquotedNoteContent =

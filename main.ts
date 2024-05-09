@@ -93,7 +93,6 @@ export default class Cannoli extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-
 		// Create a command whenever a file is renamed to be a cannoli file
 		this.registerEvent(
 			this.app.vault.on("rename", (file: TFile, oldPath: string) => {
