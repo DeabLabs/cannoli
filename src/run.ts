@@ -1236,50 +1236,104 @@ export class Run {
 	 */
 	async replaceDataviewQueries(content: string): Promise<string> {
 		let newContent = content;
-		const dataviews = newContent.match(
-			/```dataview\n([\s\S]*?)\n```/g
-		);
+		const dataviewRegex = /(\{\{\n)?```dataview\n([\s\S]*?)\n```\n?(}})?/g;
+
 		const dvApi = getAPI(this.cannoli.app);
-		if (dvApi && dataviews && dataviews.length) {
-			for (const dataview of dataviews) {
-				const sanitizedQuery = dataview.replace("```dataview", "").replace("```", "").trim()
+		if (dvApi) {
+			let match;
+			while ((match = dataviewRegex.exec(content)) !== null) {
+				const fullBlock = match[0];
+				const doubleBraced = match[1] && match[3]; // Check if both opening and closing braces are present
+				const query = match[2].trim();
 
-				const dvContent = await dvApi.queryMarkdown(sanitizedQuery)
+				const dvContent = await dvApi.queryMarkdown(query);
 
-				newContent = dvContent.successful ? newContent.replace(dataview, dvContent.value) : newContent;
+				if (dvContent.successful) {
+					let resultContent = dvContent.value;
+
+					// Replace markdown links with contents from getNote if the query block was double-braced
+					if (doubleBraced) {
+						resultContent = await this.replaceLinks(resultContent);
+					}
+
+					// Remove list formatting if we've replaced links
+					if (doubleBraced) {
+						resultContent = this.removeListFormatting(resultContent);
+					}
+
+					newContent = newContent.replace(fullBlock, resultContent);
+				}
 			}
 		}
 
-		// Attempting to replace dataviewjs queries
-		// const dataviewsjs = newContent.match(
-		// 	/```dataviewjs\n([\s\S]*?)\n```/g
-		// );
-		// if (dvApi && dataviewsjs && dataviewsjs.length) {
-		// 	for (const dataview of dataviewsjs) {
-		// 		const sanitizedQuery = dataview.replace("```dataviewjs", "").replace("```", "").trim()
-
-		// 		console.log(sanitizedQuery)
-
-		// 		// Make an empty HTML element to render the dataview output
-		// 		const dvOutput = createEl("div");
-
-		// 		// Make an empty/fake component to render the dataview output
-		// 		const dvComponent = new Component();
-
-		// 		dvComponent.onload = () => {
-		// 			// Do nothing
-		// 		}
-
-		// 		const dvContent = await dvApi.executeJs(sanitizedQuery, dvOutput, dvComponent, "")
-
-		// 		newContent = newContent.replace(dataview, dvOutput.innerHTML)
-
-		// 		console.log(dvOutput.innerHTML)
-		// 	}
-		// }
-
 		return newContent;
 	}
+
+	// Helper function to replace all markdown links with their corresponding note contents
+	async replaceLinks(resultContent: string): Promise<string> {
+		const linkRegex = /\[\[([^\]]+)\]\]/g;
+		let processedContent = "";
+		let lastIndex = 0;
+		let match;
+		while ((match = linkRegex.exec(resultContent)) !== null) {
+			// Append text between last link and this one
+			processedContent += resultContent.substring(lastIndex, match.index);
+
+			// Create a new reference object for the note
+			const reference = {
+				name: match[1],
+				type: ReferenceType.Note,
+				shouldExtract: true,
+				includeName: true,
+			};
+
+			const noteContent = await this.getNote(reference);
+			processedContent += noteContent + "\n\n";  // Add newline for spacing
+			lastIndex = match.index + match[0].length;
+		}
+		// Append any remaining text after the last link
+		processedContent += resultContent.substring(lastIndex);
+		return processedContent;
+	}
+
+	// Function to remove markdown list formatting
+	removeListFormatting(text: string): string {
+		return text.replace(/^\s*-\s*/gm, '');
+	}
+
+
+
+
+
+	// Attempting to replace dataviewjs queries
+	// const dataviewsjs = newContent.match(
+	// 	/```dataviewjs\n([\s\S]*?)\n```/g
+	// );
+	// if (dvApi && dataviewsjs && dataviewsjs.length) {
+	// 	for (const dataview of dataviewsjs) {
+	// 		const sanitizedQuery = dataview.replace("```dataviewjs", "").replace("```", "").trim()
+
+	// 		console.log(sanitizedQuery)
+
+	// 		// Make an empty HTML element to render the dataview output
+	// 		const dvOutput = createEl("div");
+
+	// 		// Make an empty/fake component to render the dataview output
+	// 		const dvComponent = new Component();
+
+	// 		dvComponent.onload = () => {
+	// 			// Do nothing
+	// 		}
+
+	// 		const dvContent = await dvApi.executeJs(sanitizedQuery, dvOutput, dvComponent, "")
+
+	// 		newContent = newContent.replace(dataview, dvOutput.innerHTML)
+
+	// 		console.log(dvOutput.innerHTML)
+	// 	}
+	// }
+
+
 
 	editSelection(newContent: string) {
 		if (this.isMock) {

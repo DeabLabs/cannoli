@@ -48,7 +48,8 @@ export class CannoliNode extends CannoliVertex {
 		let textCopy = this.text;
 
 		let index = 0;
-		textCopy = textCopy.replace(/\{\{[^{}]+\}\}/g, () => `{{${index++}}}`); // Updated regex pattern to match {{thing}}
+		// Updated regex pattern to avoid matching newlines inside the double braces
+		textCopy = textCopy.replace(/\{\{[^{}\n]+\}\}/g, () => `{{${index++}}}`);
 
 		// Define and return the render function
 		const renderFunction = async (
@@ -73,6 +74,7 @@ export class CannoliNode extends CannoliVertex {
 
 		return renderFunction;
 	}
+
 
 	async processEmbeds(content: string): Promise<string> {
 		// Check for embedded notes (e.g. ![[Note Name]]), and replace them with the note content
