@@ -1240,10 +1240,40 @@ export class Run {
 		if (dvApi && dataviews && dataviews.length) {
 			for (const dataview of dataviews) {
 				const sanitizedQuery = dataview.replace("```dataview", "").replace("```", "").trim()
+
 				const dvContent = await dvApi.queryMarkdown(sanitizedQuery)
+
 				newContent = dvContent.successful ? newContent.replace(dataview, dvContent.value) : newContent;
 			}
 		}
+
+		// Attempting to replace dataviewjs queries
+		// const dataviewsjs = newContent.match(
+		// 	/```dataviewjs\n([\s\S]*?)\n```/g
+		// );
+		// if (dvApi && dataviewsjs && dataviewsjs.length) {
+		// 	for (const dataview of dataviewsjs) {
+		// 		const sanitizedQuery = dataview.replace("```dataviewjs", "").replace("```", "").trim()
+
+		// 		console.log(sanitizedQuery)
+
+		// 		// Make an empty HTML element to render the dataview output
+		// 		const dvOutput = createEl("div");
+
+		// 		// Make an empty/fake component to render the dataview output
+		// 		const dvComponent = new Component();
+
+		// 		dvComponent.onload = () => {
+		// 			// Do nothing
+		// 		}
+
+		// 		const dvContent = await dvApi.executeJs(sanitizedQuery, dvOutput, dvComponent, "")
+
+		// 		newContent = newContent.replace(dataview, dvOutput.innerHTML)
+
+		// 		console.log(dvOutput.innerHTML)
+		// 	}
+		// }
 
 		return newContent;
 	}
