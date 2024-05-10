@@ -1235,13 +1235,20 @@ export class Run {
 	 * The QUERY TEXT is passed to the dataview plugin to get the output of the query
 	 */
 	async replaceDataviewQueries(content: string): Promise<string> {
+		// bail everything (debbugging this)
+		return content;
+
+
 		const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*)(\}\})?/g;
+
+		// If there are no dataview queries, return the content as is
+		if (!blockRegex.test(content)) {
+			return content;
+		}
 
 		const dvApi = getAPI(this.cannoli.app);
 
 		if (!dvApi) {
-			// TODO show message in canvas
-			console.warn("Dataview API not available. Skipping dataview queries.");
 			return content;
 		}
 
