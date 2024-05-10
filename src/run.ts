@@ -1238,6 +1238,13 @@ export class Run {
 		const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*)(\}\})?/g;
 
 		const dvApi = getAPI(this.cannoli.app);
+
+		if (!dvApi) {
+			// TODO show message in canvas
+			console.warn("Dataview API not available. Skipping dataview queries.");
+			return content;
+		}
+
 		let lastOffset = 0;
 		const resultParts = [];
 
