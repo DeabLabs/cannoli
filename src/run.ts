@@ -1235,66 +1235,68 @@ export class Run {
 	 * The QUERY TEXT is passed to the dataview plugin to get the output of the query
 	 */
 	async replaceDataviewQueries(content: string): Promise<string> {
-		let newContent = content;
-		// Regex to capture the entire block and any modifiers after the code block
-		const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*\n)?(\s*[^}]*)(\s*}})?/g;
+		const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*)(\}\})?/g;
 
 		const dvApi = getAPI(this.cannoli.app);
+		let lastOffset = 0;
+		const resultParts = [];
+
 		if (dvApi) {
 			let match;
 			while ((match = blockRegex.exec(content)) !== null) {
+				const beforeMatch = content.slice(lastOffset, match.index);
 				const fullBlock = match[0];
-				const doubleBraced = match[1] && match[5];
+				const doubleBraced = match[1] && match[4];
 				const query = match[2].trim();
-				const postCodeModifiers = match[4].trim();  // Capture any modifiers after the code block
+				const trailingSpaces = match[3]; // directly capture trailing spaces in regex
+
+				console.log("Processing block:", fullBlock);
+				console.log("Match index start:", match.index, "Match index end:", blockRegex.lastIndex);
+				console.log("Trailing whitespace:", JSON.stringify(trailingSpaces)); // Log exact whitespace captured
 
 				const dvContent = await dvApi.queryMarkdown(query);
+				let resultContent = dvContent.successful ? dvContent.value : "";
 
-				if (dvContent.successful) {
-					let resultContent = dvContent.value;
+				let includeName = false;
+				let includeProperties = false;
 
-					// Initialize settings with an assumption to not include anything unless specified
-					let includeName = false;
-					let includeProperties = false;
-
-					// First check for explicit disabling, prioritized over enabling
-					if (postCodeModifiers.includes('!#')) {
-						includeName = false;
-					} else if (postCodeModifiers.includes('#')) {
-						includeName = true;
-					} else {
-						// If no explicit modifiers, fallback to default setting
-						includeName = this.cannoli.settings.includeFilenameAsHeader;
-					}
-
-					if (postCodeModifiers.includes('!^')) {
-						includeProperties = false;
-					} else if (postCodeModifiers.includes('^')) {
-						includeProperties = true;
-					} else {
-						// If no explicit modifiers, fallback to default setting
-						includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
-					}
-
-					// Replace markdown links with contents from getNote if the query block was double-braced
-					if (doubleBraced) {
-						resultContent = await this.replaceLinks(resultContent, includeName, includeProperties);
-					}
-
-					// Remove list formatting if links were replaced
-					if (doubleBraced) {
-						resultContent = this.removeListFormatting(resultContent);
-					}
-
-					newContent = newContent.replace(fullBlock, resultContent);
+				if (trailingSpaces.includes('#')) {
+					includeName = true;
+				} else if (trailingSpaces.includes('!#')) {
+					includeName = false;
+				} else {
+					includeName = this.cannoli.settings.includeFilenameAsHeader;
 				}
+
+				if (trailingSpaces.includes('^')) {
+					includeProperties = true;
+				} else if (trailingSpaces.includes('!^')) {
+					includeProperties = false;
+				} else {
+					includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
+				}
+
+				console.log("Include Name:", includeName, "Include Properties:", includeProperties);
+
+				if (doubleBraced) {
+					resultContent = await this.replaceLinks(resultContent, includeName, includeProperties);
+					resultContent = this.removeListFormatting(resultContent);
+				}
+
+				resultParts.push(beforeMatch);
+				resultParts.push(resultContent);
+				resultParts.push(trailingSpaces); // Ensure trailing whitespace is added back
+
+				lastOffset = blockRegex.lastIndex;
 			}
+
+			resultParts.push(content.slice(lastOffset));
 		}
 
-		return newContent;
+		const finalResult = resultParts.join('');
+		console.log("Final Result:", finalResult);
+		return finalResult;
 	}
-
-
 
 	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean): Promise<string> {
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
@@ -1324,11 +1326,6 @@ export class Run {
 		return text.replace(/^\s*-\s*/gm, '');
 	}
 
-
-
-
-
-
 	// Attempting to replace dataviewjs queries
 	// const dataviewsjs = newContent.match(
 	// 	/```dataviewjs\n([\s\S]*?)\n```/g
@@ -1356,8 +1353,6 @@ export class Run {
 	// 		console.log(dvOutput.innerHTML)
 	// 	}
 	// }
-
-
 
 	editSelection(newContent: string) {
 		if (this.isMock) {
