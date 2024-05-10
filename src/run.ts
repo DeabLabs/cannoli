@@ -1245,14 +1245,9 @@ export class Run {
 			let match;
 			while ((match = blockRegex.exec(content)) !== null) {
 				const beforeMatch = content.slice(lastOffset, match.index);
-				const fullBlock = match[0];
 				const doubleBraced = match[1] && match[4];
 				const query = match[2].trim();
 				const trailingSpaces = match[3]; // directly capture trailing spaces in regex
-
-				console.log("Processing block:", fullBlock);
-				console.log("Match index start:", match.index, "Match index end:", blockRegex.lastIndex);
-				console.log("Trailing whitespace:", JSON.stringify(trailingSpaces)); // Log exact whitespace captured
 
 				const dvContent = await dvApi.queryMarkdown(query);
 				let resultContent = dvContent.successful ? dvContent.value : "";
@@ -1276,7 +1271,6 @@ export class Run {
 					includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
 				}
 
-				console.log("Include Name:", includeName, "Include Properties:", includeProperties);
 
 				if (doubleBraced) {
 					resultContent = await this.replaceLinks(resultContent, includeName, includeProperties);
@@ -1294,7 +1288,6 @@ export class Run {
 		}
 
 		const finalResult = resultParts.join('');
-		console.log("Final Result:", finalResult);
 		return finalResult;
 	}
 
