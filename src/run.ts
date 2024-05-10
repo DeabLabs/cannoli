@@ -15,7 +15,7 @@ import {
 	LLMProvider as Llm,
 } from "src/providers";
 import invariant from "tiny-invariant";
-import { getAPI } from "obsidian-dataview";
+//import { getAPI } from "obsidian-dataview";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -1239,70 +1239,70 @@ export class Run {
 		return content;
 
 
-		const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*)(\}\})?/g;
+		// const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*)(\}\})?/g;
 
-		// If there are no dataview queries, return the content as is
-		if (!blockRegex.test(content)) {
-			return content;
-		}
+		// // If there are no dataview queries, return the content as is
+		// if (!blockRegex.test(content)) {
+		// 	return content;
+		// }
 
-		const dvApi = getAPI(this.cannoli.app);
+		// const dvApi = getAPI(this.cannoli.app);
 
-		if (!dvApi) {
-			return content;
-		}
+		// if (!dvApi) {
+		// 	return content;
+		// }
 
-		let lastOffset = 0;
-		const resultParts = [];
+		// let lastOffset = 0;
+		// const resultParts = [];
 
-		if (dvApi) {
-			let match;
-			while ((match = blockRegex.exec(content)) !== null) {
-				const beforeMatch = content.slice(lastOffset, match.index);
-				const doubleBraced = match[1] && match[4];
-				const query = match[2].trim();
-				const trailingSpaces = match[3]; // directly capture trailing spaces in regex
+		// if (dvApi) {
+		// 	let match;
+		// 	while ((match = blockRegex.exec(content)) !== null) {
+		// 		const beforeMatch = content.slice(lastOffset, match.index);
+		// 		const doubleBraced = match[1] && match[4];
+		// 		const query = match[2].trim();
+		// 		const trailingSpaces = match[3]; // directly capture trailing spaces in regex
 
-				const dvContent = await dvApi.queryMarkdown(query);
-				let resultContent = dvContent.successful ? dvContent.value : "";
+		// 		const dvContent = await dvApi.queryMarkdown(query);
+		// 		let resultContent = dvContent.successful ? dvContent.value : "";
 
-				let includeName = false;
-				let includeProperties = false;
+		// 		let includeName = false;
+		// 		let includeProperties = false;
 
-				if (trailingSpaces.includes('#')) {
-					includeName = true;
-				} else if (trailingSpaces.includes('!#')) {
-					includeName = false;
-				} else {
-					includeName = this.cannoli.settings.includeFilenameAsHeader;
-				}
+		// 		if (trailingSpaces.includes('#')) {
+		// 			includeName = true;
+		// 		} else if (trailingSpaces.includes('!#')) {
+		// 			includeName = false;
+		// 		} else {
+		// 			includeName = this.cannoli.settings.includeFilenameAsHeader;
+		// 		}
 
-				if (trailingSpaces.includes('^')) {
-					includeProperties = true;
-				} else if (trailingSpaces.includes('!^')) {
-					includeProperties = false;
-				} else {
-					includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
-				}
+		// 		if (trailingSpaces.includes('^')) {
+		// 			includeProperties = true;
+		// 		} else if (trailingSpaces.includes('!^')) {
+		// 			includeProperties = false;
+		// 		} else {
+		// 			includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
+		// 		}
 
 
-				if (doubleBraced) {
-					resultContent = await this.replaceLinks(resultContent, includeName, includeProperties);
-					resultContent = this.removeListFormatting(resultContent);
-				}
+		// 		if (doubleBraced) {
+		// 			resultContent = await this.replaceLinks(resultContent, includeName, includeProperties);
+		// 			resultContent = this.removeListFormatting(resultContent);
+		// 		}
 
-				resultParts.push(beforeMatch);
-				resultParts.push(resultContent);
-				resultParts.push(trailingSpaces); // Ensure trailing whitespace is added back
+		// 		resultParts.push(beforeMatch);
+		// 		resultParts.push(resultContent);
+		// 		resultParts.push(trailingSpaces); // Ensure trailing whitespace is added back
 
-				lastOffset = blockRegex.lastIndex;
-			}
+		// 		lastOffset = blockRegex.lastIndex;
+		// 	}
 
-			resultParts.push(content.slice(lastOffset));
-		}
+		// 	resultParts.push(content.slice(lastOffset));
+		// }
 
-		const finalResult = resultParts.join('');
-		return finalResult;
+		// const finalResult = resultParts.join('');
+		// return finalResult;
 	}
 
 	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean): Promise<string> {
