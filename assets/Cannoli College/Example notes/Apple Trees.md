@@ -1,3 +1,7 @@
+---
+tags:
+  - cannoliArticle
+---
 Apple trees, scientifically known as *Malus domestica*, are not just providers of one of the world's most consumed fruits but are also a model of efficiency and adaptability. Originating in Central Asia, these trees have been cultivated for thousands of years and have adapted to a variety of climates, from temperate to sub-tropical. The tree's rootstock can often be grafted to optimize for disease resistance, soil compatibility, or fruit yield, a testament to its remarkable genetic flexibility.
 
 The life cycle of an apple tree involves a series of well-coordinated biological events. After the cold dormancy of winter, apple trees enter a phase of bud break in the spring, followed by flowering and pollination. Apple trees are usually not self-pollinating and require cross-pollination from another apple tree of a different variety. This ensures genetic diversity, which is crucial for the tree's adaptability and long-term survival. Post-pollination, the tree focuses on fruit development, channeling nutrients and energy into the growing apples.

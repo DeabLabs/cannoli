@@ -1,3 +1,7 @@
+---
+tags:
+  - cannoliArticle
+---
 Cleaning your home with lemons is not only effective but also environmentally friendly. Lemons, with their natural disinfecting properties and high citric acid content, can tackle a wide range of cleaning tasks. Here are some detailed tips to maximize the cleaning power of lemons:
 
 1. All-Purpose Cleaner: Create a potent all-purpose cleaner by mixing equal parts lemon juice and water. Lemons contain citric acid, which is effective in killing germs, bacteria, and odors. Squeeze the juice of fresh lemons into a spray bottle, adding an equal amount of water. Shake the bottle well to thoroughly blend the solution. This natural disinfectant is perfect for countertops, sinks, cutting boards, and food containers. To use, simply spray the solution onto the surface and let it sit for a few minutes to allow the citric acid to work its magic. Then, scrub with a sponge or cloth and rinse thoroughly with water.

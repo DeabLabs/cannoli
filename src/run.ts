@@ -1236,27 +1236,52 @@ export class Run {
 	 */
 	async replaceDataviewQueries(content: string): Promise<string> {
 		let newContent = content;
-		const dataviewRegex = /(\{\{\n)?```dataview\n([\s\S]*?)\n```\n?(}})?/g;
+		// Regex to capture the entire block and any modifiers after the code block
+		const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*\n)?(\s*[^}]*)(\s*}})?/g;
 
 		const dvApi = getAPI(this.cannoli.app);
 		if (dvApi) {
 			let match;
-			while ((match = dataviewRegex.exec(content)) !== null) {
+			while ((match = blockRegex.exec(content)) !== null) {
 				const fullBlock = match[0];
-				const doubleBraced = match[1] && match[3]; // Check if both opening and closing braces are present
+				const doubleBraced = match[1] && match[5];
 				const query = match[2].trim();
+				const postCodeModifiers = match[4].trim();  // Capture any modifiers after the code block
 
 				const dvContent = await dvApi.queryMarkdown(query);
 
 				if (dvContent.successful) {
 					let resultContent = dvContent.value;
 
-					// Replace markdown links with contents from getNote if the query block was double-braced
-					if (doubleBraced) {
-						resultContent = await this.replaceLinks(resultContent);
+					// Initialize settings with an assumption to not include anything unless specified
+					let includeName = false;
+					let includeProperties = false;
+
+					// First check for explicit disabling, prioritized over enabling
+					if (postCodeModifiers.includes('!#')) {
+						includeName = false;
+					} else if (postCodeModifiers.includes('#')) {
+						includeName = true;
+					} else {
+						// If no explicit modifiers, fallback to default setting
+						includeName = this.cannoli.settings.includeFilenameAsHeader;
 					}
 
-					// Remove list formatting if we've replaced links
+					if (postCodeModifiers.includes('!^')) {
+						includeProperties = false;
+					} else if (postCodeModifiers.includes('^')) {
+						includeProperties = true;
+					} else {
+						// If no explicit modifiers, fallback to default setting
+						includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
+					}
+
+					// Replace markdown links with contents from getNote if the query block was double-braced
+					if (doubleBraced) {
+						resultContent = await this.replaceLinks(resultContent, includeName, includeProperties);
+					}
+
+					// Remove list formatting if links were replaced
 					if (doubleBraced) {
 						resultContent = this.removeListFormatting(resultContent);
 					}
@@ -1269,37 +1294,36 @@ export class Run {
 		return newContent;
 	}
 
-	// Helper function to replace all markdown links with their corresponding note contents
-	async replaceLinks(resultContent: string): Promise<string> {
+
+
+	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean): Promise<string> {
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
 		let processedContent = "";
 		let lastIndex = 0;
 		let match;
 		while ((match = linkRegex.exec(resultContent)) !== null) {
-			// Append text between last link and this one
 			processedContent += resultContent.substring(lastIndex, match.index);
 
-			// Create a new reference object for the note
 			const reference = {
 				name: match[1],
 				type: ReferenceType.Note,
 				shouldExtract: true,
-				includeName: true,
+				includeName: includeName,
+				includeProperties: includeProperties
 			};
 
 			const noteContent = await this.getNote(reference);
 			processedContent += noteContent + "\n\n";  // Add newline for spacing
 			lastIndex = match.index + match[0].length;
 		}
-		// Append any remaining text after the last link
 		processedContent += resultContent.substring(lastIndex);
 		return processedContent;
 	}
 
-	// Function to remove markdown list formatting
 	removeListFormatting(text: string): string {
 		return text.replace(/^\s*-\s*/gm, '');
 	}
+
 
 
 

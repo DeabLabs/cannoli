@@ -202,12 +202,14 @@ export class LLMProvider {
 					apiKey: config.apiKey,
 					model: config.model,
 					temperature: config.temperature,
+					maxRetries: 3,
 				});
 			case "groq":
 				return new ChatGroq({
 					apiKey: config.apiKey,
 					model: config.model,
 					temperature: config.temperature,
+					maxRetries: 3,
 				});
 			default:
 				throw new Error("Unsupported provider");

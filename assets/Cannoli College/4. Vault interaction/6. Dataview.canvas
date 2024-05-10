@@ -1,0 +1,32 @@
+{
+	"nodes":[
+		{"id":"abdd7f206ec179b5","type":"group","x":-292,"y":2360,"width":926,"height":786,"label":"Selecting notes from Dataview queries"},
+		{"id":"866cf47b85828224","type":"group","x":-280,"y":200,"width":901,"height":800,"label":"Dataview Queries"},
+		{"id":"54821284bfffa404","type":"group","x":-280,"y":1240,"width":901,"height":800,"label":"Embedding notes with Dataview"},
+		{"id":"d496337fb835112d","type":"text","text":"Here is a dataview query:\n```dataview\nLIST\nFROM #cannoliArticle\n```\nWhat do you think are inside these notes?","x":-237,"y":220,"width":339,"height":246},
+		{"id":"0a4607692e99ccc4","type":"text","text":"Tell me about this table\n\n```dataview\nTABLE file.name,file.ctime\nFROM #cannoliArticle\n```","x":207,"y":220,"width":390,"height":255},
+		{"id":"2a540f6685096f40","type":"text","text":"","x":-260,"y":560,"width":385,"height":420,"color":"6"},
+		{"id":"4991b1a604f5b0c0","type":"text","text":"","x":203,"y":560,"width":398,"height":420,"color":"6"},
+		{"id":"86b5e262c31686a5","type":"text","text":"Read these notes and write a haiku about each one:\n\n{{\n```dataview\nLIST\nFROM #cannoliArticle\n```\n}}","x":-237,"y":1260,"width":339,"height":280},
+		{"id":"e00b70c20e8b5de4","type":"text","text":"Read these notes and write a haiku about each one:\n\n{{\n```dataview\nLIST\nFROM #cannoliArticle\n```\n!#}}","x":207,"y":1260,"width":390,"height":280},
+		{"id":"af6026eb8c26d15b","type":"text","text":"Sometimes you want the LLM to see the contents of all of the resulting links of a dataview query. To do that you can simply wrap the query in double curly brackets the way you would with a note embed. This looks better with lists than with tables.","x":-160,"y":1080,"width":680,"height":108},
+		{"id":"025b43bd8ffaa90d","type":"text","text":"Cannoli renders Dataview DQL queries so the LLM can see them. \n\nIf you have the Dataview plugin enabled on a vault, and there's a valid query inside of a node or embedded note, the LLM will see the results of that query as a Markdown list or table.\n\nDataviewJS queries are not implemented yet, but we're still working to get that in as well. (p.s. if you're reading this and have arcane dataview knowledge that might help please reach out on the repo)","x":-131,"y":-120,"width":623,"height":257},
+		{"id":"9c168db7948ae50a","type":"text","text":"","x":-260,"y":1600,"width":385,"height":420,"color":"6"},
+		{"id":"5fdb171ce82f69ef","type":"text","text":"","x":203,"y":1600,"width":398,"height":420,"color":"6"},
+		{"id":"ffbe198b39af63cb","type":"text","text":"You can use the same syntax for including or excluding note titles and properties as you can in normal note embeds. (see [[1. Referencing notes.canvas|1. Referencing notes]])","x":660,"y":1340,"width":440,"height":120},
+		{"id":"cdfbde60f7de0699","type":"text","text":"Which of these notes looks most interesting:\n\n```dataview\nLIST\nFROM #cannoliArticle\n```","x":-272,"y":2380,"width":339,"height":280},
+		{"id":"e05c95af482766e8","type":"text","text":"","x":195,"y":2490,"width":385,"height":516,"color":"6"},
+		{"id":"522c7968323ab01f","type":"text","text":"","x":-228,"y":2946,"width":398,"height":160,"color":"6"},
+		{"id":"480170f0f0cf1c3d","type":"text","text":"Do you find this note interesting?\n\n{{@mostInteresting}}","x":-228,"y":2748,"width":250,"height":130},
+		{"id":"fe2b51ed55928420","type":"text","text":"You can also use the note selection syntax on arrows leaving call nodes to get the LLM to output a selection from the links it sees.\n\nFor more on this see [[3. Dynamic note references.canvas|3. Dynamic note references]]","x":-62,"y":2120,"width":503,"height":160}
+	],
+	"edges":[
+		{"id":"2ebd28fb6c5c101d","fromNode":"d496337fb835112d","fromSide":"bottom","toNode":"2a540f6685096f40","toSide":"top","color":"2"},
+		{"id":"8ee71d334a61b7db","fromNode":"0a4607692e99ccc4","fromSide":"bottom","toNode":"4991b1a604f5b0c0","toSide":"top","color":"2"},
+		{"id":"a9b3dffa5e282eac","fromNode":"86b5e262c31686a5","fromSide":"bottom","toNode":"9c168db7948ae50a","toSide":"top","color":"2"},
+		{"id":"a7d1263d7926e2df","fromNode":"e00b70c20e8b5de4","fromSide":"bottom","toNode":"5fdb171ce82f69ef","toSide":"top","color":"2"},
+		{"id":"c66428ad3bf6bee0","fromNode":"480170f0f0cf1c3d","fromSide":"right","toNode":"e05c95af482766e8","toSide":"left","color":"2"},
+		{"id":"dc0fdfc897e3f0d4","fromNode":"cdfbde60f7de0699","fromSide":"bottom","toNode":"480170f0f0cf1c3d","toSide":"top","label":"[mostInteresting"},
+		{"id":"5c40358a63c8ae10","fromNode":"480170f0f0cf1c3d","fromSide":"bottom","toNode":"522c7968323ab01f","toSide":"top"}
+	]
+}
