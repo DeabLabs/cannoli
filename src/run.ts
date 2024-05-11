@@ -15,7 +15,7 @@ import {
 	LLMProvider as Llm,
 } from "src/providers";
 import invariant from "tiny-invariant";
-//import { getAPI } from "obsidian-dataview";
+import { getAPI } from "obsidian-dataview";
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -1224,85 +1224,99 @@ export class Run {
 		return content;
 	}
 
-	/**
-	 * Given a string of content, check for dataview code blocks and replace them with the output of the dataview
-	 * 
-	 * a dataview looks like the following
-	 * \```dataview
-	 * QUERY TEXT
-	 * ```
-	 * 
-	 * The QUERY TEXT is passed to the dataview plugin to get the output of the query
-	 */
 	async replaceDataviewQueries(content: string): Promise<string> {
-		// bail everything (debbugging this)
+		const nonEmbedRegex = /```dataview\n([\s\S]*?)\n```/g;
+		const embedRegex = /{{\n```dataview\n([\s\S]*?)\n```\n([^\n]*)}}/g;
+		const anyDataviewRegex = /```dataview\n([\s\S]*?)\n```/;
+
+		if (!anyDataviewRegex.test(content)) {
+			return content;
+		}
+
+
+		const dvApi = getAPI(this.cannoli.app);
+		if (!dvApi) {
+			return content;
+		}
+
+
+		// Handle embedded dataview queries
+
+		let embedMatch;
+		const embedMatches = [];
+		// Extract all matches first
+		while ((embedMatch = embedRegex.exec(content)) !== null) {
+			embedMatches.push({
+				fullMatch: embedMatch[0],
+				query: embedMatch[1],
+				modifiers: embedMatch[2],
+				index: embedMatch.index
+			});
+		}
+
+		// Reverse the matches array to process from last to first
+		embedMatches.reverse();
+
+		// Process each match asynchronously
+		for (const match of embedMatches) {
+			let includeName = false;
+			let includeProperties = false;
+
+			if (match.modifiers.includes('!#')) {
+				includeName = false;
+			} else if (match.modifiers.includes('#')) {
+				includeName = true;
+			} else {
+				includeName = this.cannoli.settings.includeFilenameAsHeader;
+			}
+
+			if (match.modifiers.includes('!^')) {
+				includeProperties = false;
+			} else if (match.modifiers.includes('^')) {
+				includeProperties = true;
+			} else {
+				includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
+			}
+
+			const dvApi = getAPI(this.cannoli.app);
+			if (!dvApi) {
+				continue;
+			}
+
+			const queryResult = await dvApi.queryMarkdown(match.query);
+			const result = queryResult.successful ? queryResult.value : "Invalid dataview query";
+
+			const resultLinksReplaced = await this.replaceLinks(result, includeName, includeProperties);
+
+			// Replace the original text with the result
+			content = content.substring(0, match.index) + resultLinksReplaced + content.substring(match.index + match.fullMatch.length);
+		}
+
+		// Handle normal dataview queries
+		let nonEmbedMatch;
+		const nonEmbedMatches = [];
+
+		while ((nonEmbedMatch = nonEmbedRegex.exec(content)) !== null) {
+			nonEmbedMatches.push({
+				fullMatch: nonEmbedMatch[0],
+				query: nonEmbedMatch[1],
+				index: nonEmbedMatch.index
+			});
+		}
+
+		// Reverse the matches array to process from last to first
+		nonEmbedMatches.reverse();
+
+		// Process each match asynchronously
+		for (const match of nonEmbedMatches) {
+			const queryResult = await dvApi.queryMarkdown(match.query);
+			const result = queryResult.successful ? queryResult.value : "Invalid Dataview query";
+
+			// Replace the original text with the result
+			content = content.substring(0, match.index) + result + content.substring(match.index + match.fullMatch.length);
+		}
+
 		return content;
-
-
-		// const blockRegex = /(\{\{\s*)?```dataview\s*([\s\S]*?)```(\s*)(\}\})?/g;
-
-		// // If there are no dataview queries, return the content as is
-		// if (!blockRegex.test(content)) {
-		// 	return content;
-		// }
-
-		// const dvApi = getAPI(this.cannoli.app);
-
-		// if (!dvApi) {
-		// 	return content;
-		// }
-
-		// let lastOffset = 0;
-		// const resultParts = [];
-
-		// if (dvApi) {
-		// 	let match;
-		// 	while ((match = blockRegex.exec(content)) !== null) {
-		// 		const beforeMatch = content.slice(lastOffset, match.index);
-		// 		const doubleBraced = match[1] && match[4];
-		// 		const query = match[2].trim();
-		// 		const trailingSpaces = match[3]; // directly capture trailing spaces in regex
-
-		// 		const dvContent = await dvApi.queryMarkdown(query);
-		// 		let resultContent = dvContent.successful ? dvContent.value : "";
-
-		// 		let includeName = false;
-		// 		let includeProperties = false;
-
-		// 		if (trailingSpaces.includes('#')) {
-		// 			includeName = true;
-		// 		} else if (trailingSpaces.includes('!#')) {
-		// 			includeName = false;
-		// 		} else {
-		// 			includeName = this.cannoli.settings.includeFilenameAsHeader;
-		// 		}
-
-		// 		if (trailingSpaces.includes('^')) {
-		// 			includeProperties = true;
-		// 		} else if (trailingSpaces.includes('!^')) {
-		// 			includeProperties = false;
-		// 		} else {
-		// 			includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
-		// 		}
-
-
-		// 		if (doubleBraced) {
-		// 			resultContent = await this.replaceLinks(resultContent, includeName, includeProperties);
-		// 			resultContent = this.removeListFormatting(resultContent);
-		// 		}
-
-		// 		resultParts.push(beforeMatch);
-		// 		resultParts.push(resultContent);
-		// 		resultParts.push(trailingSpaces); // Ensure trailing whitespace is added back
-
-		// 		lastOffset = blockRegex.lastIndex;
-		// 	}
-
-		// 	resultParts.push(content.slice(lastOffset));
-		// }
-
-		// const finalResult = resultParts.join('');
-		// return finalResult;
 	}
 
 	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean): Promise<string> {
@@ -1322,15 +1336,18 @@ export class Run {
 			};
 
 			const noteContent = await this.getNote(reference);
-			processedContent += noteContent + "\n\n";  // Add newline for spacing
+
+			// If the processed content ends with "- ", remove it
+			if (processedContent.endsWith("- ")) {
+				processedContent = processedContent.substring(0, processedContent.length - 2);
+			}
+
+			processedContent += noteContent;
 			lastIndex = match.index + match[0].length;
 		}
 		processedContent += resultContent.substring(lastIndex);
-		return processedContent;
-	}
 
-	removeListFormatting(text: string): string {
-		return text.replace(/^\s*-\s*/gm, '');
+		return processedContent;
 	}
 
 	// Attempting to replace dataviewjs queries
