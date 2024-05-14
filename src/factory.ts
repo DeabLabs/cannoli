@@ -290,9 +290,9 @@ export class CannoliFactory {
 					this.cannoliData.nodes.find(
 						(node) => node.id === member
 					) as
-						| CannoliCanvasFileData
-						| CannoliCanvasLinkData
-						| CannoliCanvasTextData
+					| CannoliCanvasFileData
+					| CannoliCanvasLinkData
+					| CannoliCanvasTextData
 				) !== null ||
 				this.cannoliData.nodes.find((node) => node.id === member)
 					?.type === "group"
@@ -363,7 +363,7 @@ export class CannoliFactory {
 
 		addMessages =
 			labelInfo?.addMessages !== undefined &&
-			labelInfo?.addMessages !== null
+				labelInfo?.addMessages !== null
 				? labelInfo.addMessages
 				: addMessages;
 		const dependencies = [] as string[];
@@ -431,9 +431,9 @@ export class CannoliFactory {
 					// Get the target of the merge edge
 					const mergeNode = outgoingMergeEdge
 						? data.nodes.find(
-								(node) => node.id === outgoingMergeEdge.toNode
-								// eslint-disable-next-line no-mixed-spaces-and-tabs
-						  )
+							(node) => node.id === outgoingMergeEdge.toNode
+							// eslint-disable-next-line no-mixed-spaces-and-tabs
+						)
 						: null;
 
 					// Find the line of the node's text that starts with "{#}" and replicate it for each loop, adding " <loopNumber>" to each {variable}. I.e. {variable} becomes {variable 1}, {variable 2}, etc.
@@ -494,8 +494,7 @@ export class CannoliFactory {
 									variables.forEach((variable) => {
 										newLoopLine = newLoopLine.replace(
 											variable,
-											`{${variable.slice(1, -1)} ${
-												i + 1
+											`{${variable.slice(1, -1)} ${i + 1
 											}}`
 										);
 									});
@@ -1282,10 +1281,10 @@ export class CannoliFactory {
 					if (
 						sourceNode &&
 						this.getNodeIndicatedType(sourceNode) ===
-							IndicatedNodeType.Call &&
+						IndicatedNodeType.Call &&
 						targetNode &&
 						this.getNodeIndicatedType(targetNode) ===
-							IndicatedNodeType.Content
+						IndicatedNodeType.Content
 					) {
 						return EdgeType.ChatResponse;
 					} else {
@@ -1354,15 +1353,15 @@ export class CannoliFactory {
 
 			const sourceIndicatedType = this.getNodeIndicatedType(
 				sourceNode as
-					| CannoliCanvasFileData
-					| CannoliCanvasLinkData
-					| CannoliCanvasTextData
+				| CannoliCanvasFileData
+				| CannoliCanvasLinkData
+				| CannoliCanvasTextData
 			);
 			const targetIndicatedType = this.getNodeIndicatedType(
 				targetNode as
-					| CannoliCanvasFileData
-					| CannoliCanvasLinkData
-					| CannoliCanvasTextData
+				| CannoliCanvasFileData
+				| CannoliCanvasLinkData
+				| CannoliCanvasTextData
 			);
 
 			// If the source is a content node
@@ -1654,6 +1653,12 @@ export class CannoliFactory {
 			reference.includeProperties = false;
 		} else if (modifiers.includes("^")) {
 			reference.includeProperties = true;
+		}
+
+		if (modifiers.includes("!@")) {
+			reference.includeLink = false;
+		} else if (modifiers.includes("@")) {
+			reference.includeLink = true;
 		}
 	}
 

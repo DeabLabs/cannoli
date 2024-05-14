@@ -1129,6 +1129,12 @@ export class Run {
 				content = lines.slice(startLine).join("\n");
 			}
 
+			// If includeLink is true, add the markdown link
+			if (reference.includeLink) {
+				const link = `[[${file.path}#${reference.subpath}]]`;
+				content = link + "\n" + content;
+			}
+
 			content = content.trim();
 
 			if (content === "") {
@@ -1158,6 +1164,12 @@ export class Run {
 			) {
 				const header = `# ${file.basename}\n`;
 				content = header + content;
+			}
+
+			// If includeLink is true, add the markdown link
+			if (reference.includeLink) {
+				const link = `[[${file.path}]]`;
+				content = link + "\n" + content;
 			}
 		}
 
@@ -1221,6 +1233,9 @@ export class Run {
 		// Render dataview queries
 		content = await this.replaceDataviewQueries(content);
 
+		// Render smart connections
+		content = await this.replaceSmartConnections(content);
+
 		return content;
 	}
 
@@ -1261,6 +1276,7 @@ export class Run {
 		for (const match of embedMatches) {
 			let includeName = false;
 			let includeProperties = false;
+			let includeLink = false;
 
 			if (match.modifiers.includes('!#')) {
 				includeName = false;
@@ -1278,6 +1294,14 @@ export class Run {
 				includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
 			}
 
+			if (match.modifiers.includes('!@')) {
+				includeLink = false;
+			} else if (match.modifiers.includes('@')) {
+				includeLink = true;
+			} else {
+				includeLink = this.cannoli.settings.includeLinkInExtractedNotes;
+			}
+
 			const dvApi = getAPI(this.cannoli.app);
 			if (!dvApi) {
 				continue;
@@ -1286,7 +1310,7 @@ export class Run {
 			const queryResult = await dvApi.queryMarkdown(match.query);
 			const result = queryResult.successful ? queryResult.value : "Invalid dataview query";
 
-			const resultLinksReplaced = await this.replaceLinks(result, includeName, includeProperties);
+			const resultLinksReplaced = await this.replaceLinks(result, includeName, includeProperties, includeLink);
 
 			// Replace the original text with the result
 			content = content.substring(0, match.index) + resultLinksReplaced + content.substring(match.index + match.fullMatch.length);
@@ -1310,7 +1334,12 @@ export class Run {
 		// Process each match asynchronously
 		for (const match of nonEmbedMatches) {
 			const queryResult = await dvApi.queryMarkdown(match.query);
-			const result = queryResult.successful ? queryResult.value : "Invalid Dataview query";
+			let result = queryResult.successful ? queryResult.value : "Invalid Dataview query";
+
+			// Check if the result is a single line list, and if so, remove the bullet point
+			if (result.startsWith("- ") && result.split("\n").length === 2) {
+				result = result.substring(2);
+			}
 
 			// Replace the original text with the result
 			content = content.substring(0, match.index) + result + content.substring(match.index + match.fullMatch.length);
@@ -1319,7 +1348,7 @@ export class Run {
 		return content;
 	}
 
-	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean): Promise<string> {
+	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean, includeLink: boolean): Promise<string> {
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
 		let processedContent = "";
 		let lastIndex = 0;
@@ -1332,7 +1361,8 @@ export class Run {
 				type: ReferenceType.Note,
 				shouldExtract: true,
 				includeName: includeName,
-				includeProperties: includeProperties
+				includeProperties: includeProperties,
+				includeLink: includeLink
 			};
 
 			const noteContent = await this.getNote(reference);
@@ -1348,6 +1378,144 @@ export class Run {
 		processedContent += resultContent.substring(lastIndex);
 
 		return processedContent;
+	}
+
+	async replaceSmartConnections(content: string): Promise<string> {
+		const nonEmbedRegex = /```smart-connections\n([\s\S]*?)\n```/g;
+		const embedRegex = /{{([^\n]*)\n```smart-connections\n([\s\S]*?)\n```\n([^\n]*)}}/g;
+		const anySCRegex = /```smart-connections\n([\s\S]*?)\n```/;
+
+		if (!anySCRegex.test(content)) {
+			return content;
+		}
+
+		if (!this.cannoli.app.plugins.plugins["smart-connections"].api) {
+			console.error("Smart Connections plugin not found");
+			return content;
+		}
+
+		// Handle embedded dataview queries
+
+		let embedMatch;
+		const embedMatches = [];
+		// Extract all matches first
+		while ((embedMatch = embedRegex.exec(content)) !== null) {
+			embedMatches.push({
+				fullMatch: embedMatch[0],
+				limit: embedMatch[1],
+				query: embedMatch[2],
+				modifiers: embedMatch[3],
+				index: embedMatch.index
+			});
+		}
+
+		// Reverse the matches array to process from last to first
+		embedMatches.reverse();
+
+		// Process each match asynchronously
+		for (const match of embedMatches) {
+			let includeName = false;
+			let includeProperties = false;
+			let includeLink = false;
+
+			if (match.modifiers.includes('!#')) {
+				includeName = false;
+			} else if (match.modifiers.includes('#')) {
+				includeName = true;
+			} else {
+				includeName = this.cannoli.settings.includeFilenameAsHeader;
+			}
+
+			if (match.modifiers.includes('!^')) {
+				includeProperties = false;
+			} else if (match.modifiers.includes('^')) {
+				includeProperties = true;
+			} else {
+				includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
+			}
+
+			if (match.modifiers.includes('!@')) {
+				includeLink = false;
+			} else if (match.modifiers.includes('@')) {
+				includeLink = true;
+			} else {
+				includeLink = this.cannoli.settings.includeLinkInExtractedNotes;
+			}
+
+			let result = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(match.query);
+
+			// If there's no limit defined, use the default limit of 5. If the limit is defined, parse it as an integer and truncate the results array
+			const limit = match.limit ? parseInt(match.limit) : 5;
+
+			if (result.length > limit) {
+				result = result.slice(0, limit);
+			}
+
+			// Build the replacement string by retrieving the note content for each result and concatenating them with a newline
+			let resultLinksReplaced = "";
+			for (const r of result) {
+				let noteName = r.path;
+				let subpath;
+
+				// If there's a "#" in the path, split and use the first part as the note name, and the second part as the heading
+				if (noteName.includes("#")) {
+					const split = noteName.split("#");
+					noteName = split[0];
+					subpath = split[1];
+				}
+
+				const reference = {
+					name: noteName,
+					type: ReferenceType.Note,
+					shouldExtract: true,
+					includeName: includeName,
+					includeProperties: includeProperties,
+					includeLink: includeLink,
+					subpath: subpath ?? undefined
+				};
+
+				const noteContent = await this.getNote(reference);
+
+				resultLinksReplaced += noteContent + "\n";
+			}
+
+			// Replace the original text with the result
+			content = content.substring(0, match.index) + resultLinksReplaced + content.substring(match.index + match.fullMatch.length);
+		}
+
+		// Handle normal dataview queries
+		let nonEmbedMatch;
+		const nonEmbedMatches = [];
+
+		while ((nonEmbedMatch = nonEmbedRegex.exec(content)) !== null) {
+			nonEmbedMatches.push({
+				fullMatch: nonEmbedMatch[0],
+				query: nonEmbedMatch[1],
+				index: nonEmbedMatch.index
+			});
+		}
+
+		// Reverse the matches array to process from last to first
+		nonEmbedMatches.reverse();
+
+		// Process each match asynchronously
+		for (const match of nonEmbedMatches) {
+			const results = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(match.query);
+
+			// Build a markdown table of with the columns "Similarity" (results[0].sim) and "Link" (results[i].path)
+			let result = "| Similarity | Link |\n| --- | --- |\n";
+			results.forEach((r) => {
+				result += `| ${r.sim.toFixed(2)} | [[${r.path}]] |\n`;
+			});
+
+			// const result = queryResult.successful ? queryResult.value : "Invalid Dataview query";
+
+			// Replace the original text with the result
+			content = content.substring(0, match.index) + result + content.substring(match.index + match.fullMatch.length);
+		}
+
+		return content;
+
 	}
 
 	// Attempting to replace dataviewjs queries

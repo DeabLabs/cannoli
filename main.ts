@@ -40,6 +40,7 @@ interface CannoliSettings {
 	httpTemplates: HttpTemplate[];
 	includeFilenameAsHeader: boolean;
 	includePropertiesInExtractedNotes: boolean;
+	includeLinkInExtractedNotes: boolean;
 	chatFormatString: string;
 	enableAudioTriggeredCannolis?: boolean;
 	deleteAudioFilesAfterAudioTriggeredCannolis?: boolean;
@@ -70,6 +71,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	httpTemplates: [],
 	includeFilenameAsHeader: false,
 	includePropertiesInExtractedNotes: false,
+	includeLinkInExtractedNotes: false,
 	chatFormatString: `---\n# <u>{{role}}</u>\n\n{{content}}`,
 	enableAudioTriggeredCannolis: false,
 	deleteAudioFilesAfterAudioTriggeredCannolis: false,
@@ -1435,6 +1437,27 @@ class CannoliSettingTab extends PluginSettingTab {
 					)
 					.onChange(async (value) => {
 						this.plugin.settings.includePropertiesInExtractedNotes =
+							value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		// Toggle including markdown links when extracting text from files
+		new Setting(containerEl)
+			.setName(
+				"Include markdown links when extracting or editing notes by default"
+			)
+			.setDesc(
+				`When extracting or editing a note in a cannoli, include the note's markdown link above the content. This default can be overridden by adding "@" or "!@" after the note link in a reference like this: {{[[Stuff]]@}} or {{[[Stuff]]!@}}.`
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(
+						this.plugin.settings.includeLinkInExtractedNotes ||
+						false
+					)
+					.onChange(async (value) => {
+						this.plugin.settings.includeLinkInExtractedNotes =
 							value;
 						await this.plugin.saveSettings();
 					})

@@ -69,8 +69,14 @@ export class CannoliNode extends CannoliVertex {
 			});
 
 			// Render dataview queries
-			return await this.run.replaceDataviewQueries(textCopy);
+			textCopy = await this.run.replaceDataviewQueries(textCopy);
+
+			// Render smart connections
+			textCopy = await this.run.replaceSmartConnections(textCopy);
+
+			return textCopy;
 		};
+
 
 		return renderFunction;
 	}
@@ -466,6 +472,12 @@ export class CannoliNode extends CannoliVertex {
 				} else if (modifiers.includes("$")) {
 					reference.includeProperties = true;
 				}
+
+				if (modifiers.includes("!@")) {
+					reference.includeLink = false;
+				} else if (modifiers.includes("@")) {
+					reference.includeLink = true;
+				}
 			}
 			return reference;
 		}
@@ -500,6 +512,12 @@ export class CannoliNode extends CannoliVertex {
 					reference.includeProperties = false;
 				} else if (modifiers.includes("$")) {
 					reference.includeProperties = true;
+				}
+
+				if (modifiers.includes("!@")) {
+					reference.includeLink = false;
+				} else if (modifiers.includes("@")) {
+					reference.includeLink = true;
 				}
 			}
 			return reference;

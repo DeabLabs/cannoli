@@ -106,6 +106,7 @@ export interface Reference {
 	shouldExtract: boolean;
 	includeName?: boolean;
 	includeProperties?: boolean;
+	includeLink?: boolean;
 	subpath?: string;
 }
 
