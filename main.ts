@@ -34,6 +34,7 @@ interface CannoliSettings {
 	groqAPIKey: string;
 	groqTemperature: number;
 	openaiAPIKey: string;
+	openaiBaseURL: string;
 	costThreshold: number;
 	defaultModel: string;
 	defaultTemperature: number;
@@ -65,6 +66,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	groqAPIKey: "",
 	groqTemperature: 1,
 	openaiAPIKey: "",
+	openaiBaseURL: "",
 	costThreshold: 0.5,
 	defaultModel: "gpt-3.5-turbo",
 	defaultTemperature: 1,
@@ -452,6 +454,7 @@ export default class Cannoli extends Plugin {
 						apiKey: this.settings.openaiAPIKey,
 						model: this.settings.defaultModel,
 						temperature: this.settings.defaultTemperature,
+						baseURL: this.settings.openaiBaseURL,
 					};
 				case "ollama":
 					return {
@@ -1117,6 +1120,21 @@ class CannoliSettingTab extends PluginSettingTab {
 									DEFAULT_SETTINGS.defaultTemperature;
 								await this.plugin.saveSettings();
 							}
+						})
+				);
+			// openai base url setting
+			new Setting(containerEl)
+				.setName("Openai base url")
+				.setDesc(
+					"This url will be used to make openai llm calls against a different endpoint. This is useful for switching to an azure enterprise endpoint, or, some other openai compatible service."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.openaiBaseURL)
+						.setPlaceholder("https://api.openai.com/v1/")
+						.onChange(async (value) => {
+							this.plugin.settings.openaiBaseURL = value;
+							await this.plugin.saveSettings();
 						})
 				);
 		} else if (this.plugin.settings.llmProvider === "ollama") {
