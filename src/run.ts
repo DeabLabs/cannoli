@@ -1389,6 +1389,7 @@ export class Run {
 			return content;
 		}
 
+		// @ts-ignore - This is a private API
 		if (!this.cannoli.app.plugins.plugins["smart-connections"].api) {
 			console.error("Smart Connections plugin not found");
 			return content;
@@ -1442,6 +1443,7 @@ export class Run {
 				includeLink = this.cannoli.settings.includeLinkInExtractedNotes;
 			}
 
+			// @ts-ignore - This is a private API
 			let result = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(match.query);
 
 			// If there's no limit defined, use the default limit of 5. If the limit is defined, parse it as an integer and truncate the results array
@@ -1500,12 +1502,17 @@ export class Run {
 
 		// Process each match asynchronously
 		for (const match of nonEmbedMatches) {
+			// @ts-ignore - This is a private API
 			const results = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(match.query);
 
 			// Build a markdown table of with the columns "Similarity" (results[0].sim) and "Link" (results[i].path)
 			let result = "| Similarity | Link |\n| --- | --- |\n";
+
+			// @ts-ignore - This is a private API
 			results.forEach((r) => {
-				result += `| ${r.sim.toFixed(2)} | [[${r.path}]] |\n`;
+				if (typeof r === "object" && r.sim && r.path) {
+					result += `| ${r.sim.toFixed(2)} | [[${r.path}]] |\n`;
+				}
 			});
 
 			// const result = queryResult.successful ? queryResult.value : "Invalid Dataview query";
