@@ -426,7 +426,7 @@ export default class Cannoli extends Plugin {
 		}
 	}
 
-	startCannoli = async (file: TFile) => {
+	startCannoli = async (file: TFile, noCanvas = false) => {
 		// If the api key is the default, send a notice telling the user to add their key
 		const keyName = this.settings.llmProvider + "APIKey";
 		if (
@@ -564,14 +564,14 @@ export default class Cannoli extends Plugin {
 			graph,
 			file,
 			name,
-			canvas,
-			llm
+			llm,
+			noCanvas ? undefined : canvas,
 		);
 
 		// const shouldContinue = true;
 
 		if (shouldContinue) {
-			await this.runCannoli(graph, file, name, canvas, llm);
+			await this.runCannoli(graph, file, name, noCanvas ? undefined : canvas, llm);
 		}
 	};
 
@@ -579,8 +579,8 @@ export default class Cannoli extends Plugin {
 		graph: VerifiedCannoliCanvasData,
 		file: TFile,
 		name: string,
-		canvas: Canvas,
 		llm: LLMProvider,
+		canvas?: Canvas,
 		audioTranscription?: string
 	) => {
 		return new Promise<boolean>((resolve) => {
@@ -644,7 +644,7 @@ export default class Cannoli extends Plugin {
 		graph: VerifiedCannoliCanvasData,
 		file: TFile,
 		name: string,
-		canvas: Canvas,
+		canvas?: Canvas,
 		llm?: LLMProvider
 	) => {
 		return new Promise<void>((resolve) => {
