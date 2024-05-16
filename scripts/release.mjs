@@ -51,11 +51,12 @@ execCommand(`git tag ${versionArg}`);
 execCommand(`git push origin ${currentBranch}`);
 execCommand(`git push origin ${versionArg}`);
 
-// Create a GitHub release
-const releaseTitle = `Release ${versionArg}`;
-const releaseNotes = "Your release notes here"; // Customize your release notes here
-execCommand(
-	`gh release create ${versionArg} --title "${releaseTitle}" --notes "${releaseNotes}"`
-);
+console.log(`Tag ${versionArg} created and pushed successfully.`);
 
-console.log(`Release ${versionArg} created successfully.`);
+// Optionally, you can keep this part if your GitHub Actions are not creating releases:
+// const releaseTitle = `Release ${versionArg}`;
+// const releaseNotes = "Your release notes here"; // Customize your release notes here
+// execCommand(
+// 	`gh release create ${versionArg} --title "${releaseTitle}" --notes "${releaseNotes}"`
+// );
+// console.log(`Release ${versionArg} created successfully.`);

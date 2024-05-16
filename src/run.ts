@@ -1389,9 +1389,15 @@ export class Run {
 			return content;
 		}
 
-		// @ts-ignore - This is a private API
-		if (!this.cannoli.app.plugins.plugins["smart-connections"].api) {
-			console.error("Smart Connections plugin not found");
+		// This is what we're trying to access: !this.cannoli.app.plugins.plugins["smart-connections"].api
+		// We need to try to access it in a way that doesn't throw an error if the plugin isn't found
+		try {
+			// @ts-ignore - This is a private API
+			if (!this.cannoli.app.plugins.plugins["smart-connections"].api) {
+				console.error("Smart Connections plugin not found");
+				return content;
+			}
+		} catch (error) {
 			return content;
 		}
 
