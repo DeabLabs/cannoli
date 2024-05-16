@@ -74,6 +74,7 @@ export type GenericCompletionResponse = {
 // @deprecated
 export const makeSampleConfig = (): GenericModelConfig => ({
 	apiKey: undefined,
+	baseURL: undefined,
 	model: "",
 	frequency_penalty: undefined,
 	presence_penalty: undefined,
@@ -172,9 +173,11 @@ export class LLMProvider {
 			case "openai":
 				return new ChatOpenAI({
 					apiKey: config.apiKey,
-					azureOpenAIBasePath: config.baseURL,
 					model: config.model,
 					temperature: config.temperature,
+					configuration: {
+						baseURL: config.baseURL,
+					}
 				});
 			case "ollama":
 				if (args?.hasFunctionCall) {
