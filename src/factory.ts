@@ -1,5 +1,4 @@
 import { CanvasData } from "obsidian/canvas";
-
 import {
 	AllCannoliCanvasNodeData,
 	CannoliCanvasData,
@@ -27,6 +26,8 @@ import {
 	AllVerifiedCannoliCanvasNodeData,
 	VerifiedCannoliCanvasEdgeData,
 	VerifiedCannoliCanvasTextData,
+	CannoliArgs,
+	CannoliRunSettings,
 } from "./models/graph";
 
 export enum IndicatedNodeType {
@@ -103,14 +104,21 @@ export class CannoliFactory {
 
 	constructor(
 		canvas: CanvasData,
-		activeNote: string,
-		contentIsColorless: boolean
+		settings: CannoliRunSettings,
+		args?: CannoliArgs
 	) {
-		this.cannoliData = canvas;
-		this.activeNote = activeNote;
+		// Cast the canvas to a CannoliCanvasData
+		const cannoliCanvasData = canvas as CannoliCanvasData;
 
-		// If contentIsColorless is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
-		if (contentIsColorless) {
+		// Add the settings and args to the canvas
+		cannoliCanvasData.settings = settings;
+		cannoliCanvasData.args = args;
+
+		this.cannoliData = cannoliCanvasData;
+		this.activeNote = args?.activeNote ?? "No active note";
+
+		// If contentIsColorless setting is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
+		if (settings.contentIsColorless) {
 			this.nodeColorMap = {
 				"0": IndicatedNodeType.Content,
 				"1": IndicatedNodeType.Call,
@@ -168,6 +176,8 @@ export class CannoliFactory {
 		let verifiedCannoliData: CannoliCanvasData = {
 			nodes: this.cannoliData.nodes.filter((node) => !!node.cannoliData),
 			edges: this.cannoliData.edges.filter((edge) => !!edge.cannoliData),
+			settings: this.cannoliData.settings,
+			args: this.cannoliData.args,
 		};
 
 		// Create forEach duplicates

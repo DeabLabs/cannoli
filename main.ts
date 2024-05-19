@@ -11,13 +11,13 @@ import {
 	requestUrl,
 } from "obsidian";
 import { Canvas } from "src/canvas";
-import { CannoliFactory } from "src/factory";
-import { CannoliGraph, VerifiedCannoliCanvasData } from "src/models/graph";
-import { Run, Stoppage, Usage } from "src/run";
+import { Run, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
 import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
 import invariant from "tiny-invariant";
+import { VaultInterface } from "src/vault_interface";
+import { runCannoli } from "src/run";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -553,150 +553,97 @@ export default class Cannoli extends Plugin {
 		const canvas = new Canvas(file);
 		await canvas.fetchData();
 
-		const factory = new CannoliFactory(
-			canvas.getCanvasData(),
-			`[[${this.app.workspace.getActiveFile()?.basename}]]` ??
-			"No active note",
-			this.settings.contentIsColorless ?? false
-		);
+		const vaultInterface = new VaultInterface(this);
 
-		const graph = factory.getCannoliData();
-		// console.log(JSON.stringify(graph, null, 2));
+		const cannoliSettings = {
+			contentIsColorless: this.settings.contentIsColorless ?? false,
+		};
+		const cannoliArgs = {
+			activeNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
+				"No active note",
+			selection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
+		};
 
-		const shouldContinue = await this.validateCannoli(
-			graph,
-			file,
-			name,
-			llm,
-			noCanvas ? undefined : canvas,
-		);
+		// Get file content
+		const fileContent = await this.app.vault.read(file);
 
-		// const shouldContinue = true;
+		// Parse it and add the settings and args
+		const parsedCannoliJSON = JSON.parse(fileContent);
+		parsedCannoliJSON.settings = cannoliSettings;
+		parsedCannoliJSON.args = cannoliArgs;
 
-		if (shouldContinue) {
-			await this.runCannoli(graph, file, name, noCanvas ? undefined : canvas, llm);
+		// Stringify it
+		const stringifiedCannoliJSON = JSON.stringify(parsedCannoliJSON);
+
+		// Do the validation run
+		const validationStoppage = await runCannoli({
+			llm: llm,
+			cannoliJSON: stringifiedCannoliJSON,
+			fileSystemInterface: vaultInterface,
+			isMock: true,
+			canvas: noCanvas ? undefined : canvas
+		});
+
+		delete this.runningCannolis[file.basename];
+
+		if (validationStoppage.reason === "error") {
+			new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
+			return;
+		}
+
+		let shouldContinue = true;
+
+		// If the total price is greater than the threshold, ask the user if they want to continue
+		if (validationStoppage.totalCost > this.settings.costThreshold) {
+			shouldContinue = await this.showRunPriceAlertModal(validationStoppage.usage);
+		}
+
+		if (!shouldContinue) {
+			new Notice(`Cannoli ${name} was cancelled due to cost.`);
+			return;
+		}
+
+		// Do the live run
+		const liveStoppage = await runCannoli({
+			llm: llm,
+			cannoliJSON: stringifiedCannoliJSON,
+			fileSystemInterface: vaultInterface,
+			isMock: false,
+			canvas: noCanvas ? undefined : canvas
+		});
+
+		delete this.runningCannolis[file.basename];
+
+		let costString = "";
+
+		// If the cost is less than 0.01, don't show the notice
+		if (liveStoppage.totalCost > 0.01) {
+			costString = `\n$${liveStoppage.totalCost.toFixed(2)}`;
+		}
+
+		if (liveStoppage.reason === "error") {
+			new Notice(`Cannoli ${name} failed with the error:\n\n${liveStoppage.message}${costString}`);
+		} else if (liveStoppage.reason === "complete") {
+			new Notice(`Cannoli complete: ${name}${costString}`);
+		} else {
+			new Notice(`Cannoli stopped: ${name}${costString}`);
 		}
 	};
 
-	validateCannoli = async (
-		graph: VerifiedCannoliCanvasData,
-		file: TFile,
-		name: string,
-		llm: LLMProvider,
-		canvas?: Canvas,
-		audioTranscription?: string
-	) => {
-		return new Promise<boolean>((resolve) => {
-			// Create callback function to trigger notice
-			const onFinish = (stoppage: Stoppage) => {
-				// console.log("Finished validation run");
+	showRunPriceAlertModal = (usage: Record<string, Usage>): Promise<boolean> => {
+		return new Promise((resolve) => {
+			const onContinueCallback = () => resolve(true);
+			const onCancelCallback = () => resolve(false);
 
-				delete this.runningCannolis[file.basename];
-
-				if (stoppage.reason === "error") {
-					new Notice(
-						`Cannoli ${name} failed with the error:\n\n${stoppage.message}`
-					);
-					resolve(false);
-					return;
-				}
-
-				const onContinueCallback = () => {
-					resolve(true); // Resolve with true if continued
-				};
-
-				const onCancelCallback = () => {
-					resolve(false); // Resolve with false if canceled
-				};
-
-				// If the total price is greater than the threshold, ask the user if they want to continue
-				if (stoppage.totalCost > this.settings.costThreshold) {
-					new RunPriceAlertModal(
-						this.app,
-						stoppage.usage,
-						onContinueCallback,
-						onCancelCallback
-					).open();
-				} else {
-					// Otherwise, continue
-					onContinueCallback();
-				}
-			};
-
-			const validationGraph = new CannoliGraph(
-				JSON.parse(JSON.stringify(graph))
-			);
-
-			// Create validation run
-			const validationRun = new Run({
-				graph: validationGraph.graph,
-				isMock: true,
-				canvas: canvas,
-				onFinish: onFinish,
-				cannoli: this,
-				llm: llm,
-			});
-
-			// console.log("Starting validation run");
-
-			validationRun.start();
+			new RunPriceAlertModal(
+				this.app,
+				usage,
+				onContinueCallback,
+				onCancelCallback
+			).open();
 		});
 	};
 
-	runCannoli = async (
-		graph: VerifiedCannoliCanvasData,
-		file: TFile,
-		name: string,
-		canvas?: Canvas,
-		llm?: LLMProvider
-	) => {
-		return new Promise<void>((resolve) => {
-			// Create callback function to trigger notice
-			const onFinish = (stoppage: Stoppage) => {
-				delete this.runningCannolis[file.basename];
-
-				let costString = "";
-
-				// If the cost is less than 0.01, don't show the notice
-				if (stoppage.totalCost > 0.01) {
-					costString = `\n$${stoppage.totalCost.toFixed(2)}`;
-				}
-
-				if (stoppage.reason === "error") {
-					new Notice(
-						`Cannoli ${name} failed with the error:\n\n${stoppage.message}${costString}`
-					);
-				} else if (stoppage.reason === "complete") {
-					new Notice(`Cannoli complete: ${name}${costString}`);
-				} else {
-					new Notice(`Cannoli stopped: ${name}${costString}`);
-				}
-
-				// Resolve the promise to continue the async function
-				resolve();
-			};
-
-			const liveGraph = new CannoliGraph(
-				JSON.parse(JSON.stringify(graph))
-			);
-
-			// Create live run
-			const run = new Run({
-				graph: liveGraph.graph,
-				llm: llm,
-				isMock: false,
-				canvas: canvas,
-				onFinish: onFinish,
-				cannoli: this,
-			});
-
-			// run.logGraph();
-
-			this.runningCannolis[file.basename] = run;
-
-			run.start();
-		});
-	};
 
 	addSampleFolder = async () => {
 		try {

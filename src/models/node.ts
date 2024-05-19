@@ -68,11 +68,17 @@ export class CannoliNode extends CannoliVertex {
 				return varMap.get(reference.name) || "{{invalid}}";
 			});
 
-			// Render dataview queries
-			textCopy = await this.run.replaceDataviewQueries(textCopy);
+			// Only replace dataview queries and smart connections if there's a fileSystemInterface
+			if (this.run.fileSystemInterface) {
+				// Render dataview queries
+				textCopy = await this.run.fileSystemInterface.replaceDataviewQueries(textCopy, this.run.isMock);
 
-			// Render smart connections
-			textCopy = await this.run.replaceSmartConnections(textCopy);
+				// Render smart connections
+				textCopy = await this.run.fileSystemInterface.replaceSmartConnections(
+					textCopy,
+					this.run.isMock
+				);
+			}
 
 			return textCopy;
 		};
@@ -106,13 +112,18 @@ export class CannoliNode extends CannoliVertex {
 					subpath = split[1];
 				}
 
-				const noteContent = await this.run.getNote({
+				// If there's no fileSystemInterface, throw an error
+				if (!this.run.fileSystemInterface) {
+					throw new Error("No fileSystemInterface found");
+				}
+
+				const noteContent = await this.run.fileSystemInterface.getNote({
 					name: noteName,
 					type: ReferenceType.Note,
 					shouldExtract: true,
 					includeName: true,
 					subpath: subpath,
-				});
+				}, this.run.isMock);
 
 
 
@@ -131,7 +142,12 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	async getContentFromNote(reference: Reference): Promise<string | null> {
-		const note = await this.run.getNote(reference);
+		// If there's no fileSystemInterface, throw an error
+		if (!this.run.fileSystemInterface) {
+			throw new Error("No fileSystemInterface found");
+		}
+
+		const note = await this.run.fileSystemInterface.getNote(reference, this.run.isMock);
 
 		if (note === null) {
 			return null;
@@ -1773,7 +1789,12 @@ export class ReferenceNode extends ContentNode {
 			}
 
 			try {
-				noteName = await this.run.createNoteAtExistingPath(
+				// If there's no fileSystemInterface, throw an error
+				if (!this.run.fileSystemInterface) {
+					throw new Error("No fileSystemInterface found");
+				}
+
+				noteName = await this.run.fileSystemInterface.createNoteAtExistingPath(
 					referenceNameEdge.content,
 					path,
 					content
@@ -1824,10 +1845,15 @@ export class ReferenceNode extends ContentNode {
 
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
-				const edit = await this.run.editNote(
+				// If there's no fileSystemInterface, throw an error
+				if (!this.run.fileSystemInterface) {
+					throw new Error("No fileSystemInterface found");
+				}
+
+				const edit = await this.run.fileSystemInterface.editNote(
 					this.reference,
 					newContent,
-					append
+					append ?? false
 				);
 
 				if (edit !== null) {
@@ -1838,7 +1864,12 @@ export class ReferenceNode extends ContentNode {
 					);
 				}
 			} else if (this.reference.type === ReferenceType.Selection) {
-				this.run.editSelection(newContent);
+				// If there's no fileSystemInterface, throw an error
+				if (!this.run.fileSystemInterface) {
+					throw new Error("No fileSystemInterface found");
+				}
+
+				this.run.fileSystemInterface.editSelection(newContent, this.run.isMock);
 				return;
 			} else if (this.reference.type === ReferenceType.Floating) {
 				// Search through all nodes for a floating node with the correct name
@@ -1875,7 +1906,12 @@ export class ReferenceNode extends ContentNode {
 
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
-				const edit = await this.run.editPropertyOfNote(
+				// If there's no fileSystemInterface, throw an error
+				if (!this.run.fileSystemInterface) {
+					throw new Error("No fileSystemInterface found");
+				}
+
+				const edit = await this.run.fileSystemInterface.editPropertyOfNote(
 					this.reference.name,
 					propertyName,
 					newContent.trim()
@@ -1930,13 +1966,23 @@ export class ReferenceNode extends ContentNode {
 				let value;
 
 				if (edgeObject.text.length === 0) {
-					value = await this.run.getAllPropertiesOfNote(
+					// If there's no fileSystemInterface, throw an error
+					if (!this.run.fileSystemInterface) {
+						throw new Error("No fileSystemInterface found");
+					}
+
+					value = await this.run.fileSystemInterface.getAllPropertiesOfNote(
 						this.reference.name,
 						true
 					);
 				} else {
+					// If there's no fileSystemInterface, throw an error
+					if (!this.run.fileSystemInterface) {
+						throw new Error("No fileSystemInterface found");
+					}
+
 					// Get value of the property with the same name as the edge
-					value = await this.run.getPropertyOfNote(
+					value = await this.run.fileSystemInterface.getPropertyOfNote(
 						this.reference.name,
 						edgeObject.text,
 						true
@@ -1956,7 +2002,14 @@ export class ReferenceNode extends ContentNode {
 					request: request,
 				});
 			} else if (edgeObject.vaultModifier === VaultModifier.Folder) {
-				const path = await this.run.getNotePath(this.reference.name);
+				// If there's no fileSystemInterface, throw an error
+				if (!this.run.fileSystemInterface) {
+					throw new Error("No fileSystemInterface found");
+				}
+
+				const path = await this.run.fileSystemInterface.getNotePath(
+					this.reference.name
+				);
 
 				if (path) {
 					edgeObject.load({
@@ -2103,10 +2156,16 @@ export class HttpNode extends ContentNode {
 				content
 			);
 		} else {
+			// If there's no fileSystemInterface, throw an error
+			if (!this.run.fileSystemInterface) {
+				throw new Error("No fileSystemInterface found");
+			}
+
 			// Make the request
-			result = await this.run.executeHttpTemplateByName(
+			result = await this.run.fileSystemInterface.executeHttpTemplateByName(
 				this.text,
-				content
+				content,
+				this.run.isMock
 			);
 		}
 
