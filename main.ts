@@ -143,6 +143,8 @@ export default class Cannoli extends Plugin {
 
 		this.createCannoliCommands();
 
+		this.createOpenOnWebsiteCommand();
+
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon(
 			"cannoli",
@@ -201,6 +203,50 @@ export default class Cannoli extends Plugin {
 			checkCallback: this.startCannoliCommand,
 			icon: "cannoli",
 		});
+	};
+
+	createOpenOnWebsiteCommand = () => {
+		this.addCommand({
+			id: "open-on-website",
+			name: "Open on website",
+			callback: this.openOnWebsite,
+			icon: "cannoli",
+		});
+	};
+
+	// openonwebsite
+	openOnWebsite = async () => {
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile) return;
+		const url = "http://localhost:5173/editor/open";
+
+		// get the content of the file
+		const content = await this.app.vault.read(activeFile);
+
+		// make request to the website
+		const response = await fetch(url, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: content,
+		});
+
+		// Check that the response has json
+		const json = await response.json();
+		if (!json) {
+			new Notice("Error opening file on website");
+			return;
+		}
+
+		// Check that json contains redirect key
+		if (!json.redirect) {
+			new Notice("Error opening file on website");
+			return;
+		}
+
+		// Send the redirect to the browser
+		window.open(json.redirect, "_blank");
 	};
 
 	startActiveCannoliCommand = () => {

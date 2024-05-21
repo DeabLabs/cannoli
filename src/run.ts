@@ -911,68 +911,68 @@ export class Run {
 		}
 	}
 
-	parseBodyTemplate = (
-		template: string,
-		body: string | Record<string, string>
-	): string => {
-		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
-			(v) => v.slice(2, -2)
-		);
+	// parseBodyTemplate = (
+	// 	template: string,
+	// 	body: string | Record<string, string>
+	// ): string => {
+	// 	const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
+	// 		(v) => v.slice(2, -2)
+	// 	);
 
-		if (variablesInTemplate.length === 1) {
-			let valueToReplace;
-			if (typeof body === "string") {
-				valueToReplace = body;
-			} else if (Object.keys(body).length === 1) {
-				valueToReplace = Object.values(body)[0];
-			} else {
-				throw new Error(
-					`Expected only one variable in the template, but found multiple values. This node expects the variable:\n  - ${variablesInTemplate[0]}\n\nWrite to this node using a single variable arrow or a write arrow.`
-				);
-			}
+	// 	if (variablesInTemplate.length === 1) {
+	// 		let valueToReplace;
+	// 		if (typeof body === "string") {
+	// 			valueToReplace = body;
+	// 		} else if (Object.keys(body).length === 1) {
+	// 			valueToReplace = Object.values(body)[0];
+	// 		} else {
+	// 			throw new Error(
+	// 				`Expected only one variable in the template, but found multiple values. This node expects the variable:\n  - ${variablesInTemplate[0]}\n\nWrite to this node using a single variable arrow or a write arrow.`
+	// 			);
+	// 		}
 
-			return template.replace(
-				new RegExp(`{{${variablesInTemplate[0]}}}`, "g"),
-				valueToReplace.replace(/\n/g, "\\n").replace(/"/g, '\\"')
-			);
-		}
+	// 		return template.replace(
+	// 			new RegExp(`{{${variablesInTemplate[0]}}}`, "g"),
+	// 			valueToReplace.replace(/\n/g, "\\n").replace(/"/g, '\\"')
+	// 		);
+	// 	}
 
-		let parsedTemplate = template;
+	// 	let parsedTemplate = template;
 
-		if (typeof body === "object") {
-			for (const variable of variablesInTemplate) {
-				if (!(variable in body)) {
-					throw new Error(
-						`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
-							.map((v) => `  - ${v}`)
-							.join("\n")}`
-					);
-				}
-				parsedTemplate = parsedTemplate.replace(
-					new RegExp(`{{${variable}}}`, "g"),
-					body[variable].replace(/\n/g, "\\n").replace(/"/g, '\\"')
-				);
-			}
+	// 	if (typeof body === "object") {
+	// 		for (const variable of variablesInTemplate) {
+	// 			if (!(variable in body)) {
+	// 				throw new Error(
+	// 					`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+	// 						.map((v) => `  - ${v}`)
+	// 						.join("\n")}`
+	// 				);
+	// 			}
+	// 			parsedTemplate = parsedTemplate.replace(
+	// 				new RegExp(`{{${variable}}}`, "g"),
+	// 				body[variable].replace(/\n/g, "\\n").replace(/"/g, '\\"')
+	// 			);
+	// 		}
 
-			for (const key in body) {
-				if (!variablesInTemplate.includes(key)) {
-					throw new Error(
-						`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
-							.map((v) => `  - ${v}`)
-							.join("\n")}`
-					);
-				}
-			}
-		} else {
-			throw new Error(
-				`This action node expected multiple variables, but only found one. This node expects the following variables:\n${variablesInTemplate
-					.map((v) => `  - ${v}`)
-					.join("\n")}`
-			);
-		}
+	// 		for (const key in body) {
+	// 			if (!variablesInTemplate.includes(key)) {
+	// 				throw new Error(
+	// 					`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+	// 						.map((v) => `  - ${v}`)
+	// 						.join("\n")}`
+	// 				);
+	// 			}
+	// 		}
+	// 	} else {
+	// 		throw new Error(
+	// 			`This action node expected multiple variables, but only found one. This node expects the following variables:\n${variablesInTemplate
+	// 				.map((v) => `  - ${v}`)
+	// 				.join("\n")}`
+	// 		);
+	// 	}
 
-		return parsedTemplate;
-	};
+	// 	return parsedTemplate;
+	// };
 
 
 
@@ -992,9 +992,8 @@ export function executeHttpTemplate(
 	return new Promise((resolve, reject) => {
 		// Prepare body
 		let requestBody: string;
-
 		if (template.bodyTemplate) {
-			requestBody = this.parseBodyTemplate(
+			requestBody = parseBodyTemplate(
 				template.bodyTemplate,
 				body || ""
 			);
@@ -1005,6 +1004,9 @@ export function executeHttpTemplate(
 				requestBody = JSON.stringify(body);
 			}
 		}
+
+		// Log the request body
+		// console.log("HTTP Request Body:", requestBody);
 
 		// Prepare fetch options
 		const options = {
@@ -1018,8 +1020,7 @@ export function executeHttpTemplate(
 
 		if (this.isMock) {
 			resolve("mock response");
-		}
-		{
+		} else {
 			requestUrl({ ...options, url: template.url })
 				.then((response) => {
 					return response.text;
@@ -1039,7 +1040,11 @@ export function executeHttpTemplate(
 							)
 						);
 					} else {
-						resolve(JSON.stringify(response, null, 2));
+						// Ensure the response is formatted nicely for markdown
+						const formattedResponse = JSON.stringify(response, null, 2)
+							.replace(/\\n/g, '\n') // Ensure newlines are properly formatted
+							.replace(/\\t/g, '\t'); // Ensure tabs are properly formatted
+						resolve(formattedResponse);
 					}
 				})
 				.catch((error) => {
@@ -1049,4 +1054,67 @@ export function executeHttpTemplate(
 				});
 		}
 	});
+}
+
+export function parseBodyTemplate(
+	template: string,
+	body: string | Record<string, string>
+): string {
+	const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
+		(v) => v.slice(2, -2)
+	);
+
+	if (variablesInTemplate.length === 1) {
+		let valueToReplace;
+		if (typeof body === "string") {
+			valueToReplace = body;
+		} else if (Object.keys(body).length === 1) {
+			valueToReplace = Object.values(body)[0];
+		} else {
+			throw new Error(
+				`Expected only one variable in the template, but found multiple values. This node expects the variable:\n  - ${variablesInTemplate[0]}\n\nWrite to this node using a single variable arrow or a write arrow.`
+			);
+		}
+
+		return template.replace(
+			new RegExp(`{{${variablesInTemplate[0]}}}`, "g"),
+			valueToReplace.replace(/\n/g, "\\n").replace(/"/g, '\\"')
+		);
+	}
+
+	let parsedTemplate = template;
+
+	if (typeof body === "object") {
+		for (const variable of variablesInTemplate) {
+			if (!(variable in body)) {
+				throw new Error(
+					`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+						.map((v) => `  - ${v}`)
+						.join("\n")}`
+				);
+			}
+			parsedTemplate = parsedTemplate.replace(
+				new RegExp(`{{${variable}}}`, "g"),
+				body[variable].replace(/\n/g, "\\n").replace(/"/g, '\\"')
+			);
+		}
+
+		for (const key in body) {
+			if (!variablesInTemplate.includes(key)) {
+				throw new Error(
+					`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
+						.map((v) => `  - ${v}`)
+						.join("\n")}`
+				);
+			}
+		}
+	} else {
+		throw new Error(
+			`This action node expected multiple variables, but only found one. This node expects the following variables:\n${variablesInTemplate
+				.map((v) => `  - ${v}`)
+				.join("\n")}`
+		);
+	}
+
+	return parsedTemplate;
 }
