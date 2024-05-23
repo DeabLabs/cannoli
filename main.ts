@@ -615,7 +615,6 @@ export default class Cannoli extends Plugin {
 		// Stringify it
 		const stringifiedCannoliJSON = JSON.stringify(canvasData);
 
-		const vaultInterface = new VaultInterface(this);
 
 		const canvas = new ObsidianCanvas(canvasData, file);
 
@@ -626,6 +625,9 @@ export default class Cannoli extends Plugin {
 				return response.text
 			});
 		};
+
+		const vaultInterface = new VaultInterface(this, fetcher);
+
 
 		// Do the validation run
 		const validationStoppage = await runCannoli({

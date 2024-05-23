@@ -3,15 +3,17 @@ import { Reference, ReferenceType } from "./src/models/graph";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";
-import { executeHttpTemplate } from "./src/run";
+import { ResponseTextFetcher, executeHttpTemplate } from "./src/run";
 import { FilesystemInterface } from "./src/filesystem_interface";
 
 
 export class VaultInterface implements FilesystemInterface {
     private cannoli: Cannoli;
+    private fetcher: ResponseTextFetcher;
 
-    constructor(cannoli: Cannoli) {
+    constructor(cannoli: Cannoli, fetcher: ResponseTextFetcher) {
         this.cannoli = cannoli;
+        this.fetcher = fetcher;
     }
 
     async executeHttpTemplateByName(
@@ -42,7 +44,7 @@ export class VaultInterface implements FilesystemInterface {
         }
 
         try {
-            return await executeHttpTemplate(template, body);
+            return await executeHttpTemplate(template, body, this.fetcher);
         } catch (error) {
             return error;
         }
