@@ -45,7 +45,7 @@ export class CannoliNode extends CannoliVertex {
 
 	buildRenderFunction() {
 		// Replace references with placeholders using an index-based system
-		let textCopy = this.text;
+		let textCopy = this.text.slice();
 
 		let index = 0;
 		// Updated regex pattern to avoid matching newlines inside the double braces
@@ -56,12 +56,12 @@ export class CannoliNode extends CannoliVertex {
 			variables: { name: string; content: string }[]
 		) => {
 			// Process embedded notes
-			textCopy = await this.processEmbeds(textCopy);
+			let processedText = await this.processEmbeds(textCopy);
 
 			// Create a map to look up variable content by name
 			const varMap = new Map(variables.map((v) => [v.name, v.content]));
 			// Replace the indexed placeholders with the content from the variables
-			textCopy = textCopy.replace(/\{\{(\d+)\}\}/g, (match, index) => {
+			processedText = processedText.replace(/\{\{(\d+)\}\}/g, (match, index) => {
 				// Retrieve the reference by index
 				const reference = this.references[Number(index)];
 				// Retrieve the content from the varMap using the reference's name
@@ -69,12 +69,12 @@ export class CannoliNode extends CannoliVertex {
 			});
 
 			// Render dataview queries
-			textCopy = await this.run.replaceDataviewQueries(textCopy);
+			processedText = await this.run.replaceDataviewQueries(processedText);
 
 			// Render smart connections
-			textCopy = await this.run.replaceSmartConnections(textCopy);
+			processedText = await this.run.replaceSmartConnections(processedText);
 
-			return textCopy;
+			return processedText;
 		};
 
 
