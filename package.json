@@ -19,6 +19,7 @@
   "license": "MIT",
   "private": true,
   "dependencies": {
-    "rimraf": "^5.0.7"
+    "rimraf": "^5.0.7",
+    "turbo": "1.13.3"
   }
 }
