@@ -1,5 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { ChatRole } from "src/run";
+import { ChatRole } from "../run";
 import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
 import { CannoliGroup } from "./group";
 import {
@@ -21,7 +21,7 @@ import {
 	GenericFunctionCall,
 	GenericModelConfig,
 	SupportedProviders,
-} from "src/providers";
+} from "../providers";
 import invariant from "tiny-invariant";
 
 type VariableValue = { name: string; content: string; edgeId: string };

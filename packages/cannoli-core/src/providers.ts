@@ -12,7 +12,7 @@ import {
 import { AIMessage, ChatMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { messagesWithFnCallPrompts } from "src/fn_calling";
+import { messagesWithFnCallPrompts } from "./fn_calling";
 
 const stringParser = new StringOutputParser();
 

@@ -10,15 +10,15 @@ import {
 	addIcon,
 	requestUrl,
 } from "obsidian";
-import { ResponseTextFetcher, Usage } from "src/run";
-import { cannoliCollege } from "assets/cannoliCollege";
-import { cannoliIcon } from "assets/cannoliIcon";
-import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
+import { HttpTemplate, ResponseTextFetcher, Usage } from "cannoli-core/src/run";
+import { cannoliCollege } from "../assets/cannoliCollege";
+import { cannoliIcon } from "../assets/cannoliIcon";
+import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "cannoli-core/src/providers";
 import invariant from "tiny-invariant";
-import { VaultInterface } from "vault_interface";
-import { runCannoli } from "src/run";
-import { CanvasData, CanvasGroupData } from "src/canvas_interface";
-import { ObsidianCanvas } from "canvas";
+import { VaultInterface } from "./vault_interface";
+import { runCannoli } from "cannoli-core/src/run";
+import { CanvasData, CanvasGroupData } from "cannoli-core/src/canvas_interface";
+import { ObsidianCanvas } from "./canvas";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -82,15 +82,6 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	pLimit: 50,
 	contentIsColorless: false,
 };
-
-export interface HttpTemplate {
-	id: string;
-	name: string;
-	url: string;
-	headers: Record<string, string>;
-	method: string;
-	bodyTemplate?: string;
-}
 
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
@@ -600,10 +591,10 @@ export default class Cannoli extends Plugin {
 		// Parse the file into a CanvasData object
 		const canvasData = await this.fetchData(file);
 
-		console.log({ ...canvasData });
 
 		const cannoliSettings = {
 			contentIsColorless: this.settings.contentIsColorless ?? false,
+			chatFormatString: this.settings.chatFormatString ?? DEFAULT_SETTINGS.chatFormatString
 		};
 		const cannoliArgs = {
 			currentNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
@@ -680,7 +671,6 @@ export default class Cannoli extends Plugin {
 
 		delete this.runningCannolis[file.basename];
 
-		console.log("Results:\n", liveStoppage.results);
 
 		let costString = "";
 

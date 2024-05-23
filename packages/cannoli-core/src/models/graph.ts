@@ -28,7 +28,7 @@ import {
 	LoggingEdge,
 	SystemMessageEdge,
 } from "./edge";
-import { GenericCompletionResponse, LLMProvider } from "src/providers";
+import { GenericCompletionResponse, LLMProvider } from "../providers";
 
 export enum CannoliObjectKind {
 	Node = "node",
@@ -373,8 +373,6 @@ export class CannoliGraph {
 	setupAllListeners() {
 		// Call setupListeners on every object
 		for (const id in this.graph) {
-			console.log(this.graph);
-			console.log(id);
 			this.graph[id].setupListeners();
 		}
 	}

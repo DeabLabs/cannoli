@@ -6,11 +6,16 @@ import {
 	VaultModifier,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
-import { ChatRole } from "src/run";
+import { ChatRole } from "../run";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
-} from "src/providers";
+} from "../providers";
+
+const chatFormatString = `---
+# <u>{{role}}</u>
+
+{{content}}`
 
 export class CannoliEdge extends CannoliObject {
 	source: string;
@@ -140,7 +145,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		request?: GenericCompletionParams;
 	}): void {
-		const format = this.run.settings.chatFormatString.toString();
+		const format = this.run.settings?.chatFormatString?.toString() ?? chatFormatString;
 		const messageString = "";
 		let messages: GenericCompletionResponse[] = [];
 
@@ -284,7 +289,7 @@ export class ChatResponseEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		request?: GenericCompletionParams;
 	}): void {
-		const format = this.run.settings.chatFormatString.toString();
+		const format = this.run.settings?.chatFormatString?.toString() ?? chatFormatString;
 
 		if (!format) {
 			throw new Error(

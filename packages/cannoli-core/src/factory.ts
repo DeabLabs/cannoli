@@ -118,7 +118,6 @@ export class CannoliFactory {
 		this.cannoliData = cannoliCanvasData;
 		this.currentNote = args?.currentNote ?? "No active note";
 
-		console.log("this.cannoliData", this.cannoliData);
 
 		// If contentIsColorless setting is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
 		if (settings.contentIsColorless) {

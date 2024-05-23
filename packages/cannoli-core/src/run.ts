@@ -2,8 +2,6 @@ import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
 import { CannoliArgs, CannoliGraph, CannoliObjectStatus, CannoliRunSettings } from "./models/graph";
-import { HttpTemplate } from "main";
-
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -11,11 +9,20 @@ import {
 	GenericModelConfig,
 	LLMProvider,
 	LLMProvider as Llm,
-} from "src/providers";
+} from "./providers";
 import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
 import { Canvas } from "./canvas_interface";
+
+export interface HttpTemplate {
+	id: string;
+	name: string;
+	url: string;
+	headers: Record<string, string>;
+	method: string;
+	bodyTemplate?: string;
+}
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -238,7 +245,6 @@ export class Run {
 
 		this.fileSystemInterface = fileSystemInterface ?? null;
 
-		console.log({ ...parsedCannoliJSON });
 
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
@@ -263,7 +269,6 @@ export class Run {
 			}
 		}
 
-		console.log("graphData", graphData);
 
 		this.graph = new CannoliGraph(
 			graphData
@@ -278,7 +283,7 @@ export class Run {
 
 	async start() {
 		// Log the graph
-		this.logGraph();
+		// this.logGraph();
 
 		// Setup listeners
 		this.setupListeners();
@@ -1042,10 +1047,6 @@ export class Run {
 
 	// 	return parsedTemplate;
 	// };
-
-
-
-
 
 	logGraph() {
 		for (const node of Object.values(this.graph)) {

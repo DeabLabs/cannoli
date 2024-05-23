@@ -1,5 +1,5 @@
 import { HumanMessage } from "@langchain/core/messages"
-import { GenericFunctionCall, LangchainMessages } from "src/providers"
+import { GenericFunctionCall, LangchainMessages } from "./providers"
 
 export const messagesWithFnCallPrompts = ({ convertedMessages, fn, function_call }: {
 	convertedMessages: LangchainMessages,

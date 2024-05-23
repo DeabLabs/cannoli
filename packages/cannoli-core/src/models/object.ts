@@ -1,6 +1,6 @@
 import type { CannoliEdge } from "./edge";
 import type { CannoliGroup } from "./group";
-import type { Run } from "src/run";
+import type { Run } from "../run";
 import {
 	AllVerifiedCannoliCanvasNodeData,
 	CannoliGraph,
@@ -116,7 +116,7 @@ export class CannoliObject extends EventTarget {
 							otherDependency.text === dependency.text &&
 							otherDependency.type === dependency.type &&
 							otherDependency.status ===
-								CannoliObjectStatus.Complete
+							CannoliObjectStatus.Complete
 						) {
 							// If there are, set redundantComplete to true
 							redundantComplete = true;
@@ -162,7 +162,7 @@ export class CannoliObject extends EventTarget {
 							this.cannoliGraph.isEdge(otherDependency) &&
 							otherDependency.text === dependency.text &&
 							otherDependency.status ===
-								CannoliObjectStatus.Complete
+							CannoliObjectStatus.Complete
 						) {
 							// If there are, set redundantComplete to true
 							redundantComplete = true;
@@ -229,7 +229,7 @@ export class CannoliObject extends EventTarget {
 							this.cannoliGraph.isEdge(otherDependency) &&
 							otherDependency.text === dependency.text &&
 							otherDependency.status !==
-								CannoliObjectStatus.Rejected
+							CannoliObjectStatus.Rejected
 						) {
 							// If there are, set redundantNotRejected to true and break the loop
 							redundantNotRejected = true;
@@ -277,11 +277,11 @@ export class CannoliObject extends EventTarget {
 		this.tryReject();
 	}
 
-	dependencyCompleted(dependency: CannoliObject) {}
+	dependencyCompleted(dependency: CannoliObject) { }
 
-	dependencyExecuting(dependency: CannoliObject) {}
+	dependencyExecuting(dependency: CannoliObject) { }
 
-	async execute() {}
+	async execute() { }
 
 	logDetails(): string {
 		let dependenciesString = "";
@@ -292,7 +292,7 @@ export class CannoliObject extends EventTarget {
 		return `Dependencies:\n${dependenciesString}\n`;
 	}
 
-	validate() {}
+	validate() { }
 }
 
 export class CannoliVertex extends CannoliObject {
