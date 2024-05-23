@@ -1,3 +1,4 @@
+// disable ts in this file
 export const cannoliCollege = {
   "1. Basics": [
         {

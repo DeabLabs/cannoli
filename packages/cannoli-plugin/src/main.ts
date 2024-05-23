@@ -10,14 +10,21 @@ import {
 	addIcon,
 	requestUrl,
 } from "obsidian";
-import { HttpTemplate, ResponseTextFetcher, Usage } from "cannoli-core/src/run";
+import {
+	HttpTemplate,
+	ResponseTextFetcher,
+	Usage,
+	GetDefaultsByProvider,
+	LLMProvider,
+	SupportedProviders,
+	runCannoli,
+	CanvasData,
+	CanvasGroupData
+} from "cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
-import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "cannoli-core/src/providers";
 import invariant from "tiny-invariant";
 import { VaultInterface } from "./vault_interface";
-import { runCannoli } from "cannoli-core/src/run";
-import { CanvasData, CanvasGroupData } from "cannoli-core/src/canvas_interface";
 import { ObsidianCanvas } from "./canvas";
 
 interface CannoliSettings {

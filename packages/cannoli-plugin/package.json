@@ -2,7 +2,7 @@
 	"name": "cannoli-plugin",
 	"version": "1.0.0",
 	"description": "Create LLM Chat flows using the Obsidian Canvas.",
-	"main": "../../main.js",
+	"private": true,
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "pnpm run typecheck && node esbuild.config.mjs production",

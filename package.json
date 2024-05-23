@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "description": "",
   "scripts": {
-    "typecheck": "pnpm run -r typecheck",
-    "build": "pnpm run -r build",
-    "dev": "pnpm run -r dev",
-    "release-plugin": "pnpm --filter cannoli-plugin run release",
-    "build-college": "pnpm --filter cannoli-plugin run build-college",
-    "clean": "rimraf main.js packages/**/node_modules packages/**/dist node_modules"
+    "typecheck": "turbo run typecheck",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "release-plugin": "turbo run release --filter cannoli-plugin",
+    "build-college": "turbo run run build-college --filter cannoli-plugin",
+    "clean": "rimraf main.js packages/**/node_modules packages/**/dist packages/**/.turbo .turbo node_modules"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=9"
   },
   "keywords": [],
   "author": "",

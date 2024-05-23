@@ -5,5 +5,13 @@
 	"prettier.enable": false,
 	"[typescript]": {
 		"editor.defaultFormatter": "vscode.typescript-language-features"
-	}
+	},
+	"search.exclude": {
+		// Avoid polluting search results with lockfile content
+		"pnpm-lock.yaml": true,
+		"dist": true,
+		"node_modules": true
+	},
+	// Ensure VSCode uses pnpm instead of npm
+	"npm.packageManager": "pnpm",
 }

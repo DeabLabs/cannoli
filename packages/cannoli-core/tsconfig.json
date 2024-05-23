@@ -18,7 +18,7 @@
       "ES6",
       "ES7"
     ],
-    "skipLibCheck": true
+    "skipLibCheck": true,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
