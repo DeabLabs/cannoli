@@ -10,14 +10,15 @@ import {
 	addIcon,
 	requestUrl,
 } from "obsidian";
-import { Canvas } from "src/canvas";
-import { Run, Usage } from "src/run";
+import { ResponseTextFetcher, Run, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
 import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
 import invariant from "tiny-invariant";
-import { VaultInterface } from "src/vault_interface";
+import { VaultInterface } from "vault_interface";
 import { runCannoli } from "src/run";
+import { CanvasData, CanvasGroupData } from "src/canvas_interface";
+import { ObsidianCanvas } from "canvas";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -596,10 +597,8 @@ export default class Cannoli extends Plugin {
 		// Sleep for 1.5s to give the vault time to load
 		await new Promise((resolve) => setTimeout(resolve, 1500));
 
-		const canvas = new Canvas(file);
-		await canvas.fetchData();
-
-		const vaultInterface = new VaultInterface(this);
+		// Parse the file into a CanvasData object
+		const canvasData = await this.fetchData(file);
 
 		const cannoliSettings = {
 			contentIsColorless: this.settings.contentIsColorless ?? false,
@@ -610,16 +609,23 @@ export default class Cannoli extends Plugin {
 			selection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
 		};
 
-		// Get file content
-		const fileContent = await this.app.vault.read(file);
-
-		// Parse it and add the settings and args
-		const parsedCannoliJSON = JSON.parse(fileContent);
-		parsedCannoliJSON.settings = cannoliSettings;
-		parsedCannoliJSON.args = cannoliArgs;
+		canvasData.settings = cannoliSettings;
+		canvasData.args = cannoliArgs;
 
 		// Stringify it
-		const stringifiedCannoliJSON = JSON.stringify(parsedCannoliJSON);
+		const stringifiedCannoliJSON = JSON.stringify(canvasData);
+
+		const vaultInterface = new VaultInterface(this);
+
+		const canvas = new ObsidianCanvas(canvasData, file);
+
+		const fetcher: ResponseTextFetcher = async (url: string, { body, method, headers }: RequestInit) => {
+			const headersObj = Array.isArray(headers) ? Object.fromEntries(headers) : headers instanceof Headers ? {} : headers;
+			const constrainedBody = typeof body === "string" ? body : body instanceof ArrayBuffer ? body : undefined;
+			return requestUrl({ body: constrainedBody || undefined, method, headers: headersObj, url }).then(response => {
+				return response.text
+			});
+		};
 
 		// Do the validation run
 		const validationStoppage = await runCannoli({
@@ -627,7 +633,8 @@ export default class Cannoli extends Plugin {
 			cannoliJSON: stringifiedCannoliJSON,
 			fileSystemInterface: vaultInterface,
 			isMock: true,
-			canvas: noCanvas ? undefined : canvas
+			canvas: noCanvas ? undefined : canvas,
+			fetcher: fetcher
 		});
 
 		delete this.runningCannolis[file.basename];
@@ -655,7 +662,8 @@ export default class Cannoli extends Plugin {
 			cannoliJSON: stringifiedCannoliJSON,
 			fileSystemInterface: vaultInterface,
 			isMock: false,
-			canvas: noCanvas ? undefined : canvas
+			canvas: noCanvas ? undefined : canvas,
+			fetcher: fetcher
 		});
 
 		delete this.runningCannolis[file.basename];
@@ -675,6 +683,91 @@ export default class Cannoli extends Plugin {
 			new Notice(`Cannoli stopped: ${name}${costString}`);
 		}
 	};
+
+	async fetchData(file: TFile): Promise<CanvasData> {
+		const fileContent = await this.app.vault.cachedRead(file);
+		const parsedContent = JSON.parse(fileContent) as CanvasData;
+
+		let subCanvasGroupId: string | undefined;
+
+		for (const node of parsedContent.nodes) {
+			if (node.type === "group" && (node.text === "cannoli" || node.text === "Cannoli")) {
+				subCanvasGroupId = node.id;
+				break;
+			}
+		}
+
+		let canvasData = parsedContent;
+
+		if (subCanvasGroupId) {
+			const subCanvasGroup = parsedContent.nodes.find(
+				(node) => node.id === subCanvasGroupId
+			) as CanvasGroupData;
+			if (!subCanvasGroup) {
+				throw new Error(`Group with id ${subCanvasGroupId} not found.`);
+			}
+
+			const { nodeIds, edgeIds } = this.getNodesAndEdgesInGroup(subCanvasGroup, parsedContent);
+
+			parsedContent.nodes = parsedContent.nodes.filter((node) => nodeIds.includes(node.id));
+			parsedContent.edges = parsedContent.edges.filter((edge) => edgeIds.includes(edge.id));
+
+			canvasData = parsedContent;
+		}
+
+		return canvasData;
+	}
+
+	getNodesAndEdgesInGroup(group: CanvasGroupData, canvasData: CanvasData): { nodeIds: string[]; edgeIds: string[] } {
+		const groupRectangle = this.createRectangle(group.x, group.y, group.width, group.height);
+
+		const nodeIds: string[] = [];
+		const edgeIds: string[] = [];
+
+		for (const node of canvasData.nodes) {
+			if (node.id === group.id) continue;
+			if (node.color === "1") continue;
+
+			const nodeRectangle = this.createRectangle(node.x, node.y, node.width, node.height);
+
+			if (this.encloses(groupRectangle, nodeRectangle)) {
+				nodeIds.push(node.id);
+			} else if (this.overlaps(groupRectangle, nodeRectangle)) {
+				throw new Error(
+					`Invalid layout: Node with id ${node.id} overlaps with the group but is not fully enclosed. Nodes should be fully inside or outside of each group.`
+				);
+			}
+		}
+
+		for (const edge of canvasData.edges) {
+			if (nodeIds.includes(edge.fromNode) && nodeIds.includes(edge.toNode)) {
+				edgeIds.push(edge.id);
+			}
+		}
+
+		return { nodeIds, edgeIds };
+	}
+
+	createRectangle(x: number, y: number, width: number, height: number) {
+		return {
+			x,
+			y,
+			width,
+			height,
+			x_right: x + width,
+			y_bottom: y + height,
+		};
+	}
+
+	encloses(a: ReturnType<typeof this.createRectangle>, b: ReturnType<typeof this.createRectangle>): boolean {
+		return a.x <= b.x && a.y <= b.y && a.x_right >= b.x_right && a.y_bottom >= b.y_bottom;
+	}
+
+	overlaps(a: ReturnType<typeof this.createRectangle>, b: ReturnType<typeof this.createRectangle>): boolean {
+		const horizontalOverlap = a.x < b.x_right && a.x_right > b.x;
+		const verticalOverlap = a.y < b.y_bottom && a.y_bottom > b.y;
+		return horizontalOverlap && verticalOverlap;
+	}
 
 	showRunPriceAlertModal = (usage: Record<string, Usage>): Promise<boolean> => {
 		return new Promise((resolve) => {

@@ -1,7 +1,5 @@
-import { Canvas } from "./canvas";
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
-import { requestUrl } from "obsidian";
 import pLimit from "p-limit";
 import { CannoliArgs, CannoliGraph, CannoliObjectStatus, CannoliRunSettings } from "./models/graph";
 import { HttpTemplate } from "main";
@@ -17,8 +15,11 @@ import {
 import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
+import { Canvas } from "./canvas_interface";
 
 export type StoppageReason = "user" | "error" | "complete";
+
+export type ResponseTextFetcher = (url: string, options: RequestInit) => Promise<string>;
 
 interface Limit {
 	(fn: () => Promise<GenericCompletionResponse | Error>): Promise<
@@ -71,13 +72,15 @@ export async function runCannoli({
 	canvas,
 	llm,
 	fileSystemInterface,
-	isMock
+	isMock,
+	fetcher
 }: {
 	cannoliJSON: string;
 	llm: LLMProvider;
 	canvas?: Canvas;
 	fileSystemInterface?: FilesystemInterface;
 	isMock?: boolean;
+	fetcher: ResponseTextFetcher;
 }): Promise<Stoppage> {
 
 	return new Promise<Stoppage>((resolve) => {
@@ -90,6 +93,7 @@ export async function runCannoli({
 			},
 			fileSystemInterface: fileSystemInterface,
 			isMock: isMock ?? false,
+			fetcher: fetcher,
 		});
 
 		run.start();
@@ -104,6 +108,7 @@ export class Run {
 	args?: CannoliArgs;
 
 	fileSystemInterface: FilesystemInterface | null;
+	fetcher: ResponseTextFetcher;
 	llm: Llm;
 	llmLimit: Limit;
 	canvas: Canvas | null;
@@ -158,10 +163,14 @@ export class Run {
 		onFinish,
 		canvas,
 		fileSystemInterface,
-		llm
+		llm,
+		fetcher
+
 	}: {
 		cannoliJSON: string,
 		llm: Llm;
+		fetcher: ResponseTextFetcher;
+
 		onFinish?: (stoppage: Stoppage) => void;
 		isMock?: boolean;
 		canvas?: Canvas;
@@ -171,6 +180,8 @@ export class Run {
 		this.isMock = isMock ?? false;
 		this.canvas = canvas ?? null;
 		this.usage = {};
+
+		this.fetcher = fetcher;
 
 		this.llm = llm ?? null;
 
@@ -401,7 +412,7 @@ export class Run {
 			if (this.settings.contentIsColorless) {
 				this.canvas.enqueueChangeNodeColor(object.id, "6");
 			} else {
-				this.canvas.enqueueChangeNodeColor(object.id, "0");
+				this.canvas.enqueueChangeNodeColor(object.id);
 			}
 		} else if (
 			this.canvas &&
@@ -905,7 +916,7 @@ export class Run {
 
 		// Try to execute the parsed template
 		try {
-			return await executeHttpTemplate(template, body);
+			return await executeHttpTemplate(template, body, this.fetcher);
 		} catch (error) {
 			return error;
 		}
@@ -987,7 +998,8 @@ export class Run {
 
 export function executeHttpTemplate(
 	template: HttpTemplate,
-	body: string | Record<string, string> | null
+	body: string | Record<string, string> | null,
+	fetcher: ResponseTextFetcher
 ): Promise<string> {
 	return new Promise((resolve, reject) => {
 		// Prepare body
@@ -1021,9 +1033,9 @@ export function executeHttpTemplate(
 		if (this.isMock) {
 			resolve("mock response");
 		} else {
-			requestUrl({ ...options, url: template.url })
+			fetcher(template.url, options)
 				.then((response) => {
-					return response.text;
+					return response;
 				})
 				.then((text) => {
 					let response;

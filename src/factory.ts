@@ -1,4 +1,4 @@
-import { CanvasData } from "obsidian/canvas";
+import { CanvasData } from "./canvas_interface";
 import {
 	AllCannoliCanvasNodeData,
 	CannoliCanvasData,
@@ -47,7 +47,7 @@ export class CannoliFactory {
 	};
 
 	nodeColorMap: Record<string, IndicatedNodeType> = {
-		"0": IndicatedNodeType.Call,
+		undefined: IndicatedNodeType.Call,
 		"1": IndicatedNodeType.Call,
 		"2": IndicatedNodeType.Content,
 		"3": IndicatedNodeType.Call,
@@ -1256,9 +1256,10 @@ export class CannoliFactory {
 				return IndicatedNodeType.Content;
 			case "text":
 				if (!vertex.color) {
-					vertex.color = "0";
+					vertex.color = undefined;
 				}
 				// Check against the node color map
+				// @ts-expect-error
 				if (this.nodeColorMap[vertex.color]) {
 					return this.nodeColorMap[vertex.color ?? "0"];
 				}
@@ -1597,7 +1598,7 @@ export class CannoliFactory {
 		const textCopy = node.text;
 		let match: RegExpExecArray | null;
 
-		while ((match = unifiedPattern.exec(textCopy)) !== null) {
+		while (textCopy && (match = unifiedPattern.exec(textCopy)) !== null) {
 			const content = match[1];
 			const reference: Reference = {
 				name: "",

@@ -5,7 +5,7 @@ import {
 	CanvasGroupData,
 	CanvasLinkData,
 	CanvasTextData,
-} from "obsidian/canvas";
+} from "../canvas_interface";
 
 import { CannoliObject } from "./object";
 import { CannoliGroup, ForEachGroup, RepeatGroup } from "./group";
@@ -373,6 +373,8 @@ export class CannoliGraph {
 	setupAllListeners() {
 		// Call setupListeners on every object
 		for (const id in this.graph) {
+			console.log(this.graph);
+			console.log(id);
 			this.graph[id].setupListeners();
 		}
 	}

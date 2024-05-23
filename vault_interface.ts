@@ -1,10 +1,10 @@
 import Cannoli from "main";
-import { Reference, ReferenceType } from "./models/graph";
+import { Reference, ReferenceType } from "./src/models/graph";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";
-import { executeHttpTemplate } from "./run";
-import { FilesystemInterface } from "./filesystem_interface";
+import { executeHttpTemplate } from "./src/run";
+import { FilesystemInterface } from "./src/filesystem_interface";
 
 
 export class VaultInterface implements FilesystemInterface {
