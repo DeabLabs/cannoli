@@ -67,7 +67,7 @@ export function isValidKey(
 	return key in config;
 }
 
-export async function runCannoli({
+export function runCannoli({
 	cannoliJSON,
 	canvas,
 	llm,
@@ -81,23 +81,27 @@ export async function runCannoli({
 	fileSystemInterface?: FilesystemInterface;
 	isMock?: boolean;
 	fetcher: ResponseTextFetcher;
-}): Promise<Stoppage> {
-
-	return new Promise<Stoppage>((resolve) => {
-		const run = new Run({
-			llm: llm,
-			cannoliJSON: cannoliJSON,
-			canvas: canvas,
-			onFinish: (stoppage: Stoppage) => {
-				resolve(stoppage);
-			},
-			fileSystemInterface: fileSystemInterface,
-			isMock: isMock ?? false,
-			fetcher: fetcher,
-		});
-
-		run.start();
+}): [Promise<Stoppage>, () => void] {
+	let resolver: (stoppage: Stoppage) => void;
+	const done = new Promise<Stoppage>((resolve) => {
+		resolver = resolve;
 	});
+
+	const run = new Run({
+		llm: llm,
+		cannoliJSON: cannoliJSON,
+		canvas: canvas,
+		onFinish: (stoppage: Stoppage) => {
+			resolver(stoppage);
+		},
+		fileSystemInterface: fileSystemInterface,
+		isMock: isMock ?? false,
+		fetcher: fetcher,
+	});
+
+	run.start();
+
+	return [done, () => run.stop()];
 }
 
 export class Run {

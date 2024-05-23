@@ -10,7 +10,7 @@ import {
 	addIcon,
 	requestUrl,
 } from "obsidian";
-import { ResponseTextFetcher, Run, Usage } from "src/run";
+import { ResponseTextFetcher, Usage } from "src/run";
 import { cannoliCollege } from "assets/cannoliCollege";
 import { cannoliIcon } from "assets/cannoliIcon";
 import { GetDefaultsByProvider, LLMProvider, SupportedProviders } from "src/providers";
@@ -94,7 +94,7 @@ export interface HttpTemplate {
 
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
-	runningCannolis: { [key: string]: Run } = {};
+	runningCannolis: { [key: string]: () => void } = {};
 
 	async onload() {
 		await this.loadSettings();
@@ -309,7 +309,7 @@ export default class Cannoli extends Plugin {
 
 		// Check if the cannoli is already running
 		if (this.runningCannolis[cannoli.basename]) {
-			this.runningCannolis[cannoli.basename].stop();
+			this.runningCannolis[cannoli.basename]();
 			delete this.runningCannolis[cannoli.basename];
 			return;
 		}
@@ -632,7 +632,7 @@ export default class Cannoli extends Plugin {
 
 
 		// Do the validation run
-		const validationStoppage = await runCannoli({
+		const [validationStoppagePromise] = runCannoli({
 			llm: llm,
 			cannoliJSON: stringifiedCannoliJSON,
 			fileSystemInterface: vaultInterface,
@@ -640,8 +640,8 @@ export default class Cannoli extends Plugin {
 			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher
 		});
+		const validationStoppage = await validationStoppagePromise;
 
-		delete this.runningCannolis[file.basename];
 
 		if (validationStoppage.reason === "error") {
 			new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
@@ -649,6 +649,8 @@ export default class Cannoli extends Plugin {
 		}
 
 		let shouldContinue = true;
+
+
 
 		// If the total price is greater than the threshold, ask the user if they want to continue
 		if (validationStoppage.totalCost > this.settings.costThreshold) {
@@ -661,7 +663,7 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Do the live run
-		const liveStoppage = await runCannoli({
+		const [liveStoppagePromise, stopLiveCannoli] = await runCannoli({
 			llm: llm,
 			cannoliJSON: stringifiedCannoliJSON,
 			fileSystemInterface: vaultInterface,
@@ -669,6 +671,11 @@ export default class Cannoli extends Plugin {
 			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher
 		});
+
+		// add to running cannolis
+		this.runningCannolis[file.basename] = stopLiveCannoli;
+
+		const liveStoppage = await liveStoppagePromise;
 
 		delete this.runningCannolis[file.basename];
 
