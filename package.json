@@ -7,10 +7,14 @@
     "build": "pnpm run -r build",
     "dev": "pnpm run -r dev",
     "release-plugin": "pnpm --filter cannoli-plugin run release",
-    "build-college": "pnpm --filter cannoli-plugin run build-college"
+    "build-college": "pnpm --filter cannoli-plugin run build-college",
+    "clean": "rimraf main.js packages/**/node_modules packages/**/dist node_modules"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "rimraf": "^5.0.7"
+  }
 }
