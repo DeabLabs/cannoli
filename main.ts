@@ -606,13 +606,10 @@ export default class Cannoli extends Plugin {
 			contentIsColorless: this.settings.contentIsColorless ?? false,
 		};
 		const cannoliArgs = {
-			activeNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
+			currentNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
 				"No active note",
 			selection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
 		};
-
-		canvasData.settings = cannoliSettings;
-		canvasData.args = cannoliArgs;
 
 		// Stringify it
 		const stringifiedCannoliJSON = JSON.stringify(canvasData);
@@ -638,7 +635,9 @@ export default class Cannoli extends Plugin {
 			fileSystemInterface: vaultInterface,
 			isMock: true,
 			canvas: noCanvas ? undefined : canvas,
-			fetcher: fetcher
+			fetcher: fetcher,
+			settings: cannoliSettings,
+			args: cannoliArgs
 		});
 		const validationStoppage = await validationStoppagePromise;
 
@@ -669,7 +668,9 @@ export default class Cannoli extends Plugin {
 			fileSystemInterface: vaultInterface,
 			isMock: false,
 			canvas: noCanvas ? undefined : canvas,
-			fetcher: fetcher
+			fetcher: fetcher,
+			settings: cannoliSettings,
+			args: cannoliArgs
 		});
 
 		// add to running cannolis
@@ -678,6 +679,8 @@ export default class Cannoli extends Plugin {
 		const liveStoppage = await liveStoppagePromise;
 
 		delete this.runningCannolis[file.basename];
+
+		console.log("Results:\n", liveStoppage.results);
 
 		let costString = "";
 

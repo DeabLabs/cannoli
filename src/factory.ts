@@ -38,7 +38,7 @@ export enum IndicatedNodeType {
 
 export class CannoliFactory {
 	cannoliData: CannoliCanvasData;
-	activeNote: string;
+	currentNote: string;
 
 	vaultModifierMap: Record<string, VaultModifier> = {
 		"[": VaultModifier.Note,
@@ -116,7 +116,7 @@ export class CannoliFactory {
 		cannoliCanvasData.args = args;
 
 		this.cannoliData = cannoliCanvasData;
-		this.activeNote = args?.activeNote ?? "No active note";
+		this.currentNote = args?.currentNote ?? "No active note";
 
 		console.log("this.cannoliData", this.cannoliData);
 
@@ -1616,7 +1616,7 @@ export class CannoliFactory {
 				// Special "NOTE" reference
 				reference.type = ReferenceType.Note;
 				reference.shouldExtract = false;
-				reference.name = this.activeNote;
+				reference.name = this.currentNote;
 				this.handleModifiers(reference, innerMatch[1]);
 			} else if ((innerMatch = /^SELECTION([\W]*)$/.exec(content))) {
 				// Special "SELECTION" reference

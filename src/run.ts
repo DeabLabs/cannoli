@@ -31,6 +31,7 @@ export interface Stoppage {
 	reason: StoppageReason;
 	usage: Record<string, Usage>;
 	totalCost: number;
+	results: { [key: string]: string };
 	message?: string; // Additional information, like an error message
 }
 
@@ -73,10 +74,14 @@ export function runCannoli({
 	llm,
 	fileSystemInterface,
 	isMock,
-	fetcher
+	fetcher,
+	settings,
+	args
 }: {
 	cannoliJSON: string;
 	llm: LLMProvider;
+	settings?: CannoliRunSettings;
+	args?: CannoliArgs;
 	canvas?: Canvas;
 	fileSystemInterface?: FilesystemInterface;
 	isMock?: boolean;
@@ -90,6 +95,8 @@ export function runCannoli({
 	const run = new Run({
 		llm: llm,
 		cannoliJSON: cannoliJSON,
+		settings: settings,
+		args: args,
 		canvas: canvas,
 		onFinish: (stoppage: Stoppage) => {
 			resolver(stoppage);
@@ -108,8 +115,8 @@ export class Run {
 	graph: Record<string, CannoliObject> = {};
 	onFinish: (stoppage: Stoppage) => void;
 
-	settings: CannoliRunSettings;
-	args?: CannoliArgs;
+	settings: CannoliRunSettings | null;
+	args: CannoliArgs | null;
 
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
@@ -168,13 +175,16 @@ export class Run {
 		canvas,
 		fileSystemInterface,
 		llm,
-		fetcher
+		fetcher,
+		settings,
+		args
 
 	}: {
 		cannoliJSON: string,
 		llm: Llm;
 		fetcher: ResponseTextFetcher;
-
+		settings?: CannoliRunSettings;
+		args?: CannoliArgs;
 		onFinish?: (stoppage: Stoppage) => void;
 		isMock?: boolean;
 		canvas?: Canvas;
@@ -189,12 +199,17 @@ export class Run {
 
 		this.llm = llm ?? null;
 
+		this.settings = settings ?? null;
+		this.args = args ?? null;
+
 		// Parse the JSON and get the settings and args
 		const parsedCannoliJSON = JSON.parse(cannoliJSON);
-		this.settings = parsedCannoliJSON.settings;
-		this.args = parsedCannoliJSON.args;
 
-		const limit = this.settings.pLimit
+		// add the settings and args to the cannoli
+		parsedCannoliJSON.settings = settings;
+		parsedCannoliJSON.args = args;
+
+		const limit = this.settings?.pLimit ?? 1000;
 
 		// Check that the plimit is a number
 		if (typeof limit == "number") {
@@ -206,6 +221,10 @@ export class Run {
 		this.currentNote = this.args?.currentNote ?? "No current note";
 
 		this.selection = this.args?.selection ?? "No selection";
+
+		// Delete the current note and selection from the args
+		delete this.args?.currentNote;
+		delete this.args?.selection;
 
 
 		// We need to replicate these when we make the args
@@ -223,11 +242,26 @@ export class Run {
 
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
-			this.settings,
+			this.settings ?? {},
 			this.args ?? {}
 		);
 
 		const graphData = factory.getCannoliData();
+
+		// Find all nodes of type "variable"
+		const variableNodes = graphData.nodes.filter((node) => node.cannoliData.type === "variable");
+
+		// For each arg, check if the key matches the first line of the text in the variable node
+		for (const arg of Object.entries(this.args ?? {})) {
+			const [key, value] = arg;
+			const variableNode = variableNodes.find((node) => `[${node.cannoliData.text.split("\n")[0]}]` === key);
+			if (variableNode) {
+				// If so, set the text of the variable after the first line to the value
+				variableNode.cannoliData.text = variableNode.cannoliData.text.split("\n")[0] + "\n" + value;
+			} else {
+				throw new Error(`Argument key "${key}" not found in variable nodes.`);
+			}
+		}
 
 		console.log("graphData", graphData);
 
@@ -276,6 +310,7 @@ export class Run {
 			usage: this.calculateAllLLMCosts(),
 			totalCost: this.getTotalCost(),
 			message,
+			results: this.getVariableNodesResults(),
 		});
 
 		throw new Error(message);
@@ -288,6 +323,7 @@ export class Run {
 			reason: "user",
 			usage: this.calculateAllLLMCosts(),
 			totalCost: this.getTotalCost(),
+			results: this.getVariableNodesResults(),
 		});
 	}
 
@@ -389,6 +425,7 @@ export class Run {
 				reason: "complete",
 				usage: this.calculateAllLLMCosts(),
 				totalCost: this.getTotalCost(),
+				results: this.getVariableNodesResults(),
 			});
 		}
 	}
@@ -400,6 +437,7 @@ export class Run {
 				reason: "complete",
 				usage: this.calculateAllLLMCosts(),
 				totalCost: this.getTotalCost(),
+				results: this.getVariableNodesResults(),
 			});
 		}
 	}
@@ -417,7 +455,7 @@ export class Run {
 
 	objectPending(object: CannoliObject) {
 		if (this.canvas && object instanceof CallNode) {
-			if (this.settings.contentIsColorless) {
+			if (this.settings?.contentIsColorless) {
 				this.canvas.enqueueChangeNodeColor(object.id, "6");
 			} else {
 				this.canvas.enqueueChangeNodeColor(object.id);
@@ -463,6 +501,18 @@ export class Run {
 		}
 
 		return true;
+	}
+
+	getVariableNodesResults(): { [key: string]: string } {
+		const variableNodes = Object.values(this.graph).filter((object) => object.type === "variable");
+		const results: { [key: string]: string } = {};
+		for (const node of variableNodes) {
+			// The key should be the first line without the square brackets
+			const firstLine = node.text.split("\n")[0];
+			const key = firstLine.substring(1, firstLine.length - 1);
+			results[key] = node.text.split("\n").slice(1).join("\n");
+		}
+		return results;
 	}
 
 	isDAG(objects: Record<string, CannoliObject>): boolean {
