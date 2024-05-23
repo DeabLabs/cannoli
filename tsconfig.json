@@ -21,6 +21,7 @@
 			"expression/*" : ["./node_modules/obsidian-dataview/lib/expression/*"],
 			"settings" : ["./node_modules/obsidian-dataview/lib/settings"]
 		  },
+		"skipLibCheck": true
 	},
 	"include": ["**/*.ts"],
 	"exclude": ["node_modules", "scripts"]

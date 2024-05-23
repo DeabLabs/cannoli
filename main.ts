@@ -600,6 +600,8 @@ export default class Cannoli extends Plugin {
 		// Parse the file into a CanvasData object
 		const canvasData = await this.fetchData(file);
 
+		console.log({ ...canvasData });
+
 		const cannoliSettings = {
 			contentIsColorless: this.settings.contentIsColorless ?? false,
 		};

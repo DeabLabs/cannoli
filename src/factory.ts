@@ -48,6 +48,7 @@ export class CannoliFactory {
 
 	nodeColorMap: Record<string, IndicatedNodeType> = {
 		undefined: IndicatedNodeType.Call,
+		"0": IndicatedNodeType.Call,
 		"1": IndicatedNodeType.Call,
 		"2": IndicatedNodeType.Content,
 		"3": IndicatedNodeType.Call,
@@ -117,9 +118,12 @@ export class CannoliFactory {
 		this.cannoliData = cannoliCanvasData;
 		this.activeNote = args?.activeNote ?? "No active note";
 
+		console.log("this.cannoliData", this.cannoliData);
+
 		// If contentIsColorless setting is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
 		if (settings.contentIsColorless) {
 			this.nodeColorMap = {
+				undefined: IndicatedNodeType.Content,
 				"0": IndicatedNodeType.Content,
 				"1": IndicatedNodeType.Call,
 				"2": IndicatedNodeType.Content,
@@ -1261,7 +1265,8 @@ export class CannoliFactory {
 				// Check against the node color map
 				// @ts-expect-error
 				if (this.nodeColorMap[vertex.color]) {
-					return this.nodeColorMap[vertex.color ?? "0"];
+					// @ts-expect-error
+					return this.nodeColorMap[vertex.color || undefined];
 				}
 		}
 

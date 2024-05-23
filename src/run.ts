@@ -215,6 +215,8 @@ export class Run {
 
 		this.fileSystemInterface = fileSystemInterface ?? null;
 
+		console.log({ ...parsedCannoliJSON });
+
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
 			this.settings,
@@ -222,6 +224,8 @@ export class Run {
 		);
 
 		const graphData = factory.getCannoliData();
+
+		console.log("graphData", graphData);
 
 		this.graph = new CannoliGraph(
 			graphData
@@ -236,7 +240,7 @@ export class Run {
 
 	async start() {
 		// Log the graph
-		// this.logGraph();
+		this.logGraph();
 
 		// Setup listeners
 		this.setupListeners();

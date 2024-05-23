@@ -1,7 +1,7 @@
 // import { ErrorModal } from "main";
 import { TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
-import { Canvas, CanvasColor, CanvasData, CanvasEdgeData, CanvasNodeData } from "./src/canvas_interface";
+import { Canvas, CanvasColor, CanvasData, CanvasEdgeData, AllCanvasNodeData } from "./src/canvas_interface";
 
 
 
@@ -50,7 +50,7 @@ export class ObsidianCanvas implements Canvas {
 		nodeId: string,
 		newColor?: CanvasColor
 	): CanvasData {
-		const node = data.nodes.find((node: CanvasNodeData) => node.id === nodeId);
+		const node = data.nodes.find((node: AllCanvasNodeData) => node.id === nodeId);
 		if (node) {
 			node.color = newColor;
 		}
@@ -69,7 +69,7 @@ export class ObsidianCanvas implements Canvas {
 
 		if (node) {
 			const newNodeId = this.generateNewId();
-			const errorNode: CanvasNodeData = {
+			const errorNode: AllCanvasNodeData = {
 				id: newNodeId,
 				x: node.x + node.width + 50,
 				y: nodeCenterY - 75,
@@ -107,7 +107,7 @@ export class ObsidianCanvas implements Canvas {
 
 		if (node) {
 			const newNodeId = this.generateNewId();
-			const errorNode: CanvasNodeData = {
+			const errorNode: AllCanvasNodeData = {
 				id: newNodeId,
 				x: node.x + node.width + 50,
 				y: nodeCenterY - 75,
