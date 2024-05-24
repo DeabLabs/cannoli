@@ -57,8 +57,8 @@ export type GenericModelConfig = {
 
 type ConstructorArgs = {
 	provider: SupportedProviders;
-	baseConfig: GenericModelConfig;
-	getDefaultConfigByProvider: GetDefaultsByProvider;
+	baseConfig?: GenericModelConfig;
+	getDefaultConfigByProvider?: GetDefaultsByProvider;
 };
 
 export type GenericCompletionParams = {
@@ -114,7 +114,7 @@ const removeUndefinedKeys = <T extends Record<string, unknown>>(obj: T): T => {
 export class LLMProvider {
 	baseConfig: GenericModelConfig;
 	provider: SupportedProviders;
-	getDefaultConfigByProvider: GetDefaultsByProvider;
+	getDefaultConfigByProvider?: GetDefaultsByProvider;
 	initialized = false;
 
 	constructor(initArgs: ConstructorArgs) {
@@ -124,7 +124,7 @@ export class LLMProvider {
 
 	init = (initArgs: ConstructorArgs) => {
 		this.provider = initArgs.provider;
-		this.baseConfig = initArgs.baseConfig;
+		this.baseConfig = initArgs.baseConfig || {};
 		this.getDefaultConfigByProvider = initArgs.getDefaultConfigByProvider;
 	};
 
@@ -138,7 +138,7 @@ export class LLMProvider {
 	getConfig = () => ({ ...this.baseConfig });
 
 	getDefaultsByProvider = (provider: SupportedProviders) => {
-		const defaults = this.getDefaultConfigByProvider(provider);
+		const defaults = this.getDefaultConfigByProvider?.(provider) || {};
 
 		removeUndefinedKeys(defaults);
 

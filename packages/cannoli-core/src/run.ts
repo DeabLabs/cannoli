@@ -85,7 +85,7 @@ export function runCannoli({
 	settings,
 	args
 }: {
-	cannoliJSON: string;
+	cannoliJSON: unknown;
 	llm: LLMProvider;
 	settings?: CannoliRunSettings;
 	args?: CannoliArgs;
@@ -187,7 +187,7 @@ export class Run {
 		args
 
 	}: {
-		cannoliJSON: string,
+		cannoliJSON: unknown;
 		llm: Llm;
 		fetcher: ResponseTextFetcher;
 		settings?: CannoliRunSettings;
@@ -210,7 +210,7 @@ export class Run {
 		this.args = args ?? null;
 
 		// Parse the JSON and get the settings and args
-		const parsedCannoliJSON = JSON.parse(cannoliJSON);
+		const parsedCannoliJSON = JSON.parse(JSON.stringify(cannoliJSON));
 
 		// add the settings and args to the cannoli
 		parsedCannoliJSON.settings = settings;
@@ -260,7 +260,7 @@ export class Run {
 		// For each arg, check if the key matches the first line of the text in the variable node
 		for (const arg of Object.entries(this.args ?? {})) {
 			const [key, value] = arg;
-			const variableNode = variableNodes.find((node) => `[${node.cannoliData.text.split("\n")[0]}]` === key);
+			const variableNode = variableNodes.find((node) => node.cannoliData.text.split("\n")[0] === `[${key}]`);
 			if (variableNode) {
 				// If so, set the text of the variable after the first line to the value
 				variableNode.cannoliData.text = variableNode.cannoliData.text.split("\n")[0] + "\n" + value;

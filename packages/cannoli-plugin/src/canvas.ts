@@ -1,7 +1,7 @@
 // import { ErrorModal } from "main";
 import { TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
-import { Canvas, CanvasColor, CanvasData, CanvasEdgeData, AllCanvasNodeData } from "cannoli-core";
+import { Canvas, CanvasColor, CanvasData, CanvasEdgeData, AllCanvasNodeData } from "@deablabs/cannoli-core";
 
 
 

@@ -1,5 +1,5 @@
 import Cannoli from "./main";
-import { ResponseTextFetcher, executeHttpTemplate, Reference, ReferenceType, FilesystemInterface } from "cannoli-core";
+import { ResponseTextFetcher, executeHttpTemplate, Reference, ReferenceType, FilesystemInterface } from "@deablabs/cannoli-core";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";

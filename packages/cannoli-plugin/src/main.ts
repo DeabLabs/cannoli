@@ -20,12 +20,13 @@ import {
 	runCannoli,
 	CanvasData,
 	CanvasGroupData
-} from "cannoli-core";
+} from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
 import invariant from "tiny-invariant";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
+import { SYMBOLS, cannoliValTemplate } from "./val_templates";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -57,6 +58,7 @@ interface CannoliSettings {
 	autoScrollWithTokenStream: boolean;
 	pLimit: number;
 	contentIsColorless: boolean;
+	valTownAPIKey: string;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -88,6 +90,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	autoScrollWithTokenStream: false,
 	pLimit: 50,
 	contentIsColorless: false,
+	valTownAPIKey: "",
 };
 
 export default class Cannoli extends Plugin {
@@ -143,6 +146,10 @@ export default class Cannoli extends Plugin {
 		this.createCannoliCommands();
 
 		this.createOpenOnWebsiteCommand();
+
+		this.createCopyCanvasToClipboardCommand();
+
+		this.createCreateValCommand();
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon(
@@ -213,6 +220,24 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
+	createCopyCanvasToClipboardCommand = () => {
+		this.addCommand({
+			id: "copy-canvas-to-clipboard",
+			name: "Copy canvas to clipboard",
+			callback: this.copyCanvasToClipboard,
+			icon: "cannoli",
+		});
+	};
+
+	createCreateValCommand = () => {
+		this.addCommand({
+			id: "create-val",
+			name: "Create Val",
+			callback: this.createVal,
+			icon: "cannoli",
+		});
+	};
+
 	// openonwebsite
 	openOnWebsite = async () => {
 		const activeFile = this.app.workspace.getActiveFile();
@@ -247,6 +272,116 @@ export default class Cannoli extends Plugin {
 		// Send the redirect to the browser
 		window.open(json.redirect, "_blank");
 	};
+
+	copyCanvasToClipboard = async () => {
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile) return;
+
+		if (!activeFile.path.endsWith(".canvas")) {
+			new Notice("This file is not a canvas");
+			return;
+		}
+
+		const content = await this.app.vault.read(activeFile);
+		await navigator.clipboard.writeText(content);
+
+		new Notice("Canvas copied to clipboard");
+	};
+
+	createVal = async () => {
+		// Check if the user's on a canvas
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
+			new Notice("This file is not a canvas");
+			return;
+		}
+
+		// Check that the user has a val town api key
+		if (!this.settings.valTownAPIKey) {
+			new Notice("Please enter a Val Town API key in the Cannoli settings");
+			return;
+		}
+
+		// Get the content of the file
+		const content = await this.app.vault.read(activeFile);
+		const code = cannoliValTemplate.replace(SYMBOLS.defaultProvider, this.settings.llmProvider)
+			.replace(SYMBOLS.defaultModel, this.settings.defaultModel)
+			.replace(SYMBOLS.canvasJSON, content)
+			.replace(SYMBOLS.defaultGroqModel, this.settings.groqModel)
+			.replace(SYMBOLS.defaultOpenaiModel, this.settings.defaultModel)
+			.replace(SYMBOLS.defaultGeminiModel, this.settings.geminiModel)
+			.replace(SYMBOLS.defaultAnthropicModel, this.settings.anthropicModel)
+			.replace(SYMBOLS.defaultOpenaiTemperature, this.settings.defaultTemperature.toString())
+			.replace(SYMBOLS.defaultGeminiTemperature, this.settings.geminiTemperature.toString())
+			.replace(SYMBOLS.defaultAnthropicTemperature, this.settings.anthropicTemperature.toString())
+			.replace(SYMBOLS.defaultGroqTemperature, this.settings.groqTemperature.toString())
+			.replace(SYMBOLS.defaultOpenaiBaseURL, this.settings.openaiBaseURL)
+
+
+		// const args = this.getArgsFromCanvas(content);
+
+		// const readme = cannoliValReadmeTemplate(
+		// 	activeFile.basename,
+		// 	"https://www.val.town/v/username/cannoliName",
+		// 	args
+		// );
+
+		const response = await requestUrl({
+			url: "https://api.val.town/v1/vals",
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+			},
+			body: JSON.stringify({
+				name: activeFile.basename,
+				code: code,
+				// readme: readme,
+			}),
+		});
+
+		// If the response is not ok, send a notice
+		if (typeof response.json === "string") {
+			new Notice(`Error creating Val: ${response.json}`);
+			return;
+		}
+
+		const valUrl = `https://www.val.town/v/${response.json.author.username}/${response.json.name}`
+
+		new Notice(`Val created for ${activeFile.basename}`);
+
+		// Redirect to the val
+		window.open(valUrl, "_blank");
+	};
+
+	getArgsFromCanvas = (canvas: string) => {
+		// Parse into JSON
+		const json = JSON.parse(canvas);
+
+		// Find all nodes with no attatched edges
+		// Build array of all node IDs referenced in the edges by "toNode" or "fromNode"
+		const edges = json.edges;
+		const nodeIds = edges.map((edge: { toNode: string, fromNode: string }) => {
+			return [edge.toNode, edge.fromNode];
+		}).flat();
+
+		// Look for nodes that are not in the nodeIds array
+		const nodes = json.nodes;
+		const noEdgeNodes = nodes.filter((node: { id: string }) => {
+			return !nodeIds.includes(node.id);
+		});
+
+		// Look in the floating nodes for ones whose text has a first line like this "[name]\n", and grab the name
+		const floatingNodeNames = noEdgeNodes.filter((node: { text: string }) => {
+			const firstLine = node.text.split("\n")[0];
+			return firstLine.trim().startsWith("[") && firstLine.trim().endsWith("]");
+		}).map((node: { text: string }) => {
+			return node.text.trim().slice(1, -1);
+		});
+
+		// Return the array
+		return floatingNodeNames;
+	}
 
 	startActiveCannoliCommand = () => {
 		this.startCannoliCommand(false);
@@ -609,9 +744,6 @@ export default class Cannoli extends Plugin {
 			selection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
 		};
 
-		// Stringify it
-		const stringifiedCannoliJSON = JSON.stringify(canvasData);
-
 
 		const canvas = new ObsidianCanvas(canvasData, file);
 
@@ -629,7 +761,7 @@ export default class Cannoli extends Plugin {
 		// Do the validation run
 		const [validationStoppagePromise] = runCannoli({
 			llm: llm,
-			cannoliJSON: stringifiedCannoliJSON,
+			cannoliJSON: canvasData,
 			fileSystemInterface: vaultInterface,
 			isMock: true,
 			canvas: noCanvas ? undefined : canvas,
@@ -660,9 +792,9 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Do the live run
-		const [liveStoppagePromise, stopLiveCannoli] = await runCannoli({
+		const [liveStoppagePromise, stopLiveCannoli] = runCannoli({
 			llm: llm,
-			cannoliJSON: stringifiedCannoliJSON,
+			cannoliJSON: canvasData,
 			fileSystemInterface: vaultInterface,
 			isMock: false,
 			canvas: noCanvas ? undefined : canvas,
@@ -1105,6 +1237,20 @@ class CannoliSettingTab extends PluginSettingTab {
 				button.setButtonText("Add").onClick(() => {
 					this.plugin.addSampleFolder();
 				})
+			);
+		new Setting(containerEl)
+			.setName("ValTown API key")
+			.setDesc(
+				`This key will be used to create Vals on your Val Town account when you run the "Create Val" command.`
+			)
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.valTownAPIKey)
+					.setPlaceholder("...")
+					.onChange(async (value) => {
+						this.plugin.settings.valTownAPIKey = value;
+						await this.plugin.saveSettings();
+					}).inputEl.setAttribute("type", "password")
 			);
 
 		// Add dropdown for AI provider with options OpenAI and Ollama
