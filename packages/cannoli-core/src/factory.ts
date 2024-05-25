@@ -108,8 +108,6 @@ export class CannoliFactory {
 		settings: CannoliRunSettings,
 		args?: CannoliArgs
 	) {
-		console.log(`Creating CannoliFactory with settings: ${JSON.stringify(settings)}`);
-
 		// Cast the canvas to a CannoliCanvasData
 		const cannoliCanvasData = canvas as CannoliCanvasData;
 

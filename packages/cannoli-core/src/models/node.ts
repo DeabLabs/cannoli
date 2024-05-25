@@ -65,7 +65,7 @@ export class CannoliNode extends CannoliVertex {
 				// Retrieve the reference by index
 				const reference = this.references[Number(index)];
 				// Retrieve the content from the varMap using the reference's name
-				return varMap.get(reference.name) || "{{invalid}}";
+				return varMap.get(reference.name) ?? "{{invalid}}";
 			});
 
 			// Only replace dataview queries and smart connections if there's a fileSystemInterface
@@ -253,7 +253,7 @@ export class CannoliNode extends CannoliVertex {
 						const floatingContent = this.getContentFromFloatingNode(
 							reference.name
 						);
-						if (floatingContent) {
+						if (floatingContent !== null) {
 							content = floatingContent;
 						} else {
 							this.warning(`Floating node "${name}" not found`);
@@ -453,7 +453,6 @@ export class CannoliNode extends CannoliVertex {
 
 				// If we exceed the list items, reject the edge
 				if (!item) {
-					console.log(`Rejecting edge ${edgeObject.id} because we exceeded the list items`);
 					edgeObject.reject();
 					continue;
 				}
