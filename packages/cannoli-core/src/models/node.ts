@@ -45,7 +45,7 @@ export class CannoliNode extends CannoliVertex {
 
 	buildRenderFunction() {
 		// Replace references with placeholders using an index-based system
-		let textCopy = this.text;
+		let textCopy = this.text.slice();
 
 		let index = 0;
 		// Updated regex pattern to avoid matching newlines inside the double braces
@@ -56,12 +56,12 @@ export class CannoliNode extends CannoliVertex {
 			variables: { name: string; content: string }[]
 		) => {
 			// Process embedded notes
-			textCopy = await this.processEmbeds(textCopy);
+			let processedText = await this.processEmbeds(textCopy);
 
 			// Create a map to look up variable content by name
 			const varMap = new Map(variables.map((v) => [v.name, v.content]));
 			// Replace the indexed placeholders with the content from the variables
-			textCopy = textCopy.replace(/\{\{(\d+)\}\}/g, (match, index) => {
+			processedText = processedText.replace(/\{\{(\d+)\}\}/g, (match, index) => {
 				// Retrieve the reference by index
 				const reference = this.references[Number(index)];
 				// Retrieve the content from the varMap using the reference's name
@@ -71,16 +71,16 @@ export class CannoliNode extends CannoliVertex {
 			// Only replace dataview queries and smart connections if there's a fileSystemInterface
 			if (this.run.fileSystemInterface) {
 				// Render dataview queries
-				textCopy = await this.run.fileSystemInterface.replaceDataviewQueries(textCopy, this.run.isMock);
+				processedText = await this.run.fileSystemInterface.replaceDataviewQueries(processedText, this.run.isMock);
 
 				// Render smart connections
-				textCopy = await this.run.fileSystemInterface.replaceSmartConnections(
-					textCopy,
+				processedText = await this.run.fileSystemInterface.replaceSmartConnections(
+					processedText,
 					this.run.isMock
 				);
 			}
 
-			return textCopy;
+			return processedText;
 		};
 
 
