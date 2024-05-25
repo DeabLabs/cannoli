@@ -49,7 +49,7 @@ export default async function (req: Request): Promise<Response> {
    } else if (provider === "openai") {
       return {
         model: "${SYMBOLS.defaultOpenaiModel}",
-        apiKey: Deno.env.get("GEMINI_API_KEY"),
+        apiKey: Deno.env.get("OPENAI_API_KEY"),
         temperature: "${SYMBOLS.defaultOpenaiTemperature}"
       }
    }
