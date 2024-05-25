@@ -1,6 +1,6 @@
 {
 	"name": "@deablabs/cannoli-core",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"description": "[WORK IN PROGRESS]",
 	"main": "dist/index.mjs",
 	"types": "dist/index.d.mts",
