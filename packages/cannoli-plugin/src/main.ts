@@ -320,11 +320,9 @@ export default class Cannoli extends Plugin {
 
 		// const args = this.getArgsFromCanvas(content);
 
-		// const readme = cannoliValReadmeTemplate(
-		// 	activeFile.basename,
-		// 	"https://www.val.town/v/username/cannoliName",
-		// 	args
-		// );
+		const name = activeFile.basename.toLocaleLowerCase().replace(".canvas", "").replace(/ /g, "-").replace(/[^a-z]/g, "");
+
+
 
 		const response = await requestUrl({
 			url: "https://api.val.town/v1/vals",
@@ -334,9 +332,8 @@ export default class Cannoli extends Plugin {
 				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
 			},
 			body: JSON.stringify({
-				name: activeFile.basename,
+				name: name,
 				code: code,
-				// readme: readme,
 			}),
 		});
 
@@ -346,7 +343,29 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		const valUrl = `https://www.val.town/v/${response.json.author.username}/${response.json.name}`
+		const valUrl = `https://www.val.town/v/${response.json.author.username}/${response.json.name}`;
+
+		// const readme = cannoliValReadmeTemplate(
+		// 	name,
+		// 	valUrl,
+		// 	args
+		// );
+
+		// console.log(readme);
+
+		// await requestUrl({
+		// 	url: `https://api.val.town/v1/vals/${response.json.id}`,
+		// 	method: "PUT",
+		// 	headers: {
+		// 		"Content-Type": "application/json",
+		// 		"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+		// 	},
+		// 	body: JSON.stringify({
+		// 		name: name,
+		// 		readme: readme,
+		// 		code: code,
+		// 	}),
+		// });
 
 		new Notice(`Val created for ${activeFile.basename}`);
 
@@ -372,9 +391,9 @@ export default class Cannoli extends Plugin {
 		});
 
 		// Look in the floating nodes for ones whose text has a first line like this "[name]\n", and grab the name
-		const floatingNodeNames = noEdgeNodes.filter((node: { text: string }) => {
-			const firstLine = node.text.split("\n")[0];
-			return firstLine.trim().startsWith("[") && firstLine.trim().endsWith("]");
+		const floatingNodeNames = noEdgeNodes.filter((node: { text?: string }) => {
+			const firstLine = node.text?.split("\n")?.[0];
+			return firstLine?.trim().startsWith("[") && firstLine?.trim().endsWith("]");
 		}).map((node: { text: string }) => {
 			return node.text.trim().slice(1, -1);
 		});

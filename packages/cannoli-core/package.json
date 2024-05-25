@@ -1,7 +1,7 @@
 {
 	"name": "@deablabs/cannoli-core",
-	"version": "1.0.3",
-	"description": "Create LLM Chat flows using the Obsidian Canvas.",
+	"version": "1.0.4",
+	"description": "[WORK IN PROGRESS]",
 	"main": "dist/index.mjs",
 	"types": "dist/index.d.mts",
 	"files": [
