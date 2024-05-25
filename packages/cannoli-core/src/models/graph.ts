@@ -10,7 +10,6 @@ import {
 import { CannoliObject } from "./object";
 import { CannoliGroup, ForEachGroup, RepeatGroup } from "./group";
 import {
-	AccumulateNode,
 	CallNode,
 	CannoliNode,
 	ChooseNode,
@@ -53,8 +52,8 @@ export enum EdgeType {
 	Field = "field",
 	List = "list",
 	Merge = "merge",
+	Item = "item",
 	Choice = "choice",
-	Category = "category",
 	Config = "config",
 	Function = "function",
 	Logging = "logging",
@@ -73,11 +72,8 @@ export type NodeType = CallNodeType | ContentNodeType | FloatingNodeType;
 
 export enum CallNodeType {
 	StandardCall = "standard-call",
-	Select = "select",
-	Categorize = "categorize",
 	Choose = "choose",
 	Form = "form",
-	Accumulate = "accumulate",
 }
 
 export enum ContentNodeType {
@@ -287,25 +283,6 @@ export class CannoliGraph {
 				case CallNodeType.Form: {
 					const formNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new FormNode(formNode);
-					break;
-				}
-				case CallNodeType.Accumulate: {
-					const accumulateNode =
-						node as VerifiedCannoliCanvasTextData;
-					this.graph[node.id] = new AccumulateNode(accumulateNode);
-					break;
-				}
-				case CallNodeType.Categorize: {
-					console.error("Categorize node not implemented");
-					// const categorizeNode =
-					// 	node as VerifiedCannoliCanvasTextData;
-					// this.graph[node.id] = new CategorizeNode(categorizeNode);
-					break;
-				}
-				case CallNodeType.Select: {
-					console.error("Select node not implemented");
-					// const selectNode = node as VerifiedCannoliCanvasTextData;
-					// this.graph[node.id] = new SelectNode(selectNode);
 					break;
 				}
 				case FloatingNodeType.Variable: {

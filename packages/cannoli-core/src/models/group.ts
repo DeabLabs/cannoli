@@ -100,7 +100,7 @@ export class CannoliGroup extends CannoliVertex {
 			// If it's not complete, return false
 			if (
 				this.graph[dependency].status !==
-					CannoliObjectStatus.Complete &&
+				CannoliObjectStatus.Complete &&
 				this.graph[dependency].status !== CannoliObjectStatus.Rejected
 			) {
 				return false;
@@ -117,7 +117,7 @@ export class CannoliGroup extends CannoliVertex {
 		this.dispatchEvent(event);
 	}
 
-	membersFinished() {}
+	membersFinished() { }
 
 	dependencyCompleted(dependency: CannoliObject): void {
 		if (this.status === CannoliObjectStatus.Executing) {
@@ -442,8 +442,7 @@ export class RepeatGroup extends CannoliGroup {
 		// Repeat groups can't have incoming edges of type list or category
 		const listOrCategoryEdges = this.incomingEdges.filter(
 			(edge) =>
-				this.graph[edge].type === EdgeType.List ||
-				this.graph[edge].type === EdgeType.Category
+				this.graph[edge].type === EdgeType.List
 		);
 
 		if (listOrCategoryEdges.length !== 0) {

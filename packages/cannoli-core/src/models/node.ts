@@ -437,18 +437,47 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	loadOutgoingEdges(content: string, request?: GenericCompletionParams) {
+		let itemIndex = 0;
+		const listItems = this.getListArrayFromContent(content);
+
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
-			if (
-				edgeObject instanceof CannoliEdge &&
-				!(edgeObject instanceof ChatResponseEdge)
-			) {
+
+			if (edgeObject instanceof CannoliEdge && !(edgeObject instanceof ChatResponseEdge) && edgeObject.type !== EdgeType.Item) {
 				edgeObject.load({
 					content: content,
 					request: request,
 				});
+			} else if (edgeObject instanceof CannoliEdge && edgeObject.type === EdgeType.Item) {
+				const item = listItems[itemIndex];
+
+				// If we exceed the list items, reject the edge
+				if (!item) {
+					console.log(`Rejecting edge ${edgeObject.id} because we exceeded the list items`);
+					edgeObject.reject();
+					continue;
+				}
+
+				edgeObject.load({
+					content: item,
+					request: request,
+				});
+				itemIndex++;
 			}
 		}
+	}
+
+
+
+	getListArrayFromContent(content: string): string[] {
+		// First pass: look for markdown list items, and return the item at the index
+		const lines = content.split("\n");
+
+		// Filter out the lines that don't start with "- "
+		const listItems = lines.filter((line) => line.startsWith("- "));
+
+		// Return the list items without the "- "
+		return listItems.map((item) => item.substring(2));
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
@@ -579,20 +608,9 @@ export class CannoliNode extends CannoliVertex {
 	validate(): void {
 		super.validate();
 
-		// // All special outgoing edges must be homogeneous
-		// if (this.type ===   !this.specialOutgoingEdgesAreHomogeneous()) {
-		// 	this.error(
-		// 		`If a call node has an outgoing variable edge, all outgoing variable edges must be of the same type. (Custom function edges are an exception.)`
-		// 	);
-		// }
-
-		// If there are any incoming list edges, there must only be one
-		if (
-			this.incomingEdges.filter(
-				(edge) => this.graph[edge].type === EdgeType.List
-			).length > 1
-		) {
-			this.error(`Nodes can only have one incoming list edge.`);
+		// Nodes can't have any incoming list edges
+		if (this.incomingEdges.filter((edge) => this.graph[edge].type === EdgeType.List).length > 0) {
+			this.error(`Nodes can't have any incoming list edges.`);
 		}
 	}
 
@@ -602,7 +620,6 @@ export class CannoliNode extends CannoliVertex {
 			return (
 				edge.type === EdgeType.Field ||
 				edge.type === EdgeType.Choice ||
-				edge.type === EdgeType.Category ||
 				edge.type === EdgeType.Merge ||
 				edge.type === EdgeType.List ||
 				edge.type === EdgeType.Variable

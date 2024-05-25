@@ -89,7 +89,7 @@ export class CannoliFactory {
 		[EdgeType.List]: false,
 		[EdgeType.Merge]: false,
 		[EdgeType.Variable]: false,
-		[EdgeType.Category]: false,
+		[EdgeType.Item]: false,
 		[EdgeType.Logging]: false,
 		[EdgeType.Write]: false,
 		[EdgeType.ChatResponse]: false,
@@ -108,6 +108,8 @@ export class CannoliFactory {
 		settings: CannoliRunSettings,
 		args?: CannoliArgs
 	) {
+		console.log(`Creating CannoliFactory with settings: ${JSON.stringify(settings)}`);
+
 		// Cast the canvas to a CannoliCanvasData
 		const cannoliCanvasData = canvas as CannoliCanvasData;
 
@@ -685,7 +687,7 @@ export class CannoliFactory {
 							reference.type === ReferenceType.Variable &&
 							reference.name === incomingListEdge.cannoliData.text
 						) {
-							reference.name = `${reference.name} ${index}`;
+							reference.name = `${reference.name}`;
 							return reference;
 						} else {
 							return reference;
@@ -710,8 +712,8 @@ export class CannoliFactory {
 			edge.toNode = duplicateGroup.id;
 			duplicateGroup.cannoliData.incomingEdges.push(edge.id);
 			if (edge.cannoliData.type === EdgeType.List) {
-				edge.cannoliData.type = EdgeType.Field;
-				edge.cannoliData.text = `${edge.cannoliData.text} ${index}`;
+				edge.cannoliData.type = EdgeType.Item;
+				edge.cannoliData.text = `${edge.cannoliData.text}`;
 			}
 
 			// Update the outgoingEdges array of the fromNode
@@ -741,7 +743,7 @@ export class CannoliFactory {
 			duplicateGroup.cannoliData.outgoingEdges.push(edge.id);
 			if (edge.cannoliData.type === EdgeType.Merge) {
 				edge.cannoliData.type = EdgeType.Variable;
-				edge.cannoliData.text = `${edge.cannoliData.text} ${index}`;
+				edge.cannoliData.text = `${edge.cannoliData.text}`;
 				accumulatorNode = canvas.nodes.find(
 					(node) => node.id === edge.toNode
 				) as AllVerifiedCannoliCanvasNodeData;
@@ -825,7 +827,7 @@ export class CannoliFactory {
 
 			// If the toNode is the accumulatorNode, add the index to the edge's text
 			if (edge.toNode === accumulatorNode?.id) {
-				edge.cannoliData.text = `${edge.cannoliData.text} ${index}`;
+				edge.cannoliData.text = `${edge.cannoliData.text}`;
 			}
 
 			// Add this edge to the outgoingEdges array of the fromNode
@@ -1093,90 +1095,29 @@ export class CannoliFactory {
 	}
 
 	getCallNodeType(vertex: CannoliCanvasTextData): CallNodeType | null {
-		const incomingEdges = this.getIncomingEdges(vertex.id);
 		const outgoingEdges = this.getOutgoingEdges(vertex.id);
-
-		// If it has an incoming edge of type "merge"
+		// If it has any outgoing field or list edges, it's a form node
 		if (
-			incomingEdges.some(
-				(edge) => this.getEdgeType(edge) === EdgeType.Merge
+			outgoingEdges.some(
+				(edge) =>
+					this.getEdgeType(edge) === EdgeType.Field ||
+					this.getEdgeType(edge) === EdgeType.List
 			)
 		) {
-			// If it has an outgoing edge of type "category", it's a categorize node
-			if (
-				outgoingEdges.some(
-					(edge) => this.getEdgeType(edge) === EdgeType.Category
-				)
-			) {
-				return CallNodeType.Categorize;
-			}
-			// If it has an outgoing edge of type "choice"
-			else if (
-				outgoingEdges.some(
-					(edge) => this.getEdgeType(edge) === EdgeType.Choice
-				)
-			) {
-				// Get all outgoing choice edges
-				const choiceEdges = outgoingEdges.filter(
-					(edge) => this.getEdgeType(edge) === EdgeType.Choice
-				);
-
-				// Parse the labels of the choice edges
-				const choiceLabels = choiceEdges.map((edge) =>
-					this.parseEdgeLabel(edge)
-				);
-
-				// If the text in all choice labels are the same, its a select node
-				if (choiceLabels.every((label) => label === choiceLabels[0])) {
-					return CallNodeType.Select;
-				} else {
-					return CallNodeType.Choose;
-				}
-			}
-			// If it has any outgoing field or list edges, it's a form node
-			else if (
-				outgoingEdges.some(
-					(edge) =>
-						this.getEdgeType(edge) === EdgeType.Field ||
-						this.getEdgeType(edge) === EdgeType.List
-				)
-			) {
-				return CallNodeType.Form;
-			}
-			// Otherwise, it's an accumulate node
-			else {
-				return CallNodeType.Accumulate;
-			}
-		} else {
-			// If it has any outgoing field or list edges, it's a form node
-			if (
-				outgoingEdges.some(
-					(edge) =>
-						this.getEdgeType(edge) === EdgeType.Field ||
-						this.getEdgeType(edge) === EdgeType.List
-				)
-			) {
-				return CallNodeType.Form;
-			}
-			// If it has any outgoing choice edges, it's a choose node
-			else if (
-				outgoingEdges.some(
-					(edge) => this.getEdgeType(edge) === EdgeType.Choice
-				)
-			) {
-				return CallNodeType.Choose;
-			}
-			// If it has any outgoing category edges, it's a categorize node
-			else if (
-				outgoingEdges.some(
-					(edge) => this.getEdgeType(edge) === EdgeType.Category
-				)
-			) {
-				return CallNodeType.Categorize;
-			} else {
-				return CallNodeType.StandardCall;
-			}
+			return CallNodeType.Form;
 		}
+		// If it has any outgoing choice edges, it's a choose node
+		else if (
+			outgoingEdges.some(
+				(edge) => this.getEdgeType(edge) === EdgeType.Choice
+			)
+		) {
+			return CallNodeType.Choose;
+		}
+		else {
+			return CallNodeType.StandardCall;
+		}
+
 	}
 
 	getContentNodeType(
@@ -1278,7 +1219,7 @@ export class CannoliFactory {
 			if (this.edgeColorMap[edge.color]) {
 				// If the type from the map is choice, return the subtype
 				if (this.edgeColorMap[edge.color] === EdgeType.Choice) {
-					return this.getChoiceEdgeSubtype(edge);
+					return EdgeType.Choice;
 				}
 				// If the type from the color map is field, return the subtype
 				else if (this.edgeColorMap[edge.color] === EdgeType.Field) {
@@ -1325,11 +1266,11 @@ export class CannoliFactory {
 			if (this.edgePrefixMap[edge.label[0]]) {
 				// If the type from the map is choice, return the subtype
 				if (this.edgePrefixMap[edge.label[0]] === EdgeType.Choice) {
-					return this.getChoiceEdgeSubtype(edge);
+					return EdgeType.Choice;
 				}
 				// If the type from the color map is key, return the subtype
 				else if (this.edgePrefixMap[edge.label[0]] === EdgeType.Field) {
-					return this.getKeyEdgeSubtype(edge);
+					return EdgeType.Field;
 				}
 				// If the type from the color map is config
 				else if (
@@ -1402,43 +1343,6 @@ export class CannoliFactory {
 		}
 
 		return null;
-	}
-
-	getChoiceEdgeSubtype(edge: CannoliCanvasEdgeData): EdgeType {
-		const targetGroup = this.getGroup(edge.toNode);
-		if (targetGroup) {
-			// If the target is a forEach group, it's a category edge
-			if (this.getGroupType(targetGroup) === GroupType.SignifiedForEach) {
-				return EdgeType.Category;
-			} else {
-				return EdgeType.Choice;
-			}
-		} else {
-			return EdgeType.Choice;
-		}
-	}
-
-	getKeyEdgeSubtype(edge: CannoliCanvasEdgeData): EdgeType {
-		const sourceGroup = this.getGroup(edge.fromNode);
-		const targetGroup = this.getGroup(edge.toNode);
-
-		// If the source is a forEach group or a repeat group, it's a merge edge
-		if (
-			sourceGroup &&
-			(this.getGroupType(sourceGroup) === GroupType.SignifiedForEach ||
-				this.getGroupType(sourceGroup) === GroupType.SignifiedForEach)
-		) {
-			return EdgeType.Merge;
-		}
-		// Check if the target is a forEach group
-		else if (
-			targetGroup &&
-			this.getGroupType(targetGroup) === GroupType.SignifiedForEach
-		) {
-			return EdgeType.List;
-		}
-
-		return EdgeType.Field;
 	}
 
 	getGroupType(group: CannoliCanvasGroupData): GroupType {
