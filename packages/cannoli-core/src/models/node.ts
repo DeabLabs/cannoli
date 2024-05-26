@@ -222,7 +222,7 @@ export class CannoliNode extends CannoliVertex {
 
 						// Restore original variable name
 						reference.name = originalName;
-						if (noteContent) {
+						if (noteContent !== null) {
 							content = noteContent;
 						} else {
 							this.warning(
@@ -239,11 +239,11 @@ export class CannoliNode extends CannoliVertex {
 						const noteContent = await this.getContentFromNote(
 							reference
 						);
-						if (noteContent) {
+						if (noteContent !== null) {
 							content = noteContent;
 						} else {
 							this.warning(`Note "${reference.name}" not found`);
-							content = `{{${reference.name}}}`;
+							content = `{{[[${reference.name}]]}}`;
 						}
 					} else {
 						content = reference.name;
@@ -318,9 +318,13 @@ export class CannoliNode extends CannoliVertex {
 				);
 			}
 
-			// If the edge isn't complete, (MAYBE DEPRECATED) check if its a rejected reflexive edge with content, if not, continue
+			// If the edge isn't complete, check its status
 			if (!(edgeObject.status === CannoliObjectStatus.Complete)) {
-				if (
+				// If the edge is reflexive and not rejected, set its content to an empty string and keep going
+				if (edgeObject.isReflexive && edgeObject.status !== CannoliObjectStatus.Rejected) {
+					edgeObject.content = "";
+				} else if (
+					// If the edge is not rejected, not reflexive, or its content is null, skip it
 					!(edgeObject.status === CannoliObjectStatus.Rejected) ||
 					!edgeObject.isReflexive ||
 					edgeObject.content === null
@@ -414,18 +418,39 @@ export class CannoliNode extends CannoliVertex {
 			const variables = groupedByName[name];
 
 			let selectedVariable = variables[0]; // Start with the first variable
+			let foundNonEmptyReflexive = false;
 
 			// Iterate through the variables, preferring the reflexive edge if found
 			for (const variable of variables) {
 				const edgeObject = this.graph[variable.edgeId];
 
-				// Check if edgeObject is an instance of CannoliEdge (or another specific subtype that has the isReflexive property)
+				// Check if edgeObject is an instance of CannoliEdge and if it's reflexive
 				if (
 					edgeObject instanceof CannoliEdge &&
 					edgeObject.isReflexive
 				) {
-					selectedVariable = variable;
-					break; // Exit the loop once a reflexive edge is found
+					if (edgeObject.content !== "") {
+						selectedVariable = variable;
+						foundNonEmptyReflexive = true;
+						break; // Exit the loop once a reflexive edge with non-empty content is found
+					} else if (!foundNonEmptyReflexive) {
+						// If no non-empty reflexive edge has been found yet, prefer the first reflexive edge
+						selectedVariable = variable;
+					}
+				}
+			}
+
+			// If no non-empty reflexive edge was found, prefer the first non-reflexive edge
+			if (!foundNonEmptyReflexive && selectedVariable.content === "") {
+				for (const variable of variables) {
+					const edgeObject = this.graph[variable.edgeId];
+					if (
+						!(edgeObject instanceof CannoliEdge) ||
+						!edgeObject.isReflexive
+					) {
+						selectedVariable = variable;
+						break;
+					}
 				}
 			}
 
@@ -1549,7 +1574,7 @@ export class ReferenceNode extends ContentNode {
 	async execute(): Promise<void> {
 		this.executing();
 
-		let content = "";
+		let content: string | null = null;
 
 		const writeOrLoggingContent = this.getWriteOrLoggingContent();
 
@@ -1605,7 +1630,7 @@ export class ReferenceNode extends ContentNode {
 				edge.text !== this.reference.name
 		);
 
-		if (content) {
+		if (content !== null) {
 			// Append is dependent on if there is an incoming edge of type ChatResponse
 			const append = this.getIncomingEdges().some(
 				(edge) => edge.type === EdgeType.ChatResponse
@@ -1700,7 +1725,7 @@ export class ReferenceNode extends ContentNode {
 				const content = this.getContentFromFloatingNode(
 					this.reference.name
 				);
-				if (content) {
+				if (content !== null) {
 					return content;
 				} else {
 					this.error(
