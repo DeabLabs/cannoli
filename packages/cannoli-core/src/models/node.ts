@@ -178,6 +178,7 @@ export class CannoliNode extends CannoliVertex {
 						reference.type === ReferenceType.Selection) &&
 					!reference.shouldExtract
 				) {
+					// First, try to get the content from variable values
 					const variable = variableValues.find(
 						(variable: { name: string }) =>
 							variable.name === reference.name
@@ -185,35 +186,52 @@ export class CannoliNode extends CannoliVertex {
 
 					if (variable) {
 						content = variable.content;
-					}
-					// If the reference name contains only "#" symbols, replace it with the loop index
-					else if (reference.name.match(/^#+$/)) {
-						// Depth is the number of hash symbols minus 1
-						const depth = reference.name.length - 1;
-						const loopIndex = this.getLoopIndex(depth);
-						if (loopIndex !== null) {
-							content = loopIndex.toString();
+					} else {
+						// If variable content is null, fall back to floating node
+						const floatingContent = this.getContentFromFloatingNode(reference.name);
+						if (floatingContent !== null) {
+							content = floatingContent;
+						}
+						// If the reference name contains only "#" symbols, replace it with the loop index
+						else if (reference.name.match(/^#+$/)) {
+							// Depth is the number of hash symbols minus 1
+							const depth = reference.name.length - 1;
+							const loopIndex = this.getLoopIndex(depth);
+							if (loopIndex !== null) {
+								content = loopIndex.toString();
+							} else {
+								content = `{{${reference.name}}}`;
+							}
 						} else {
+							// this.warning(`Variable "${reference.name}" not found`);
 							content = `{{${reference.name}}}`;
 						}
-					} else {
-						// this.warning(`Variable "${reference.name}" not found`);
-						content = `{{${reference.name}}}`;
 					}
 				} else if (
 					(reference.type === ReferenceType.Variable ||
 						reference.type === ReferenceType.Selection) &&
 					reference.shouldExtract
 				) {
+					// First, try to get the content from variable values
 					const variable = variableValues.find(
 						(variable) => variable.name === reference.name
 					);
 					if (variable && variable.content) {
+						content = variable.content;
+					} else {
+						// If variable content is null, fall back to floating node
+						const floatingContent = this.getContentFromFloatingNode(reference.name);
+						if (floatingContent !== null) {
+							content = floatingContent;
+						}
+					}
+
+					if (content !== "{{invalid reference}}") {
 						// Save original variable name
 						const originalName = reference.name;
 
 						// Set reference name to the content of the variable
-						reference.name = variable.content;
+						reference.name = content;
 
 						// Get the content from the note
 						const noteContent = await this.getContentFromNote(
@@ -226,7 +244,7 @@ export class CannoliNode extends CannoliVertex {
 							content = noteContent;
 						} else {
 							this.warning(
-								`Note "${variable.content}" not found`
+								`Note "${content}" not found`
 							);
 							content = `{{@${reference.name}}}`;
 						}
@@ -1732,8 +1750,18 @@ export class ReferenceNode extends ContentNode {
 						`Invalid reference. Could not find floating node "${this.reference.name}"`
 					);
 				}
+			} else if (this.reference.type === ReferenceType.Variable) {
+				const content = this.getContentFromFloatingNode(
+					this.reference.name
+				);
+				if (content !== null) {
+					return content;
+				} else {
+					this.error(
+						`Invalid reference. Could not find floating node "${this.reference.name}"`
+					);
+				}
 			} else if (
-				this.reference.type === ReferenceType.Variable ||
 				this.reference.type === ReferenceType.CreateNote
 			) {
 				this.error(`Dynamic reference did not process correctly.`);
