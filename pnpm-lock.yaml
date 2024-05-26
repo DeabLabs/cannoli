@@ -56,6 +56,9 @@ importers:
       tsup:
         specifier: ^8.0.2
         version: 8.0.2(ts-node@10.9.2(@types/node@16.18.97)(typescript@5.4.5))(typescript@5.4.5)
+      zod:
+        specifier: 3.23.8
+        version: 3.23.8
     devDependencies:
       '@types/js-yaml':
         specifier: ^4.0.6

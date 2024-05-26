@@ -312,6 +312,7 @@ export class CannoliFactory {
 		);
 
 		const dependencies = [] as string[];
+		// @ts-expect-error: originalObject is not a property of CannoliCanvasGroupData
 		const originalObject = group.originalObject;
 		const status =
 			type === GroupType.Basic
@@ -1299,7 +1300,9 @@ export class CannoliFactory {
 			}
 
 			if (
+				// @ts-expect-error: kind is not a property of CannoliCanvasGroupData
 				sourceNode.kind === CannoliObjectKind.Group ||
+				// @ts-expect-error: kind is not a property of CannoliCanvasGroupData
 				targetNode.kind === CannoliObjectKind.Group
 			) {
 				return EdgeType.Chat;

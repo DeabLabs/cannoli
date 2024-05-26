@@ -13,7 +13,7 @@ import {
 import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
-import { Canvas } from "./canvas_interface";
+import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
 
 export interface HttpTemplate {
 	id: string;
@@ -92,7 +92,7 @@ export function runCannoli({
 	canvas?: Canvas;
 	fileSystemInterface?: FilesystemInterface;
 	isMock?: boolean;
-	fetcher: ResponseTextFetcher;
+	fetcher?: ResponseTextFetcher;
 }): [Promise<Stoppage>, () => void] {
 	let resolver: (stoppage: Stoppage) => void;
 	const done = new Promise<Stoppage>((resolve) => {
@@ -189,7 +189,7 @@ export class Run {
 	}: {
 		cannoliJSON: unknown;
 		llm: Llm;
-		fetcher: ResponseTextFetcher;
+		fetcher?: ResponseTextFetcher;
 		settings?: CannoliRunSettings;
 		args?: CannoliArgs;
 		onFinish?: (stoppage: Stoppage) => void;
@@ -202,15 +202,27 @@ export class Run {
 		this.canvas = canvas ?? null;
 		this.usage = {};
 
-		this.fetcher = fetcher;
+		const defaultFetcher: ResponseTextFetcher = async (url, options) => {
+			const res = await fetch(url, options);
+			return await res.text();
+		};
+
+		this.fetcher = fetcher ?? defaultFetcher;
 
 		this.llm = llm ?? null;
 
 		this.settings = settings ?? null;
 		this.args = args ?? null;
 
-		// Parse the JSON and get the settings and args
-		const parsedCannoliJSON = JSON.parse(JSON.stringify(cannoliJSON));
+		let parsedCannoliJSON: CanvasData;
+
+		try {
+			// Parse the JSON and get the settings and args
+			parsedCannoliJSON = canvasDataSchema.parse(cannoliJSON);
+		} catch (error) {
+			this.error(error.message);
+			return;
+		}
 
 		// add the settings and args to the cannoli
 		parsedCannoliJSON.settings = settings;
@@ -299,11 +311,18 @@ export class Run {
 			await this.canvas.enqueueRemoveAllErrorNodes();
 		}
 
+		let executedObjectsCount = 0;
+
 		// Call execute on all root objects
 		for (const object of Object.values(this.graph)) {
 			if (object.dependencies.length === 0) {
 				object.execute();
+				executedObjectsCount++;
 			}
+		}
+
+		if (executedObjectsCount === 0) {
+			this.error("No objects to execute");
 		}
 	}
 
@@ -509,7 +528,7 @@ export class Run {
 	}
 
 	getVariableNodesResults(): { [key: string]: string } {
-		const variableNodes = Object.values(this.graph).filter((object) => object.type === "variable");
+		const variableNodes = Object.values(this.graph).filter((object) => object.type === "variable" && object.kind === "node");
 		const results: { [key: string]: string } = {};
 		for (const node of variableNodes) {
 			// The key should be the first line without the square brackets
