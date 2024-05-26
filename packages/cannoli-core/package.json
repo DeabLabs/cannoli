@@ -2,9 +2,9 @@
 	"name": "@deablabs/cannoli-core",
 	"version": "1.0.8",
 	"description": "[WORK IN PROGRESS]",
-	"main": "dist/index.mjs",
+	"main": "dist/index.js",
 	"type": "module",
-	"types": "dist/index.d.mts",
+	"types": "dist/index.d.ts",
 	"files": [
 		"dist/**/*",
 		"package.json"
