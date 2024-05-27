@@ -1656,7 +1656,8 @@ export class ReferenceNode extends ContentNode {
 
 			if (
 				this.reference.type === ReferenceType.CreateNote ||
-				this.reference.type === ReferenceType.Variable
+				(this.reference.type === ReferenceType.Variable &&
+					this.reference.shouldExtract)
 			) {
 				await this.processDynamicReference(content);
 			} else {
@@ -1684,7 +1685,8 @@ export class ReferenceNode extends ContentNode {
 		} else {
 			if (
 				this.reference.type === ReferenceType.CreateNote ||
-				this.reference.type === ReferenceType.Variable
+				(this.reference.type === ReferenceType.Variable &&
+					this.reference.shouldExtract)
 			) {
 				await this.processDynamicReference("");
 
@@ -1957,7 +1959,23 @@ export class ReferenceNode extends ContentNode {
 					`Invalid reference. Could not find floating node ${this.reference.name}`
 				);
 			} else if (
-				this.reference.type === ReferenceType.Variable ||
+				this.reference.type === ReferenceType.Variable) {
+				// Search through all nodes for a floating node with the correct name
+				for (const objectId in this.graph) {
+					const object = this.graph[objectId];
+					if (
+						object instanceof FloatingNode &&
+						object.getName() === this.reference.name
+					) {
+						object.editContent(newContent);
+						return;
+					}
+				}
+
+				this.error(
+					`Invalid reference. Could not find floating node ${this.reference.name}`
+				);
+			} else if (
 				this.reference.type === ReferenceType.CreateNote
 			) {
 				this.error(`Dynamic reference did not process correctly.`);
