@@ -1399,15 +1399,57 @@ export class ChooseNode extends CallNode {
 
 export class ContentNode extends CannoliNode {
 	reset(): void {
-		// If its a standard content node and it has incoming edges, reset the text and then call the super
-		if (
-			this.type === ContentNodeType.StandardContent &&
-			this.incomingEdges.length > 0
-		) {
-			this.text = "";
+		// If it's a standard content node or output node, reset the text and then call the super
+		if (this.type === ContentNodeType.StandardContent || this.type === ContentNodeType.Output) {
+			const name = this.getName();
+			if (name !== null && this.type !== ContentNodeType.StandardContent) {
+				// Clear everything except the first line
+				this.text = this.text.split("\n")[0];
+			} else {
+				// Clear everything
+				this.text = "";
+			}
 		}
 
 		super.reset();
+	}
+
+	getName(): string | null {
+		const firstLine = this.text.split("\n")[0].trim();
+		if (
+			firstLine.startsWith("[") &&
+			firstLine.endsWith("]") &&
+			this.type !== ContentNodeType.StandardContent
+		) {
+			return firstLine.substring(1, firstLine.length - 1);
+		}
+		return null;
+	}
+
+	// Content is everything after the first line
+	getContentCheckName(): string {
+		const name = this.getName();
+		if (name !== null) {
+			const firstLine = this.text.split("\n")[0];
+			return this.text.substring(firstLine.length + 1);
+		}
+		return this.text;
+	}
+
+	editContentCheckName(newContent: string): void {
+		const name = this.getName();
+		const firstLine = this.text.split("\n")[0];
+		if (name !== null) {
+			const newFirstLine = newContent.split("\n")[0].trim();
+			// Check if the first line of the new content matches the current name line
+			if (newFirstLine === firstLine.trim()) {
+				// Discard the first line of the new content
+				newContent = newContent.substring(newFirstLine.length).trim();
+			}
+			this.text = `${firstLine}\n${newContent}`;
+		} else {
+			this.text = newContent;
+		}
 	}
 
 	async execute(): Promise<void> {
@@ -1427,13 +1469,14 @@ export class ContentNode extends CannoliNode {
 		}
 
 		if (content !== null && content !== undefined && content !== "") {
-			this.text = content;
+			this.editContentCheckName(content);
 		} else {
 			content = await this.processReferences();
+			this.editContentCheckName(content);
 		}
 
 		// Load all outgoing edges
-		this.loadOutgoingEdges(content);
+		this.loadOutgoingEdges(this.getContentCheckName());
 
 		this.completed();
 	}

@@ -266,18 +266,19 @@ export class Run {
 
 		const graphData = factory.getCannoliData();
 
-		// Find all nodes of type "variable"
-		const variableNodes = graphData.nodes.filter((node) => node.cannoliData.type === "variable");
+		// Find all nodes of type "variable" or "input"
+		const argNodes = graphData.nodes.filter((node) => node.cannoliData.type === "variable"
+			|| node.cannoliData.type === "input");
 
-		// For each arg, check if the key matches the first line of the text in the variable node
+		// For each arg, check if the key matches the first line of the text in the variable/input node
 		for (const arg of Object.entries(this.args ?? {})) {
 			const [key, value] = arg;
-			const variableNode = variableNodes.find((node) => node.cannoliData.text.split("\n")[0] === `[${key}]`);
-			if (variableNode) {
-				// If so, set the text of the variable after the first line to the value
-				variableNode.cannoliData.text = variableNode.cannoliData.text.split("\n")[0] + "\n" + value;
+			const argNode = argNodes.find((node) => node.cannoliData.text.split("\n")[0] === `[${key}]`);
+			if (argNode) {
+				// If so, set the text of the variable/input node after the first line to the value
+				argNode.cannoliData.text = argNode.cannoliData.text.split("\n")[0] + "\n" + value;
 			} else {
-				throw new Error(`Argument key "${key}" not found in variable nodes.`);
+				throw new Error(`Argument key "${key}" not found in arg nodes.`);
 			}
 		}
 
@@ -334,7 +335,7 @@ export class Run {
 			usage: this.calculateAllLLMCosts(),
 			totalCost: this.getTotalCost(),
 			message,
-			results: this.getVariableNodesResults(),
+			results: this.getResults(),
 		});
 
 		throw new Error(message);
@@ -347,7 +348,7 @@ export class Run {
 			reason: "user",
 			usage: this.calculateAllLLMCosts(),
 			totalCost: this.getTotalCost(),
-			results: this.getVariableNodesResults(),
+			results: this.getResults(),
 		});
 	}
 
@@ -449,7 +450,7 @@ export class Run {
 				reason: "complete",
 				usage: this.calculateAllLLMCosts(),
 				totalCost: this.getTotalCost(),
-				results: this.getVariableNodesResults(),
+				results: this.getResults(),
 			});
 		}
 	}
@@ -461,7 +462,7 @@ export class Run {
 				reason: "complete",
 				usage: this.calculateAllLLMCosts(),
 				totalCost: this.getTotalCost(),
-				results: this.getVariableNodesResults(),
+				results: this.getResults(),
 			});
 		}
 	}
@@ -527,8 +528,8 @@ export class Run {
 		return true;
 	}
 
-	getVariableNodesResults(): { [key: string]: string } {
-		const variableNodes = Object.values(this.graph).filter((object) => object.type === "variable" && object.kind === "node");
+	getResults(): { [key: string]: string } {
+		const variableNodes = Object.values(this.graph).filter((object) => (object.type === "variable" || object.type === "output") && object.kind === "node");
 		const results: { [key: string]: string } = {};
 		for (const node of variableNodes) {
 			// The key should be the first line without the square brackets

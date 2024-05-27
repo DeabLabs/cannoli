@@ -1161,7 +1161,15 @@ export class CannoliFactory {
 			return ContentNodeType.Reference;
 		}
 
-		// Otherwise, its a standard content node
+		// If it has no incoming edges, it's an input node
+		if (this.getIncomingEdges(node.id).length === 0) {
+			return ContentNodeType.Input;
+		}
+		// If it has no outgoing edges, it's an output node
+		if (this.getOutgoingEdges(node.id).length === 0) {
+			return ContentNodeType.Output;
+		}
+
 		return ContentNodeType.StandardContent;
 	}
 
