@@ -36,6 +36,13 @@ type VersionedContent = {
 	}[];
 };
 
+type TreeNode = {
+	header: string | null;
+	subHeader: string | null;
+	content?: string;
+	children?: TreeNode[];
+};
+
 export class CannoliNode extends CannoliVertex {
 	references: Reference[] = [];
 	renderFunction: (
@@ -178,9 +185,6 @@ export class CannoliNode extends CannoliVertex {
 
 	async processReferences() {
 		const variableValues = this.getVariableValues(true);
-
-		console.log(`variableValues:`);
-		console.log(variableValues);
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
@@ -399,13 +403,10 @@ export class CannoliNode extends CannoliVertex {
 						}
 					}
 
-					console.log(allVersions);
-
-					content = this.formatAllVersions(allVersions);
+					content = this.renderAsMarkdownDocument(this.transformToTree(allVersions));
 				} else {
 					content = edgeObject.content;
 				}
-
 
 				const variableValue = {
 					name: edgeObject.text,
@@ -465,261 +466,106 @@ export class CannoliNode extends CannoliVertex {
 		return resolvedVariableValues;
 	}
 
+	transformToTree(allVersions: VersionedContent[]): TreeNode {
+		const root: TreeNode = { header: null, subHeader: null, children: [] };
 
+		allVersions.forEach(item => {
+			let currentNode = root;
 
-	formatAllVersions(allVersions: VersionedContent[]): string {
-		// Determine the length of the version arrays
-		const versionLength = allVersions[0].versionArray.length;
+			for (let i = item.versionArray.length - 1; i >= 0; i--) {
+				const version = item.versionArray[i];
+				if (!currentNode.children) {
+					currentNode.children = [];
+				}
 
-		if (versionLength === 1) {
-			return this.formatAsMarkdownList(allVersions);
-		} else if (versionLength === 2) {
-			return this.formatAsMarkdownDocument(allVersions);
-		} else if (versionLength === 3) {
-			return this.formatAsMarkdownDocument3(allVersions);
-		} else {
-			return this.formatStub(allVersions);
+				let nextNode = currentNode.children.find(child => child.subHeader === version.subHeader);
+
+				if (!nextNode) {
+					nextNode = {
+						header: version.header,
+						subHeader: version.subHeader,
+						children: []
+					};
+					currentNode.children.push(nextNode);
+				}
+
+				currentNode = nextNode;
+
+				if (i === 0) {
+					currentNode.content = item.content;
+				}
+			}
+		});
+
+		return root;
+	}
+
+	renderAsMarkdownDocument(tree: TreeNode, level: number = 1): string {
+		let result = '';
+
+		if (tree.subHeader) {
+			result += `${'#'.repeat(level)} ${tree.subHeader}\n\n`;
 		}
-	}
 
-	formatAsMarkdownList(allVersions: VersionedContent[]): string {
-		// Sort by the versionArray values
-		const sortedVersions = allVersions.sort((a, b) => a.versionArray[0].version - b.versionArray[0].version);
+		if (tree.content) {
+			result += `${tree.content}\n\n`;
+		}
 
-		// Create a markdown list
-		return sortedVersions.map(item => `- ${item.content}`).join('\n');
-	}
-
-	formatAsTable(allVersions: VersionedContent[]): string {
-		// Determine the maximum row index based on the version numbers in versionArray
-		const maxRow = Math.max(...allVersions.map(item => item.versionArray[0].version));
-
-		// Determine the maximum column index based on the version numbers in versionArray
-		const maxCol = Math.max(...allVersions.map(item => item.versionArray[1].version));
-
-		// Initialize a 2D array for the table with empty strings
-		const table: string[][] = Array.from({ length: maxRow + 1 }, () =>
-			Array(maxCol + 1).fill('')
-		);
-
-		// Initialize arrays for row and column headers with empty strings
-		const rowHeaders: string[] = Array(maxRow + 1).fill('');
-		const colHeaders: string[] = Array(maxCol + 1).fill('');
-
-		// Populate the table and headers with content and subHeaders from allVersions
-		allVersions.forEach(item => {
-			// Extract row and column indices from the versionArray
-			const [row, col] = item.versionArray.map((version) => version.version);
-
-			// Place the content in the table at the specified row and column
-			table[row][col] = item.content;
-
-			// Place the subHeader in the rowHeaders array
-			rowHeaders[row] = item.versionArray[0].subHeader ?? '';
-
-			// Place the subHeader in the colHeaders array
-			colHeaders[col] = item.versionArray[1].subHeader ?? '';
-		});
-
-		// Remove empty leading elements in colHeaders and rowHeaders arrays if necessary
-		const headerCol = colHeaders.slice(1);
-		const headerRow = rowHeaders.slice(1);
-		const contentTable = table.slice(1).map(row => row.slice(1));
-
-		// Convert the table to a markdown table string
-		// Create the header row by joining the column headers with vertical bars
-		const header = `|   | ${headerCol.join(' | ')} |`;
-
-		// Create the separator row for the markdown table
-		const separator = `| --- | ${Array(maxCol).fill('---').join(' | ')} |`;
-
-		// Create the rows by joining row headers and table content with vertical bars
-		const rows = contentTable.map((row, rowIndex) => `| ${headerRow[rowIndex]} | ${row.join(' | ')} |`).join('\n');
-
-		// Return the complete markdown table string
-		return `${header}\n${separator}\n${rows}`;
-	}
-
-	formatAsMarkdownList3(allVersions: VersionedContent[]): string {
-		// Determine the unique column headers from the versionArray
-		const uniqueColHeaders = Array.from(new Set(allVersions.map(item => item.versionArray[2].subHeader ?? '')));
-
-		// Create a map to store the content based on row and column headers
-		const contentMap = new Map<string, Map<string, Map<string, string>>>();
-
-		allVersions.forEach(item => {
-			const topHeader = item.versionArray[0].subHeader ?? '';
-			const midHeader = item.versionArray[1].subHeader ?? '';
-			const colHeader = item.versionArray[2].subHeader ?? '';
-
-			if (!contentMap.has(colHeader)) {
-				contentMap.set(colHeader, new Map<string, Map<string, string>>());
-			}
-
-			const midMap = contentMap.get(colHeader)!;
-
-			if (!midMap.has(midHeader)) {
-				midMap.set(midHeader, new Map<string, string>());
-			}
-
-			const rowMap = midMap.get(midHeader)!;
-			rowMap.set(topHeader, item.content);
-		});
-
-		// Generate the markdown document
-		let markdownDocument = '';
-
-		uniqueColHeaders.forEach(colHeader => {
-			// Add the column header as a top-level list item
-			if (colHeader) {
-				markdownDocument += `- ${colHeader}\n`;
-			}
-
-			const midMap = contentMap.get(colHeader) || new Map<string, Map<string, string>>();
-
-			midMap.forEach((rowMap, midHeader) => {
-				// Add the middle-level header as a nested list item
-				if (midHeader) {
-					markdownDocument += `  - ${midHeader}\n`;
-				}
-
-				rowMap.forEach((content, topHeader) => {
-					// Add the row header as a further nested list item
-					if (topHeader) {
-						markdownDocument += `    - ${topHeader}\n`;
-					}
-
-					// Add the content if it exists
-					if (content) {
-						markdownDocument += `      - ${content}\n`;
-					}
-				});
+		if (tree.children) {
+			tree.children.forEach(child => {
+				result += this.renderAsMarkdownDocument(child, level + 1);
 			});
-		});
+		}
 
-		return markdownDocument;
+		return result;
 	}
 
+	renderAsMarkdownList(tree: TreeNode, indent: string = ''): string {
+		let result = '';
 
-	formatAsMarkdownDocument(allVersions: VersionedContent[]): string {
-		// Determine the unique column headers from the versionArray
-		const uniqueColHeaders = Array.from(new Set(allVersions.map(item => item.versionArray[1].subHeader ?? '')));
+		if (tree.subHeader) {
+			result += `${indent}- ${tree.subHeader}\n`;
+		}
 
-		// Create a map to store the content based on row and column headers
-		const contentMap = new Map<string, Map<string, string>>();
+		if (tree.content) {
+			result += `${indent}  ${tree.content}\n`;
+		}
 
-		allVersions.forEach(item => {
-			const rowHeader = item.versionArray[0].subHeader ?? '';
-			const colHeader = item.versionArray[1].subHeader ?? '';
-
-			if (!contentMap.has(colHeader)) {
-				contentMap.set(colHeader, new Map<string, string>());
-			}
-
-			const rowMap = contentMap.get(colHeader)!;
-			rowMap.set(rowHeader, item.content);
-		});
-
-		// Generate the markdown document
-		let markdownDocument = '';
-
-		uniqueColHeaders.forEach(colHeader => {
-			// Add the column header as a top-level header
-			if (colHeader) {
-				markdownDocument += `# ${colHeader}\n\n`;
-			}
-
-			const rowMap = contentMap.get(colHeader) || new Map<string, string>();
-
-			rowMap.forEach((content, rowHeader) => {
-				// Add the row header as a second-level header
-				if (rowHeader) {
-					markdownDocument += `## ${rowHeader}\n\n`;
-				}
-
-				// Add the content if it exists
-				if (content) {
-					markdownDocument += `${content}\n\n`;
-				}
+		if (tree.children) {
+			tree.children.forEach(child => {
+				result += this.renderAsMarkdownList(child, indent + '  ');
 			});
-		});
+		}
 
-		return markdownDocument;
+		return result;
 	}
 
-	formatAsMarkdownDocument3(allVersions: VersionedContent[]): string {
-		// Determine the unique column headers from the versionArray
-		const uniqueColHeaders = Array.from(new Set(allVersions.map(item => item.versionArray[2].subHeader ?? '')));
+	renderAsMarkdownTable(tree: TreeNode): string {
+		let table = '';
 
-		// Create a map to store the content based on row and column headers
-		const contentMap = new Map<string, Map<string, Map<string, string>>>();
+		if (!tree.children) {
+			return table;
+		}
 
-		allVersions.forEach(item => {
-			const topHeader = item.versionArray[0].subHeader ?? '';
-			const midHeader = item.versionArray[1].subHeader ?? '';
-			const colHeader = item.versionArray[2].subHeader ?? '';
+		// Extract the headers from the first child
+		const headers = tree.children.map(child => child.subHeader);
 
-			if (!contentMap.has(colHeader)) {
-				contentMap.set(colHeader, new Map<string, Map<string, string>>());
-			}
+		// Create the table header with an empty cell for the main header
+		table += '| |' + headers.join(' | ') + ' |\n';
+		table += '| --- |' + headers.map(() => ' --- ').join(' | ') + ' |\n';
 
-			const midMap = contentMap.get(colHeader)!;
-
-			if (!midMap.has(midHeader)) {
-				midMap.set(midHeader, new Map<string, string>());
-			}
-
-			const rowMap = midMap.get(midHeader)!;
-			rowMap.set(topHeader, item.content);
-		});
-
-		// Generate the markdown document
-		let markdownDocument = '';
-
-		uniqueColHeaders.forEach(colHeader => {
-			// Add the column header as a top-level header
-			if (colHeader) {
-				markdownDocument += `# ${colHeader}\n\n`;
-			}
-
-			const midMap = contentMap.get(colHeader) || new Map<string, Map<string, string>>();
-
-			midMap.forEach((rowMap, midHeader) => {
-				// Add the middle-level header as a second-level header
-				if (midHeader) {
-					markdownDocument += `## ${midHeader}\n\n`;
-				}
-
-				rowMap.forEach((content, topHeader) => {
-					// Add the row header as a third-level header
-					if (topHeader) {
-						markdownDocument += `### ${topHeader}\n\n`;
-					}
-
-					// Add the content if it exists
-					if (content) {
-						markdownDocument += `${content}\n\n`;
-					}
-				});
+		// Create the table rows
+		tree.children[0].children!.forEach((subChild, index) => {
+			table += '| ' + subChild.subHeader + ' |';
+			tree.children?.forEach(child => {
+				const content = child.children![index].content ?? '';
+				table += ` ${content} |`;
 			});
+			table += '\n';
 		});
 
-		return markdownDocument;
+		return table;
 	}
-
-
-
-
-
-
-
-	formatStub(allVersions: VersionedContent[]): string {
-		// Stub implementation for arrays with length 3 or more
-		return "Formatting for version arrays with length 3 or more is not implemented yet.";
-	}
-
-
-
 
 	resolveVariableConflicts(variableValues: VariableValue[]): VariableValue[] {
 		const finalVariables: VariableValue[] = [];
@@ -783,8 +629,6 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	loadOutgoingEdges(content: string, request?: GenericCompletionParams) {
-		console.log(`loadOutgoingEdges: ${content}`);
-
 		let itemIndex = 0;
 		const listItems = this.getListArrayFromContent(content);
 
@@ -805,8 +649,6 @@ export class CannoliNode extends CannoliVertex {
 					continue;
 				}
 
-				console.log(`item: ${item}`);
-
 				edgeObject.load({
 					content: item,
 					request: request,
@@ -819,6 +661,16 @@ export class CannoliNode extends CannoliVertex {
 
 
 	getListArrayFromContent(content: string): string[] {
+		// Attempt to parse the content as JSON
+		try {
+			const jsonArray = JSON.parse(content);
+			if (Array.isArray(jsonArray) && jsonArray.every(item => typeof item === 'string')) {
+				return jsonArray;
+			}
+		} catch (e) {
+			// If parsing fails, continue with markdown list parsing
+		}
+
 		// First pass: look for markdown list items, and return the item at the index
 		const lines = content.split("\n");
 
@@ -1728,7 +1580,14 @@ export class ContentNode extends CannoliNode {
 			firstLine.endsWith("]") &&
 			this.type !== ContentNodeType.StandardContent
 		) {
-			return firstLine.substring(1, firstLine.length - 1);
+			try {
+				// Check if the first line is a valid JSON array
+				JSON.parse(firstLine);
+				return null; // If it's a valid JSON array, return null
+			} catch (e) {
+				// If it's not a valid JSON array, proceed to extract the name
+				return firstLine.substring(1, firstLine.length - 1);
+			}
 		}
 		return null;
 	}

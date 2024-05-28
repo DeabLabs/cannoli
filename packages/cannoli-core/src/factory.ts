@@ -407,7 +407,6 @@ export class CannoliFactory {
 					const { crossingInEdges, crossingOutEdges, internalEdges } =
 						this.getCrossingAndInternalEdges(castGroup, data);
 
-					console.log(`Number of internal edges for group with text: ${castGroup.cannoliData.text} is ${internalEdges.length}`);
 
 					const subGroups = data.nodes.filter(
 						(node) => node.cannoliData.groups.includes(group.id) && node.cannoliData.kind === CannoliObjectKind.Group
@@ -535,7 +534,6 @@ export class CannoliFactory {
 
 		const duplicateInternalEdges = internalEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
 
-		console.log(`Number of duplicate internal edges: ${duplicateInternalEdges.length}`);
 
 		// Add the index to both ends, and all of the crossing in and out groups
 		duplicateInternalEdges.forEach((edge) => {
@@ -579,9 +577,6 @@ export class CannoliFactory {
 			// replace the original group id with the duplicate group id
 			edge.cannoliData.crossingOutGroups = edge.cannoliData.crossingOutGroups.map((groupId) => groupId === originalGroup.id ? `${groupId}-${index}` : groupId);
 		});
-
-		console.log(`Duplicate members of group with text ${originalGroup.cannoliData.text}: `);
-		console.log(duplicateMembers);
 
 		data.nodes.push(duplicateGroup);
 		data.edges.push(...duplicateIncomingEdges);
