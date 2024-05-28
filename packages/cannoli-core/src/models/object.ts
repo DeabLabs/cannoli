@@ -230,8 +230,6 @@ export class CannoliObject extends EventTarget {
 	}
 
 	reject() {
-		console.log(`Rejecting:\n${this.logDetails()}`);
-
 		this.status = CannoliObjectStatus.Rejected;
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Rejected },

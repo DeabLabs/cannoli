@@ -474,9 +474,10 @@ export class CannoliNode extends CannoliVertex {
 		if (versionLength === 1) {
 			return this.formatAsMarkdownList(allVersions);
 		} else if (versionLength === 2) {
-			return this.formatAsTable(allVersions);
+			return this.formatAsMarkdownDocument(allVersions);
+		} else if (versionLength === 3) {
+			return this.formatAsMarkdownDocument3(allVersions);
 		} else {
-			// Stub for version arrays of length 3 or more
 			return this.formatStub(allVersions);
 		}
 	}
@@ -490,37 +491,227 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	formatAsTable(allVersions: VersionedContent[]): string {
-		// Determine the maximum row and column based on versionArray values
+		// Determine the maximum row index based on the version numbers in versionArray
 		const maxRow = Math.max(...allVersions.map(item => item.versionArray[0].version));
+
+		// Determine the maximum column index based on the version numbers in versionArray
 		const maxCol = Math.max(...allVersions.map(item => item.versionArray[1].version));
 
-		// Initialize a 2D array for the table
+		// Initialize a 2D array for the table with empty strings
 		const table: string[][] = Array.from({ length: maxRow + 1 }, () =>
 			Array(maxCol + 1).fill('')
 		);
 
-		// Initialize arrays for row and column headers
+		// Initialize arrays for row and column headers with empty strings
 		const rowHeaders: string[] = Array(maxRow + 1).fill('');
 		const colHeaders: string[] = Array(maxCol + 1).fill('');
 
-		// Populate the table and headers
+		// Populate the table and headers with content and subHeaders from allVersions
 		allVersions.forEach(item => {
+			// Extract row and column indices from the versionArray
 			const [row, col] = item.versionArray.map((version) => version.version);
+
+			// Place the content in the table at the specified row and column
 			table[row][col] = item.content;
+
+			// Place the subHeader in the rowHeaders array
 			rowHeaders[row] = item.versionArray[0].subHeader ?? '';
+
+			// Place the subHeader in the colHeaders array
 			colHeaders[col] = item.versionArray[1].subHeader ?? '';
 		});
 
+		// Remove empty leading elements in colHeaders and rowHeaders arrays if necessary
+		const headerCol = colHeaders.slice(1);
+		const headerRow = rowHeaders.slice(1);
+		const contentTable = table.slice(1).map(row => row.slice(1));
+
 		// Convert the table to a markdown table string
-		const header = `| ${['', ...colHeaders].join(' | ')} |`;
-		const separator = `| ${Array(maxCol + 2).fill('---').join(' | ')} |`;
-		const rows = table.map((row, rowIndex) => `| ${[rowHeaders[rowIndex], ...row].join(' | ')} |`).join('\n');
+		// Create the header row by joining the column headers with vertical bars
+		const header = `|   | ${headerCol.join(' | ')} |`;
 
-		// Ensure no empty row is added after the header
-		const filteredRows = rows.split('\n').filter(row => !/^(\| \s*)+\|$/.test(row)).join('\n');
+		// Create the separator row for the markdown table
+		const separator = `| --- | ${Array(maxCol).fill('---').join(' | ')} |`;
 
-		return `${header}\n${separator}\n${filteredRows}`;
+		// Create the rows by joining row headers and table content with vertical bars
+		const rows = contentTable.map((row, rowIndex) => `| ${headerRow[rowIndex]} | ${row.join(' | ')} |`).join('\n');
+
+		// Return the complete markdown table string
+		return `${header}\n${separator}\n${rows}`;
 	}
+
+	formatAsMarkdownList3(allVersions: VersionedContent[]): string {
+		// Determine the unique column headers from the versionArray
+		const uniqueColHeaders = Array.from(new Set(allVersions.map(item => item.versionArray[2].subHeader ?? '')));
+
+		// Create a map to store the content based on row and column headers
+		const contentMap = new Map<string, Map<string, Map<string, string>>>();
+
+		allVersions.forEach(item => {
+			const topHeader = item.versionArray[0].subHeader ?? '';
+			const midHeader = item.versionArray[1].subHeader ?? '';
+			const colHeader = item.versionArray[2].subHeader ?? '';
+
+			if (!contentMap.has(colHeader)) {
+				contentMap.set(colHeader, new Map<string, Map<string, string>>());
+			}
+
+			const midMap = contentMap.get(colHeader)!;
+
+			if (!midMap.has(midHeader)) {
+				midMap.set(midHeader, new Map<string, string>());
+			}
+
+			const rowMap = midMap.get(midHeader)!;
+			rowMap.set(topHeader, item.content);
+		});
+
+		// Generate the markdown document
+		let markdownDocument = '';
+
+		uniqueColHeaders.forEach(colHeader => {
+			// Add the column header as a top-level list item
+			if (colHeader) {
+				markdownDocument += `- ${colHeader}\n`;
+			}
+
+			const midMap = contentMap.get(colHeader) || new Map<string, Map<string, string>>();
+
+			midMap.forEach((rowMap, midHeader) => {
+				// Add the middle-level header as a nested list item
+				if (midHeader) {
+					markdownDocument += `  - ${midHeader}\n`;
+				}
+
+				rowMap.forEach((content, topHeader) => {
+					// Add the row header as a further nested list item
+					if (topHeader) {
+						markdownDocument += `    - ${topHeader}\n`;
+					}
+
+					// Add the content if it exists
+					if (content) {
+						markdownDocument += `      - ${content}\n`;
+					}
+				});
+			});
+		});
+
+		return markdownDocument;
+	}
+
+
+	formatAsMarkdownDocument(allVersions: VersionedContent[]): string {
+		// Determine the unique column headers from the versionArray
+		const uniqueColHeaders = Array.from(new Set(allVersions.map(item => item.versionArray[1].subHeader ?? '')));
+
+		// Create a map to store the content based on row and column headers
+		const contentMap = new Map<string, Map<string, string>>();
+
+		allVersions.forEach(item => {
+			const rowHeader = item.versionArray[0].subHeader ?? '';
+			const colHeader = item.versionArray[1].subHeader ?? '';
+
+			if (!contentMap.has(colHeader)) {
+				contentMap.set(colHeader, new Map<string, string>());
+			}
+
+			const rowMap = contentMap.get(colHeader)!;
+			rowMap.set(rowHeader, item.content);
+		});
+
+		// Generate the markdown document
+		let markdownDocument = '';
+
+		uniqueColHeaders.forEach(colHeader => {
+			// Add the column header as a top-level header
+			if (colHeader) {
+				markdownDocument += `# ${colHeader}\n\n`;
+			}
+
+			const rowMap = contentMap.get(colHeader) || new Map<string, string>();
+
+			rowMap.forEach((content, rowHeader) => {
+				// Add the row header as a second-level header
+				if (rowHeader) {
+					markdownDocument += `## ${rowHeader}\n\n`;
+				}
+
+				// Add the content if it exists
+				if (content) {
+					markdownDocument += `${content}\n\n`;
+				}
+			});
+		});
+
+		return markdownDocument;
+	}
+
+	formatAsMarkdownDocument3(allVersions: VersionedContent[]): string {
+		// Determine the unique column headers from the versionArray
+		const uniqueColHeaders = Array.from(new Set(allVersions.map(item => item.versionArray[2].subHeader ?? '')));
+
+		// Create a map to store the content based on row and column headers
+		const contentMap = new Map<string, Map<string, Map<string, string>>>();
+
+		allVersions.forEach(item => {
+			const topHeader = item.versionArray[0].subHeader ?? '';
+			const midHeader = item.versionArray[1].subHeader ?? '';
+			const colHeader = item.versionArray[2].subHeader ?? '';
+
+			if (!contentMap.has(colHeader)) {
+				contentMap.set(colHeader, new Map<string, Map<string, string>>());
+			}
+
+			const midMap = contentMap.get(colHeader)!;
+
+			if (!midMap.has(midHeader)) {
+				midMap.set(midHeader, new Map<string, string>());
+			}
+
+			const rowMap = midMap.get(midHeader)!;
+			rowMap.set(topHeader, item.content);
+		});
+
+		// Generate the markdown document
+		let markdownDocument = '';
+
+		uniqueColHeaders.forEach(colHeader => {
+			// Add the column header as a top-level header
+			if (colHeader) {
+				markdownDocument += `# ${colHeader}\n\n`;
+			}
+
+			const midMap = contentMap.get(colHeader) || new Map<string, Map<string, string>>();
+
+			midMap.forEach((rowMap, midHeader) => {
+				// Add the middle-level header as a second-level header
+				if (midHeader) {
+					markdownDocument += `## ${midHeader}\n\n`;
+				}
+
+				rowMap.forEach((content, topHeader) => {
+					// Add the row header as a third-level header
+					if (topHeader) {
+						markdownDocument += `### ${topHeader}\n\n`;
+					}
+
+					// Add the content if it exists
+					if (content) {
+						markdownDocument += `${content}\n\n`;
+					}
+				});
+			});
+		});
+
+		return markdownDocument;
+	}
+
+
+
+
+
+
 
 	formatStub(allVersions: VersionedContent[]): string {
 		// Stub implementation for arrays with length 3 or more
@@ -631,11 +822,11 @@ export class CannoliNode extends CannoliVertex {
 		// First pass: look for markdown list items, and return the item at the index
 		const lines = content.split("\n");
 
-		// Filter out the lines that don't start with "- "
-		const listItems = lines.filter((line) => line.startsWith("- "));
+		// Filter out the lines that don't start with "- " or a number followed by ". "
+		const listItems = lines.filter((line) => line.startsWith("- ") || /^\d+\. /.test(line));
 
-		// Return the list items without the "- "
-		return listItems.map((item) => item.substring(2));
+		// Return the list items without the "- " or the number and ". "
+		return listItems.map((item) => item.startsWith("- ") ? item.substring(2) : item.replace(/^\d+\. /, ""));
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
