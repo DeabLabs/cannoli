@@ -1266,8 +1266,7 @@ export class CannoliFactory {
 		if (
 			outgoingEdges.some(
 				(edge) =>
-					this.getEdgeType(edge) === EdgeType.Field ||
-					this.getEdgeType(edge) === EdgeType.List
+					this.getEdgeType(edge) === EdgeType.Field
 			)
 		) {
 			return CallNodeType.Form;
