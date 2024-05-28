@@ -777,38 +777,38 @@ export default class Cannoli extends Plugin {
 		const vaultInterface = new VaultInterface(this, fetcher);
 
 
-		// Do the validation run
-		const [validationStoppagePromise] = runCannoli({
-			llm: llm,
-			cannoliJSON: canvasData,
-			fileSystemInterface: vaultInterface,
-			isMock: true,
-			canvas: noCanvas ? undefined : canvas,
-			fetcher: fetcher,
-			settings: cannoliSettings,
-			args: cannoliArgs
-		});
-		const validationStoppage = await validationStoppagePromise;
+		// // Do the validation run
+		// const [validationStoppagePromise] = runCannoli({
+		// 	llm: llm,
+		// 	cannoliJSON: canvasData,
+		// 	fileSystemInterface: vaultInterface,
+		// 	isMock: true,
+		// 	canvas: noCanvas ? undefined : canvas,
+		// 	fetcher: fetcher,
+		// 	settings: cannoliSettings,
+		// 	args: cannoliArgs
+		// });
+		// const validationStoppage = await validationStoppagePromise;
 
 
-		if (validationStoppage.reason === "error") {
-			new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
-			return;
-		}
+		// if (validationStoppage.reason === "error") {
+		// 	new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
+		// 	return;
+		// }
 
-		let shouldContinue = true;
+		// let shouldContinue = true;
 
 
 
-		// If the total price is greater than the threshold, ask the user if they want to continue
-		if (validationStoppage.totalCost > this.settings.costThreshold) {
-			shouldContinue = await this.showRunPriceAlertModal(validationStoppage.usage);
-		}
+		// // If the total price is greater than the threshold, ask the user if they want to continue
+		// if (validationStoppage.totalCost > this.settings.costThreshold) {
+		// 	shouldContinue = await this.showRunPriceAlertModal(validationStoppage.usage);
+		// }
 
-		if (!shouldContinue) {
-			new Notice(`Cannoli ${name} was cancelled due to cost.`);
-			return;
-		}
+		// if (!shouldContinue) {
+		// 	new Notice(`Cannoli ${name} was cancelled due to cost.`);
+		// 	return;
+		// }
 
 		// Do the live run
 		const [liveStoppagePromise, stopLiveCannoli] = runCannoli({

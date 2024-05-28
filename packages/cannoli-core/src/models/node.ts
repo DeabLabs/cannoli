@@ -10,6 +10,7 @@ import {
 	Reference,
 	ReferenceType,
 	VaultModifier,
+	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasFileData,
 	VerifiedCannoliCanvasLinkData,
 	VerifiedCannoliCanvasTextData,
@@ -26,6 +27,11 @@ import invariant from "tiny-invariant";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
+type VersionedContent = {
+	content: string;
+	versionArray: number[];
+};
+
 export class CannoliNode extends CannoliVertex {
 	references: Reference[] = [];
 	renderFunction: (
@@ -36,9 +42,10 @@ export class CannoliNode extends CannoliVertex {
 		nodeData:
 			| VerifiedCannoliCanvasFileData
 			| VerifiedCannoliCanvasLinkData
-			| VerifiedCannoliCanvasTextData
+			| VerifiedCannoliCanvasTextData,
+		fullCanvasData: VerifiedCannoliCanvasData
 	) {
-		super(nodeData);
+		super(nodeData, fullCanvasData);
 		this.references = nodeData.cannoliData.references || [];
 		this.renderFunction = this.buildRenderFunction();
 	}
@@ -358,7 +365,37 @@ export class CannoliNode extends CannoliVertex {
 			}
 
 			if (typeof edgeObject.content === "string" && edgeObject.text) {
-				content = edgeObject.content;
+				// if the edge has a versions array
+				if (edgeObject.versions && edgeObject.versions.length > 0) {
+					const allVersions: VersionedContent[] = [{
+						content: edgeObject.content,
+						versionArray: edgeObject.versions
+					}];
+
+					// Find all edges with the same name and add them to the allVersions array
+					const edgesWithSameName = this.getAllAvailableProvideEdges().filter((edge) => edge.text === edgeObject.text);
+					for (const otherVersion of edgesWithSameName) {
+						console.log(otherVersion.text + ": " + otherVersion.content + " (" + otherVersion.status + ")");
+
+						if (otherVersion.id !== edgeObject.id &&
+							otherVersion.versions.length === edgeObject.versions.length &&
+							otherVersion.content !== null) {
+							allVersions.push(
+								{
+									content: otherVersion.content as string,
+									versionArray: otherVersion.versions
+								}
+							)
+						}
+					}
+
+					console.log(allVersions);
+
+					content = this.formatAllVersions(allVersions);
+				} else {
+					content = edgeObject.content;
+				}
+
 
 				const variableValue = {
 					name: edgeObject.text,
@@ -417,6 +454,60 @@ export class CannoliNode extends CannoliVertex {
 
 		return resolvedVariableValues;
 	}
+
+
+
+	formatAllVersions(allVersions: VersionedContent[]): string {
+		// Determine the length of the version arrays
+		const versionLength = allVersions[0].versionArray.length;
+
+		if (versionLength === 1) {
+			return this.formatAsMarkdownList(allVersions);
+		} else if (versionLength === 2) {
+			return this.formatAsTable(allVersions);
+		} else {
+			// Stub for version arrays of length 3 or more
+			return this.formatStub(allVersions);
+		}
+	}
+
+	formatAsMarkdownList(allVersions: VersionedContent[]): string {
+		// Sort by the versionArray values
+		const sortedVersions = allVersions.sort((a, b) => a.versionArray[0] - b.versionArray[0]);
+
+		// Create a markdown list
+		return sortedVersions.map(item => `- ${item.content}`).join('\n');
+	}
+
+	formatAsTable(allVersions: VersionedContent[]): string {
+		// Determine the maximum row and column based on versionArray values
+		const maxRow = Math.max(...allVersions.map(item => item.versionArray[0]));
+		const maxCol = Math.max(...allVersions.map(item => item.versionArray[1]));
+
+		// Initialize a 2D array for the table
+		const table: string[][] = Array.from({ length: maxRow + 1 }, () =>
+			Array(maxCol + 1).fill('')
+		);
+
+		// Populate the table
+		allVersions.forEach(item => {
+			const [row, col] = item.versionArray;
+			table[row][col] = item.content;
+		});
+
+		// Convert the table to a markdown table string
+		const header = Array(maxCol + 1).fill('---').join(' | ');
+		const rows = table.map(row => row.join(' | ')).join('\n');
+		return `${header}\n${rows}`;
+	}
+
+	formatStub(allVersions: VersionedContent[]): string {
+		// Stub implementation for arrays with length 3 or more
+		return "Formatting for version arrays with length 3 or more is not implemented yet.";
+	}
+
+
+
 
 	resolveVariableConflicts(variableValues: VariableValue[]): VariableValue[] {
 		const finalVariables: VariableValue[] = [];
@@ -662,7 +753,7 @@ export class CannoliNode extends CannoliVertex {
 			return (
 				edge.type === EdgeType.Field ||
 				edge.type === EdgeType.Choice ||
-				edge.type === EdgeType.Merge ||
+				// edge.type === EdgeType.Merge ||
 				edge.type === EdgeType.List ||
 				edge.type === EdgeType.Variable
 			);
@@ -1621,9 +1712,10 @@ export class ReferenceNode extends ContentNode {
 		nodeData:
 			| VerifiedCannoliCanvasTextData
 			| VerifiedCannoliCanvasLinkData
-			| VerifiedCannoliCanvasFileData
+			| VerifiedCannoliCanvasFileData,
+		fullCanvasData: VerifiedCannoliCanvasData
 	) {
-		super(nodeData);
+		super(nodeData, fullCanvasData);
 
 		if (this.references.length !== 1) {
 			this.error(`Could not find reference.`);
@@ -2337,9 +2429,10 @@ export class FloatingNode extends CannoliNode {
 		nodeData:
 			| VerifiedCannoliCanvasTextData
 			| VerifiedCannoliCanvasLinkData
-			| VerifiedCannoliCanvasFileData
+			| VerifiedCannoliCanvasFileData,
+		fullCanvasData: VerifiedCannoliCanvasData
 	) {
-		super(nodeData);
+		super(nodeData, fullCanvasData);
 		this.status = CannoliObjectStatus.Complete;
 	}
 

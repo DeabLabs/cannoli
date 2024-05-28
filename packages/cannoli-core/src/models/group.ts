@@ -3,17 +3,25 @@ import { CannoliEdge } from "./edge";
 import {
 	CannoliObjectStatus,
 	EdgeType,
+	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasGroupData,
 } from "./graph";
+import { getGroupMembersFromData } from "src/factory";
 
 export class CannoliGroup extends CannoliVertex {
 	members: string[];
 	maxLoops: number;
 	currentLoop: number;
 
-	constructor(groupData: VerifiedCannoliCanvasGroupData) {
-		super(groupData);
-		this.members = groupData.cannoliData.members;
+	constructor(
+		groupData: VerifiedCannoliCanvasGroupData,
+		fullCanvasData: VerifiedCannoliCanvasData
+	) {
+		super(groupData, fullCanvasData);
+		this.members = getGroupMembersFromData(
+			groupData.id,
+			fullCanvasData
+		);
 		this.maxLoops = groupData.cannoliData.maxLoops ?? 1;
 		this.currentLoop = groupData.cannoliData.currentLoop ?? 0;
 	}
@@ -295,8 +303,11 @@ export class CannoliGroup extends CannoliVertex {
 }
 
 export class ForEachGroup extends CannoliGroup {
-	constructor(forEachData: VerifiedCannoliCanvasGroupData) {
-		super(forEachData);
+	constructor(
+		forEachData: VerifiedCannoliCanvasGroupData,
+		fullCanvasData: VerifiedCannoliCanvasData
+	) {
+		super(forEachData, fullCanvasData);
 	}
 
 	logDetails(): string {
@@ -353,8 +364,11 @@ export class ForEachGroup extends CannoliGroup {
 }
 
 export class RepeatGroup extends CannoliGroup {
-	constructor(groupData: VerifiedCannoliCanvasGroupData) {
-		super(groupData);
+	constructor(
+		groupData: VerifiedCannoliCanvasGroupData,
+		fullCanvasData: VerifiedCannoliCanvasData
+	) {
+		super(groupData, fullCanvasData);
 
 		this.currentLoop = groupData.cannoliData.currentLoop ?? 0;
 		this.maxLoops = groupData.cannoliData.maxLoops ?? 1;

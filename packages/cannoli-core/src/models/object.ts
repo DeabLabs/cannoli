@@ -9,8 +9,10 @@ import {
 	EdgeType,
 	GroupType,
 	NodeType,
+	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
+import { getIncomingEdgesFromData, getOutgoingEdgesFromData } from "src/factory";
 export class CannoliObject extends EventTarget {
 	run: Run;
 	id: string;
@@ -22,12 +24,14 @@ export class CannoliObject extends EventTarget {
 	canvasData:
 		| AllVerifiedCannoliCanvasNodeData
 		| VerifiedCannoliCanvasEdgeData;
+	fullCanvasData: VerifiedCannoliCanvasData;
 	originalObject: string | null;
 	kind: CannoliObjectKind;
 	type: EdgeType | NodeType | GroupType;
 
 	constructor(
-		data: AllVerifiedCannoliCanvasNodeData | VerifiedCannoliCanvasEdgeData
+		data: AllVerifiedCannoliCanvasNodeData | VerifiedCannoliCanvasEdgeData,
+		fullCanvasData: VerifiedCannoliCanvasData
 	) {
 		super();
 		this.id = data.id;
@@ -38,6 +42,7 @@ export class CannoliObject extends EventTarget {
 		this.kind = data.cannoliData.kind;
 		this.type = data.cannoliData.type;
 		this.canvasData = data;
+		this.fullCanvasData = fullCanvasData;
 	}
 
 	setRun(run: Run) {
@@ -101,6 +106,21 @@ export class CannoliObject extends EventTarget {
 
 		// For each dependency
 		for (const dependency of dependencies) {
+			// New logic for edges with versions property
+			if (this.cannoliGraph.isEdge(dependency) && dependency.versions !== undefined) {
+				for (const otherDependency of dependencies) {
+					if (
+						this.cannoliGraph.isEdge(otherDependency) &&
+						otherDependency.text === dependency.text &&
+						(otherDependency.status !== CannoliObjectStatus.Complete &&
+							otherDependency.status !== CannoliObjectStatus.Rejected)
+					) {
+						// If any other edge with the same name is not complete or rejected, return false
+						return false;
+					}
+				}
+			}
+
 			if (dependency.status !== CannoliObjectStatus.Complete) {
 				// If the dependency is a non-logging edge
 				if (
@@ -133,6 +153,8 @@ export class CannoliObject extends EventTarget {
 					return false;
 				}
 			}
+
+
 		}
 		return true;
 	}
@@ -302,10 +324,10 @@ export class CannoliVertex extends CannoliObject {
 	incomingEdges: string[];
 	groups: string[]; // Sorted from immediate parent to most distant
 
-	constructor(vertexData: AllVerifiedCannoliCanvasNodeData) {
-		super(vertexData);
-		this.outgoingEdges = vertexData.cannoliData.outgoingEdges;
-		this.incomingEdges = vertexData.cannoliData.incomingEdges;
+	constructor(vertexData: AllVerifiedCannoliCanvasNodeData, fullCanvasData: VerifiedCannoliCanvasData) {
+		super(vertexData, fullCanvasData);
+		this.outgoingEdges = getOutgoingEdgesFromData(this.id, this.fullCanvasData);
+		this.incomingEdges = getIncomingEdgesFromData(this.id, this.fullCanvasData);
 		this.groups = vertexData.cannoliData.groups;
 	}
 

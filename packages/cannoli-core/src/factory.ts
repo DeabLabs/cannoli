@@ -25,7 +25,6 @@ import {
 	VerifiedCannoliCanvasGroupData,
 	AllVerifiedCannoliCanvasNodeData,
 	VerifiedCannoliCanvasEdgeData,
-	VerifiedCannoliCanvasTextData,
 	CannoliArgs,
 	CannoliRunSettings,
 } from "./models/graph";
@@ -87,7 +86,6 @@ export class CannoliFactory {
 		[EdgeType.Config]: false,
 		[EdgeType.Field]: false,
 		[EdgeType.List]: false,
-		[EdgeType.Merge]: false,
 		[EdgeType.Variable]: false,
 		[EdgeType.Item]: false,
 		[EdgeType.Logging]: false,
@@ -245,12 +243,6 @@ export class CannoliFactory {
 			node.type === "text" || node.type === "file"
 				? this.parseNodeReferences(node)
 				: [];
-		const incomingEdges = this.getIncomingEdges(node.id).map(
-			(edge) => edge.id
-		);
-		const outgoingEdges = this.getOutgoingEdges(node.id).map(
-			(edge) => edge.id
-		);
 		const groups = this.getGroupsForVertex(node);
 		const dependencies = [] as string[];
 		const originalObject = null;
@@ -268,8 +260,6 @@ export class CannoliFactory {
 			type,
 			text,
 			references,
-			incomingEdges,
-			outgoingEdges,
 			groups,
 			dependencies,
 			originalObject,
@@ -288,28 +278,7 @@ export class CannoliFactory {
 		const kind = CannoliObjectKind.Group;
 		const type = this.getGroupType(group);
 		const text = labelInfo?.text || "";
-		const incomingEdges = this.getIncomingEdges(group.id).map(
-			(edge) => edge.id
-		);
-		const outgoingEdges = this.getOutgoingEdges(group.id).map(
-			(edge) => edge.id
-		);
 		const groups = this.getGroupsForVertex(group);
-
-		// Filter for members that are groups or have a non-null indicated type
-		const members = this.getMembersForGroup(group).filter(
-			(member) =>
-				this.getNodeIndicatedType(
-					this.cannoliData.nodes.find(
-						(node) => node.id === member
-					) as
-					| CannoliCanvasFileData
-					| CannoliCanvasLinkData
-					| CannoliCanvasTextData
-				) !== null ||
-				this.cannoliData.nodes.find((node) => node.id === member)
-					?.type === "group"
-		);
 
 		const dependencies = [] as string[];
 		// @ts-expect-error: originalObject is not a property of CannoliCanvasGroupData
@@ -323,10 +292,7 @@ export class CannoliFactory {
 			kind,
 			type,
 			text,
-			incomingEdges,
-			outgoingEdges,
 			groups,
-			members,
 			dependencies,
 			originalObject,
 			status,
@@ -407,10 +373,17 @@ export class CannoliFactory {
 	createForEachDuplicates(
 		data: VerifiedCannoliCanvasData
 	): VerifiedCannoliCanvasData {
+		// Sort groups by depth (deepest first)
+		const groups = data.nodes
+			.filter((node) => node.cannoliData.kind === CannoliObjectKind.Group)
+			.sort((a, b) => b.cannoliData.groups.length - a.cannoliData.groups.length);
+
 		// For each group of type "signified-for-each", create a duplicate group
-		for (const group of data.nodes) {
+		for (const group of groups) {
 			// For each group
 			if (group.cannoliData.kind === CannoliObjectKind.Group) {
+				const originalId = group.id;
+
 				// For each group of type "signified-for-each"
 				if (group.cannoliData.type === GroupType.SignifiedForEach) {
 					const castGroup = group as VerifiedCannoliCanvasGroupData;
@@ -438,109 +411,6 @@ export class CannoliFactory {
 								) as VerifiedCannoliCanvasEdgeData
 						);
 
-					const outgoingMergeEdge = outgoingEdges.find(
-						(edge) => edge.cannoliData.type === EdgeType.Merge
-					);
-
-					// Get the target of the merge edge
-					const mergeNode = outgoingMergeEdge
-						? data.nodes.find(
-							(node) => node.id === outgoingMergeEdge.toNode
-							// eslint-disable-next-line no-mixed-spaces-and-tabs
-						)
-						: null;
-
-					// Find the line of the node's text that starts with "{#}" and replicate it for each loop, adding " <loopNumber>" to each {variable}. I.e. {variable} becomes {variable 1}, {variable 2}, etc.
-					if (
-						mergeNode &&
-						mergeNode.cannoliData.kind === CannoliObjectKind.Node
-					) {
-						const castMergeNode =
-							mergeNode as VerifiedCannoliCanvasTextData;
-
-						// Split the text by newline
-						const lines =
-							castMergeNode.cannoliData.text.split("\n");
-
-						// Get the line of the node's text that starts with "{#}"
-						const loopLine = lines.find((line) =>
-							line.startsWith("{#}")
-						);
-
-						if (loopLine) {
-							// Get the text before and after the loopLine
-							let beforeLoopLine =
-								castMergeNode.cannoliData.text.slice(
-									0,
-									castMergeNode.cannoliData.text.indexOf(
-										loopLine
-									)
-								);
-
-							const afterLoopLine =
-								castMergeNode.cannoliData.text.slice(
-									castMergeNode.cannoliData.text.indexOf(
-										loopLine
-									) + loopLine.length
-								);
-
-							// Find the variables
-							const variables = loopLine.match(/{\w+}/g);
-
-							if (variables) {
-								// Create a copy of the loopLine for each loop
-								for (
-									let i = 0;
-									// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-									i < castGroup.cannoliData.maxLoops!;
-									i++
-								) {
-									// Create a copy of the loopLine
-									let newLoopLine = loopLine;
-
-									// Replace the "{#}" with the loop number
-									newLoopLine = newLoopLine.replace(
-										"{#}",
-										`${i + 1}`
-									);
-
-									// Replace each variable with the variable and the loop number
-									variables.forEach((variable) => {
-										newLoopLine = newLoopLine.replace(
-											variable,
-											`{${variable.slice(1, -1)} ${i + 1
-											}}`
-										);
-									});
-
-									// Add the new loopLine to the beforeLoopLine
-									beforeLoopLine = `${beforeLoopLine}${newLoopLine}\n\n`;
-								}
-
-								// Add the afterLoopLine to the beforeLoopLine
-								beforeLoopLine = `${beforeLoopLine}${afterLoopLine.trim()}`;
-
-								// Update the node's text
-								castMergeNode.text = beforeLoopLine;
-
-								castMergeNode.cannoliData.text = beforeLoopLine;
-							}
-						}
-
-						// Update the node's references
-						castMergeNode.cannoliData.references =
-							this.parseNodeReferences(castMergeNode);
-
-						// Replace the old node with the new node
-						data.nodes = data.nodes.map((node) => {
-							if (node.id === castMergeNode.id) {
-								return castMergeNode;
-							} else {
-								return node;
-							}
-						});
-					}
-
 					// Get group crossingInEdges, crossingOutEdges, and internalEdges
 					const { crossingInEdges, crossingOutEdges, internalEdges } =
 						this.getCrossingAndInternalEdges(castGroup, data);
@@ -563,7 +433,9 @@ export class CannoliFactory {
 					// Remove the original group and its members and edges from the canvas
 					data.nodes = data.nodes.filter(
 						(node) =>
-							node.id !== group.id &&
+							// If the node is not the original group
+							node.id !== originalId &&
+							// If the node is not in the original group's members array
 							!castGroup.cannoliData?.members.includes(node.id)
 					);
 
@@ -577,6 +449,9 @@ export class CannoliFactory {
 					);
 				}
 			}
+
+			console.log("Canvas after duplicating group with text: " + group.cannoliData.text);
+			console.log(data);
 		}
 
 		return data;
@@ -592,305 +467,470 @@ export class CannoliFactory {
 		internalEdges: VerifiedCannoliCanvasEdgeData[],
 		canvas: VerifiedCannoliCanvasData
 	): void {
-		// Create a duplicate group and its members and edges
-		const duplicateGroup = this.duplicateObject(
-			group
-		) as VerifiedCannoliCanvasGroupData;
 
-		const duplicateMembers = this.duplicateObject(
-			group.cannoliData.members.map((memberId) =>
-				canvas.nodes.find((node) => node.id === memberId)
-			)
-		) as AllVerifiedCannoliCanvasNodeData[];
+	}
 
-		// Create duplicate edges
-		const duplicateIncomingEdges = this.duplicateObject(
-			incomingEdges
-		) as VerifiedCannoliCanvasEdgeData[];
+	duplicateEdge(edgeId: string, index: number, data: VerifiedCannoliCanvasData): string {
+		const originalEdge = data.edges.find((edge) => edge.id === edgeId);
 
-		const duplicateOutgoingEdges = this.duplicateObject(
-			outgoingEdges
-		) as VerifiedCannoliCanvasEdgeData[];
+		if (!originalEdge) {
+			throw new Error("duplicateEdge: originalEdge is undefined");
+		}
 
-		const duplicateCrossingInEdges = this.duplicateObject(
-			crossingInEdges
-		) as VerifiedCannoliCanvasEdgeData[];
+		const duplicateEdge = this.duplicateObject(originalEdge) as VerifiedCannoliCanvasEdgeData;
+		duplicateEdge.id = `${duplicateEdge.id}-${index}`;
 
-		const duplicateCrossingOutEdges = this.duplicateObject(
-			crossingOutEdges
-		) as VerifiedCannoliCanvasEdgeData[];
+		// Add the duplicate edge to the canvas' edges array
+		data.edges.push(duplicateEdge);
 
-		const duplicateInternalEdges = this.duplicateObject(
-			internalEdges
-		) as VerifiedCannoliCanvasEdgeData[];
+		return duplicateEdge.id;
+	}
 
-		// Update the duplicate group's id and type
-		duplicateGroup.cannoliData.originalObject = group.id;
+	duplicateGroup(groupId: string, index: number, data: VerifiedCannoliCanvasData): string {
+		const originalGroup = data.nodes.find((node) => node.id === groupId);
+		if (!originalGroup) {
+			throw new Error("duplicateGroup: originalGroup is undefined");
+		}
+		const duplicateGroup = this.duplicateObject(originalGroup) as VerifiedCannoliCanvasGroupData;
 		duplicateGroup.id = `${duplicateGroup.id}-${index}`;
 		duplicateGroup.cannoliData.currentLoop = index;
-		duplicateGroup.cannoliData.type = GroupType.ForEach;
 
-		// Update the members arrays of the groups in this group's groups array
-		duplicateGroup.cannoliData.groups.forEach((groupId: string) => {
-			const groupData = canvas.nodes.find(
-				(node) => node.id === groupId
-			) as VerifiedCannoliCanvasGroupData;
+		// If the original is a forEach group, set the type to basic
+		if (originalGroup.cannoliData.type === GroupType.SignifiedForEach) {
+			duplicateGroup.cannoliData.type = GroupType.Basic;
+		}
 
-			if (!groupData) {
-				throw new Error("createDuplicateGroup: groupData is undefined");
-			}
+		// Find all instances of the original group in the crossingInGroups array of the edges
+		const crossingInEdges = data.edges.filter((edge) => edge.cannoliData.crossingInGroups.includes(originalGroup.id));
 
-			// Change the original group id to the new group id
-			groupData.cannoliData.members = groupData.cannoliData.members.map(
-				(memberId) => {
-					if (memberId === group.id) {
-						return duplicateGroup.id;
-					} else {
-						return memberId;
-					}
-				}
-			);
+		// For each edge that contains the original group as a crossingInGroup, update the crossingInGroups array to include the duplicate group id
+		crossingInEdges.forEach((edge) => {
+			edge.cannoliData.crossingInGroups = edge.cannoliData.crossingInGroups.filter((groupId) => groupId !== originalGroup.id);
+			edge.cannoliData.crossingInGroups.push(duplicateGroup.id);
 		});
 
-		// Get the incoming list edge of the group
-		const incomingListEdge = canvas.edges.find(
-			(edge) =>
-				edge.toNode === group.id &&
-				edge.cannoliData.type === EdgeType.List
-		) as VerifiedCannoliCanvasEdgeData;
+		// Find all instances of the original group in the crossingOutGroups array of the edges
+		const crossingOutEdges = data.edges.filter((edge) => edge.cannoliData.crossingOutGroups.includes(originalGroup.id));
 
-		let accumulatorNode: AllVerifiedCannoliCanvasNodeData | null = null;
-
-		// Update the duplicate members' ids and replace the group id in the groups with the duplicate group id
-		duplicateMembers.forEach((member) => {
-			member.cannoliData.originalObject = member.id;
-			member.id = `${member.id}-${index}`;
-			member.cannoliData.groups = member.cannoliData.groups.map(
-				(groupId: string) => {
-					if (groupId === group.id) {
-						return duplicateGroup.id;
-					} else {
-						return groupId;
-					}
-				}
-			);
-			member.cannoliData.incomingEdges = [];
-			member.cannoliData.outgoingEdges = [];
-
-			// If its a node, update the references if they match the incoming list edge
-			if (member.cannoliData.kind === CannoliObjectKind.Node) {
-				const node = member as VerifiedCannoliCanvasTextData;
-				node.cannoliData.references = node.cannoliData.references?.map(
-					(reference) => {
-						if (
-							reference.type === ReferenceType.Variable &&
-							reference.name === incomingListEdge.cannoliData.text
-						) {
-							reference.name = `${reference.name}`;
-							return reference;
-						} else {
-							return reference;
-						}
-					}
-				);
-			}
+		// For each edge that contains the original group as a crossingOutGroup, update the crossingOutGroups array to include the duplicate group id
+		crossingOutEdges.forEach((edge) => {
+			edge.cannoliData.crossingOutGroups = edge.cannoliData.crossingOutGroups.filter((groupId) => groupId !== originalGroup.id);
+			edge.cannoliData.crossingOutGroups.push(duplicateGroup.id);
 		});
 
-		// Update the duplicate group's members array, replacing the old members with the new ones
-		duplicateGroup.cannoliData.members = duplicateMembers.map(
-			(member) => member.id
-		);
+		data.nodes.push(duplicateGroup);
 
-		duplicateGroup.cannoliData.incomingEdges = [];
-		duplicateGroup.cannoliData.outgoingEdges = [];
-
-		// For each duplicate incoming edge, update the edge's target to the duplicate group, and the group's incoming edges to the duplicate incoming edges, and change the type
-		duplicateIncomingEdges.forEach((edge) => {
-			edge.cannoliData.originalObject = edge.id;
-			edge.id = `${edge.id}-${index}`;
-			edge.toNode = duplicateGroup.id;
-			duplicateGroup.cannoliData.incomingEdges.push(edge.id);
-			if (edge.cannoliData.type === EdgeType.List) {
-				edge.cannoliData.type = EdgeType.Item;
-				edge.cannoliData.text = `${edge.cannoliData.text}`;
-			}
-
-			// Update the outgoingEdges array of the fromNode
-			const fromNode = canvas.nodes.find(
-				(node) => node.id === edge.fromNode
-			) as AllVerifiedCannoliCanvasNodeData;
-
-			if (!fromNode) {
-				throw new Error("createDuplicateGroup: fromNode is undefined");
-			}
-
-			fromNode.cannoliData.outgoingEdges.push(edge.id);
-
-			// Remove the edge from the outgoingEdges array of the fromNode
-			fromNode.cannoliData.outgoingEdges =
-				fromNode.cannoliData.outgoingEdges.filter(
-					(edgeId: string | null) =>
-						edgeId !== edge.cannoliData.originalObject
-				);
-		});
-
-		// For each duplicate outgoing edge, update the edge's source to the duplicate group, and the group's outgoing edges to the duplicate outgoing edges, and change the type
-		duplicateOutgoingEdges.forEach((edge) => {
-			edge.cannoliData.originalObject = edge.id;
-			edge.id = `${edge.id}-${index}`;
-			edge.fromNode = duplicateGroup.id;
-			duplicateGroup.cannoliData.outgoingEdges.push(edge.id);
-			if (edge.cannoliData.type === EdgeType.Merge) {
-				edge.cannoliData.type = EdgeType.Variable;
-				edge.cannoliData.text = `${edge.cannoliData.text}`;
-				accumulatorNode = canvas.nodes.find(
-					(node) => node.id === edge.toNode
-				) as AllVerifiedCannoliCanvasNodeData;
-			}
-
-			// Update the incomingEdges array of the toNode
-			const toNode = canvas.nodes.find(
-				(node) => node.id === edge.toNode
-			) as AllVerifiedCannoliCanvasNodeData;
-
-			if (!toNode) {
-				throw new Error("createDuplicateGroup: toNode is undefined");
-			}
-
-			toNode.cannoliData.incomingEdges.push(edge.id);
-
-			// Remove the edge from the incomingEdges array of the toNode
-			toNode.cannoliData.incomingEdges =
-				toNode.cannoliData.incomingEdges.filter(
-					(edgeId: string | null) =>
-						edgeId !== edge.cannoliData.originalObject
-				);
-		});
-
-		// For each duplicate crossing in edge, update the edge's target to the new member and update the edge's crossingInGroups with the duplicate group
-		duplicateCrossingInEdges.forEach((edge) => {
-			edge.cannoliData.originalObject = edge.id;
-			edge.id = `${edge.id}-${index}`;
-			edge.toNode = `${edge.toNode}-${index}`;
-			// edge.toNode = duplicateMembers.find(
-			// 	(member) => member.cannoliData.originalObject === edge.toNode
-			// )?.id as string;
-
-			// Add this edge to the incomingEdges array of the toNode
-			const toNode = duplicateMembers.find(
-				(node) => node.id === edge.toNode
-			) as AllVerifiedCannoliCanvasNodeData;
-
-			if (!toNode) {
-				throw new Error("createDuplicateGroup: toNode is undefined");
-			}
-
-			toNode.cannoliData.incomingEdges.push(edge.id);
-
-			// Update the outgoingEdges array of the fromNode
-			const fromNode = canvas.nodes.find(
-				(node) => node.id === edge.fromNode
-			) as AllVerifiedCannoliCanvasNodeData;
-
-			if (!fromNode) {
-				throw new Error("createDuplicateGroup: fromNode is undefined");
-			}
-
-			fromNode.cannoliData.outgoingEdges.push(edge.id);
-
-			// Remove the edge from the outgoingEdges array of the fromNode
-			fromNode.cannoliData.outgoingEdges =
-				fromNode.cannoliData.outgoingEdges.filter(
-					(edgeId: string | null) =>
-						edgeId !== edge.cannoliData.originalObject
-				);
-
-			edge.cannoliData.crossingInGroups =
-				edge.cannoliData.crossingInGroups.map((groupId: string) => {
-					if (groupId === group.id) {
-						return duplicateGroup.id;
-					} else {
-						return groupId;
-					}
-				});
-		});
-
-		// For each duplicate crossing out edge, update the edge's source to the new member and update the edge's crossingOutGroups with the duplicate group
-		duplicateCrossingOutEdges.forEach((edge) => {
-			edge.cannoliData.originalObject = edge.id;
-			edge.id = `${edge.id}-${index}`;
-			edge.fromNode = `${edge.fromNode}-${index}`;
-			// edge.fromNode = duplicateMembers.find(
-			// 	(member) => member.cannoliData.originalObject === edge.fromNode
-			// )?.id as string;
-
-			// If the toNode is the accumulatorNode, add the index to the edge's text
-			if (edge.toNode === accumulatorNode?.id) {
-				edge.cannoliData.text = `${edge.cannoliData.text}`;
-			}
-
-			// Add this edge to the outgoingEdges array of the fromNode
-			const fromNode = duplicateMembers.find(
-				(node) => node.id === edge.fromNode
-			) as AllVerifiedCannoliCanvasNodeData;
-
-			if (!fromNode) {
-				throw new Error("createDuplicateGroup: fromNode is undefined");
-			}
-
-			fromNode.cannoliData.outgoingEdges.push(edge.id);
-
-			// Update the incomingEdges array of the toNode
-			const toNode = canvas.nodes.find(
-				(node) => node.id === edge.toNode
-			) as AllVerifiedCannoliCanvasNodeData;
-
-			if (!toNode) {
-				throw new Error("createDuplicateGroup: toNode is undefined");
-			}
-
-			toNode.cannoliData.incomingEdges.push(edge.id);
-
-			// Remove the edge from the incomingEdges array of the toNode
-			toNode.cannoliData.incomingEdges =
-				toNode.cannoliData.incomingEdges.filter(
-					(edgeId: string | null) =>
-						edgeId !== edge.cannoliData.originalObject
-				);
-
-			edge.cannoliData.crossingOutGroups =
-				edge.cannoliData.crossingOutGroups.map((groupId: string) => {
-					if (groupId === group.id) {
-						return duplicateGroup.id;
-					} else {
-						return groupId;
-					}
-				});
-		});
-
-		// For each duplicate internal edge, update the edge's source and target to the new members
-		duplicateInternalEdges.forEach((edge) => {
-			edge.fromNode = duplicateMembers.find(
-				(member) => member.cannoliData.originalObject === edge.fromNode
-			)?.id as string;
-
-			edge.toNode = duplicateMembers.find(
-				(member) => member.cannoliData.originalObject === edge.toNode
-			)?.id as string;
-		});
-
-		// Add the duplicate group, members, and edges to the canvas
-		canvas.nodes.push(duplicateGroup);
-		canvas.nodes.push(...duplicateMembers);
-		// Add the duplicate edges to the canvas
-		canvas.edges.push(
-			...duplicateIncomingEdges,
-			...duplicateOutgoingEdges,
-			...duplicateCrossingInEdges,
-			...duplicateCrossingOutEdges,
-			...duplicateInternalEdges
-		);
+		return duplicateGroup.id;
 	}
+
+	duplicateNode(nodeId: string, index: number, data: VerifiedCannoliCanvasData): string {
+		const originalNode = data.nodes.find((node) => node.id === nodeId);
+
+		if (!originalNode) {
+			throw new Error("duplicateNode: originalNode is undefined");
+		}
+
+		const duplicateNode = this.duplicateObject(originalNode) as AllVerifiedCannoliCanvasNodeData;
+		duplicateNode.id = `${duplicateNode.id}-${index}`;
+
+		// Find all instances of the original node in the toNode of the edges
+		const incomingEdges = data.edges.filter((edge) => edge.toNode === originalNode.id);
+
+		// For each edge that contains the original node as a toNode, duplicate the edge and update the toNode to include the duplicate node id
+		incomingEdges.forEach((edge) => {
+			const duplicateEdgeId = this.duplicateEdge(edge.id, index, data);
+			// Edit the toNode of the duplicate edge to be the duplicate node id
+			data.edges.map((edge) => {
+				if (edge.id === duplicateEdgeId) {
+					edge.toNode = duplicateNode.id;
+				}
+			});
+		});
+
+		// Find all instances of the original node in the fromNode of the edges
+		const outgoingEdges = data.edges.filter((edge) => edge.fromNode === originalNode.id);
+
+		// For each edge that contains the original node as a fromNode, duplicate the edge and update the fromNode to include the duplicate node id
+		outgoingEdges.forEach((edge) => {
+			const duplicateEdgeId = this.duplicateEdge(edge.id, index, data);
+			// Edit the fromNode of the duplicate edge to be the duplicate node id
+			data.edges.map((edge) => {
+				if (edge.id === duplicateEdgeId) {
+					edge.fromNode = duplicateNode.id;
+				}
+			});
+		});
+
+		// Add the duplicate node to the canvas' nodes array
+		data.nodes.push(duplicateNode);
+
+		return duplicateNode.id;
+	}
+
+
+
+	// 	group: VerifiedCannoliCanvasGroupData,
+	// 	index: number,
+	// 	incomingEdges: VerifiedCannoliCanvasEdgeData[],
+	// 	outgoingEdges: VerifiedCannoliCanvasEdgeData[],
+	// 	crossingInEdges: VerifiedCannoliCanvasEdgeData[],
+	// 	crossingOutEdges: VerifiedCannoliCanvasEdgeData[],
+	// 	internalEdges: VerifiedCannoliCanvasEdgeData[],
+	// 	canvas: VerifiedCannoliCanvasData
+	// ): void {
+	// 	// Create a duplicate group and its members and edges
+	// 	const duplicateGroup = this.duplicateObject(
+	// 		group
+	// 	) as VerifiedCannoliCanvasGroupData;
+
+	// 	const duplicateMembers = this.duplicateObject(
+	// 		group.cannoliData.members.map((memberId) =>
+	// 			canvas.nodes.find((node) => node.id === memberId)
+	// 		)
+	// 	) as AllVerifiedCannoliCanvasNodeData[];
+
+	// 	// Create duplicate edges
+	// 	const duplicateIncomingEdges = this.duplicateObject(
+	// 		incomingEdges
+	// 	) as VerifiedCannoliCanvasEdgeData[];
+
+	// 	const duplicateOutgoingEdges = this.duplicateObject(
+	// 		outgoingEdges
+	// 	) as VerifiedCannoliCanvasEdgeData[];
+
+	// 	const duplicateCrossingInEdges = this.duplicateObject(
+	// 		crossingInEdges
+	// 	) as VerifiedCannoliCanvasEdgeData[];
+
+	// 	const duplicateCrossingOutEdges = this.duplicateObject(
+	// 		crossingOutEdges
+	// 	) as VerifiedCannoliCanvasEdgeData[];
+
+	// 	const duplicateInternalEdges = this.duplicateObject(
+	// 		internalEdges
+	// 	) as VerifiedCannoliCanvasEdgeData[];
+
+	// 	const originalGroupId = group.id;
+
+	// 	// Update the duplicate group's id and type
+	// 	duplicateGroup.cannoliData.originalObject = group.id;
+	// 	duplicateGroup.id = `${duplicateGroup.id}-${index}`;
+	// 	duplicateGroup.cannoliData.currentLoop = index;
+	// 	duplicateGroup.cannoliData.type = GroupType.ForEach;
+
+	// 	// Update the members arrays of the groups in this group's groups array
+	// 	duplicateGroup.cannoliData.groups.forEach((groupId: string) => {
+	// 		const groupData = canvas.nodes.find(
+	// 			(node) => node.id === groupId
+	// 		) as VerifiedCannoliCanvasGroupData;
+
+	// 		if (!groupData) {
+	// 			throw new Error("createDuplicateGroup: groupData is undefined");
+	// 		}
+
+	// 		// Remove the original group from the group's members array
+	// 		groupData.cannoliData.members = groupData.cannoliData.members.filter(
+	// 			(member) => member !== group.id
+	// 		);
+
+	// 		// Add the duplicate group to the group's members array
+	// 		groupData.cannoliData.members.push(duplicateGroup.id);
+	// 	});
+
+	// 	// // Get the incoming list edge of the group
+	// 	// const incomingListEdge = canvas.edges.find(
+	// 	// 	(edge) =>
+	// 	// 		edge.toNode === group.id &&
+	// 	// 		edge.cannoliData.type === EdgeType.List
+	// 	// ) as VerifiedCannoliCanvasEdgeData;
+
+	// 	// let accumulatorNode: AllVerifiedCannoliCanvasNodeData | null = null;
+
+	// 	// Update the duplicate members' ids and replace the group id in the groups with the duplicate group id
+	// 	duplicateMembers.forEach((member) => {
+	// 		const originalMemberId = member.id;
+	// 		member.cannoliData.originalObject = member.id;
+	// 		member.id = `${member.id}-${index}`;
+	// 		// member.cannoliData.groups = member.cannoliData.groups.map(
+	// 		// 	(groupId: string) => {
+	// 		// 		if (groupId === group.id) {
+	// 		// 			return duplicateGroup.id;
+	// 		// 		} else {
+	// 		// 			return groupId;
+	// 		// 		}
+	// 		// 	}
+	// 		// );
+	// 		member.cannoliData.incomingEdges = [];
+	// 		member.cannoliData.outgoingEdges = [];
+
+	// 		// // Replace this group in the member's groups array with the duplicate group
+	// 		// member.cannoliData.groups = member.cannoliData.groups.map(
+	// 		// 	(groupId) => {
+	// 		// 		if (groupId === group.id) {
+	// 		// 			return duplicateGroup.id;
+	// 		// 		} else {
+	// 		// 			return groupId;
+	// 		// 		}
+	// 		// 	}
+	// 		// );
+
+	// 		// For each group this member is in other than the group currently being duplicated, update the group's members array to remove the original node and add this one
+	// 		member.cannoliData.groups.forEach((groupId) => {
+	// 			// If the group is not the group currently being duplicated
+	// 			if (groupId !== originalGroupId) {
+	// 				const group = canvas.nodes.find(
+	// 					(node) => node.id === groupId
+	// 				) as VerifiedCannoliCanvasGroupData;
+	// 				group.cannoliData.members = group.cannoliData.members.filter(
+	// 					(member) => member !== originalMemberId
+	// 				);
+	// 				group.cannoliData.members.push(member.id);
+	// 			} else {
+	// 				// If the group is the group currently being duplicated, replace it with the duplicate group
+	// 				member.cannoliData.groups = member.cannoliData.groups.map(
+	// 					(groupId) => {
+	// 						if (groupId === originalGroupId) {
+	// 							return duplicateGroup.id;
+	// 						} else {
+	// 							return groupId;
+	// 						}
+	// 					}
+	// 				);
+	// 			}
+	// 		});
+
+	// 		// If this member is itself a group, deal with members and crossingIn and crossingOut edges
+	// 		if (member.cannoliData.kind === CannoliObjectKind.Group) {
+	// 			const memberGroup = member as VerifiedCannoliCanvasGroupData;
+
+	// 			// For each member of this group, find and replace the original group id with the duplicate group id
+	// 			memberGroup.cannoliData.members.forEach((memberId) => {
+	// 				const member = canvas.nodes.find(
+	// 					(node) => node.id === memberId
+	// 				) as VerifiedCannoliCanvasGroupData;
+	// 				// find and replace the original group id with the duplicate group id
+	// 				member.cannoliData.groups = member.cannoliData.groups.filter(
+	// 					(groupId) => groupId !== originalMemberId
+	// 				);
+	// 				member.cannoliData.groups.push(memberGroup.id);
+	// 			});
+
+	// 			// For each edge in the canvas, if it's crossingInGroups or crossingOutGroups contains the memberGroup, find and replace the original group id with the duplicate group id
+	// 			canvas.edges.forEach((edge) => {
+	// 				if (edge.cannoliData.crossingInGroups.includes(originalMemberId)) {
+	// 					edge.cannoliData.crossingInGroups = edge.cannoliData.crossingInGroups.filter(
+	// 						(groupId) => groupId !== originalMemberId
+	// 					);
+	// 					edge.cannoliData.crossingInGroups.push(memberGroup.id);
+	// 				} else if (edge.cannoliData.crossingOutGroups.includes(originalMemberId)) {
+	// 					edge.cannoliData.crossingOutGroups = edge.cannoliData.crossingOutGroups.filter(
+	// 						(groupId) => groupId !== originalMemberId
+	// 					);
+	// 					edge.cannoliData.crossingOutGroups.push(memberGroup.id);
+	// 				}
+	// 			});
+	// 		}
+
+
+	// 		// // If its a node, update the references if they match the incoming list edge
+	// 		// if (member.cannoliData.kind === CannoliObjectKind.Node) {
+	// 		// 	const node = member as VerifiedCannoliCanvasTextData;
+	// 		// 	node.cannoliData.references = node.cannoliData.references?.map(
+	// 		// 		(reference) => {
+	// 		// 			if (
+	// 		// 				reference.type === ReferenceType.Variable &&
+	// 		// 				reference.name === incomingListEdge.cannoliData.text
+	// 		// 			) {
+	// 		// 				reference.name = `${reference.name}`;
+	// 		// 				return reference;
+	// 		// 			} else {
+	// 		// 				return reference;
+	// 		// 			}
+	// 		// 		}
+	// 		// 	);
+	// 		// }
+	// 	});
+
+	// 	// Update the duplicate group's members array, replacing the old members with the new ones
+	// 	duplicateGroup.cannoliData.members = duplicateMembers.map(
+	// 		(member) => member.id
+	// 	);
+
+	// 	duplicateGroup.cannoliData.incomingEdges = [];
+	// 	duplicateGroup.cannoliData.outgoingEdges = [];
+
+	// 	// For each duplicate incoming edge, update the edge's target to the duplicate group, and the group's incoming edges to the duplicate incoming edges, and change the type
+	// 	duplicateIncomingEdges.forEach((edge) => {
+	// 		edge.cannoliData.originalObject = edge.id;
+	// 		edge.id = `${edge.id}-${index}`;
+	// 		edge.toNode = duplicateGroup.id;
+	// 		duplicateGroup.cannoliData.incomingEdges.push(edge.id);
+	// 		if (edge.cannoliData.type === EdgeType.List) {
+	// 			edge.cannoliData.type = EdgeType.Item;
+	// 			edge.cannoliData.text = `${edge.cannoliData.text}`;
+	// 		}
+
+	// 		// Update the outgoingEdges array of the fromNode
+	// 		const fromNode = canvas.nodes.find(
+	// 			(node) => node.id === edge.fromNode
+	// 		) as AllVerifiedCannoliCanvasNodeData;
+
+	// 		if (!fromNode) {
+	// 			throw new Error("createDuplicateGroup: fromNode is undefined");
+	// 		}
+
+	// 		fromNode.cannoliData.outgoingEdges.push(edge.id);
+
+	// 		// Remove the edge from the outgoingEdges array of the fromNode
+	// 		fromNode.cannoliData.outgoingEdges =
+	// 			fromNode.cannoliData.outgoingEdges.filter(
+	// 				(edgeId: string | null) =>
+	// 					edgeId !== edge.cannoliData.originalObject
+	// 			);
+	// 	});
+
+	// 	// For each duplicate crossing in edge, update the edge's target to the new member and update the edge's crossingInGroups with the duplicate group
+	// 	duplicateCrossingInEdges.forEach((edge) => {
+	// 		edge.cannoliData.originalObject = edge.id;
+	// 		edge.id = `${edge.id}-${index}`;
+	// 		edge.toNode = `${edge.toNode}-${index}`;
+	// 		// edge.toNode = duplicateMembers.find(
+	// 		// 	(member) => member.cannoliData.originalObject === edge.toNode
+	// 		// )?.id as string;
+
+	// 		// Add this edge to the incomingEdges array of the toNode
+	// 		const toNode = duplicateMembers.find(
+	// 			(node) => node.id === edge.toNode
+	// 		) as AllVerifiedCannoliCanvasNodeData;
+
+	// 		if (!toNode) {
+	// 			throw new Error("createDuplicateGroup: toNode is undefined");
+	// 		}
+
+	// 		toNode.cannoliData.incomingEdges.push(edge.id);
+
+	// 		// Update the outgoingEdges array of the fromNode
+	// 		const fromNode = canvas.nodes.find(
+	// 			(node) => node.id === edge.fromNode
+	// 		) as AllVerifiedCannoliCanvasNodeData;
+
+	// 		if (!fromNode) {
+	// 			throw new Error("createDuplicateGroup: fromNode is undefined");
+	// 		}
+
+	// 		fromNode.cannoliData.outgoingEdges.push(edge.id);
+
+	// 		// Remove the edge from the outgoingEdges array of the fromNode
+	// 		fromNode.cannoliData.outgoingEdges =
+	// 			fromNode.cannoliData.outgoingEdges.filter(
+	// 				(edgeId: string | null) =>
+	// 					edgeId !== edge.cannoliData.originalObject
+	// 			);
+
+	// 		edge.cannoliData.crossingInGroups =
+	// 			edge.cannoliData.crossingInGroups.map((groupId: string) => {
+	// 				if (groupId === group.id) {
+	// 					return duplicateGroup.id;
+	// 				} else {
+	// 					return groupId;
+	// 				}
+	// 			});
+	// 	});
+
+	// 	// For each duplicate crossing out edge, update the edge's source to the new member and update the edge's crossingOutGroups with the duplicate group
+	// 	duplicateCrossingOutEdges.forEach((edge) => {
+	// 		edge.cannoliData.originalObject = edge.id;
+
+	// 		// If the edge doesn't have a versions array, create it
+	// 		if (!edge.cannoliData.versions) {
+	// 			edge.cannoliData.versions = [];
+	// 		}
+	// 		// Add the index to the versions array
+	// 		edge.cannoliData.versions.push(index);
+
+	// 		edge.id = `${edge.id}-${index}`;
+	// 		edge.fromNode = `${edge.fromNode}-${index}`;
+	// 		// edge.fromNode = duplicateMembers.find(
+	// 		// 	(member) => member.cannoliData.originalObject === edge.fromNode
+	// 		// )?.id as string;
+
+	// 		// // If the toNode is the accumulatorNode, add the index to the edge's text
+	// 		// if (edge.toNode === accumulatorNode?.id) {
+	// 		// 	edge.cannoliData.text = `${edge.cannoliData.text}`;
+	// 		// }
+
+	// 		// Add this edge to the outgoingEdges array of the fromNode
+	// 		const fromNode = duplicateMembers.find(
+	// 			(node) => node.id === edge.fromNode
+	// 		) as AllVerifiedCannoliCanvasNodeData;
+
+	// 		if (!fromNode) {
+	// 			throw new Error("createDuplicateGroup: fromNode is undefined");
+	// 		}
+
+	// 		fromNode.cannoliData.outgoingEdges.push(edge.id);
+
+	// 		// Update the incomingEdges array of the toNode
+	// 		const toNode = canvas.nodes.find(
+	// 			(node) => node.id === edge.toNode
+	// 		) as AllVerifiedCannoliCanvasNodeData;
+
+	// 		if (!toNode) {
+	// 			throw new Error("createDuplicateGroup: toNode is undefined");
+	// 		}
+
+	// 		toNode.cannoliData.incomingEdges.push(edge.id);
+
+	// 		// Remove the edge from the incomingEdges array of the toNode
+	// 		toNode.cannoliData.incomingEdges =
+	// 			toNode.cannoliData.incomingEdges.filter(
+	// 				(edgeId: string | null) =>
+	// 					edgeId !== edge.cannoliData.originalObject
+	// 			);
+
+	// 		edge.cannoliData.crossingOutGroups =
+	// 			edge.cannoliData.crossingOutGroups.map((groupId: string) => {
+	// 				if (groupId === group.id) {
+	// 					return duplicateGroup.id;
+	// 				} else {
+	// 					return groupId;
+	// 				}
+	// 			});
+	// 	});
+
+	// 	// For each duplicate internal edge, update the edge's source and target to the new members
+	// 	duplicateInternalEdges.forEach((edge) => {
+	// 		edge.id = `${edge.id}-${index}`;
+	// 		edge.fromNode = `${edge.fromNode}-${index}`;
+	// 		edge.toNode = `${edge.toNode}-${index}`;
+
+	// 		// Update the fromNode's outgoingEdges array
+	// 		const fromNode = duplicateMembers.find(
+	// 			(node) => node.id === edge.fromNode
+	// 		) as AllVerifiedCannoliCanvasNodeData;
+
+	// 		fromNode.cannoliData.outgoingEdges.push(edge.id);
+
+	// 		// Update the toNode's incomingEdges array
+	// 		const toNode = duplicateMembers.find(
+	// 			(node) => node.id === edge.toNode
+	// 		) as AllVerifiedCannoliCanvasNodeData;
+
+	// 		toNode.cannoliData.incomingEdges.push(edge.id);
+	// 	});
+
+	// 	// Add the duplicate group, members, and edges to the canvas
+	// 	canvas.nodes.push(duplicateGroup);
+	// 	canvas.nodes.push(...duplicateMembers);
+	// 	// Add the duplicate edges to the canvas
+	// 	canvas.edges.push(
+	// 		...duplicateIncomingEdges,
+	// 		...duplicateOutgoingEdges,
+	// 		...duplicateCrossingInEdges,
+	// 		...duplicateCrossingOutEdges,
+	// 		...duplicateInternalEdges
+	// 	);
+	// }
 
 	duplicateObject(data: unknown) {
 		return JSON.parse(JSON.stringify(data));
@@ -910,14 +950,10 @@ export class CannoliFactory {
 		const internalEdges: VerifiedCannoliCanvasEdgeData[] = [];
 
 		// For each member
-		for (const member of group.cannoliData.members) {
-			// Get the member data
-			const memberData = canvas.nodes.find(
-				(node) => node.id === member
-			) as AllVerifiedCannoliCanvasNodeData;
-
+		const members = getGroupMembersFromData(group.id, canvas);
+		for (const member of members) {
 			// For each incoming edge
-			for (const edgeId of memberData.cannoliData.incomingEdges) {
+			for (const edgeId of getIncomingEdgesFromData(member, canvas)) {
 				const edgeData = canvas.edges.find(
 					(edge) => edge.id === edgeId
 				) as VerifiedCannoliCanvasEdgeData;
@@ -933,7 +969,7 @@ export class CannoliFactory {
 			}
 
 			// For each outgoing edge
-			for (const edgeId of memberData.cannoliData.outgoingEdges) {
+			for (const edgeId of getOutgoingEdgesFromData(member, canvas)) {
 				const edgeData = canvas.edges.find(
 					(edge) => edge.id === edgeId
 				) as VerifiedCannoliCanvasEdgeData;
@@ -964,7 +1000,7 @@ export class CannoliFactory {
 		const dependencies = [] as string[];
 
 		// For each incoming edge, check if it is reflexive and add it if its not
-		const incomingEdges = vertex.cannoliData?.incomingEdges;
+		const incomingEdges = getIncomingEdgesFromData(vertex.id, data);
 
 		if (!incomingEdges) {
 			throw new Error(
@@ -1000,11 +1036,11 @@ export class CannoliFactory {
 			) as VerifiedCannoliCanvasGroupData;
 			if (!groupData) {
 				throw new Error(
-					"setVertexDependencies: groupData is undefined"
+					`setVertexDependencies: groupData for ${vertex.id} is undefined in:\n${JSON.stringify(data, null, 2)}`
 				);
 			}
 
-			const incomingEdges = groupData.cannoliData?.incomingEdges;
+			const incomingEdges = getIncomingEdgesFromData(group, data);
 
 			if (!incomingEdges) {
 				throw new Error(
@@ -1037,7 +1073,7 @@ export class CannoliFactory {
 		// If the vertex is a group, add all of its members as dependencies
 		if (vertex.cannoliData?.kind === CannoliObjectKind.Group) {
 			const group = vertex as CannoliCanvasGroupData;
-			const members = group.cannoliData?.members;
+			const members = getGroupMembersFromData(group.id, data);
 			// Filter for members that exist in the data
 			const existingMembers = members?.filter((member) =>
 				data.nodes.some((node) => node.id === member)
@@ -1844,4 +1880,21 @@ export class CannoliFactory {
 
 		return false;
 	}
+}
+
+export function getIncomingEdgesFromData(nodeId: string, data: VerifiedCannoliCanvasData): string[] {
+	return data.edges.filter(
+		(edge) => edge.toNode === nodeId
+	).map((edge) => edge.id);
+}
+
+export function getOutgoingEdgesFromData(nodeId: string, data: VerifiedCannoliCanvasData): string[] {
+	return data.edges.filter(
+		(edge) => edge.fromNode === nodeId
+	).map((edge) => edge.id);
+}
+
+export function getGroupMembersFromData(groupId: string, data: VerifiedCannoliCanvasData): string[] {
+	// Find all nodes with the groupId in their groups array
+	return data.nodes.filter((node) => node.cannoliData.groups.includes(groupId)).map((node) => node.id);
 }

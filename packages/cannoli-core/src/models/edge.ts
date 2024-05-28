@@ -4,6 +4,7 @@ import {
 	CannoliObjectStatus,
 	EdgeType,
 	VaultModifier,
+	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
 import { ChatRole } from "../run";
@@ -27,9 +28,10 @@ export class CannoliEdge extends CannoliObject {
 	vaultModifier: VaultModifier | null;
 	content: string | Record<string, string> | null;
 	messages: GenericCompletionResponse[] | null;
+	versions: number[];
 
-	constructor(edgeData: VerifiedCannoliCanvasEdgeData) {
-		super(edgeData);
+	constructor(edgeData: VerifiedCannoliCanvasEdgeData, fullCanvasData: VerifiedCannoliCanvasData) {
+		super(edgeData, fullCanvasData);
 		this.source = edgeData.fromNode;
 		this.target = edgeData.toNode;
 		this.crossingInGroups = edgeData.cannoliData.crossingInGroups;
@@ -45,6 +47,9 @@ export class CannoliEdge extends CannoliObject {
 		this.messages = edgeData.cannoliData.messages
 			? edgeData.cannoliData.messages
 			: null;
+		this.versions = edgeData.cannoliData.versions
+			? edgeData.cannoliData.versions
+			: [];
 
 		// Overrwite the addMessages for certain types of edges
 		if (

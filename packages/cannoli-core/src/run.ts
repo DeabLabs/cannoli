@@ -266,6 +266,9 @@ export class Run {
 
 		const graphData = factory.getCannoliData();
 
+		console.log("graphData");
+		console.log(graphData);
+
 		// Find all nodes of type "variable" or "input"
 		const argNodes = graphData.nodes.filter((node) => node.cannoliData.type === "variable"
 			|| node.cannoliData.type === "input");
