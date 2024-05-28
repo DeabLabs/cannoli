@@ -146,7 +146,11 @@ export interface CannoliEdgeData extends CannoliData {
 	messages?: GenericCompletionResponse[];
 	name?: string;
 	vaultModifier?: VaultModifier;
-	versions?: number[];
+	versions?: {
+		version: number,
+		header: string | null,
+		subHeader: string | null,
+	}[];
 }
 
 export interface CannoliGroupData extends CannoliVertexData {

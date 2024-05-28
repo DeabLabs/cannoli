@@ -512,7 +512,11 @@ export class CannoliFactory {
 			if (!edge.cannoliData.versions) {
 				edge.cannoliData.versions = [];
 			}
-			edge.cannoliData.versions.push(index);
+			edge.cannoliData.versions.push({
+				version: index,
+				header: null,
+				subHeader: null,
+			});
 		});
 
 		// Add the index to the fromNode of the duplicate crossingOutEdges

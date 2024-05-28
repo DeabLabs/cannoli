@@ -1,5 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { ForEachGroup, RepeatGroup } from "./group";
+import { CannoliGroup, ForEachGroup, RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,
 	EdgeType,
@@ -28,7 +28,11 @@ export class CannoliEdge extends CannoliObject {
 	vaultModifier: VaultModifier | null;
 	content: string | Record<string, string> | null;
 	messages: GenericCompletionResponse[] | null;
-	versions: number[];
+	versions: {
+		version: number,
+		header: string | null,
+		subHeader: string | null,
+	}[] | null;
 
 	constructor(edgeData: VerifiedCannoliCanvasEdgeData, fullCanvasData: VerifiedCannoliCanvasData) {
 		super(edgeData, fullCanvasData);
@@ -49,7 +53,7 @@ export class CannoliEdge extends CannoliObject {
 			: null;
 		this.versions = edgeData.cannoliData.versions
 			? edgeData.cannoliData.versions
-			: [];
+			: null;
 
 		// Overrwite the addMessages for certain types of edges
 		if (
@@ -77,6 +81,28 @@ export class CannoliEdge extends CannoliObject {
 		content?: string | Record<string, string>;
 		request?: GenericCompletionParams;
 	}): void {
+		// If there is a versions array
+		if (this.versions) {
+			let versionCount = 0;
+			for (const group of this.crossingOutGroups) {
+				const groupObject = this.graph[group] as CannoliGroup;
+				// Get the incoming item edge, if there is one
+				const itemEdge = groupObject.incomingEdges.find((edge) => this.graph[edge].type === EdgeType.Item);
+				if (itemEdge) {
+					// Get the item edge object
+					const itemEdgeObject = this.graph[itemEdge] as CannoliEdge;
+
+					// Set the version header to the name of the list edge
+					this.versions[versionCount].header = itemEdgeObject.text;
+
+					// Set the version subheader to the header of the item edge object
+					this.versions[versionCount].subHeader = itemEdgeObject.content as string;
+					versionCount++;
+				}
+			}
+
+		}
+
 		this.content =
 			content !== null && content !== undefined ? content : null;
 

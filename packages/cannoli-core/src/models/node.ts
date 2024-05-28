@@ -29,7 +29,11 @@ type VariableValue = { name: string; content: string; edgeId: string };
 
 type VersionedContent = {
 	content: string;
-	versionArray: number[];
+	versionArray: {
+		version: number;
+		header: string | null;
+		subHeader: string | null;
+	}[];
 };
 
 export class CannoliNode extends CannoliVertex {
@@ -174,6 +178,9 @@ export class CannoliNode extends CannoliVertex {
 
 	async processReferences() {
 		const variableValues = this.getVariableValues(true);
+
+		console.log(`variableValues:`);
+		console.log(variableValues);
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
@@ -369,16 +376,19 @@ export class CannoliNode extends CannoliVertex {
 				if (edgeObject.versions && edgeObject.versions.length > 0) {
 					const allVersions: VersionedContent[] = [{
 						content: edgeObject.content,
-						versionArray: edgeObject.versions
+						versionArray: edgeObject.versions.map((version) => ({
+							version: version.version,
+							header: version.header,
+							subHeader: version.subHeader
+						}))
 					}];
 
 					// Find all edges with the same name and add them to the allVersions array
 					const edgesWithSameName = this.getAllAvailableProvideEdges().filter((edge) => edge.text === edgeObject.text);
 					for (const otherVersion of edgesWithSameName) {
-						console.log(otherVersion.text + ": " + otherVersion.content + " (" + otherVersion.status + ")");
 
 						if (otherVersion.id !== edgeObject.id &&
-							otherVersion.versions.length === edgeObject.versions.length &&
+							otherVersion.versions?.length === edgeObject.versions?.length &&
 							otherVersion.content !== null) {
 							allVersions.push(
 								{
@@ -473,7 +483,7 @@ export class CannoliNode extends CannoliVertex {
 
 	formatAsMarkdownList(allVersions: VersionedContent[]): string {
 		// Sort by the versionArray values
-		const sortedVersions = allVersions.sort((a, b) => a.versionArray[0] - b.versionArray[0]);
+		const sortedVersions = allVersions.sort((a, b) => a.versionArray[0].version - b.versionArray[0].version);
 
 		// Create a markdown list
 		return sortedVersions.map(item => `- ${item.content}`).join('\n');
@@ -481,24 +491,35 @@ export class CannoliNode extends CannoliVertex {
 
 	formatAsTable(allVersions: VersionedContent[]): string {
 		// Determine the maximum row and column based on versionArray values
-		const maxRow = Math.max(...allVersions.map(item => item.versionArray[0]));
-		const maxCol = Math.max(...allVersions.map(item => item.versionArray[1]));
+		const maxRow = Math.max(...allVersions.map(item => item.versionArray[0].version));
+		const maxCol = Math.max(...allVersions.map(item => item.versionArray[1].version));
 
 		// Initialize a 2D array for the table
 		const table: string[][] = Array.from({ length: maxRow + 1 }, () =>
 			Array(maxCol + 1).fill('')
 		);
 
-		// Populate the table
+		// Initialize arrays for row and column headers
+		const rowHeaders: string[] = Array(maxRow + 1).fill('');
+		const colHeaders: string[] = Array(maxCol + 1).fill('');
+
+		// Populate the table and headers
 		allVersions.forEach(item => {
-			const [row, col] = item.versionArray;
+			const [row, col] = item.versionArray.map((version) => version.version);
 			table[row][col] = item.content;
+			rowHeaders[row] = item.versionArray[0].subHeader ?? '';
+			colHeaders[col] = item.versionArray[1].subHeader ?? '';
 		});
 
 		// Convert the table to a markdown table string
-		const header = Array(maxCol + 1).fill('---').join(' | ');
-		const rows = table.map(row => row.join(' | ')).join('\n');
-		return `${header}\n${rows}`;
+		const header = `| ${['', ...colHeaders].join(' | ')} |`;
+		const separator = `| ${Array(maxCol + 2).fill('---').join(' | ')} |`;
+		const rows = table.map((row, rowIndex) => `| ${[rowHeaders[rowIndex], ...row].join(' | ')} |`).join('\n');
+
+		// Ensure no empty row is added after the header
+		const filteredRows = rows.split('\n').filter(row => !/^(\| \s*)+\|$/.test(row)).join('\n');
+
+		return `${header}\n${separator}\n${filteredRows}`;
 	}
 
 	formatStub(allVersions: VersionedContent[]): string {
@@ -571,6 +592,8 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	loadOutgoingEdges(content: string, request?: GenericCompletionParams) {
+		console.log(`loadOutgoingEdges: ${content}`);
+
 		let itemIndex = 0;
 		const listItems = this.getListArrayFromContent(content);
 
@@ -590,6 +613,8 @@ export class CannoliNode extends CannoliVertex {
 					edgeObject.reject();
 					continue;
 				}
+
+				console.log(`item: ${item}`);
 
 				edgeObject.load({
 					content: item,
