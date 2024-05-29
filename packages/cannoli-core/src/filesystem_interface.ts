@@ -1,11 +1,10 @@
 import { Reference } from "./models/graph";
+import { HttpTemplate } from "./run";
 
 export interface FilesystemInterface {
-    executeHttpTemplateByName(
+    getHttpTemplateByName(
         name: string,
-        body: string | Record<string, string> | null,
-        isMock: boolean
-    ): Promise<string | Error>;
+    ): HttpTemplate;
 
     editNote(
         reference: Reference,

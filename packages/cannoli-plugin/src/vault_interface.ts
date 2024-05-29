@@ -1,5 +1,5 @@
 import Cannoli from "./main";
-import { ResponseTextFetcher, executeHttpTemplate, Reference, ReferenceType, FilesystemInterface } from "@deablabs/cannoli-core";
+import { ResponseTextFetcher, Reference, ReferenceType, FilesystemInterface, HttpTemplate } from "@deablabs/cannoli-core";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";
@@ -11,22 +11,15 @@ export class VaultInterface implements FilesystemInterface {
 	constructor(cannoli: Cannoli, fetcher: ResponseTextFetcher) {
 		this.cannoli = cannoli;
 		this.fetcher = fetcher;
+
 	}
 
-	async executeHttpTemplateByName(
+	getHttpTemplateByName(
 		name: string,
-		body: string | Record<string, string> | null,
-		isMock: boolean
-	): Promise<string | Error> {
-		// REMOVE WHEN I FIGURE OUT MOCKING
-		if (isMock) {
-			return "Mock response";
-		}
-
-
-		// If we don't have an httpTemplates array, we can't execute commands
+	): HttpTemplate {
+		// If we don't have an httpTemplates array, we can't get templates
 		if (!this.cannoli.settings.httpTemplates) {
-			return new Error(
+			throw new Error(
 				"No HTTP templates available. You can add them in Cannoli Plugin settings."
 			);
 		}
@@ -37,14 +30,10 @@ export class VaultInterface implements FilesystemInterface {
 		);
 
 		if (!template) {
-			return new Error(`HTTP template with name "${name}" not found.`);
+			throw new Error(`HTTP template with name "${name}" not found.`);
 		}
 
-		try {
-			return await executeHttpTemplate(template, body, this.fetcher);
-		} catch (error) {
-			return error;
-		}
+		return template;
 	}
 
 	async editNote(
@@ -892,4 +881,6 @@ export class VaultInterface implements FilesystemInterface {
 
 		return true;
 	}
+
+
 }

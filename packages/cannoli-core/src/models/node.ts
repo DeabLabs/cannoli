@@ -1,5 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { ChatRole } from "../run";
+import { ChatRole, HttpRequest } from "../run";
 import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
 import { CannoliGroup } from "./group";
 import {
@@ -2416,17 +2416,49 @@ export class HttpNode extends ContentNode {
 	async execute(): Promise<void> {
 		this.executing();
 
-		let content: string | Record<string, string> | null =
+		const content = await this.processReferences();
+
+		// Check if content starts with "http"
+		if (typeof content === "string" && content.startsWith("http")) {
+			const request: HttpRequest = {
+				url: content,
+				method: "GET"
+			};
+			const result = await this.run.executeHttpRequest(request);
+
+			this.loadOutgoingEdges(result);
+			this.completed();
+			return;
+		}
+
+		// Check if content matches HttpRequest format
+		if (typeof content === "string") {
+			try {
+				const parsedContent = JSON.parse(content);
+				if (parsedContent.url) {
+					const request: HttpRequest = parsedContent;
+					const result = await this.run.executeHttpRequest(request);
+
+					this.loadOutgoingEdges(result);
+					this.completed();
+					return;
+				}
+			} catch (e) {
+				// If parsing fails, continue with the existing logic
+			}
+		}
+
+		let variables: string | Record<string, string> | null =
 			this.getWriteOrLoggingContent();
 
-		if (!content) {
+		if (!variables) {
 			const variableValues = this.getVariableValues(false);
 
 			// If there are variable values, make a record of them and set it to content
 			if (variableValues.length > 0) {
-				content = {};
+				variables = {};
 				for (const variableValue of variableValues) {
-					content[variableValue.name] = variableValue.content || "";
+					variables[variableValue.name] = variableValue.content || "";
 				}
 			}
 		}
@@ -2450,7 +2482,7 @@ export class HttpNode extends ContentNode {
 		if (template) {
 			result = await this.run.executeHttpTemplateFromFloatingNode(
 				template,
-				content
+				variables
 			);
 		} else {
 			// If there's no fileSystemInterface, throw an error
@@ -2458,12 +2490,11 @@ export class HttpNode extends ContentNode {
 				throw new Error("No fileSystemInterface found");
 			}
 
+			// Get the template
+			const template = this.run.fileSystemInterface.getHttpTemplateByName(this.text);
+
 			// Make the request
-			result = await this.run.fileSystemInterface.executeHttpTemplateByName(
-				this.text,
-				content,
-				this.run.isMock
-			);
+			result = await this.run.executeHttpTemplate(template, variables);
 		}
 
 		if (result instanceof Error) {
