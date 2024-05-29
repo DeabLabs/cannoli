@@ -640,7 +640,7 @@ export class CannoliNode extends CannoliVertex {
 			const contentObject = JSON.parse(content as string);
 
 			// Get the value from the parsed text
-			const value = pathOr(contentObject, path, `No value found at path ${this.text}`);
+			const value = pathOr(contentObject, path, content);
 
 			listItems = this.getListArrayFromContent(JSON.stringify(value, null, 2));
 		} else {
@@ -659,7 +659,7 @@ export class CannoliNode extends CannoliVertex {
 				const contentObject = JSON.parse(content as string);
 
 				// Get the value from the parsed text
-				const value = pathOr(contentObject, path, `No value found at path ${this.text}`);
+				const value = pathOr(contentObject, path, content);
 
 				// If the value is a string, just set content to it
 				if (typeof value === "string") {
