@@ -24,6 +24,7 @@ import {
 	SupportedProviders,
 } from "../providers";
 import invariant from "tiny-invariant";
+import { pathOr, stringToPath } from "remeda";
 
 type VariableValue = { name: string; content: string; edgeId: string };
 
@@ -630,14 +631,48 @@ export class CannoliNode extends CannoliVertex {
 
 	loadOutgoingEdges(content: string, request?: GenericCompletionParams) {
 		let itemIndex = 0;
-		const listItems = this.getListArrayFromContent(content);
+		let listItems: string[] = [];
+
+		if (this.type === ContentNodeType.Http && this.outgoingEdges.some(edge => this.graph[edge].type === EdgeType.Item)) {
+			// Parse the text of the edge with remeda
+			const path = stringToPath(this.graph[this.outgoingEdges.find(edge => this.graph[edge].type === EdgeType.Item)!].text);
+
+			const contentObject = JSON.parse(content as string);
+
+			// Get the value from the parsed text
+			const value = pathOr(contentObject, path, `No value found at path ${this.text}`);
+
+			listItems = this.getListArrayFromContent(JSON.stringify(value, null, 2));
+		} else {
+			listItems = this.getListArrayFromContent(content);
+		}
 
 		for (const edge of this.outgoingEdges) {
 			const edgeObject = this.graph[edge];
+			let contentToLoad = content;
+
+			// If it's coming from an httpnode
+			if (this.type === ContentNodeType.Http) {
+				// Parse the text of the edge with remeda
+				const path = stringToPath(edgeObject.text);
+
+				const contentObject = JSON.parse(content as string);
+
+				// Get the value from the parsed text
+				const value = pathOr(contentObject, path, `No value found at path ${this.text}`);
+
+				// If the value is a string, just set content to it
+				if (typeof value === "string") {
+					contentToLoad = value;
+				} else {
+					contentToLoad = JSON.stringify(value, null, 2);
+				}
+			}
+
 
 			if (edgeObject instanceof CannoliEdge && !(edgeObject instanceof ChatResponseEdge) && edgeObject.type !== EdgeType.Item) {
 				edgeObject.load({
-					content: content,
+					content: contentToLoad,
 					request: request,
 				});
 			} else if (edgeObject instanceof CannoliEdge && edgeObject.type === EdgeType.Item) {
@@ -658,14 +693,12 @@ export class CannoliNode extends CannoliVertex {
 		}
 	}
 
-
-
 	getListArrayFromContent(content: string): string[] {
 		// Attempt to parse the content as JSON
 		try {
 			const jsonArray = JSON.parse(content);
-			if (Array.isArray(jsonArray) && jsonArray.every(item => typeof item === 'string')) {
-				return jsonArray;
+			if (Array.isArray(jsonArray)) {
+				return jsonArray.map(item => typeof item === 'string' ? item : JSON.stringify(item));
 			}
 		} catch (e) {
 			// If parsing fails, continue with markdown list parsing
