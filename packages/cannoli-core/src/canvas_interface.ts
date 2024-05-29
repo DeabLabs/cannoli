@@ -206,17 +206,11 @@ export type CanvasData = z.infer<typeof canvasDataSchema>;
 // }
 
 export interface Canvas {
-    canvasData?: CanvasData;
-    subCanvasGroupId?: string;
-    editQueue?: Promise<unknown>;
-
     enqueueChangeNodeColor(nodeId: string, newColor?: CanvasColor): Promise<void>;
     enqueueAddErrorNode(nodeId: string, message: string): Promise<void>;
     enqueueAddWarningNode(nodeId: string, message: string): Promise<void>;
     enqueueChangeNodeText(nodeId: string, newText: string): Promise<void>;
     enqueueRemoveAllErrorNodes(): Promise<void>;
-
-
 }
 
 
