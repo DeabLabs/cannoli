@@ -820,9 +820,14 @@ export class CannoliFactory {
 			text = node.url;
 		}
 
-		// If its color is "2", return http
+		// If its color is "2", return http or hook
 		if (node.color === "2") {
-			return ContentNodeType.Http;
+			// If the first line of the text is HOOK, return hook
+			if (text.startsWith(`HOOK\n`)) {
+				return ContentNodeType.Hook;
+			} else {
+				return ContentNodeType.Http;
+			}
 		}
 
 		// If its text starts and ends with double double quotes, it's a formatter node

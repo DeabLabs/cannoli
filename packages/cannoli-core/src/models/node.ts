@@ -26,7 +26,7 @@ import {
 import invariant from "tiny-invariant";
 import { pathOr, stringToPath } from "remeda";
 
-type VariableValue = { name: string; content: string; edgeId: string };
+type VariableValue = { name: string; content: string; edgeId: string | null };
 
 type VersionedContent = {
 	content: string;
@@ -184,8 +184,12 @@ export class CannoliNode extends CannoliVertex {
 		return null;
 	}
 
-	async processReferences() {
+	async processReferences(additionalVariableValues?: VariableValue[], cleanForJson?: boolean) {
 		const variableValues = this.getVariableValues(true);
+
+		if (additionalVariableValues) {
+			variableValues.push(...additionalVariableValues);
+		}
 
 		const resolvedReferences = await Promise.all(
 			this.references.map(async (reference) => {
@@ -297,6 +301,13 @@ export class CannoliNode extends CannoliVertex {
 							content = `{{[${reference.name}]}}`;
 						}
 					}
+				}
+
+				if (cleanForJson) {
+					content = content.replace(/\\/g, '\\\\')
+						.replace(/\n/g, "\\n")
+						.replace(/"/g, '\\"')
+						.replace(/\t/g, '\\t');
 				}
 
 				return { name, content };
@@ -590,6 +601,12 @@ export class CannoliNode extends CannoliVertex {
 
 			// Iterate through the variables, preferring the reflexive edge if found
 			for (const variable of variables) {
+				if (!variable.edgeId) {
+					// If the variable has no edgeId, it's a special variable given by the node, it always has priority
+					selectedVariable = variable;
+					break;
+				}
+
 				const edgeObject = this.graph[variable.edgeId];
 
 				// Check if edgeObject is an instance of CannoliEdge and if it's reflexive
@@ -611,6 +628,11 @@ export class CannoliNode extends CannoliVertex {
 			// If no non-empty reflexive edge was found, prefer the first non-reflexive edge
 			if (!foundNonEmptyReflexive && selectedVariable.content === "") {
 				for (const variable of variables) {
+					if (!variable.edgeId) {
+						this.error(`Variable ${name} has no edgeId`);
+						continue;
+					}
+
 					const edgeObject = this.graph[variable.edgeId];
 					if (
 						!(edgeObject instanceof CannoliEdge) ||
@@ -637,12 +659,24 @@ export class CannoliNode extends CannoliVertex {
 			// Parse the text of the edge with remeda
 			const path = stringToPath(this.graph[this.outgoingEdges.find(edge => this.graph[edge].type === EdgeType.Item)!].text);
 
-			const contentObject = JSON.parse(content as string);
+			let contentObject;
 
-			// Get the value from the parsed text
-			const value = pathOr(contentObject, path, content);
+			// Try to parse the content as JSON
+			try {
+				contentObject = JSON.parse(content as string);
+			} catch (e) {
+				// If parsing fails, continue with markdown list parsing
+			}
 
-			listItems = this.getListArrayFromContent(JSON.stringify(value, null, 2));
+			// If we parsed the content as JSON, use the parsed object
+			if (contentObject) {
+				// Get the value from the parsed text
+				const value = pathOr(contentObject, path, content);
+				listItems = this.getListArrayFromContent(JSON.stringify(value, null, 2));
+			} else {
+				// If we didn't parse the content as JSON, use the original content
+				listItems = this.getListArrayFromContent(content);
+			}
 		} else {
 			listItems = this.getListArrayFromContent(content);
 		}
@@ -656,17 +690,33 @@ export class CannoliNode extends CannoliVertex {
 				// Parse the text of the edge with remeda
 				const path = stringToPath(edgeObject.text);
 
-				const contentObject = JSON.parse(content as string);
+				let contentObject;
 
-				// Get the value from the parsed text
-				const value = pathOr(contentObject, path, content);
-
-				// If the value is a string, just set content to it
-				if (typeof value === "string") {
-					contentToLoad = value;
-				} else {
-					contentToLoad = JSON.stringify(value, null, 2);
+				// Try to parse the content as JSON
+				try {
+					contentObject = JSON.parse(content as string);
+				} catch (e) {
+					// If parsing fails, continue with markdown list parsing
 				}
+
+				// If we parsed the content as JSON, use the parsed object
+				if (contentObject) {
+
+					// Get the value from the parsed text
+					const value = pathOr(contentObject, path, content);
+
+					// If the value is a string, just set content to it
+					if (typeof value === "string") {
+						contentToLoad = value;
+					} else {
+						contentToLoad = JSON.stringify(value, null, 2);
+					}
+				} else {
+					// If we didn't parse the content as JSON, use the original content
+					contentToLoad = content;
+				}
+
+
 			}
 
 
@@ -1844,7 +1894,7 @@ export class ReferenceNode extends ContentNode {
 		if (variableValues.length > 0) {
 			// First, get the edges of the variable values
 			const variableValueEdges = variableValues.map((variableValue) => {
-				return this.graph[variableValue.edgeId] as CannoliEdge;
+				return this.graph[variableValue.edgeId ?? ""] as CannoliEdge;
 			});
 
 			// Then, filter out the edges that have the same name as the reference, or are of type folder or property
@@ -2443,13 +2493,54 @@ export class ReferenceNode extends ContentNode {
 
 export class HttpNode extends ContentNode {
 	logDetails(): string {
-		return super.logDetails() + `Subtype: Http\n`;
+		return super.logDetails() + `Subtype: Http\nIs Hook: ${this.type === ContentNodeType.Hook}\n`;
 	}
 
 	async execute(): Promise<void> {
 		this.executing();
 
-		const content = await this.processReferences();
+		let hookId: string | null = null;
+
+		let content: string;
+
+		if (this.type === ContentNodeType.Hook) {
+			// Check if there's a reference to ID, and give an error saying if they don't include the hook id in the request then there's no way to get a response
+			if (!this.references.some((reference) => reference.name === "ID")) {
+				this.error(`You must send the ID of the hook using the "{{ID}}" variable to get a response.`);
+				return;
+			}
+
+			if (!this.run.receiver) {
+				this.error(`No receiver found.`);
+				return;
+			}
+
+			const hookCreationResponse = await this.run.receiver.createHook(this.run.isMock);
+			if (hookCreationResponse instanceof Error) {
+				this.error(`Could not create hook: ${hookCreationResponse.message}`);
+				return;
+			}
+
+			hookId = hookCreationResponse;
+
+			if (hookId === null) {
+				this.error(`Could not create hook.`);
+				return;
+			}
+
+
+			// Make a variable value
+			const hookIdValue: VariableValue = {
+				name: "ID",
+				content: hookId,
+				edgeId: null
+			};
+
+			content = await this.processReferences([hookIdValue], true);
+		} else {
+			content = await this.processReferences([], true);
+		}
+
 
 		// Check if content starts with "http"
 		if (typeof content === "string" && content.startsWith("http")) {
@@ -2459,25 +2550,41 @@ export class HttpNode extends ContentNode {
 			};
 			const result = await this.run.executeHttpRequest(request);
 
-			this.loadOutgoingEdges(result);
+			if (this.type === ContentNodeType.Hook) {
+				// Wait for a response to be retrieved from the hook
+				const response = await this.waitForHookResponse(hookId);
+				this.loadOutgoingEdges(response);
+			} else {
+				this.loadOutgoingEdges(result);
+			}
+
 			this.completed();
 			return;
 		}
 
 		// Check if content matches HttpRequest format
 		if (typeof content === "string") {
+			let parsedContent;
 			try {
-				const parsedContent = JSON.parse(content);
-				if (parsedContent.url) {
-					const request: HttpRequest = parsedContent;
-					const result = await this.run.executeHttpRequest(request);
-
-					this.loadOutgoingEdges(result);
-					this.completed();
-					return;
-				}
+				parsedContent = JSON.parse(content);
 			} catch (e) {
-				// If parsing fails, continue with the existing logic
+				// Do nothing, it won't pass the if below
+			}
+
+			if (parsedContent && parsedContent.url) {
+				const request: HttpRequest = parsedContent;
+				const result = await this.run.executeHttpRequest(request);
+
+				if (this.type === ContentNodeType.Hook) {
+					const response = await this.waitForHookResponse(hookId);
+
+					this.loadOutgoingEdges(response);
+				} else {
+					this.loadOutgoingEdges(result);
+				}
+
+				this.completed();
+				return;
 			}
 		}
 
@@ -2536,10 +2643,41 @@ export class HttpNode extends ContentNode {
 		}
 
 		if (typeof result === "string") {
-			this.loadOutgoingEdges(result);
+			if (this.type === ContentNodeType.Hook) {
+				const response = await this.waitForHookResponse(hookId);
+				this.loadOutgoingEdges(response);
+			} else {
+				this.loadOutgoingEdges(result);
+			}
 		}
 
 		this.completed();
+	}
+
+	async waitForHookResponse(hookId: string | null): Promise<string> {
+		if (!this.run.receiver) {
+			this.warning(`No receiver found.`);
+			return "No receiver found.";
+		}
+
+		if (hookId === null) {
+			this.warning(`Hook ID not found.`);
+			return "Could not get hook response.";
+		}
+
+		// Set up the waiting callback
+		const shouldContinueWaiting = () => {
+			return !this.run.isStopped;
+		};
+
+		// Wait for a response to be retrieved from the hook
+		const response: string | Error = await this.run.receiver.getHookResponse(hookId, this.run.isMock, shouldContinueWaiting);
+		if (response instanceof Error) {
+			this.warning(`Could not get hook response: ${response.message}`);
+			return "Could not get hook response.";
+		}
+
+		return response;
 	}
 }
 

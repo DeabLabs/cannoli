@@ -1,7 +1,7 @@
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { CannoliArgs, CannoliGraph, CannoliObjectStatus, CannoliRunSettings } from "./models/graph";
+import { CannoliArgs, CannoliGraph, CannoliObjectStatus, CannoliRunSettings, ContentNodeType } from "./models/graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -14,6 +14,7 @@ import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
 import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
+import { Receiver } from "./receiver";
 
 export interface HttpTemplate {
 	id: string;
@@ -87,6 +88,7 @@ export function runCannoli({
 	canvas,
 	llm,
 	fileSystemInterface,
+	receiver,
 	isMock,
 	fetcher,
 	settings,
@@ -98,6 +100,7 @@ export function runCannoli({
 	args?: CannoliArgs;
 	canvas?: Canvas;
 	fileSystemInterface?: FilesystemInterface;
+	receiver?: Receiver;
 	isMock?: boolean;
 	fetcher?: ResponseTextFetcher;
 }): [Promise<Stoppage>, () => void] {
@@ -116,6 +119,7 @@ export function runCannoli({
 			resolver(stoppage);
 		},
 		fileSystemInterface: fileSystemInterface,
+		receiver: receiver,
 		isMock: isMock ?? false,
 		fetcher: fetcher,
 	});
@@ -134,6 +138,7 @@ export class Run {
 
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
+	receiver: Receiver | null;
 	llm: Llm;
 	llmLimit: Limit;
 	canvas: Canvas | null;
@@ -190,6 +195,7 @@ export class Run {
 		fileSystemInterface,
 		llm,
 		fetcher,
+		receiver,
 		settings,
 		args
 
@@ -203,6 +209,7 @@ export class Run {
 		isMock?: boolean;
 		canvas?: Canvas;
 		fileSystemInterface?: FilesystemInterface;
+		receiver?: Receiver;
 	}) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
@@ -263,6 +270,8 @@ export class Run {
 		// 		: null;
 
 		this.fileSystemInterface = fileSystemInterface ?? null;
+
+		this.receiver = receiver ?? null;
 
 
 		const factory = new CannoliFactory(
@@ -444,7 +453,8 @@ export class Run {
 			if (object instanceof CallNode) {
 				this.canvas.enqueueChangeNodeColor(object.id, "4");
 			} else if (
-				object instanceof ContentNode ||
+				object.type === ContentNodeType.Output ||
+				object.type === ContentNodeType.StandardContent ||
 				object instanceof FloatingNode
 			) {
 				this.canvas.enqueueChangeNodeText(object.id, object.text);
@@ -1021,12 +1031,16 @@ export class Run {
 	executeHttpRequest(
 		request: HttpRequest,
 	): Promise<string> {
+		if (this.isMock) {
+			return Promise.resolve("mock response");
+		}
+
 		return new Promise((resolve, reject) => {
 			// Prepare fetch options
 			const options: RequestInit = {
-				method: request.body ? 'POST' : 'GET', // Default to GET if no body is provided
+				method: request.method ?? 'GET', // Default to GET if no body is provided
 				headers: request.headers,
-				body: request.body,
+				body: JSON.stringify(request.body),
 			};
 
 			this.fetcher(request.url, options)
@@ -1035,24 +1049,30 @@ export class Run {
 				})
 				.then((text) => {
 					let response;
-					if (text.length > 0) {
-						response = JSON.parse(text);
-					} else {
-						response = {};
+					try {
+						response = JSON.parse(text); // Try to parse as JSON
+					} catch (error) {
+						response = text; // If parsing fails, return as string
 					}
 
-					if (response.status >= 400) {
+					if (response.status && response.status >= 400) {
 						reject(
 							new Error(
 								`HTTP error ${response.status}: ${response.statusText}`
 							)
 						);
 					} else {
-						// Ensure the response is formatted nicely for markdown
-						const formattedResponse = JSON.stringify(response, null, 2)
-							.replace(/\\n/g, '\n') // Ensure newlines are properly formatted
-							.replace(/\\t/g, '\t'); // Ensure tabs are properly formatted
-						resolve(formattedResponse);
+						if (typeof response === 'string') {
+							resolve(response);
+						} else {
+							// Ensure the response is formatted nicely for markdown
+							const formattedResponse = JSON.stringify(response, null, 2)
+								.replace(/\\n/g, '\n') // Ensure newlines are properly formatted
+								.replace(/\\t/g, '\t') // Ensure tabs are properly formatted
+								.replace(/\\/g, '\\') // Ensure backslashes are properly formatted
+								.replace(/\\"/g, '"'); // Ensure double quotes are properly formatted
+							resolve(formattedResponse);
+						}
 					}
 				})
 				.catch((error) => {
@@ -1123,7 +1143,10 @@ export class Run {
 
 			return template.replace(
 				new RegExp(`{{${variablesInTemplate[0]}}}`, "g"),
-				valueToReplace.replace(/\n/g, "\\n").replace(/"/g, '\\"')
+				valueToReplace.replace(/\\/g, '\\\\')
+					.replace(/\n/g, "\\n")
+					.replace(/"/g, '\\"')
+					.replace(/\t/g, '\\t')
 			);
 		}
 
@@ -1140,7 +1163,10 @@ export class Run {
 				}
 				parsedTemplate = parsedTemplate.replace(
 					new RegExp(`{{${variable}}}`, "g"),
-					body[variable].replace(/\n/g, "\\n").replace(/"/g, '\\"')
+					body[variable].replace(/\\/g, '\\\\')
+						.replace(/\n/g, "\\n")
+						.replace(/"/g, '\\"')
+						.replace(/\t/g, '\\t')
 				);
 			}
 

@@ -206,11 +206,11 @@ export type CanvasData = z.infer<typeof canvasDataSchema>;
 // }
 
 export interface Canvas {
-    enqueueChangeNodeColor(nodeId: string, newColor?: CanvasColor): Promise<void>;
-    enqueueAddErrorNode(nodeId: string, message: string): Promise<void>;
-    enqueueAddWarningNode(nodeId: string, message: string): Promise<void>;
-    enqueueChangeNodeText(nodeId: string, newText: string): Promise<void>;
-    enqueueRemoveAllErrorNodes(): Promise<void>;
+    enqueueChangeNodeColor(nodeId: string, newColor?: CanvasColor, isMock?: boolean): Promise<void>;
+    enqueueAddErrorNode(nodeId: string, message: string, isMock?: boolean): Promise<void>;
+    enqueueAddWarningNode(nodeId: string, message: string, isMock?: boolean): Promise<void>;
+    enqueueChangeNodeText(nodeId: string, newText: string, isMock?: boolean): Promise<void>;
+    enqueueRemoveAllErrorNodes(isMock?: boolean): Promise<void>;
 }
 
 

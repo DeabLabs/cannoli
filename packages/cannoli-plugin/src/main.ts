@@ -19,7 +19,7 @@ import {
 	SupportedProviders,
 	runCannoli,
 	CanvasData,
-	CanvasGroupData
+	CanvasGroupData,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -27,6 +27,7 @@ import invariant from "tiny-invariant";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
 import { SYMBOLS, cannoliValTemplate } from "./val_templates";
+import { PluginHookHandler } from "./plugin_hook_handler";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -59,6 +60,7 @@ interface CannoliSettings {
 	pLimit: number;
 	contentIsColorless: boolean;
 	valTownAPIKey: string;
+	cannoliWebsiteAPIKey: string;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -91,6 +93,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	pLimit: 50,
 	contentIsColorless: false,
 	valTownAPIKey: "",
+	cannoliWebsiteAPIKey: "",
 };
 
 export default class Cannoli extends Plugin {
@@ -146,6 +149,8 @@ export default class Cannoli extends Plugin {
 		this.createCannoliCommands();
 
 		this.createOpenOnWebsiteCommand();
+
+		this.createOpenOnWebsiteDevCommand();
 
 		this.createCopyCanvasToClipboardCommand();
 
@@ -220,6 +225,15 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
+	createOpenOnWebsiteDevCommand = () => {
+		this.addCommand({
+			id: "open-on-website-dev",
+			name: "Open on website [DEV]",
+			callback: () => this.openOnWebsite(true),
+			icon: "cannoli",
+		});
+	}
+
 	createCopyCanvasToClipboardCommand = () => {
 		this.addCommand({
 			id: "copy-canvas-to-clipboard",
@@ -238,26 +252,26 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
-	// openonwebsite
-	openOnWebsite = async () => {
+	openOnWebsite = async (dev?: boolean) => {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) return;
-		const url = "http://localhost:5173/editor/open";
+		const url = dev ? "http://localhost:5173/editor/open" : "https://cannoli.website/editor/open";
 
 		// get the content of the file
 		const content = await this.app.vault.read(activeFile);
 
 		// make request to the website
-		const response = await fetch(url, {
+		const response = await requestUrl({
+			url: url,
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: content,
+			body: JSON.stringify({ content }),
 		});
 
 		// Check that the response has json
-		const json = await response.json();
+		const json = response.json;
 		if (!json) {
 			new Notice("Error opening file on website");
 			return;
@@ -776,45 +790,49 @@ export default class Cannoli extends Plugin {
 
 		const vaultInterface = new VaultInterface(this, fetcher);
 
-
-		// // Do the validation run
-		// const [validationStoppagePromise] = runCannoli({
-		// 	llm: llm,
-		// 	cannoliJSON: canvasData,
-		// 	fileSystemInterface: vaultInterface,
-		// 	isMock: true,
-		// 	canvas: noCanvas ? undefined : canvas,
-		// 	fetcher: fetcher,
-		// 	settings: cannoliSettings,
-		// 	args: cannoliArgs
-		// });
-		// const validationStoppage = await validationStoppagePromise;
+		const hookHandler = new PluginHookHandler(this.settings.cannoliWebsiteAPIKey);
 
 
-		// if (validationStoppage.reason === "error") {
-		// 	new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
-		// 	return;
-		// }
+		// Do the validation run
+		const [validationStoppagePromise] = runCannoli({
+			llm: llm,
+			cannoliJSON: canvasData,
+			fileSystemInterface: vaultInterface,
+			receiver: hookHandler,
+			isMock: true,
+			canvas: noCanvas ? undefined : canvas,
+			fetcher: fetcher,
+			settings: cannoliSettings,
+			args: cannoliArgs
+		});
+		const validationStoppage = await validationStoppagePromise;
 
-		// let shouldContinue = true;
+
+		if (validationStoppage.reason === "error") {
+			new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
+			return;
+		}
+
+		let shouldContinue = true;
 
 
 
-		// // If the total price is greater than the threshold, ask the user if they want to continue
-		// if (validationStoppage.totalCost > this.settings.costThreshold) {
-		// 	shouldContinue = await this.showRunPriceAlertModal(validationStoppage.usage);
-		// }
+		// If the total price is greater than the threshold, ask the user if they want to continue
+		if (validationStoppage.totalCost > this.settings.costThreshold) {
+			shouldContinue = await this.showRunPriceAlertModal(validationStoppage.usage);
+		}
 
-		// if (!shouldContinue) {
-		// 	new Notice(`Cannoli ${name} was cancelled due to cost.`);
-		// 	return;
-		// }
+		if (!shouldContinue) {
+			new Notice(`Cannoli ${name} was cancelled due to cost.`);
+			return;
+		}
 
 		// Do the live run
 		const [liveStoppagePromise, stopLiveCannoli] = runCannoli({
 			llm: llm,
 			cannoliJSON: canvasData,
 			fileSystemInterface: vaultInterface,
+			receiver: hookHandler,
 			isMock: false,
 			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher,
@@ -1268,6 +1286,21 @@ class CannoliSettingTab extends PluginSettingTab {
 					.setPlaceholder("...")
 					.onChange(async (value) => {
 						this.plugin.settings.valTownAPIKey = value;
+						await this.plugin.saveSettings();
+					}).inputEl.setAttribute("type", "password")
+			);
+
+		new Setting(containerEl)
+			.setName("Cannoli.website API key")
+			.setDesc(
+				"Get an API key from our website to use hook nodes."
+			)
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.cannoliWebsiteAPIKey)
+					.setPlaceholder("...")
+					.onChange(async (value) => {
+						this.plugin.settings.cannoliWebsiteAPIKey = value;
 						await this.plugin.saveSettings();
 					}).inputEl.setAttribute("type", "password")
 			);
