@@ -259,16 +259,6 @@ export class Run {
 		delete this.args?.currentNote;
 		delete this.args?.selection;
 
-
-		// We need to replicate these when we make the args
-		// 	this.currentNote = `[[${this.cannoli.app.workspace.getActiveFile()?.basename
-		// 	}]]`;
-
-		// this.selection =
-		// 	this.cannoli.app.workspace.activeEditor?.editor?.getSelection()
-		// 		? this.cannoli.app.workspace.activeEditor?.editor?.getSelection()
-		// 		: null;
-
 		this.fileSystemInterface = fileSystemInterface ?? null;
 
 		this.receiver = receiver ?? null;
@@ -995,136 +985,89 @@ export class Run {
 		return httpTemplate;
 	}
 
-	async executeHttpTemplateFromFloatingNode(
-		inputString: string,
-		body: string | Record<string, string> | null
-	): Promise<string | Error> {
-		// If this is a mock, return a mock response
-		if (this.isMock) {
-			return "Mock response";
-		}
-
-		// Try to parse the input string into an httpTemplate object
-		let template: HttpTemplate;
-		try {
-			template = this.createHttpTemplate(inputString);
-		} catch (error) {
-			return new Error(
-				`Failed to create HTTP template from input string: ${error.message}`
-			);
-		}
-
-		// Try to execute the parsed template
-		try {
-			return await this.executeHttpTemplate(template, body);
-		} catch (error) {
-			return error;
-		}
-	}
-
 	logGraph() {
 		for (const node of Object.values(this.graph)) {
 			console.log(node.logDetails());
 		}
 	}
 
-	executeHttpRequest(
-		request: HttpRequest,
-	): Promise<string> {
+	async executeHttpRequest(request: HttpRequest): Promise<string | Error> {
 		if (this.isMock) {
-			return Promise.resolve("mock response");
+			return "mock response";
 		}
 
-		return new Promise((resolve, reject) => {
-			// Prepare fetch options
-			const options: RequestInit = {
-				method: request.method ?? 'GET', // Default to GET if no body is provided
-				headers: request.headers,
-				body: JSON.stringify(request.body),
-			};
+		// Prepare fetch options
+		const options: RequestInit = {
+			method: request.method ?? 'GET', // Default to GET if no body is provided
+			headers: request.headers,
+			body: request.body ? JSON.stringify(request.body) : undefined,
+		};
 
-			this.fetcher(request.url, options)
-				.then((response) => {
-					return response;
-				})
-				.then((text) => {
-					let response;
-					try {
-						response = JSON.parse(text); // Try to parse as JSON
-					} catch (error) {
-						response = text; // If parsing fails, return as string
-					}
+		try {
+			console.log(`Request: ${JSON.stringify(request, null, 2)}`);
+			const responseText = await this.fetcher(request.url, options);
+			console.log(`Response: ${JSON.stringify(responseText, null, 2)}`);
 
-					if (response.status && response.status >= 400) {
-						reject(
-							new Error(
-								`HTTP error ${response.status}: ${response.statusText}`
-							)
-						);
-					} else {
-						if (typeof response === 'string') {
-							resolve(response);
-						} else {
-							// Ensure the response is formatted nicely for markdown
-							const formattedResponse = JSON.stringify(response, null, 2)
-								.replace(/\\n/g, '\n') // Ensure newlines are properly formatted
-								.replace(/\\t/g, '\t') // Ensure tabs are properly formatted
-								.replace(/\\/g, '\\') // Ensure backslashes are properly formatted
-								.replace(/\\"/g, '"'); // Ensure double quotes are properly formatted
-							resolve(formattedResponse);
-						}
-					}
-				})
-				.catch((error) => {
-					reject(
-						new Error(`Error on HTTP request: ${error.message}`)
-					);
-				});
-		});
+			let response;
+			try {
+				response = JSON.parse(responseText); // Try to parse as JSON
+			} catch {
+				response = responseText; // If parsing fails, return as string
+			}
+
+			if (response.status && response.status >= 400) {
+				return new Error(`HTTP error ${response.status}: ${response.statusText}`);
+			}
+
+			if (typeof response === 'string') {
+				return response;
+			} else {
+				// Ensure the response is formatted nicely for markdown
+				return JSON.stringify(response, null, 2)
+					.replace(/\\n/g, '\n') // Ensure newlines are properly formatted
+					.replace(/\\t/g, '\t') // Ensure tabs are properly formatted
+					.replace(/\\/g, '\\') // Ensure backslashes are properly formatted
+					.replace(/\\"/g, '"'); // Ensure double quotes are properly formatted
+			}
+		} catch (error) {
+			console.log(`Error: ${error}`);
+			return new Error(`Error on HTTP request: ${error.message}`);
+		}
 	}
 
-	executeHttpTemplate(
+	convertTemplateToRequest(
 		template: HttpTemplate,
-		body: string | Record<string, string> | null,
-	): Promise<string> {
-		return new Promise((resolve, reject) => {
-			// Prepare body
-			let requestBody: string;
-			if (template.bodyTemplate) {
-				requestBody = this.parseBodyTemplate(
-					template.bodyTemplate,
-					body || ""
-				);
-			} else {
-				if (typeof body === "string") {
-					requestBody = body;
-				} else {
-					requestBody = JSON.stringify(body);
-				}
-			}
+		body: string | Record<string, string> | null
+	): HttpRequest | Error {
+		let requestBody: string | Error;
 
-			// Create HttpRequest object
-			const request: HttpRequest = {
-				url: template.url,
-				method: template.method,
-				headers: template.headers,
-				body: template.method.toLowerCase() !== "get" ? requestBody : undefined,
-			};
-
-			if (this.isMock) {
-				resolve("mock response");
-			} else {
-				this.executeHttpRequest(request)
-					.then(resolve)
-					.catch(reject);
+		if (template.bodyTemplate) {
+			requestBody = this.parseBodyTemplate(template.bodyTemplate, body || "");
+			if (requestBody instanceof Error) {
+				return requestBody;
 			}
-		});
+		} else {
+			if (typeof body === "string") {
+				requestBody = body;
+			} else {
+				requestBody = JSON.stringify(body);
+			}
+		}
+
+		const request: HttpRequest = {
+			url: template.url,
+			method: template.method,
+			headers: template.headers,
+			body: template.method.toLowerCase() !== "get" ? requestBody : undefined,
+		};
+
+		return request;
 	}
 
 	parseBodyTemplate(
 		template: string,
 		body: string | Record<string, string>
-	): string {
+	): string | Error {
 		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
 			(v) => v.slice(2, -2)
 		);
@@ -1155,7 +1098,7 @@ export class Run {
 		if (typeof body === "object") {
 			for (const variable of variablesInTemplate) {
 				if (!(variable in body)) {
-					throw new Error(
+					return new Error(
 						`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
 							.map((v) => `  - ${v}`)
 							.join("\n")}`
@@ -1172,7 +1115,7 @@ export class Run {
 
 			for (const key in body) {
 				if (!variablesInTemplate.includes(key)) {
-					throw new Error(
+					return new Error(
 						`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
 							.map((v) => `  - ${v}`)
 							.join("\n")}`
@@ -1180,7 +1123,7 @@ export class Run {
 				}
 			}
 		} else {
-			throw new Error(
+			return new Error(
 				`This action node expected multiple variables, but only found one. This node expects the following variables:\n${variablesInTemplate
 					.map((v) => `  - ${v}`)
 					.join("\n")}`

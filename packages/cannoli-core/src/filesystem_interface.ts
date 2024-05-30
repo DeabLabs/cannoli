@@ -4,7 +4,7 @@ import { HttpTemplate } from "./run";
 export interface FilesystemInterface {
     getHttpTemplateByName(
         name: string,
-    ): HttpTemplate;
+    ): HttpTemplate | Error;
 
     editNote(
         reference: Reference,

@@ -1,5 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { ChatRole, HttpRequest } from "../run";
+import { ChatRole, HttpRequest, HttpTemplate } from "../run";
 import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
 import { CannoliGroup } from "./group";
 import {
@@ -1133,11 +1133,6 @@ export class CallNode extends CannoliNode {
 		return references;
 	}
 
-	private getDefaultConfig(): GenericModelConfig {
-		const config = JSON.parse(JSON.stringify(this.run.getDefaultConfig()));
-		return config;
-	}
-
 	private updateConfigWithValue(
 		runConfig: GenericModelConfig,
 		content: string | Record<string, string> | null,
@@ -1530,17 +1525,6 @@ export class FormNode extends CallNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Form\n`;
 	}
-
-	validate() {
-		super.validate();
-		// If there are no outgoing key edges, error
-
-		// if (
-		// 	!this.getOutgoingEdges().some((edge) => edge.type === EdgeType.Key)
-		// ) {
-		// 	this.error(`List nodes must have at least one outgoing list edge.`);
-		// }
-	}
 }
 
 export class AccumulateNode extends CallNode {
@@ -1819,47 +1803,6 @@ export class ContentNode extends CannoliNode {
 		}
 
 		return null;
-	}
-
-	validate(): void {
-		super.validate();
-
-		// // There must not be more than one incoming edge of type write
-		// if (
-		// 	this.getIncomingEdges().filter(
-		// 		(edge) => edge.type === EdgeType.Write
-		// 	).length > 1
-		// ) {
-		// 	this.error(`Content nodes can only have one incoming write edge.`);
-		// }
-
-		// If there are more than one incoming edges and its a standard content node, there must only be one non-config edge
-		// if (
-		// 	this.type === ContentNodeType.StandardConent &&
-		// 	this.getIncomingEdges().filter(
-		// 		(edge) => edge.type !== EdgeType.Config
-		// 	).length > 1
-		// ) {
-		// 	this.error(
-		// 		`Standard content nodes can only have one incoming edge that is not of type config.`
-		// 	);
-		// }
-
-		// Content nodes must not have any outgoing edges of type ListItem, List, Category, Select, Branch, or Function
-		// if (
-		// 	this.getOutgoingEdges().some(
-		// 		(edge) =>
-		// 			edge.type === EdgeType.List ||
-		// 			edge.type === EdgeType.Category ||
-		// 			edge.type === EdgeType.Function ||
-		// 			edge.type === EdgeType.Choice ||
-		// 			edge.type === EdgeType.Logging
-		// 	)
-		// ) {
-		// 	this.error(
-		// 		`Content nodes cannot have any outgoing list, choice, or function edges.`
-		// 	);
-		// }
 	}
 }
 
@@ -2460,35 +2403,6 @@ export class ReferenceNode extends ContentNode {
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Reference\n`;
 	}
-
-	validate(): void {
-		super.validate();
-
-		// // Reference nodes cant have incoming edges of type category, list, or function
-		// if (
-		// 	this.getIncomingEdges().some(
-		// 		(edge) =>
-		// 			edge.type === EdgeType.Category ||
-		// 			edge.type === EdgeType.List ||
-		// 			edge.type === EdgeType.Function
-		// 	)
-		// ) {
-		// 	this.error(
-		// 		`Reference nodes cannot have incoming category, list, or function edges.`
-		// 	);
-		// }
-
-		// // If there are more than one incoming edges, there must only be one non-config edge
-		// if (
-		// 	this.getIncomingEdges().filter(
-		// 		(edge) => edge.type !== EdgeType.Config
-		// 	).length > 1
-		// ) {
-		// 	this.error(
-		// 		`Reference nodes can only have one incoming edge that is not of type config.`
-		// 	);
-		// }
-	}
 }
 
 export class HttpNode extends ContentNode {
@@ -2500,101 +2414,107 @@ export class HttpNode extends ContentNode {
 		this.executing();
 
 		let hookId: string | null = null;
-
 		let content: string;
 
 		if (this.type === ContentNodeType.Hook) {
-			// Check if there's a reference to ID, and give an error saying if they don't include the hook id in the request then there's no way to get a response
-			if (!this.references.some((reference) => reference.name === "ID")) {
-				this.error(`You must send the ID of the hook using the "{{ID}}" variable to get a response.`);
+			const hookResult = await this.handleHookCreation();
+			if (hookResult instanceof Error) {
+				this.error(hookResult.message);
 				return;
 			}
-
-			if (!this.run.receiver) {
-				this.error(`No receiver found.`);
-				return;
-			}
-
-			const hookCreationResponse = await this.run.receiver.createHook(this.run.isMock);
-			if (hookCreationResponse instanceof Error) {
-				this.error(`Could not create hook: ${hookCreationResponse.message}`);
-				return;
-			}
-
-			hookId = hookCreationResponse;
-
-			if (hookId === null) {
-				this.error(`Could not create hook.`);
-				return;
-			}
-
-
-			// Make a variable value
-			const hookIdValue: VariableValue = {
-				name: "ID",
-				content: hookId,
-				edgeId: null
-			};
-
-			content = await this.processReferences([hookIdValue], true);
+			({ hookId, content } = hookResult);
 		} else {
 			content = await this.processReferences([], true);
 		}
 
-
-		// Check if content starts with "http"
-		if (typeof content === "string" && content.startsWith("http")) {
-			const request: HttpRequest = {
-				url: content,
-				method: "GET"
-			};
-			const result = await this.run.executeHttpRequest(request);
-
-			if (this.type === ContentNodeType.Hook) {
-				// Wait for a response to be retrieved from the hook
-				const response = await this.waitForHookResponse(hookId);
-				this.loadOutgoingEdges(response);
-			} else {
-				this.loadOutgoingEdges(result);
-			}
-
-			this.completed();
+		const request = this.parseContentToRequest(content);
+		if (request instanceof Error) {
+			this.error(request.message);
 			return;
 		}
 
-		// Check if content matches HttpRequest format
-		if (typeof content === "string") {
-			let parsedContent;
-			try {
-				parsedContent = JSON.parse(content);
-			} catch (e) {
-				// Do nothing, it won't pass the if below
-			}
+		const result = await this.run.executeHttpRequest(request);
 
-			if (parsedContent && parsedContent.url) {
-				const request: HttpRequest = parsedContent;
-				const result = await this.run.executeHttpRequest(request);
-
-				if (this.type === ContentNodeType.Hook) {
-					const response = await this.waitForHookResponse(hookId);
-
-					this.loadOutgoingEdges(response);
-				} else {
-					this.loadOutgoingEdges(result);
-				}
-
-				this.completed();
-				return;
-			}
+		if (result instanceof Error) {
+			this.error(result.message);
+			return;
 		}
 
-		let variables: string | Record<string, string> | null =
-			this.getWriteOrLoggingContent();
+		if (this.type === ContentNodeType.Hook) {
+			const response = await this.waitForHookResponse(hookId);
+			this.loadOutgoingEdges(response);
+		} else {
+			this.loadOutgoingEdges(result);
+		}
+
+		this.completed();
+	}
+
+	private async handleHookCreation(): Promise<{ hookId: string | null, content: string } | Error> {
+		if (!this.references.some((reference) => reference.name === "ID")) {
+			return new Error(`You must send the ID of the hook using the "{{ID}}" variable to get a response.`);
+		}
+
+		if (!this.run.receiver) {
+			return new Error(`No receiver found.`);
+		}
+
+		const hookCreationResponse = await this.run.receiver.createHook(this.run.isMock);
+		if (hookCreationResponse instanceof Error) {
+			return new Error(`Could not create hook: ${hookCreationResponse.message}`);
+		}
+
+		const hookId = hookCreationResponse;
+		if (hookId === null) {
+			return new Error(`Could not create hook.`);
+		}
+
+		const hookIdValue: VariableValue = {
+			name: "ID",
+			content: hookId,
+			edgeId: null
+		};
+
+		const content = await this.processReferences([hookIdValue], true);
+		return { hookId, content };
+	}
+
+	private parseContentToRequest(content: string): HttpRequest | Error {
+		// If the content is wrapped in triple backticks with or without a language identifier, remove them
+		content = content.replace(/^```[^\n]*\n([\s\S]*?)\n```$/, '$1').trim();
+
+		if (typeof content === "string" && (content.startsWith("http://") || content.startsWith("https://"))) {
+			return { url: content, method: "GET" };
+		}
+
+		try {
+			const parsedContent = JSON.parse(content);
+			if (parsedContent && parsedContent.url) {
+				return parsedContent as HttpRequest;
+			}
+		} catch (e) {
+			// Continue to next parsing method
+		}
+
+		const variables = this.getVariables();
+		const template = this.getTemplate(content);
+		if (template instanceof Error) {
+			return template;
+		}
+
+		const request = this.run.convertTemplateToRequest(template, variables);
+		if (request instanceof Error) {
+			return request;
+		}
+
+		return request;
+	}
+
+	private getVariables(): string | Record<string, string> | null {
+		let variables: string | Record<string, string> | null = this.getWriteOrLoggingContent();
 
 		if (!variables) {
 			const variableValues = this.getVariableValues(false);
-
-			// If there are variable values, make a record of them and set it to content
 			if (variableValues.length > 0) {
 				variables = {};
 				for (const variableValue of variableValues) {
@@ -2603,58 +2523,52 @@ export class HttpNode extends ContentNode {
 			}
 		}
 
-		let template: string | null = null;
-
-		// Check if the text matches the name of a floating node
-		for (const objectId in this.graph) {
-			const object = this.graph[objectId];
-			if (
-				object instanceof FloatingNode &&
-				object.getName() === this.text
-			) {
-				template = object.text;
-			}
-		}
-
-		let result: string | Error;
-
-		// If there's a template, call executeTemplateFromFloatingNode
-		if (template) {
-			result = await this.run.executeHttpTemplateFromFloatingNode(
-				template,
-				variables
-			);
-		} else {
-			// If there's no fileSystemInterface, throw an error
-			if (!this.run.fileSystemInterface) {
-				throw new Error("No fileSystemInterface found");
-			}
-
-			// Get the template
-			const template = this.run.fileSystemInterface.getHttpTemplateByName(this.text);
-
-			// Make the request
-			result = await this.run.executeHttpTemplate(template, variables);
-		}
-
-		if (result instanceof Error) {
-			this.error(result.message);
-			return;
-		}
-
-		if (typeof result === "string") {
-			if (this.type === ContentNodeType.Hook) {
-				const response = await this.waitForHookResponse(hookId);
-				this.loadOutgoingEdges(response);
-			} else {
-				this.loadOutgoingEdges(result);
-			}
-		}
-
-		this.completed();
+		return variables;
 	}
 
-	async waitForHookResponse(hookId: string | null): Promise<string> {
+	private getTemplate(name: string): HttpTemplate | Error {
+		console.log(`Getting template for ${name}`);
+
+		for (const objectId in this.graph) {
+			const object = this.graph[objectId];
+			if (object instanceof FloatingNode && object.getName() === name) {
+				// If the text is wrapped in triple backticks with or without a language identifier, remove them
+				const text = object.getContent().replace(/^```[^\n]*\n([\s\S]*?)\n```$/, '$1').trim();
+
+				try {
+					const template = JSON.parse(text) as HttpTemplate;
+
+					// Check that the template has a url and method
+					if (!template.url || !template.method) {
+						return new Error(`Floating node "${name}" does not have a valid HTTP template.`);
+					}
+
+					// Convert the body template to a string
+					if (template.bodyTemplate) {
+						template.bodyTemplate = JSON.stringify(template.bodyTemplate);
+					}
+
+					return template;
+				} catch (e) {
+					return new Error(`Floating node "${name}" could not be parsed as an HTTP template.`);
+				}
+
+			}
+		}
+
+		if (!this.run.fileSystemInterface) {
+			return new Error("No fileSystemInterface found");
+		}
+
+		const settingsTemplate = this.run.fileSystemInterface.getHttpTemplateByName(name);
+		if (settingsTemplate instanceof Error) {
+			return new Error(`Could not get HTTP template with name "${name}" from floating nodes or pre-set templates.`);
+		}
+
+		return settingsTemplate;
+	}
+
+	private async waitForHookResponse(hookId: string | null): Promise<string> {
 		if (!this.run.receiver) {
 			this.warning(`No receiver found.`);
 			return "No receiver found.";
@@ -2665,12 +2579,8 @@ export class HttpNode extends ContentNode {
 			return "Could not get hook response.";
 		}
 
-		// Set up the waiting callback
-		const shouldContinueWaiting = () => {
-			return !this.run.isStopped;
-		};
+		const shouldContinueWaiting = () => !this.run.isStopped;
 
-		// Wait for a response to be retrieved from the hook
 		const response: string | Error = await this.run.receiver.getHookResponse(hookId, this.run.isMock, shouldContinueWaiting);
 		if (response instanceof Error) {
 			this.warning(`Could not get hook response: ${response.message}`);

@@ -16,10 +16,10 @@ export class VaultInterface implements FilesystemInterface {
 
 	getHttpTemplateByName(
 		name: string,
-	): HttpTemplate {
+	): HttpTemplate | Error {
 		// If we don't have an httpTemplates array, we can't get templates
 		if (!this.cannoli.settings.httpTemplates) {
-			throw new Error(
+			return new Error(
 				"No HTTP templates available. You can add them in Cannoli Plugin settings."
 			);
 		}
@@ -30,7 +30,7 @@ export class VaultInterface implements FilesystemInterface {
 		);
 
 		if (!template) {
-			throw new Error(`HTTP template with name "${name}" not found.`);
+			return new Error(`HTTP template with name "${name}" not found.`);
 		}
 
 		return template;

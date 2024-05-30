@@ -815,8 +815,6 @@ export default class Cannoli extends Plugin {
 
 		let shouldContinue = true;
 
-
-
 		// If the total price is greater than the threshold, ask the user if they want to continue
 		if (validationStoppage.totalCost > this.settings.costThreshold) {
 			shouldContinue = await this.showRunPriceAlertModal(validationStoppage.usage);
