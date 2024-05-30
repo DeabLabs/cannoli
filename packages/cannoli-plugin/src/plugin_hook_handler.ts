@@ -3,7 +3,8 @@ import { requestUrl } from "obsidian";
 
 export class PluginHookHandler implements Receiver {
     private cannoliWebsiteAPIKey: string;
-    private url = "https://cannoli.website";
+    private url = "https://cannoli.website/api";
+    // private url = "http://localhost:5173/api";
 
     constructor(cannoliWebsiteAPIKey: string) {
         this.cannoliWebsiteAPIKey = cannoliWebsiteAPIKey;
@@ -19,11 +20,11 @@ export class PluginHookHandler implements Receiver {
         }
 
         try {
-            // Send request to hooks/create
+            // Send POST request to /hooks
             const response = await requestUrl(
                 {
-                    url: `${this.url}/hooks/new`,
-                    method: "GET",
+                    url: `${this.url}/hooks`,
+                    method: "POST",
                     headers: {
                         "Content-Type": "application/json",
                         "Authorization": `Bearer ${this.cannoliWebsiteAPIKey}`,
@@ -58,7 +59,7 @@ export class PluginHookHandler implements Receiver {
             try {
                 const response = await requestUrl(
                     {
-                        url: `${this.url}/hooks/receive/${hookId}`,
+                        url: `${this.url}/hooks/${hookId}`,
                         headers: {
                             "Content-Type": "application/json",
                             "Authorization": `Bearer ${this.cannoliWebsiteAPIKey}`,
@@ -84,7 +85,7 @@ export class PluginHookHandler implements Receiver {
         // Delete the hook
         await requestUrl(
             {
-                url: `${this.url}/hooks/delete/${hookId}`,
+                url: `${this.url}/hooks/${hookId}`,
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
