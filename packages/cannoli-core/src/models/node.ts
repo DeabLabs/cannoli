@@ -2488,10 +2488,29 @@ export class HttpNode extends ContentNode {
 		}
 
 		try {
-			const parsedContent = JSON.parse(content);
-			if (parsedContent && parsedContent.url) {
-				return parsedContent as HttpRequest;
+			const request = JSON.parse(content);
+
+			// Evaluate the request
+			try {
+				// Check that the template has a url and method
+				if (!request.url || !request.method) {
+					return new Error(`Request is missing a URL or method.`);
+				}
+
+				if (request.headers && typeof request.headers !== "string") {
+					request.headers = JSON.stringify(request.headers);
+				}
+
+				if (request.body && typeof request.body !== "string") {
+					request.body = JSON.stringify(request.body);
+				}
+
+				return request;
+			} catch (e) {
+				return new Error(`Action node does not have a valid HTTP request.`);
 			}
+
+
 		} catch (e) {
 			// Continue to next parsing method
 		}
@@ -2502,7 +2521,7 @@ export class HttpNode extends ContentNode {
 			return template;
 		}
 
-		const request = this.run.convertTemplateToRequest(template, variables);
+		const request = this.convertTemplateToRequest(template, variables);
 		if (request instanceof Error) {
 			return request;
 		}
@@ -2511,24 +2530,21 @@ export class HttpNode extends ContentNode {
 	}
 
 	private getVariables(): string | Record<string, string> | null {
-		let variables: string | Record<string, string> | null = this.getWriteOrLoggingContent();
+		let variables: string | Record<string, string> | null = null;
 
-		if (!variables) {
-			const variableValues = this.getVariableValues(false);
-			if (variableValues.length > 0) {
-				variables = {};
-				for (const variableValue of variableValues) {
-					variables[variableValue.name] = variableValue.content || "";
-				}
+		const variableValues = this.getVariableValues(false);
+		if (variableValues.length > 0) {
+			variables = {};
+			for (const variableValue of variableValues) {
+				variables[variableValue.name] = variableValue.content || "";
 			}
+
 		}
 
 		return variables;
 	}
 
 	private getTemplate(name: string): HttpTemplate | Error {
-		console.log(`Getting template for ${name}`);
-
 		for (const objectId in this.graph) {
 			const object = this.graph[objectId];
 			if (object instanceof FloatingNode && object.getName() === name) {
@@ -2543,9 +2559,14 @@ export class HttpNode extends ContentNode {
 						return new Error(`Floating node "${name}" does not have a valid HTTP template.`);
 					}
 
-					// Convert the body template to a string
-					if (template.bodyTemplate) {
-						template.bodyTemplate = JSON.stringify(template.bodyTemplate);
+					if (template.headers && typeof template.headers !== "string") {
+						template.headers = JSON.stringify(template.headers);
+					}
+
+					const bodyValue = template.body ?? template.bodyTemplate;
+
+					if (bodyValue && typeof bodyValue !== "string") {
+						template.body = JSON.stringify(bodyValue);
 					}
 
 					return template;
@@ -2566,6 +2587,111 @@ export class HttpNode extends ContentNode {
 		}
 
 		return settingsTemplate;
+	}
+
+	private convertTemplateToRequest(
+		template: HttpTemplate,
+		variables: string | Record<string, string> | null
+	): HttpRequest | Error {
+		const url = this.replaceVariables(template.url, variables);
+		if (url instanceof Error) return url;
+
+		const method = this.replaceVariables(template.method, variables);
+		if (method instanceof Error) return method;
+
+		let headers: string | Error | undefined;
+		if (template.headers) {
+			headers = this.replaceVariables(template.headers, variables);
+			if (headers instanceof Error) return headers;
+		}
+
+		const bodyTemplate = template.body ?? template.bodyTemplate;
+		let body: string | Error = "";
+
+		if (bodyTemplate) {
+			body = this.parseBodyTemplate(bodyTemplate, variables || "");
+			if (body instanceof Error) {
+				return body;
+			}
+		}
+
+		return {
+			url,
+			method,
+			headers: headers ? headers as string : undefined,
+			body: method.toLowerCase() !== "get" ? body : undefined,
+		};
+	}
+
+	private replaceVariables(template: string, variables: string | Record<string, string> | null): string | Error {
+		template = String(template);
+
+		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
+			(v) => v.slice(2, -2)
+		);
+
+		if (typeof variables === "string") {
+			return template.replace(/{{.*?}}/g, variables);
+		}
+
+		if (variables && typeof variables === "object") {
+			for (const variable of variablesInTemplate) {
+				if (!(variable in variables)) {
+					return new Error(
+						`Missing value for variable "${variable}" in available arrows. This part of the template requires the following variables:\n${variablesInTemplate
+							.map((v) => `  - ${v}`)
+							.join("\n")}`
+					);
+				}
+				template = template.replace(new RegExp(`{{${variable}}}`, "g"), variables[variable]);
+			}
+		}
+
+		return template;
+	}
+
+	private parseBodyTemplate(
+		template: string,
+		body: string | Record<string, string>
+	): string | Error {
+		template = String(template);
+
+		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
+			(v) => v.slice(2, -2)
+		);
+
+		let parsedTemplate = template;
+
+		if (typeof body === "object") {
+			for (const variable of variablesInTemplate) {
+				if (!(variable in body)) {
+					return new Error(
+						`Missing value for variable "${variable}" in available arrows. This body template requires the following variables:\n${variablesInTemplate
+							.map((v) => `  - ${v}`)
+							.join("\n")}`
+					);
+				}
+				parsedTemplate = parsedTemplate.replace(
+					new RegExp(`{{${variable}}}`, "g"),
+					body[variable].replace(/\\/g, '\\\\')
+						.replace(/\n/g, "\\n")
+						.replace(/"/g, '\\"')
+						.replace(/\t/g, '\\t')
+				);
+			}
+		} else {
+			for (const variable of variablesInTemplate) {
+				parsedTemplate = parsedTemplate.replace(
+					new RegExp(`{{${variable}}}`, "g"),
+					body.replace(/\\/g, '\\\\')
+						.replace(/\n/g, "\\n")
+						.replace(/"/g, '\\"')
+						.replace(/\t/g, '\\t')
+				);
+			}
+		}
+
+		return parsedTemplate;
 	}
 
 	private async waitForHookResponse(hookId: string | null): Promise<string> {
@@ -2589,6 +2715,8 @@ export class HttpNode extends ContentNode {
 
 		return response;
 	}
+
+
 }
 
 export class FormatterNode extends ContentNode {

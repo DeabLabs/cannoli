@@ -20,21 +20,22 @@ export interface HttpTemplate {
 	id: string;
 	name: string;
 	url: string;
-	headers: Record<string, string>;
 	method: string;
-	bodyTemplate?: string;
+	headers?: string;
+	body?: string; // New field for new templates
+	bodyTemplate?: string; // Backward compatibility
 }
 
 export interface HttpRequest {
 	url: string;
 	method: string;
-	headers?: Record<string, string>;
+	headers?: string;
 	body?: string;
 }
 
 export type StoppageReason = "user" | "error" | "complete";
 
-export type ResponseTextFetcher = (url: string, options: RequestInit) => Promise<string>;
+export type ResponseTextFetcher = (url: string, options: RequestInit) => Promise<string | Error>;
 
 interface Limit {
 	(fn: () => Promise<GenericCompletionResponse | Error>): Promise<
@@ -996,17 +997,43 @@ export class Run {
 			return "mock response";
 		}
 
+		// Try to parse the headers
+		let headers: Record<string, string> | undefined;
+		if (request.headers) {
+			try {
+				headers = JSON.parse(request.headers);
+			} catch {
+				return new Error(`Error parsing headers: ${request.headers}`);
+			}
+		}
+
+		try {
+			this.validateRequestParams(headers, request.body);
+		} catch (error) {
+			return new Error(`Error validating request params: ${error}`);
+		}
+
 		// Prepare fetch options
 		const options: RequestInit = {
 			method: request.method ?? 'GET', // Default to GET if no body is provided
-			headers: request.headers,
-			body: request.body ? JSON.stringify(request.body) : undefined,
+			headers: headers,
+			body: request.body ?? undefined,
 		};
 
 		try {
-			console.log(`Request: ${JSON.stringify(request, null, 2)}`);
-			const responseText = await this.fetcher(request.url, options);
-			console.log(`Response: ${JSON.stringify(responseText, null, 2)}`);
+			// Set a timeout of 20 seconds
+			const timeout = 20000;
+
+			const responseText = await Promise.race([
+				this.fetcher(request.url, options),
+				new Promise<Error>((_, reject) =>
+					setTimeout(() => reject(new Error('Request timed out, please ensure the URL is valid.')), timeout)
+				)
+			]);
+
+			if (responseText instanceof Error) {
+				return responseText;
+			}
 
 			let response;
 			try {
@@ -1030,106 +1057,32 @@ export class Run {
 					.replace(/\\"/g, '"'); // Ensure double quotes are properly formatted
 			}
 		} catch (error) {
-			console.log(`Error: ${error}`);
 			return new Error(`Error on HTTP request: ${error.message}`);
 		}
 	}
 
-	convertTemplateToRequest(
-		template: HttpTemplate,
-		body: string | Record<string, string> | null
-	): HttpRequest | Error {
-		let requestBody: string | Error;
-
-		if (template.bodyTemplate) {
-			requestBody = this.parseBodyTemplate(template.bodyTemplate, body || "");
-			if (requestBody instanceof Error) {
-				return requestBody;
-			}
-		} else {
-			if (typeof body === "string") {
-				requestBody = body;
-			} else {
-				requestBody = JSON.stringify(body);
-			}
-		}
-
-		const request: HttpRequest = {
-			url: template.url,
-			method: template.method,
-			headers: template.headers,
-			body: template.method.toLowerCase() !== "get" ? requestBody : undefined,
-		};
-
-		return request;
-	}
-
-	parseBodyTemplate(
-		template: string,
-		body: string | Record<string, string>
-	): string | Error {
-		const variablesInTemplate = (template.match(/\{\{.*?\}\}/g) || []).map(
-			(v) => v.slice(2, -2)
-		);
-
-		if (variablesInTemplate.length === 1) {
-			let valueToReplace;
-			if (typeof body === "string") {
-				valueToReplace = body;
-			} else if (Object.keys(body).length === 1) {
-				valueToReplace = Object.values(body)[0];
-			} else {
-				throw new Error(
-					`Expected only one variable in the template, but found multiple values. This node expects the variable:\n  - ${variablesInTemplate[0]}\n\nWrite to this node using a single variable arrow or a write arrow.`
-				);
-			}
-
-			return template.replace(
-				new RegExp(`{{${variablesInTemplate[0]}}}`, "g"),
-				valueToReplace.replace(/\\/g, '\\\\')
-					.replace(/\n/g, "\\n")
-					.replace(/"/g, '\\"')
-					.replace(/\t/g, '\\t')
-			);
-		}
-
-		let parsedTemplate = template;
-
-		if (typeof body === "object") {
-			for (const variable of variablesInTemplate) {
-				if (!(variable in body)) {
-					return new Error(
-						`Missing value for variable "${variable}" in available arrows. This template requires the following variables:\n${variablesInTemplate
-							.map((v) => `  - ${v}`)
-							.join("\n")}`
-					);
+	validateRequestParams(headers: unknown, body: unknown): void {
+		if (headers) {
+			// Validate headers
+			if (Array.isArray(headers)) {
+				try {
+					Object.fromEntries(headers);
+				} catch (error) {
+					throw new Error("Invalid headers array format.");
 				}
-				parsedTemplate = parsedTemplate.replace(
-					new RegExp(`{{${variable}}}`, "g"),
-					body[variable].replace(/\\/g, '\\\\')
-						.replace(/\n/g, "\\n")
-						.replace(/"/g, '\\"')
-						.replace(/\t/g, '\\t')
-				);
+			} else if (headers instanceof Headers) {
+				// Headers instance is valid
+			} else if (typeof headers === 'object' && headers !== null) {
+				// Plain object is valid
+			} else {
+				throw new Error("Invalid headers format. Expected an array, Headers instance, or plain object.");
 			}
-
-			for (const key in body) {
-				if (!variablesInTemplate.includes(key)) {
-					return new Error(
-						`Extra variable "${key}" in available arrows. This template requires the following variables:\n${variablesInTemplate
-							.map((v) => `  - ${v}`)
-							.join("\n")}`
-					);
-				}
-			}
-		} else {
-			return new Error(
-				`This action node expected multiple variables, but only found one. This node expects the following variables:\n${variablesInTemplate
-					.map((v) => `  - ${v}`)
-					.join("\n")}`
-			);
 		}
-
-		return parsedTemplate;
+		// Validate body
+		if (body !== null && body !== undefined) {
+			if (typeof body !== 'string' && !(body instanceof ArrayBuffer)) {
+				throw new Error("Invalid body format. Expected a string or ArrayBuffer.");
+			}
+		}
 	}
 }

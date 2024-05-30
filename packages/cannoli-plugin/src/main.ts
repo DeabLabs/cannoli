@@ -1099,6 +1099,26 @@ export class HttpTemplateEditorModal extends Modal {
 		contentEl.addClass("http-template-editor");
 		contentEl.createEl("h1", { text: "Edit action node template" });
 
+		// Add some space between the header and the description
+		contentEl.createEl("div", { cls: "spacer" });
+
+		// Insert a spacer element
+		contentEl.createEl("div", { cls: "spacer", attr: { style: "height: 20px;" } });
+
+		const createDescription = (text: string) => {
+			const p = contentEl.createEl("p", {
+				cls: "http-template-description",
+			});
+			// Allow newlines in the description
+			p.innerHTML = text.replace(/\n/g, "<br>");
+			return p;
+		};
+
+		// Brief description of what this modal does
+		createDescription(
+			`This modal allows you to edit the template for an action node. You can use this template to predefine the structure of http requests.\n\nUse {{variableName}} syntax to insert variables anywhere in the request. If there's only one variable, it will be replaced with whatever is written to the action node. If there are multiple variables, the action node will look for the variables in the available named arrows.`
+		);
+
 		const createInputGroup = (
 			labelText: string,
 			inputElement: HTMLElement,
@@ -1113,13 +1133,7 @@ export class HttpTemplateEditorModal extends Modal {
 			div.appendChild(inputElement);
 		};
 
-		const createDescription = (text: string) => {
-			const p = contentEl.createEl("p", {
-				cls: "http-template-description",
-			});
-			p.textContent = text;
-			return p;
-		};
+
 
 		const nameInput = contentEl.createEl("input", {
 			type: "text",
@@ -1133,6 +1147,7 @@ export class HttpTemplateEditorModal extends Modal {
 			value: this.template.url || "",
 		}) as HTMLInputElement;
 		urlInput.setAttribute("id", "url-input");
+		urlInput.setAttribute("placeholder", "https://example.com/{{path}}");
 		createInputGroup("URL:", urlInput, "url-input");
 
 		// Create a select element for HTTP methods
@@ -1152,44 +1167,37 @@ export class HttpTemplateEditorModal extends Modal {
 
 		const headersValue =
 			this.template.headers &&
-				Object.keys(this.template.headers).length > 0
-				? JSON.stringify(this.template.headers, null, 2)
-				: JSON.stringify(
-					{ "Content-Type": "application/json" },
-					null,
-					2
-					// eslint-disable-next-line no-mixed-spaces-and-tabs
-				);
+				this.template.headers.length > 0
+				? this.template.headers
+				: `{ "Content-Type": "application/json" }`;
 
-		const headersInput = contentEl.createEl("textarea", {
-			placeholder: `{ "Content-Type": "application/json" }`,
-		}) as HTMLTextAreaElement;
+		const headersInput = contentEl.createEl("textarea") as HTMLTextAreaElement;
+
 		headersInput.value = headersValue;
 		headersInput.setAttribute("rows", "3");
+		headersInput.setAttribute("placeholder", `{ "Content-Type": "application/json" }`);
 
-		createInputGroup("Headers:", headersInput, "headers-input");
+		createInputGroup("Headers: (optional)", headersInput, "headers-input");
 
 		// Body template input
-		const bodyTemplateInput = contentEl.createEl("textarea", {
+		const bodyInput = contentEl.createEl("textarea", {
 			placeholder:
-				"Enter body template. Use {{variableName}} for variables.",
+				"Enter body. Use {{variableName}} for variables.",
 		}) as HTMLTextAreaElement;
-		const formattedBody = this.formatBody(this.template.bodyTemplate || "");
-		bodyTemplateInput.value = formattedBody;
-		bodyTemplateInput.setAttribute("rows", "3");
-		bodyTemplateInput.setAttribute(
+
+		const bodyValue = this.template.body ?? this.template.bodyTemplate ?? '';
+
+		const formattedBody = this.formatBody(bodyValue);
+		bodyInput.value = formattedBody;
+		bodyInput.setAttribute("rows", "3");
+		bodyInput.setAttribute(
 			"placeholder",
 			"Enter body template. Use {{variableName}} for variables."
 		);
 		createInputGroup(
-			"Body template: (optional)",
-			bodyTemplateInput,
-			"body-template-input"
-		);
-
-		// Add the permanent description below the input
-		createDescription(
-			"You can use the optional body template to predefine the structure of the request body. Use {{variableName}} syntax to insert variables into the body template. If there's only one variable, it will be replaced with whatever is written to the action node. If there are multiple variables, the action node will look for the variables in the available named arrows."
+			"Body: (optional)",
+			bodyInput,
+			"body-input"
 		);
 
 		const panel = new Setting(contentEl);
@@ -1206,10 +1214,13 @@ export class HttpTemplateEditorModal extends Modal {
 				.setButtonText("Save")
 				.setCta()
 				.onClick(() => {
-					// Parsing headers
-					let headers: Record<string, string> = {};
+					if (!urlInput.value) {
+						alert("URL is required");
+						return;
+					}
+
 					try {
-						headers = JSON.parse(headersInput.value || "{}");
+						JSON.parse(headersInput.value || "{}");
 					} catch (error) {
 						alert(
 							"Invalid JSON format for headers. Please correct and try again."
@@ -1220,9 +1231,12 @@ export class HttpTemplateEditorModal extends Modal {
 					// Updating template object
 					this.template.name = nameInput.value;
 					this.template.url = urlInput.value;
-					this.template.headers = headers;
+					this.template.headers = headersInput.value;
 					this.template.method = methodSelect.value;
-					this.template.bodyTemplate = bodyTemplateInput.value;
+					this.template.body = bodyInput.value;
+
+					// Delete deprecated bodyTemplate
+					delete this.template.bodyTemplate;
 
 					this.close();
 					this.onSave(this.template);
@@ -1897,7 +1911,7 @@ class CannoliSettingTab extends PluginSettingTab {
 					const newCommand: HttpTemplate = {
 						name: "",
 						url: "",
-						headers: {},
+						headers: `{ "Content-Type": "application/json" }`,
 						id: "",
 						method: "GET",
 					};
