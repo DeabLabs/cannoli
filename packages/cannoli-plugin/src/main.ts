@@ -267,7 +267,7 @@ export default class Cannoli extends Plugin {
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({ content }),
+			body: content,
 		});
 
 		// Check that the response has json
