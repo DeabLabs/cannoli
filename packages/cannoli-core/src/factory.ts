@@ -132,6 +132,29 @@ export class CannoliFactory {
 	}
 
 	getCannoliData(): VerifiedCannoliCanvasData {
+		const addedEdges: CannoliCanvasEdgeData[] = [];
+
+		// Look for multi-edges
+		this.cannoliData.edges.forEach((edge) => {
+			// Ignore red ("1") objects
+			if (edge.color === "1") {
+				return;
+			}
+
+			// If there are newlines in the edge text, split by line, then make copies of the edge for each line and add them to the addedEdges array
+			if (edge.label && edge.label.includes("\n")) {
+				const lines = edge.label.split("\n");
+				lines.forEach((line) => {
+					const newEdge = this.duplicateObject(edge, `${edge.id}-${line}`) as CannoliCanvasEdgeData;
+					newEdge.label = line;
+					addedEdges.push(newEdge);
+				});
+			}
+		});
+
+		// Add the added edges to the canvas
+		this.cannoliData.edges.push(...addedEdges);
+
 		// Create the cannoli data object for each node and edge
 		this.cannoliData.nodes.forEach((node) => {
 			// Ignore red ("1") objects
