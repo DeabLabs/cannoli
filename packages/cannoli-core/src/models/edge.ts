@@ -1,5 +1,5 @@
 import { CannoliObject, CannoliVertex } from "./object";
-import { CannoliGroup, ForEachGroup, RepeatGroup } from "./group";
+import { CannoliGroup, RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,
 	EdgeType,
@@ -471,20 +471,23 @@ export class LoggingEdge extends CannoliEdge {
 	}
 
 	getForEachVersionNumbers(): number[] {
-		// Get the current loop number of any repeat type groups that the edge is crossing out of
-		const forEachVersionNumbers: number[] = [];
+		// TODO
+		return [123]
 
-		this.crossingOutGroups.forEach((group) => {
-			const groupObject = this.graph[group];
-			if (groupObject instanceof ForEachGroup) {
-				forEachVersionNumbers.push(groupObject.currentLoop);
-			}
-		});
+		// // Get the current loop number of any repeat type groups that the edge is crossing out of
+		// const forEachVersionNumbers: number[] = [];
 
-		// Reverse the array
-		forEachVersionNumbers.reverse();
+		// this.crossingOutGroups.forEach((group) => {
+		// 	const groupObject = this.graph[group];
+		// 	if (this.groupObject.canvasData.cannoliData.originalObject) {
+		// 		forEachVersionNumbers.push(groupObject.currentLoop);
+		// 	}
+		// });
 
-		return forEachVersionNumbers;
+		// // Reverse the array
+		// forEachVersionNumbers.reverse();
+
+		// return forEachVersionNumbers;
 	}
 
 	formatInteractionHeaders(messages: GenericCompletionResponse[]): string {
@@ -524,7 +527,6 @@ export class LoggingEdge extends CannoliEdge {
 			// If all forEach type groups being crossed are complete
 			this.crossingOutGroups.every(
 				(group) =>
-					!(this.graph[group] instanceof ForEachGroup) ||
 					this.graph[group].status === CannoliObjectStatus.Complete
 			)
 		) {

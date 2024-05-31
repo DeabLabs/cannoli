@@ -182,7 +182,11 @@ export class ObsidianCanvas implements Canvas {
 	): CanvasData {
 		const node = data.nodes.find((node) => node.id === nodeId);
 		if (node) {
-			node.text = newText;
+			if (node.type === "text") {
+				node.text = newText;
+			} else if (node.type === "group") {
+				node.label = newText;
+			}
 		}
 		return data;
 	}

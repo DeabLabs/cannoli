@@ -8,7 +8,7 @@ import {
 } from "../canvas_interface";
 
 import { CannoliObject } from "./object";
-import { CannoliGroup, ForEachGroup, RepeatGroup } from "./group";
+import { CannoliGroup, RepeatGroup } from "./group";
 import {
 	CallNode,
 	CannoliNode,
@@ -51,11 +51,9 @@ export enum EdgeType {
 	Variable = "variable",
 	Field = "field",
 	List = "list",
-	// Merge = "merge",
 	Item = "item",
 	Choice = "choice",
 	Config = "config",
-	Function = "function",
 	Logging = "logging",
 }
 
@@ -66,6 +64,7 @@ export enum CannoliObjectStatus {
 	Rejected = "rejected",
 	Error = "error",
 	Warning = "warning",
+	VersionComplete = "version-complete",
 }
 
 export type NodeType = CallNodeType | ContentNodeType | FloatingNodeType;
@@ -155,9 +154,9 @@ export interface CannoliEdgeData extends CannoliData {
 }
 
 export interface CannoliGroupData extends CannoliVertexData {
-	//members: string[];
 	maxLoops?: number;
 	currentLoop?: number;
+	fromForEach?: boolean;
 }
 
 export interface CannoliNodeData extends CannoliVertexData {
@@ -241,15 +240,6 @@ export class CannoliGraph {
 	hydrateGraph() {
 		for (const node of this.cannoliCanvasData.nodes) {
 			switch (node.cannoliData?.type) {
-				case GroupType.ForEach: {
-					const forEachGroup =
-						node as VerifiedCannoliCanvasGroupData;
-					this.graph[node.id] = new ForEachGroup(
-						forEachGroup,
-						this.cannoliCanvasData
-					);
-					break;
-				}
 				case GroupType.Repeat: {
 					const repeatGroup =
 						node as VerifiedCannoliCanvasGroupData;

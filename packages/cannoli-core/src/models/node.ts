@@ -904,7 +904,6 @@ export class CannoliNode extends CannoliVertex {
 			return (
 				edge.type === EdgeType.Field ||
 				edge.type === EdgeType.Choice ||
-				// edge.type === EdgeType.Merge ||
 				edge.type === EdgeType.List ||
 				edge.type === EdgeType.Variable
 			);

@@ -82,7 +82,6 @@ export class CannoliFactory {
 		[EdgeType.SystemMessage]: true,
 		[EdgeType.ChatConverter]: true,
 
-		[EdgeType.Function]: false,
 		[EdgeType.Config]: false,
 		[EdgeType.Field]: false,
 		[EdgeType.List]: false,
@@ -304,8 +303,6 @@ export class CannoliFactory {
 		const groups = this.getGroupsForVertex(group);
 
 		const dependencies = [] as string[];
-		// @ts-expect-error: originalObject is not a property of CannoliCanvasGroupData
-		const originalObject = group.originalObject;
 		const status =
 			type === GroupType.Basic
 				? CannoliObjectStatus.Complete
@@ -317,8 +314,8 @@ export class CannoliFactory {
 			text,
 			groups,
 			dependencies,
-			originalObject,
 			status,
+			originalObject: null,
 		};
 
 		if (type === GroupType.Repeat || type === GroupType.SignifiedForEach) {
@@ -495,6 +492,8 @@ export class CannoliFactory {
 		const duplicateGroup = this.duplicateObject(originalGroup, `${originalGroup.id}-${index}`) as VerifiedCannoliCanvasGroupData;
 		duplicateGroup.cannoliData.currentLoop = index;
 		duplicateGroup.cannoliData.type = GroupType.Basic;
+		duplicateGroup.cannoliData.fromForEach = true;
+		duplicateGroup.cannoliData.originalObject = originalGroup.id;
 
 		const duplicateIncomingEdges = incomingEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
 		duplicateIncomingEdges.forEach((edge) => {

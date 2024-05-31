@@ -15,6 +15,7 @@ import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
 import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
 import { Receiver } from "./receiver";
+import { CannoliGroup, RepeatGroup } from "./models/group";
 
 export interface HttpTemplate {
 	id: string;
@@ -147,6 +148,8 @@ export class Run {
 	isStopped = false;
 	currentNote: string | null = null;
 	selection: string | null = null;
+
+	forEachTracker: Map<string, number>;
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4-1106-preview": {
@@ -289,6 +292,7 @@ export class Run {
 			}
 		}
 
+		this.forEachTracker = new Map();
 
 		this.graph = new CannoliGraph(
 			graphData
@@ -424,6 +428,10 @@ export class Run {
 				this.objectPending(object);
 				break;
 			}
+			case CannoliObjectStatus.VersionComplete: {
+				this.objectVersionComplete(object, message);
+				break;
+			}
 			case CannoliObjectStatus.Error: {
 				this.objectError(object, message);
 				break;
@@ -433,6 +441,7 @@ export class Run {
 				break;
 			}
 
+
 			default: {
 				throw new Error(`Unknown status: ${status}`);
 			}
@@ -440,7 +449,7 @@ export class Run {
 	}
 
 	objectCompleted(object: CannoliObject) {
-		if (!this.isMock && this.canvas && object.originalObject === null) {
+		if (!this.isMock && this.canvas && !object.originalObject) {
 			if (object instanceof CallNode) {
 				this.canvas.enqueueChangeNodeColor(object.id, "4");
 			} else if (
@@ -449,8 +458,11 @@ export class Run {
 				object instanceof FloatingNode
 			) {
 				this.canvas.enqueueChangeNodeText(object.id, object.text);
+			} else if (object instanceof RepeatGroup) {
+				this.canvas.enqueueChangeNodeText(object.id, `${object.currentLoop + 1}/${object.maxLoops}`);
 			}
 		}
+
 
 		if (this.allObjectsFinished() && !this.isStopped) {
 			this.isStopped = true;
@@ -499,6 +511,34 @@ export class Run {
 			object.text === ""
 		) {
 			this.canvas.enqueueChangeNodeText(object.id, "");
+		} else if (
+			this.canvas &&
+			(object instanceof RepeatGroup)
+		) {
+			this.canvas.enqueueChangeNodeText(object.id, `0/${object.maxLoops}`);
+		} else if (this.canvas && object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
+			this.canvas.enqueueChangeNodeText(object.originalObject, `0/${object.maxLoops}`);
+		}
+	}
+
+	objectVersionComplete(object: CannoliObject, message?: string) {
+		if (this.canvas && !this.isMock) {
+			if (object instanceof RepeatGroup && message) {
+				this.canvas.enqueueChangeNodeText(object.id, `${message}/${object.maxLoops}`);
+			} else if (object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
+				const originalGroupId = object.originalObject;
+
+				if (!this.forEachTracker.has(originalGroupId)) {
+					this.forEachTracker.set(originalGroupId, 1);
+				} else {
+					const current = this.forEachTracker.get(originalGroupId);
+					if (current) {
+						this.forEachTracker.set(originalGroupId, current + 1);
+					}
+				}
+
+				this.canvas.enqueueChangeNodeText(originalGroupId, `${this.forEachTracker.get(originalGroupId)}/${object.maxLoops}`);
+			}
 		}
 	}
 
@@ -1007,6 +1047,21 @@ export class Run {
 			}
 		}
 
+		let body;
+
+		if (request.body) {
+			// Use the headers to decide whether to use json stringify. If the header defines json but it can't be parsed, error
+			if (headers && headers["Content-Type"] === "application/json") {
+				try {
+					body = JSON.stringify(JSON.parse(request.body));
+				} catch {
+					return new Error(`Error parsing body: ${request.body}`);
+				}
+			} else {
+				body = request.body;
+			}
+		}
+
 		try {
 			this.validateRequestParams(headers, request.body);
 		} catch (error) {
@@ -1017,12 +1072,12 @@ export class Run {
 		const options: RequestInit = {
 			method: request.method ?? 'GET', // Default to GET if no body is provided
 			headers: headers,
-			body: request.body ?? undefined,
+			body: body,
 		};
 
 		try {
-			// Set a timeout of 20 seconds
-			const timeout = 20000;
+			// Set a timeout of 400 seconds
+			const timeout = 400000;
 
 			const responseText = await Promise.race([
 				this.fetcher(request.url, options),

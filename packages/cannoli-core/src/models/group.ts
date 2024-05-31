@@ -12,6 +12,7 @@ export class CannoliGroup extends CannoliVertex {
 	members: string[];
 	maxLoops: number;
 	currentLoop: number;
+	fromForEach: boolean;
 
 	constructor(
 		groupData: VerifiedCannoliCanvasGroupData,
@@ -24,6 +25,8 @@ export class CannoliGroup extends CannoliVertex {
 		);
 		this.maxLoops = groupData.cannoliData.maxLoops ?? 1;
 		this.currentLoop = groupData.cannoliData.currentLoop ?? 0;
+		this.fromForEach = groupData.cannoliData.fromForEach ?? false;
+		this.originalObject = groupData.cannoliData.originalObject ?? null;
 	}
 
 	getMembers(): CannoliVertex[] {
@@ -132,6 +135,14 @@ export class CannoliGroup extends CannoliVertex {
 			// If all dependencies are complete or rejected, call membersFinished
 			if (this.allDependenciesCompleteOrRejected()) {
 				this.membersFinished();
+
+			}
+		} else if (this.status === CannoliObjectStatus.Complete) {
+			if (this.fromForEach && this.allDependenciesCompleteOrRejected()) {
+				const event = new CustomEvent("update", {
+					detail: { obj: this, status: CannoliObjectStatus.VersionComplete },
+				});
+				this.dispatchEvent(event);
 			}
 		}
 	}
@@ -302,66 +313,37 @@ export class CannoliGroup extends CannoliVertex {
 	}
 }
 
-export class ForEachGroup extends CannoliGroup {
-	constructor(
-		forEachData: VerifiedCannoliCanvasGroupData,
-		fullCanvasData: VerifiedCannoliCanvasData
-	) {
-		super(forEachData, fullCanvasData);
-	}
+// export class ForEachGroup extends CannoliGroup {
+// 	constructor(
+// 		forEachData: VerifiedCannoliCanvasGroupData,
+// 		fullCanvasData: VerifiedCannoliCanvasData
+// 	) {
+// 		super(forEachData, fullCanvasData);
+// 	}
 
-	logDetails(): string {
-		return (
-			super.logDetails() + `Type: ForEach\nIndex: ${this.currentLoop}\n`
-		);
-	}
+// 	logDetails(): string {
+// 		return (
+// 			super.logDetails() + `Type: ForEach\nIndex: ${this.currentLoop}\n`
+// 		);
+// 	}
 
-	async execute(): Promise<void> {
-		this.status = CannoliObjectStatus.Executing;
-		const event = new CustomEvent("update", {
-			detail: { obj: this, status: CannoliObjectStatus.Executing },
-		});
-		this.dispatchEvent(event);
-	}
+// 	async execute(): Promise<void> {
+// 		this.status = CannoliObjectStatus.Executing;
+// 		const event = new CustomEvent("update", {
+// 			detail: { obj: this, status: CannoliObjectStatus.Executing },
+// 		});
+// 		this.dispatchEvent(event);
+// 	}
 
-	dependencyCompleted(dependency: CannoliObject): void {
-		if (this.status === CannoliObjectStatus.Executing) {
-			// If all members are complete or rejected, call membersFinished
-			if (this.allMembersCompleteOrRejected()) {
-				this.completed();
-			}
-		}
-	}
-
-	validate(): void {
-		super.validate();
-
-		// // List groups must have one and only one edge of type either list or category
-		// const listOrCategoryEdges = this.outgoingEdges.filter(
-		// 	(edge) =>
-		// 		this.graph[edge].type === EdgeType.List ||
-		// 		this.graph[edge].type === EdgeType.Category
-		// );
-
-		// if (listOrCategoryEdges.length !== 1) {
-		// 	this.error(
-		// 		`List groups must have one and only one edge of type list or category.`
-		// 	);
-		// }
-
-		// // List groups can't have outgoing edges that aren't of type list
-		// for (const edge of this.outgoingEdges) {
-		// 	if (
-		// 		this.graph[edge].kind === CannoliObjectKind.Edge &&
-		// 		this.graph[edge].type !== EdgeType.List
-		// 	) {
-		// 		this.error(
-		// 			`List groups can't have outgoing edges that aren't of type list.`
-		// 		);
-		// 	}
-		// }
-	}
-}
+// 	dependencyCompleted(dependency: CannoliObject): void {
+// 		if (this.status === CannoliObjectStatus.Executing) {
+// 			// If all members are complete or rejected, call membersFinished
+// 			if (this.allMembersCompleteOrRejected()) {
+// 				this.completed();
+// 			}
+// 		}
+// 	}
+// }
 
 export class RepeatGroup extends CannoliGroup {
 	constructor(
@@ -410,6 +392,13 @@ export class RepeatGroup extends CannoliGroup {
 				// Sleep for 20ms to allow complete color to render
 				setTimeout(() => {
 					this.resetMembers();
+
+					const event = new CustomEvent("update", {
+						detail: { obj: this, status: CannoliObjectStatus.VersionComplete, message: this.currentLoop.toString() },
+					});
+
+					this.dispatchEvent(event);
+
 					this.executeMembers();
 				}, 20);
 			} else {
