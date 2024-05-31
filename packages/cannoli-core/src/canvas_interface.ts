@@ -23,7 +23,7 @@ import { z } from "zod";
 // export type HexColor = `#${string}`;
 
 export const hexColorSchema = z.custom<`#${string}`>(v => {
-    return /^#[0-9a-fA-F]{6}$/.test(v);
+	return /^#[0-9a-fA-F]{6}$/.test(v);
 });
 
 export type HexColor = z.infer<typeof hexColorSchema>;
@@ -47,18 +47,18 @@ export type CanvasColor = z.infer<typeof canvasColorSchema>;
 // }
 
 const canvasNodeDataSchema = z.object({
-    id: z.string(),
-    x: z.number(),
-    y: z.number(),
-    width: z.number(),
-    height: z.number(),
-    color: z.string().optional(),
-    text: z.string().optional(),
-    type: z.string(),
+	id: z.string(),
+	x: z.number(),
+	y: z.number(),
+	width: z.number(),
+	height: z.number(),
+	color: z.string().optional(),
+	text: z.string().optional(),
+	type: z.string(),
 }).passthrough();
 
 export type CanvasNodeData = z.infer<typeof canvasNodeDataSchema> & {
-    [key: string]: any;
+	[key: string]: any;
 };
 
 // export type AllCanvasNodeData = CanvasFileData | CanvasTextData | CanvasLinkData | CanvasGroupData;
@@ -73,16 +73,16 @@ export type CanvasNodeData = z.infer<typeof canvasNodeDataSchema> & {
 // }
 
 export const canvasFileDataSchema = canvasNodeDataSchema.merge(z.object({
-    type: z.literal('file'),
-    file: z.string(),
-    subpath: z.string().optional(),
+	type: z.literal('file'),
+	file: z.string(),
+	subpath: z.string().optional(),
 }));
 
 export type CanvasFileData = z.infer<typeof canvasFileDataSchema>;
 
 const canvasTextDataSchema = canvasNodeDataSchema.merge(z.object({
-    type: z.literal('text'),
-    text: z.string(),
+	type: z.literal('text'),
+	text: z.string(),
 }));
 
 export type CanvasTextData = z.infer<typeof canvasTextDataSchema>;
@@ -101,8 +101,8 @@ export type CanvasTextData = z.infer<typeof canvasTextDataSchema>;
 // }
 
 export const canvasLinkDataSchema = canvasNodeDataSchema.merge(z.object({
-    type: z.literal('link'),
-    url: z.string(),
+	type: z.literal('link'),
+	url: z.string(),
 }));
 
 export type CanvasLinkData = z.infer<typeof canvasLinkDataSchema>;
@@ -122,10 +122,10 @@ export type BackgroundStyle = 'cover' | 'ratio' | 'repeat';
 // }
 
 export const canvasGroupDataSchema = canvasNodeDataSchema.merge(z.object({
-    type: z.literal('group'),
-    label: z.string().optional(),
-    background: z.string().optional(),
-    backgroundStyle: z.enum(['cover', 'ratio', 'repeat']).optional(),
+	type: z.literal('group'),
+	label: z.string().optional(),
+	background: z.string().optional(),
+	backgroundStyle: z.union([z.literal('cover'), z.literal('ratio'), z.literal('repeat')]).optional(),
 }));
 
 export type CanvasGroupData = z.infer<typeof canvasGroupDataSchema>;
@@ -133,14 +133,14 @@ export type CanvasGroupData = z.infer<typeof canvasGroupDataSchema>;
 /** The side of the node that a connection is connected to */
 // export type NodeSide = 'top' | 'right' | 'bottom' | 'left';
 
-export const nodeSideSchema = z.enum(['top', 'right', 'bottom', 'left']);
+export const nodeSideSchema = z.union([z.literal('top'), z.literal('right'), z.literal('bottom'), z.literal('left')]);
 
 export type NodeSide = z.infer<typeof nodeSideSchema>;
 
 /** What to display at the end of an edge */
 // export type EdgeEnd = 'none' | 'arrow';
 
-export const edgeEndSchema = z.enum(['none', 'arrow']);
+export const edgeEndSchema = z.union([z.literal('none'), z.literal('arrow')]);
 
 export type EdgeEnd = z.infer<typeof edgeEndSchema>;
 
@@ -172,26 +172,26 @@ export const allCanvasNodeDataSchema = z.union([canvasFileDataSchema, canvasText
 export type AllCanvasNodeData = z.infer<typeof allCanvasNodeDataSchema>;
 
 export const canvasEdgeDataSchema = z.object({
-    id: z.string(),
-    fromNode: z.string(),
-    fromSide: nodeSideSchema,
-    fromEnd: edgeEndSchema.optional(),
-    toNode: z.string(),
-    toSide: nodeSideSchema,
-    toEnd: edgeEndSchema.optional(),
-    color: z.string().optional(),
-    label: z.string().optional(),
+	id: z.string(),
+	fromNode: z.string(),
+	fromSide: nodeSideSchema,
+	fromEnd: edgeEndSchema.optional(),
+	toNode: z.string(),
+	toSide: nodeSideSchema,
+	toEnd: edgeEndSchema.optional(),
+	color: z.string().optional(),
+	label: z.string().optional(),
 }).passthrough();
 
 export type CanvasEdgeData = z.infer<typeof canvasEdgeDataSchema> & {
-    [key: string]: any;
+	[key: string]: any;
 };
 
 export const canvasDataSchema = z.object({
-    nodes: z.array(allCanvasNodeDataSchema),
-    edges: z.array(canvasEdgeDataSchema),
-    settings: z.record(z.any()).optional(),
-    args: z.record(z.string()).optional(),
+	nodes: z.array(allCanvasNodeDataSchema),
+	edges: z.array(canvasEdgeDataSchema),
+	settings: z.record(z.any()).optional(),
+	args: z.record(z.string()).optional(),
 });
 
 export type CanvasData = z.infer<typeof canvasDataSchema>;
@@ -206,11 +206,11 @@ export type CanvasData = z.infer<typeof canvasDataSchema>;
 // }
 
 export interface Canvas {
-    enqueueChangeNodeColor(nodeId: string, newColor?: CanvasColor, isMock?: boolean): Promise<void>;
-    enqueueAddErrorNode(nodeId: string, message: string, isMock?: boolean): Promise<void>;
-    enqueueAddWarningNode(nodeId: string, message: string, isMock?: boolean): Promise<void>;
-    enqueueChangeNodeText(nodeId: string, newText: string, isMock?: boolean): Promise<void>;
-    enqueueRemoveAllErrorNodes(isMock?: boolean): Promise<void>;
+	enqueueChangeNodeColor(nodeId: string, newColor?: CanvasColor, isMock?: boolean): Promise<void>;
+	enqueueAddErrorNode(nodeId: string, message: string, isMock?: boolean): Promise<void>;
+	enqueueAddWarningNode(nodeId: string, message: string, isMock?: boolean): Promise<void>;
+	enqueueChangeNodeText(nodeId: string, newText: string, isMock?: boolean): Promise<void>;
+	enqueueRemoveAllErrorNodes(isMock?: boolean): Promise<void>;
 }
 
 
