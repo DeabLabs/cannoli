@@ -21,10 +21,12 @@ import {
 	GenericCompletionResponse,
 	GenericFunctionCall,
 	GenericModelConfig,
+	GenericModelConfigSchema,
 	SupportedProviders,
 } from "../providers";
 import invariant from "tiny-invariant";
 import { pathOr, stringToPath } from "remeda";
+import { ZodSchema, z } from "zod";
 
 type VariableValue = { name: string; content: string; edgeId: string | null };
 
@@ -962,6 +964,129 @@ export class CannoliNode extends CannoliVertex {
 
 		return filteredEdges as CannoliEdge[];
 	}
+
+	private updateConfigWithValue(
+		runConfig: Record<string, unknown>,
+		content: string | Record<string, string> | null,
+		schema: ZodSchema,
+		setting?: string | null,
+	): void {
+		// Ensure the schema is a ZodObject to access its shape
+		if (!(schema instanceof z.ZodObject)) {
+			this.error("Provided schema is not a ZodObject.");
+			return;
+		}
+
+		const schemaKeys = Object.keys(schema.shape);
+
+		if (typeof content === "string") {
+			if (setting && schemaKeys.includes(setting)) {
+				// Try to transform into number, boolean, array, or object
+				try {
+					runConfig[setting] = Number(content);
+				} catch (error) {
+					runConfig[setting] = content;
+				}
+
+				try {
+					if (content.toLowerCase() === "true" || content.toLowerCase() === "false") {
+						runConfig[setting] = content.toLowerCase() === "true";
+					} else {
+						runConfig[setting] = content;
+					}
+				} catch (error) {
+					runConfig[setting] = content;
+				}
+
+				try {
+					runConfig[setting] = JSON.parse(content);
+				} catch (error) {
+					runConfig[setting] = content;
+				}
+			} else {
+				this.error(`"${setting}" is not a valid config setting.`);
+			}
+		} else if (typeof content === "object") {
+			for (const key in content) {
+				if (schemaKeys.includes(key)) {
+					runConfig[key] = content[key];
+				} else {
+					this.error(`"${key}" is not a valid config setting.`);
+				}
+			}
+		}
+
+		try {
+			// Validate and transform the final runConfig against the schema
+			const parsedConfig = schema.parse(runConfig);
+			Object.assign(runConfig, parsedConfig); // Update runConfig with the transformed values
+		} catch (error) {
+			this.error(`Error setting config: ${error.errors[0].message}`);
+		}
+	}
+
+	private processSingleEdge(
+		runConfig: Record<string, unknown>,
+		edgeObject: CannoliEdge,
+		schema: ZodSchema
+	): void {
+		if (
+			typeof edgeObject.content === "string" ||
+			typeof edgeObject.content === "object"
+		) {
+			this.updateConfigWithValue(
+				runConfig,
+				edgeObject.content,
+				schema,
+				edgeObject.text,
+			);
+		} else {
+			this.error(`Config edge has invalid content.`);
+		}
+	}
+
+	private processEdges(
+		runConfig: Record<string, unknown>,
+		edges: CannoliEdge[],
+		schema: ZodSchema
+	): void {
+		for (const edgeObject of edges) {
+			if (!(edgeObject instanceof CannoliEdge)) {
+				throw new Error(
+					`Error processing config edges: object is not an edge.`
+				);
+			}
+			this.processSingleEdge(runConfig, edgeObject, schema);
+		}
+	}
+
+	private processGroups(runConfig: Record<string, unknown>, schema: ZodSchema): void {
+		for (let i = this.groups.length - 1; i >= 0; i--) {
+			const group = this.graph[this.groups[i]];
+			if (group instanceof CannoliGroup) {
+				const configEdges = group
+					.getIncomingEdges()
+					.filter((edge) => edge.type === EdgeType.Config);
+				this.processEdges(runConfig, configEdges, schema);
+			}
+		}
+	}
+
+	private processNodes(runConfig: Record<string, unknown>, schema: ZodSchema): void {
+		const configEdges = this.getIncomingEdges().filter(
+			(edge) => edge.type === EdgeType.Config
+		);
+		this.processEdges(runConfig, configEdges, schema);
+	}
+
+	getConfig(schema: ZodSchema): Record<string, unknown> {
+		const runConfig = {};
+
+		this.processGroups(runConfig, schema);
+		this.processNodes(runConfig, schema);
+
+		return runConfig;
+	}
 }
 
 export class CallNode extends CannoliNode {
@@ -1132,115 +1257,6 @@ export class CallNode extends CannoliNode {
 		return references;
 	}
 
-	private updateConfigWithValue(
-		runConfig: GenericModelConfig,
-		content: string | Record<string, string> | null,
-		setting?: string | null
-	): void {
-		const sampleConfig = this.run.llm?.getSampleConfig() ?? {};
-
-		// Define the expected types for each key
-		const keyTypeMap: {
-			[key in keyof GenericModelConfig]?: "string" | "number";
-		} = {
-			frequency_penalty: "number",
-			presence_penalty: "number",
-			temperature: "number",
-			top_p: "number",
-		};
-
-		// Convert value based on its expected type
-		const convertValue = (key: keyof GenericModelConfig, value: string) => {
-			const expectedType = keyTypeMap[key];
-			return expectedType === "number" ? parseFloat(value) : value;
-		};
-
-		// Type guard to check if a string is a key of LLMConfig
-		const isValidKey = (key: string): key is keyof GenericModelConfig => {
-			return key in sampleConfig;
-		};
-
-		if (typeof content === "string") {
-			if (setting && isValidKey(setting)) {
-				// Use isValidKey
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				(runConfig as any)[setting] = convertValue(setting, content); // Using type assertion with conversion
-			} else {
-				this.error(`"${setting}" is not a valid config setting.`);
-			}
-		} else if (typeof content === "object") {
-			for (const key in content) {
-				if (isValidKey(key)) {
-					// Use isValidKey
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					(runConfig as any)[key] = convertValue(key, content[key]); // Using type assertion with conversion
-				} else {
-					this.error(`"${key}" is not a valid config setting.`);
-				}
-			}
-		}
-	}
-
-	private processSingleEdge(
-		runConfig: GenericModelConfig,
-		edgeObject: CannoliEdge
-	): void {
-		if (
-			typeof edgeObject.content === "string" ||
-			typeof edgeObject.content === "object"
-		) {
-			this.updateConfigWithValue(
-				runConfig,
-				edgeObject.content,
-				edgeObject.text
-			);
-		} else {
-			this.error(`Config edge has invalid content.`);
-		}
-	}
-
-	private processEdges(
-		runConfig: GenericModelConfig,
-		edges: CannoliEdge[]
-	): void {
-		for (const edgeObject of edges) {
-			if (!(edgeObject instanceof CannoliEdge)) {
-				throw new Error(
-					`Error processing config edges: object is not an edge.`
-				);
-			}
-			this.processSingleEdge(runConfig, edgeObject);
-		}
-	}
-
-	private processGroups(runConfig: GenericModelConfig): void {
-		for (let i = this.groups.length - 1; i >= 0; i--) {
-			const group = this.graph[this.groups[i]];
-			if (group instanceof CannoliGroup) {
-				const configEdges = group
-					.getIncomingEdges()
-					.filter((edge) => edge.type === EdgeType.Config);
-				this.processEdges(runConfig, configEdges);
-			}
-		}
-	}
-
-	private processNodes(runConfig: GenericModelConfig): void {
-		const configEdges = this.getIncomingEdges().filter(
-			(edge) => edge.type === EdgeType.Config
-		);
-		this.processEdges(runConfig, configEdges);
-	}
-
-	getConfig(): GenericModelConfig {
-		const runConfig = {};
-
-		this.processGroups(runConfig);
-		this.processNodes(runConfig);
-
-		return runConfig;
-	}
-
 	async execute() {
 		this.executing();
 
@@ -1350,7 +1366,7 @@ export class CallNode extends CannoliNode {
 	}
 
 	async createLLMRequest(): Promise<GenericCompletionParams> {
-		const overrides = this.getConfig();
+		const overrides = this.getConfig(GenericModelConfigSchema) as GenericModelConfig;
 		const config = this.run.llm?.getMergedConfig({
 			configOverrides: overrides,
 			provider: (overrides.provider as SupportedProviders) ?? undefined
@@ -1526,11 +1542,6 @@ export class FormNode extends CallNode {
 	}
 }
 
-export class AccumulateNode extends CallNode {
-	logDetails(): string {
-		return super.logDetails() + `Subtype: Accumulate\n`;
-	}
-}
 export class ChooseNode extends CallNode {
 	getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
 		const choices = this.getBranchChoices();
@@ -2404,18 +2415,40 @@ export class ReferenceNode extends ContentNode {
 	}
 }
 
+const HTTPConfigSchema = z.object({
+	receiver: z.string().optional(),
+	catch: z.boolean().optional(),
+	timeout: z.number().optional(),
+});
+
+type HttpConfig = z.infer<typeof HTTPConfigSchema>;
+
+// Default http config
+const defaultHttpConfig: HttpConfig = {
+	catch: true,
+	timeout: 30000,
+};
+
 export class HttpNode extends ContentNode {
 	logDetails(): string {
-		return super.logDetails() + `Subtype: Http\nIs Hook: ${this.type === ContentNodeType.Hook}\n`;
+		return super.logDetails() + `Subtype: Http\n`;
 	}
 
 	async execute(): Promise<void> {
+		const overrides = this.getConfig(HTTPConfigSchema) as HttpConfig;
+		if (overrides instanceof Error) {
+			this.error(overrides.message);
+			return;
+		}
+
+		const config = { ...defaultHttpConfig, ...overrides };
+
 		this.executing();
 
 		let hookId: string | null = null;
 		let content: string;
 
-		if (this.type === ContentNodeType.Hook) {
+		if (config.receiver) {
 			const hookResult = await this.handleHookCreation();
 			if (hookResult instanceof Error) {
 				this.error(hookResult.message);
@@ -2432,14 +2465,18 @@ export class HttpNode extends ContentNode {
 			return;
 		}
 
-		const result = await this.run.executeHttpRequest(request);
+		let result = await this.run.executeHttpRequest(request, config.timeout as number);
 
 		if (result instanceof Error) {
-			this.error(result.message);
-			return;
+			console.log(`Type of Catch override: ${typeof config.catch}`);
+			if (config.catch) {
+				this.error(result.message);
+				return;
+			}
+			result = result.message;
 		}
 
-		if (this.type === ContentNodeType.Hook) {
+		if (config.receiver) {
 			const response = await this.waitForHookResponse(hookId);
 			this.loadOutgoingEdges(response);
 		} else {

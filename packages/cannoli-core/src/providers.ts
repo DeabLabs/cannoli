@@ -18,42 +18,45 @@ const stringParser = new StringOutputParser();
 
 export type SupportedProviders = "openai" | "ollama" | "gemini" | "anthropic" | "groq";
 
-export type GenericFunctionCall = {
-	name: string;
-	description?: string;
-	parameters: Record<string, unknown>;
-};
+import { z } from "zod";
 
-export type GenericModelConfig = {
-	provider?: string;
-	apiKey?: string;
-	baseURL?: string;
+export const GenericFunctionCallSchema = z.object({
+	name: z.string(),
+	description: z.string().optional(),
+	parameters: z.record(z.unknown()),
+});
 
-	model?: string;
+export type GenericFunctionCall = z.infer<typeof GenericFunctionCallSchema>;
 
-	function_call?: { name: string };
-	functions?: GenericFunctionCall[];
+export const GenericModelConfigSchema = z.object({
+	provider: z.string().optional(),
+	apiKey: z.string().optional(),
+	baseURL: z.string().optional(),
+	model: z.string().optional(),
+	function_call: z.object({ name: z.string() }).optional(),
+	functions: z.array(GenericFunctionCallSchema).optional(),
+	temperature: z.number().optional(),
+	top_p: z.number().optional(),
+	top_k: z.number().optional(),
+	frequency_penalty: z.number().optional(),
+	presence_penalty: z.number().optional(),
+	stop: z.string().optional(),
+	role: z.string().optional(),
+	microstat: z.boolean().optional(),
+	microstat_eta: z.number().optional(),
+	microstat_tau: z.number().optional(),
+	num_ctx: z.number().optional(),
+	num_gqa: z.number().optional(),
+	num_gpu: z.number().optional(),
+	num_thread: z.number().optional(),
+	repeat_last_n: z.number().optional(),
+	repeat_penalty: z.number().optional(),
+	seed: z.number().optional(),
+	tfs_z: z.number().optional(),
+	num_predict: z.number().optional(),
+});
 
-	temperature?: number;
-	top_p?: number;
-	top_k?: number;
-	frequency_penalty?: number;
-	presence_penalty?: number;
-	stop?: string;
-	role?: string;
-	microstat?: boolean;
-	microstat_eta?: number;
-	microstat_tau?: number;
-	num_ctx?: number;
-	num_gqa?: number;
-	num_gpu?: number;
-	num_thread?: number;
-	repeat_last_n?: number;
-	repeat_penalty?: number;
-	seed?: number;
-	tfs_z?: number;
-	num_predict?: number;
-};
+export type GenericModelConfig = z.infer<typeof GenericModelConfigSchema>;
 
 type ConstructorArgs = {
 	provider: SupportedProviders;

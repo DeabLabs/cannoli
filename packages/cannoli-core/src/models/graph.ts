@@ -82,7 +82,6 @@ export enum ContentNodeType {
 	Reference = "reference",
 	Formatter = "formatter",
 	Http = "http",
-	Hook = "hook",
 }
 
 export enum FloatingNodeType {
@@ -308,19 +307,6 @@ export class CannoliGraph {
 						node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new HttpNode(
 						httpNode,
-						this.cannoliCanvasData
-					);
-					break;
-				}
-				case ContentNodeType.Hook: {
-					const hookNode =
-						node as VerifiedCannoliCanvasTextData;
-
-					// Remove the first line of the text
-					hookNode.cannoliData.text = hookNode.cannoliData.text.substring(5);
-
-					this.graph[node.id] = new HttpNode(
-						hookNode,
 						this.cannoliCanvasData
 					);
 					break;

@@ -1032,7 +1032,7 @@ export class Run {
 		}
 	}
 
-	async executeHttpRequest(request: HttpRequest): Promise<string | Error> {
+	async executeHttpRequest(request: HttpRequest, timeout: number = 30000): Promise<string | Error> {
 		if (this.isMock) {
 			return "mock response";
 		}
@@ -1076,13 +1076,10 @@ export class Run {
 		};
 
 		try {
-			// Set a timeout of 400 seconds
-			const timeout = 400000;
-
 			const responseText = await Promise.race([
 				this.fetcher(request.url, options),
 				new Promise<Error>((_, reject) =>
-					setTimeout(() => reject(new Error('Request timed out, please ensure the URL is valid.')), timeout)
+					setTimeout(() => reject(new Error('Request timed out.')), timeout)
 				)
 			]);
 
@@ -1098,7 +1095,8 @@ export class Run {
 			}
 
 			if (response.status && response.status >= 400) {
-				return new Error(`HTTP error ${response.status}: ${response.statusText}`);
+				const errorMessage = `HTTP error ${response.status}: ${response.statusText}`;
+				return new Error(errorMessage);
 			}
 
 			if (typeof response === 'string') {
