@@ -257,7 +257,7 @@ export default class Cannoli extends Plugin {
 	openOnWebsite = async (dev?: boolean) => {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) return;
-		const url = dev ? "http://localhost:5173/editor/open" : "https://cannoli.website/editor/open";
+		const url = dev ? "http://localhost:5173/canvas/open" : "https://cannoli.website/canvas/open";
 
 		// get the content of the file
 		const content = await this.app.vault.read(activeFile);
