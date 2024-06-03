@@ -27,7 +27,9 @@ import invariant from "tiny-invariant";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
 import { SYMBOLS, cannoliValTemplate } from "./val_templates";
-import { PluginHookHandler } from "./plugin_hook_handler";
+import { CannoliHooksMessenger } from "./plugin_hook_handler";
+import { DiscordMessenger } from "./discord_messenger";
+import { ObsidianMessenger } from "./obsidian_messenger";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -790,7 +792,11 @@ export default class Cannoli extends Plugin {
 
 		const vaultInterface = new VaultInterface(this, fetcher);
 
-		const hookHandler = new PluginHookHandler(this.settings.cannoliWebsiteAPIKey);
+		const hooksMessenger = new CannoliHooksMessenger(this.settings.cannoliWebsiteAPIKey);
+
+		const discordMessenger = new DiscordMessenger();
+
+		const obsidianMessenger = new ObsidianMessenger(this.app);
 
 
 		// Do the validation run
@@ -798,7 +804,7 @@ export default class Cannoli extends Plugin {
 			llm: llm,
 			cannoliJSON: canvasData,
 			fileSystemInterface: vaultInterface,
-			receiver: hookHandler,
+			messengers: [hooksMessenger, discordMessenger, obsidianMessenger],
 			isMock: true,
 			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher,
@@ -830,7 +836,7 @@ export default class Cannoli extends Plugin {
 			llm: llm,
 			cannoliJSON: canvasData,
 			fileSystemInterface: vaultInterface,
-			receiver: hookHandler,
+			messengers: [hooksMessenger, discordMessenger, obsidianMessenger],
 			isMock: false,
 			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher,

@@ -1,21 +1,50 @@
-import { Receiver } from "@deablabs/cannoli-core";
 import { requestUrl } from "obsidian";
+import { Messenger, HttpConfig } from "@deablabs/cannoli-core";
 
-export class PluginHookHandler implements Receiver {
-    private cannoliWebsiteAPIKey: string;
+export class CannoliHooksMessenger implements Messenger {
+    name = "cannoli-hooks";
+    configKeys = ["hooksApiKey"];
     private url = "https://cannoli.website/api";
-    // private url = "http://localhost:5173/api";
+    private apiKey: string;
 
-    constructor(cannoliWebsiteAPIKey: string) {
-        this.cannoliWebsiteAPIKey = cannoliWebsiteAPIKey;
+    constructor(apiKey: string) {
+        this.apiKey = apiKey;
     }
 
-    async createHook(isMock: boolean | undefined): Promise<string | Error> {
-        if (isMock) {
-            return "mock_hook_id";
+    async sendMessage(message: string, config: HttpConfig): Promise<string | Error> {
+
+        const hookId = await this.createHook(config);
+        if (hookId instanceof Error) {
+            return new Error(`Could not create hook: ${hookId.message}`);
         }
 
-        if (this.cannoliWebsiteAPIKey === "") {
+        // Send the message to the relay
+        const response = await requestUrl(
+            {
+                url: `${config.relayUrl}`,
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    message,
+                    hookId,
+                }),
+            }
+        );
+        if (response instanceof Error) {
+            return new Error(`Could not send message to relay: ${response.message}`);
+        }
+
+        return hookId;
+    }
+
+    async receiveMessage(shouldContinueWaiting: () => boolean, responseFromSend: unknown): Promise<string | Error> {
+        return this.getHookResponse(responseFromSend as string, shouldContinueWaiting);
+    }
+
+    async createHook(config: HttpConfig): Promise<string | Error> {
+        if (this.apiKey === "") {
             return new Error("Cannoli website API key not set");
         }
 
@@ -27,7 +56,7 @@ export class PluginHookHandler implements Receiver {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${this.cannoliWebsiteAPIKey}`,
+                        "Authorization": `Bearer ${this.apiKey}`,
                     },
                 }
             );
@@ -44,12 +73,8 @@ export class PluginHookHandler implements Receiver {
         }
     }
 
-    async getHookResponse(hookId: string, isMock: boolean | undefined, shouldContinueWaiting: () => boolean): Promise<string | Error> {
-        if (isMock) {
-            return Promise.resolve("mock_hook_response");
-        }
-
-        if (this.cannoliWebsiteAPIKey === "") {
+    async getHookResponse(hookId: string, shouldContinueWaiting: () => boolean): Promise<string | Error> {
+        if (this.apiKey === "") {
             return new Error("Cannoli website API key not set");
         }
 
@@ -62,7 +87,7 @@ export class PluginHookHandler implements Receiver {
                         url: `${this.url}/hooks/${hookId}`,
                         headers: {
                             "Content-Type": "application/json",
-                            "Authorization": `Bearer ${this.cannoliWebsiteAPIKey}`,
+                            "Authorization": `Bearer ${this.apiKey}`,
                         },
                         method: "GET",
                     }
@@ -89,7 +114,7 @@ export class PluginHookHandler implements Receiver {
                 method: "DELETE",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${this.cannoliWebsiteAPIKey}`,
+                    "Authorization": `Bearer ${this.apiKey}`,
                 },
             }
         );

@@ -977,42 +977,13 @@ export class CannoliNode extends CannoliVertex {
 			return;
 		}
 
-		const schemaKeys = Object.keys(schema.shape);
-
 		if (typeof content === "string") {
-			if (setting && schemaKeys.includes(setting)) {
-				// Try to transform into number, boolean, array, or object
-				try {
-					runConfig[setting] = Number(content);
-				} catch (error) {
-					runConfig[setting] = content;
-				}
-
-				try {
-					if (content.toLowerCase() === "true" || content.toLowerCase() === "false") {
-						runConfig[setting] = content.toLowerCase() === "true";
-					} else {
-						runConfig[setting] = content;
-					}
-				} catch (error) {
-					runConfig[setting] = content;
-				}
-
-				try {
-					runConfig[setting] = JSON.parse(content);
-				} catch (error) {
-					runConfig[setting] = content;
-				}
-			} else {
-				this.error(`"${setting}" is not a valid config setting.`);
+			if (setting) {
+				runConfig[setting] = content;
 			}
 		} else if (typeof content === "object") {
 			for (const key in content) {
-				if (schemaKeys.includes(key)) {
-					runConfig[key] = content[key];
-				} else {
-					this.error(`"${key}" is not a valid config setting.`);
-				}
+				runConfig[key] = content[key];
 			}
 		}
 
@@ -2416,12 +2387,15 @@ export class ReferenceNode extends ContentNode {
 }
 
 const HTTPConfigSchema = z.object({
-	receiver: z.string().optional(),
+	url: z.string().optional(),
+	method: z.string().optional(),
+	headers: z.string().optional(),
 	catch: z.boolean().optional(),
 	timeout: z.number().optional(),
-});
+	messenger: z.string().optional(),
+}).passthrough();
 
-type HttpConfig = z.infer<typeof HTTPConfigSchema>;
+export type HttpConfig = z.infer<typeof HTTPConfigSchema>;
 
 // Default http config
 const defaultHttpConfig: HttpConfig = {
@@ -2445,77 +2419,92 @@ export class HttpNode extends ContentNode {
 
 		this.executing();
 
-		let hookId: string | null = null;
-		let content: string;
+		const content = await this.processReferences([], true);
 
-		if (config.receiver) {
-			const hookResult = await this.handleHookCreation();
-			if (hookResult instanceof Error) {
-				this.error(hookResult.message);
+		let response: string | Error;
+
+		if (config.messenger) {
+			response = await this.useMessenger(config, content);
+			if (response instanceof Error) {
+				if (config.catch) {
+					this.error(response.message);
+					return;
+				}
+				response = response.message;
+			}
+		} else {
+			const request = this.parseContentToRequest(content, config);
+			if (request instanceof Error) {
+				this.error(request.message);
 				return;
 			}
-			({ hookId, content } = hookResult);
-		} else {
-			content = await this.processReferences([], true);
-		}
 
-		const request = this.parseContentToRequest(content);
-		if (request instanceof Error) {
-			this.error(request.message);
-			return;
-		}
+			response = await this.run.executeHttpRequest(request, config.timeout as number);
 
-		let result = await this.run.executeHttpRequest(request, config.timeout as number);
-
-		if (result instanceof Error) {
-			console.log(`Type of Catch override: ${typeof config.catch}`);
-			if (config.catch) {
-				this.error(result.message);
-				return;
+			if (response instanceof Error) {
+				if (config.catch) {
+					this.error(response.message);
+					return;
+				}
+				response = response.message;
 			}
-			result = result.message;
 		}
 
-		if (config.receiver) {
-			const response = await this.waitForHookResponse(hookId);
-			this.loadOutgoingEdges(response);
-		} else {
-			this.loadOutgoingEdges(result);
-		}
-
+		this.loadOutgoingEdges(response);
 		this.completed();
 	}
 
-	private async handleHookCreation(): Promise<{ hookId: string | null, content: string } | Error> {
-		if (!this.references.some((reference) => reference.name === "ID")) {
-			return new Error(`You must send the ID of the hook using the "{{ID}}" variable to get a response.`);
+	private async useMessenger(config: HttpConfig, content: string): Promise<string | Error> {
+		if (this.run.isMock) {
+			return "Mock response";
 		}
 
-		if (!this.run.receiver) {
-			return new Error(`No receiver found.`);
+		const messenger = this.run.messengers?.find((messenger) => messenger.name === config.messenger);
+		if (!messenger) {
+			return new Error(`Messenger ${config.messenger} not found.`);
 		}
 
-		const hookCreationResponse = await this.run.receiver.createHook(this.run.isMock);
-		if (hookCreationResponse instanceof Error) {
-			return new Error(`Could not create hook: ${hookCreationResponse.message}`);
+		let sendResult: unknown;
+
+		try {
+			sendResult = await messenger.sendMessage(content, config);
+			if (sendResult instanceof Error) {
+				return new Error(`Could not send message to messenger "${config.messenger}": ${sendResult.message}`);
+			}
+		} catch (e) {
+			return new Error(`Could not send message to messenger "${config.messenger}": ${e}`);
 		}
 
-		const hookId = hookCreationResponse;
-		if (hookId === null) {
-			return new Error(`Could not create hook.`);
+		let response: string | Error;
+
+		const shouldContinueWaiting = () => !this.run.isStopped;
+
+		try {
+			response = await messenger.receiveMessage(shouldContinueWaiting, sendResult, config);
+			if (response instanceof Error) {
+				return new Error(`Could not receive message from messenger ${config.messenger}: ${response.message}`);
+			}
+		} catch (e) {
+			return new Error(`Could not receive message from messenger ${config.messenger}: ${e}`);
 		}
 
-		const hookIdValue: VariableValue = {
-			name: "ID",
-			content: hookId,
-			edgeId: null
-		};
-
-		const content = await this.processReferences([hookIdValue], true);
-		return { hookId, content };
+		return response;
 	}
 
-	private parseContentToRequest(content: string): HttpRequest | Error {
+
+
+	private parseContentToRequest(content: string, config: HttpConfig): HttpRequest | Error {
+		// If the url config is set, look for the method and headers, and interpret the content as the body
+		if (config.url) {
+			const request: HttpRequest = {
+				url: config.url,
+				method: config.method || "POST",
+				headers: config.headers,
+				body: content,
+			};
+			return request;
+		}
+
 		// If the content is wrapped in triple backticks with or without a language identifier, remove them
 		content = content.replace(/^```[^\n]*\n([\s\S]*?)\n```$/, '$1').trim();
 
@@ -2729,30 +2718,6 @@ export class HttpNode extends ContentNode {
 
 		return parsedTemplate;
 	}
-
-	private async waitForHookResponse(hookId: string | null): Promise<string> {
-		if (!this.run.receiver) {
-			this.warning(`No receiver found.`);
-			return "No receiver found.";
-		}
-
-		if (hookId === null) {
-			this.warning(`Hook ID not found.`);
-			return "Could not get hook response.";
-		}
-
-		const shouldContinueWaiting = () => !this.run.isStopped;
-
-		const response: string | Error = await this.run.receiver.getHookResponse(hookId, this.run.isMock, shouldContinueWaiting);
-		if (response instanceof Error) {
-			this.warning(`Could not get hook response: ${response.message}`);
-			return "Could not get hook response.";
-		}
-
-		return response;
-	}
-
-
 }
 
 export class FormatterNode extends ContentNode {

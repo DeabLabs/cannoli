@@ -14,8 +14,8 @@ import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
 import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
-import { Receiver } from "./receiver";
 import { CannoliGroup, RepeatGroup } from "./models/group";
+import { Messenger } from "./messenger";
 
 export interface HttpTemplate {
 	id: string;
@@ -90,7 +90,7 @@ export function runCannoli({
 	canvas,
 	llm,
 	fileSystemInterface,
-	receiver,
+	messengers,
 	isMock,
 	fetcher,
 	settings,
@@ -102,7 +102,7 @@ export function runCannoli({
 	args?: CannoliArgs;
 	canvas?: Canvas;
 	fileSystemInterface?: FilesystemInterface;
-	receiver?: Receiver;
+	messengers?: Messenger[];
 	isMock?: boolean;
 	fetcher?: ResponseTextFetcher;
 }): [Promise<Stoppage>, () => void] {
@@ -121,7 +121,7 @@ export function runCannoli({
 			resolver(stoppage);
 		},
 		fileSystemInterface: fileSystemInterface,
-		receiver: receiver,
+		messengers: messengers,
 		isMock: isMock ?? false,
 		fetcher: fetcher,
 	});
@@ -140,7 +140,7 @@ export class Run {
 
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
-	receiver: Receiver | null;
+	messengers: Messenger[] | null;
 	llm: Llm;
 	llmLimit: Limit;
 	canvas: Canvas | null;
@@ -199,7 +199,7 @@ export class Run {
 		fileSystemInterface,
 		llm,
 		fetcher,
-		receiver,
+		messengers,
 		settings,
 		args
 
@@ -213,7 +213,7 @@ export class Run {
 		isMock?: boolean;
 		canvas?: Canvas;
 		fileSystemInterface?: FilesystemInterface;
-		receiver?: Receiver;
+		messengers?: Messenger[];
 	}) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
@@ -265,7 +265,7 @@ export class Run {
 
 		this.fileSystemInterface = fileSystemInterface ?? null;
 
-		this.receiver = receiver ?? null;
+		this.messengers = messengers ?? null;
 
 
 		const factory = new CannoliFactory(
