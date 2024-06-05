@@ -29,8 +29,10 @@
 	},
 	"dependencies": {
 		"@deablabs/cannoli-core": "workspace:*",
+		"@types/node-rsa": "1.1.4",
 		"esbuild-plugin-wat": "^0.2.7",
 		"js-yaml": "^4.1.0",
+		"node-rsa": "1.1.1",
 		"obsidian-dataview": "^0.5.66",
 		"openai": "^4.24.1",
 		"tiny-invariant": "^1.3.1",

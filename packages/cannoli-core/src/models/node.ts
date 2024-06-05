@@ -1058,11 +1058,10 @@ export class CannoliNode extends CannoliVertex {
 
 		return runConfig;
 	}
-}
 
-export class CallNode extends CannoliNode {
 	getPrependedMessages(): GenericCompletionResponse[] {
 		const messages: GenericCompletionResponse[] = [];
+		const systemMessages: GenericCompletionResponse[] = [];
 
 		// Get all available provide edges
 		const availableEdges = this.getAllAvailableProvideEdges();
@@ -1072,10 +1071,18 @@ export class CallNode extends CannoliNode {
 			this.incomingEdges.includes(edge.id)
 		);
 
+		console.log(`Getting prepended messages for ${this.type}`)
+
+		// Log out the cannoliData of directEdges
+		console.log(`Direct edges: ${JSON.stringify(directEdges.map((edge) => edge.canvasData), null, 2)}`);
+
 		// Filter for indirect edges (not incoming edges of this node)
 		const indirectEdges = availableEdges.filter(
 			(edge) => !this.incomingEdges.includes(edge.id)
 		);
+
+		// Log out the cannoliData of indirectEdges
+		console.log(`Indirect edges: ${JSON.stringify(indirectEdges.map((edge) => edge.canvasData), null, 2)}`);
 
 		for (const edge of directEdges) {
 			const edgeObject = this.graph[edge.id];
@@ -1087,15 +1094,7 @@ export class CallNode extends CannoliNode {
 
 			const edgeMessages = edgeObject.messages;
 
-			// console.log(
-			// 	`Edge messages: ${JSON.stringify(edgeMessages, null, 2)}`
-			// );
-
-			if (!edgeMessages) {
-				continue;
-			}
-
-			if (edgeMessages.length < 1) {
+			if (!edgeMessages || edgeMessages.length < 1) {
 				continue;
 			}
 
@@ -1105,14 +1104,15 @@ export class CallNode extends CannoliNode {
 					(edge) => edge.target === group
 				);
 
-				// Filter for those indirect edges that have addMessages = true
+				// Filter for those indirect edges that have addMessages = true and are of the same type
 				const indirectEdgesToAdd = indirectEdgesToGroup.filter(
 					(edge) =>
 						this.graph[edge.id] instanceof CannoliEdge &&
-						(this.graph[edge.id] as CannoliEdge).addMessages
+						(this.graph[edge.id] as CannoliEdge).addMessages &&
+						(this.graph[edge.id] as CannoliEdge).type === edgeObject.type
 				);
 
-				// For each indirect edge
+				// For each indirect edge, add its messages without overwriting
 				for (const indirectEdge of indirectEdgesToAdd) {
 					const indirectEdgeObject = this.graph[indirectEdge.id];
 					if (!(indirectEdgeObject instanceof CannoliEdge)) {
@@ -1123,38 +1123,38 @@ export class CallNode extends CannoliNode {
 
 					const indirectEdgeMessages = indirectEdgeObject.messages;
 
-					if (!indirectEdgeMessages) {
+					if (!indirectEdgeMessages || indirectEdgeMessages.length < 1) {
 						continue;
 					}
 
-					if (indirectEdgeMessages.length < 1) {
-						continue;
-					}
-
-					// Overwrite edgeMessages with indirectEdgeMessages
-					edgeMessages.length = 0;
 					edgeMessages.push(...indirectEdgeMessages);
 				}
 			}
 
-			if (edgeMessages) {
-				// If its a system message, add it to the beginning of the array
-				if (edge.type === EdgeType.SystemMessage) {
-					messages.unshift(edgeMessages[0]);
-				} else {
-					messages.push(...edgeMessages);
+			// Separate system messages from other messages
+			if (edge.type === EdgeType.SystemMessage) {
+				for (const msg of edgeMessages) {
+					if (!systemMessages.some((m) => m.content === msg.content) && !messages.some((m) => m.content === msg.content)) {
+						systemMessages.push(msg);
+					}
 				}
+			} else {
+				messages.push(...edgeMessages);
 			}
 		}
 
+		console.log(`System messages: ${JSON.stringify(systemMessages, null, 2)}`);
+		console.log(`Messages: ${JSON.stringify(messages, null, 2)}`);
+
 		// If messages is empty and there are no incoming edges with addMessages = true, try it with indirect edges
 		if (
-			messages.length === 0 &&
-			this.incomingEdges.filter(
-				(edge) =>
-					this.cannoliGraph.isEdge(this.graph[edge]) &&
-					(this.graph[edge] as CannoliEdge).addMessages
-			).length === 0
+			messages.length === 0
+			// &&
+			// this.incomingEdges.filter(
+			// 	(edge) =>
+			// 		this.cannoliGraph.isEdge(this.graph[edge]) &&
+			// 		(this.graph[edge] as CannoliEdge).addMessages
+			// ).length === 0
 		) {
 			for (const edge of indirectEdges) {
 				const edgeObject = this.graph[edge.id];
@@ -1166,28 +1166,39 @@ export class CallNode extends CannoliNode {
 
 				const edgeMessages = edgeObject.messages;
 
-				if (!edgeMessages) {
+				if (!edgeMessages || edgeMessages.length < 1) {
 					continue;
 				}
 
-				if (edgeMessages.length < 1) {
-					continue;
-				}
-
-				if (edgeMessages) {
-					// If its a system message, add it to the beginning of the array
-					if (edge.type === EdgeType.SystemMessage) {
-						messages.unshift(edgeMessages[0]);
-					} else {
-						messages.push(...edgeMessages);
+				// Separate system messages from other messages
+				if (edge.type === EdgeType.SystemMessage) {
+					for (const msg of edgeMessages) {
+						if (!systemMessages.some((m) => m.content === msg.content) && !messages.some((m) => m.content === msg.content)) {
+							systemMessages.push(msg);
+						}
 					}
+				} else {
+					messages.push(...edgeMessages);
 				}
 			}
 		}
 
-		return messages;
-	}
+		// Combine system messages and other messages
+		const combinedMessages = [...systemMessages, ...messages];
 
+		// Remove duplicate system messages from the combined message stack
+		const uniqueMessages = combinedMessages.filter((msg, index, self) =>
+			msg.role !== "system" || self.findIndex((m) => m.content === msg.content) === index
+		);
+
+		return uniqueMessages;
+	}
+}
+
+
+
+
+export class CallNode extends CannoliNode {
 	async getNewMessage(
 		role?: string
 	): Promise<GenericCompletionResponse | null> {
@@ -2422,6 +2433,7 @@ export class HttpNode extends ContentNode {
 		const content = await this.processReferences([], true);
 
 		let response: string | Error;
+		let request: GenericCompletionParams | undefined;
 
 		if (config.messenger) {
 			response = await this.useMessenger(config, content);
@@ -2431,6 +2443,14 @@ export class HttpNode extends ContentNode {
 					return;
 				}
 				response = response.message;
+			}
+
+			const messages = this.getPrependedMessages();
+			// If messages isnt empty
+			if (messages.length > 0) {
+				request = {
+					messages: messages,
+				} as GenericCompletionParams;
 			}
 		} else {
 			const request = this.parseContentToRequest(content, config);
@@ -2450,7 +2470,11 @@ export class HttpNode extends ContentNode {
 			}
 		}
 
-		this.loadOutgoingEdges(response);
+		if (request) {
+			this.loadOutgoingEdges(response, request);
+		} else {
+			this.loadOutgoingEdges(response);
+		}
 		this.completed();
 	}
 
@@ -2464,15 +2488,9 @@ export class HttpNode extends ContentNode {
 			return new Error(`Messenger ${config.messenger} not found.`);
 		}
 
-		let sendResult: unknown;
-
-		try {
-			sendResult = await messenger.sendMessage(content, config);
-			if (sendResult instanceof Error) {
-				return new Error(`Could not send message to messenger "${config.messenger}": ${sendResult.message}`);
-			}
-		} catch (e) {
-			return new Error(`Could not send message to messenger "${config.messenger}": ${e}`);
+		const sendResult = await messenger.sendMessage(content, config);
+		if (sendResult instanceof Error) {
+			return new Error(`Could not send message to messenger "${config.messenger}": ${sendResult.message}`);
 		}
 
 		let response: string | Error;

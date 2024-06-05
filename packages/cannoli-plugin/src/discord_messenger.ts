@@ -1,80 +1,36 @@
-import { requestUrl } from "obsidian";
 import { Messenger, HttpConfig } from "@deablabs/cannoli-core";
-
+import CannoliDiscordBotClient from "./discord_bot_client";
 
 export class DiscordMessenger implements Messenger {
     name = "discord";
     configKeys = ["channel"];
-    url = "http://localhost:3000";
+    private client: CannoliDiscordBotClient;
+
+    constructor(botClient: CannoliDiscordBotClient) {
+        this.client = botClient;
+    }
 
     async sendMessage(message: string, config?: HttpConfig): Promise<string | Error> {
-        // Use requestUrl to send a request to localhost 3000 with the body including the message and channelId
+        try {
+            const replyType = config?.requireReply === "true" ? "reply" : "next";
+            const messageId = await this.client.sendMessage(config?.channel as string, message, replyType);
 
-        let requireReply = true;
-
-        if (config?.requireReply !== undefined) {
-            // Coerce requireReply to from string to boolean
-            requireReply = config?.requireReply === "true";
-        }
-
-        const response = await requestUrl({
-            url: `${this.url}/send-message`,
-            method: "POST", headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ message, channel: config?.channel, requireReply }),
-        });
-
-        return response.json.id;
-    }
-    async receiveMessage(shouldContinueWaiting: () => boolean, responseFromSend: string, config?: HttpConfig): Promise<string | Error> {
-        const pollInterval = 2000; // Poll every 2 seconds
-
-        let requireReply = true;
-
-        if (config?.requireReply !== undefined) {
-            // Coerce requireReply to from string to boolean
-            requireReply = config?.requireReply === "true";
-        }
-
-        while (shouldContinueWaiting()) {
-            try {
-                const response = await requestUrl(
-                    {
-                        url: `${this.url}/receive-reply`,
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        method: "POST",
-                        body: JSON.stringify({ id: responseFromSend, requireReply }),
-                    }
-                );
-
-                if (response.status === 200) {
-                    return response.json.reply;
-                } else if (response.status !== 204) {
-                    return new Error(`Unexpected response status: ${response.status}`);
-                }
-            } catch (error) {
-                return new Error(error);
+            return messageId;
+        } catch (error) {
+            // If it's a 403 error, return an error telling the user to link their vault to the bot
+            if (error instanceof Error && error.message.includes("403")) {
+                return new Error("Vault not linked to bot. Please link your vault to the Cannoli bot by pasting your vault key (found in Cannoli settings) into the 'link-vault' command.");
             }
 
-            await new Promise(resolve => setTimeout(resolve, pollInterval));
+            return error;
         }
+    }
 
-        // Delete the hook
-        // await requestUrl(
-        //     {
-        //         url: `${this.url}/hooks/${hookId}`,
-        //         method: "DELETE",
-        //         headers: {
-        //             "Content-Type": "application/json",
-        //         },
-        //     }
-        // );
-
-        return "Polling stopped by callback";
+    receiveMessage(shouldContinueWaiting: () => boolean, responseFromSend: string, config?: HttpConfig): Promise<string | Error> {
+        return new Promise((resolve, reject) => {
+            this.client.waitForReply(responseFromSend, (reply) => {
+                resolve(reply);
+            });
+        });
     }
 }
-
-
