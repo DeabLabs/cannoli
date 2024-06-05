@@ -1071,18 +1071,12 @@ export class CannoliNode extends CannoliVertex {
 			this.incomingEdges.includes(edge.id)
 		);
 
-		console.log(`Getting prepended messages for ${this.type}`)
-
-		// Log out the cannoliData of directEdges
-		console.log(`Direct edges: ${JSON.stringify(directEdges.map((edge) => edge.canvasData), null, 2)}`);
 
 		// Filter for indirect edges (not incoming edges of this node)
 		const indirectEdges = availableEdges.filter(
 			(edge) => !this.incomingEdges.includes(edge.id)
 		);
 
-		// Log out the cannoliData of indirectEdges
-		console.log(`Indirect edges: ${JSON.stringify(indirectEdges.map((edge) => edge.canvasData), null, 2)}`);
 
 		for (const edge of directEdges) {
 			const edgeObject = this.graph[edge.id];
@@ -1143,19 +1137,8 @@ export class CannoliNode extends CannoliVertex {
 			}
 		}
 
-		console.log(`System messages: ${JSON.stringify(systemMessages, null, 2)}`);
-		console.log(`Messages: ${JSON.stringify(messages, null, 2)}`);
-
 		// If messages is empty and there are no incoming edges with addMessages = true, try it with indirect edges
-		if (
-			messages.length === 0
-			// &&
-			// this.incomingEdges.filter(
-			// 	(edge) =>
-			// 		this.cannoliGraph.isEdge(this.graph[edge]) &&
-			// 		(this.graph[edge] as CannoliEdge).addMessages
-			// ).length === 0
-		) {
+		if (messages.length === 0) {
 			for (const edge of indirectEdges) {
 				const edgeObject = this.graph[edge.id];
 				if (!(edgeObject instanceof CannoliEdge)) {
