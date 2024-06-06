@@ -166,7 +166,7 @@ export class VaultInterface implements FilesystemInterface {
 			// If includeLink is true, add the markdown link
 			if (reference.includeLink) {
 				const link = `[[${file.path}#${reference.subpath}]]`;
-				content = link + "\n" + content;
+				content = link + "\n\n" + content;
 			}
 
 			content = content.trim();
@@ -191,6 +191,12 @@ export class VaultInterface implements FilesystemInterface {
 				}
 			}
 
+			// If includeLink is true, add the markdown link
+			if (reference.includeLink) {
+				const link = `[[${file.path}]]`;
+				content = link + "\n\n" + content;
+			}
+
 			// If includeFilenameAsHeader is true, add the filename as a header
 			if (
 				reference.includeName ??
@@ -198,12 +204,6 @@ export class VaultInterface implements FilesystemInterface {
 			) {
 				const header = `# ${file.basename}\n`;
 				content = header + content;
-			}
-
-			// If includeLink is true, add the markdown link
-			if (reference.includeLink) {
-				const link = `[[${file.path}]]`;
-				content = link + "\n" + content;
 			}
 		}
 
@@ -565,6 +565,54 @@ export class VaultInterface implements FilesystemInterface {
 
 		return content;
 
+	}
+
+	async querySmartConnections(query: string, limit: number): Promise<string[]> {
+		// @ts-ignore - This is a private API
+		const results = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(query);
+
+		return results.slice(0, limit).map((r: { path: string }) => {
+			let path = r.path;
+
+			// Remove the trailing "#" if it exists
+			if (path.endsWith("#")) {
+				path = path.slice(0, -1);
+			}
+
+			// Extract the filename from the path
+			const filename = path.substring(path.lastIndexOf("/") + 1);
+
+			return `[[${filename}]]`;
+		});
+	}
+
+	async extractNoteContents(
+		noteLinks: string[],
+		includeName: boolean,
+		includeProperties: boolean,
+		includeLink: boolean,
+		isMock: boolean
+	): Promise<string[]> {
+		const resultContents = [];
+		for (const noteLink of noteLinks) {
+			const [noteName, subpath] = noteLink.split("#");
+			const reference: Reference = {
+				name: noteName,
+				type: ReferenceType.Note,
+				shouldExtract: true,
+				includeName,
+				includeProperties,
+				includeLink,
+				subpath: subpath ?? undefined
+			};
+
+			const noteContent = await this.getNote(reference, isMock);
+
+			if (noteContent) {
+				resultContents.push(noteContent);
+			}
+		}
+		return resultContents;
 	}
 
 	// Attempting to replace dataviewjs queries

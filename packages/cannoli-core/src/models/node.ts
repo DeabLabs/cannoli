@@ -417,7 +417,7 @@ export class CannoliNode extends CannoliVertex {
 						}
 					}
 
-					content = this.renderAsMarkdownDocument(this.transformToTree(allVersions));
+					content = this.renderAsParagraphs(this.transformToTree(allVersions));
 				} else {
 					content = edgeObject.content;
 				}
@@ -514,12 +514,26 @@ export class CannoliNode extends CannoliVertex {
 		return root;
 	}
 
+	renderAsParagraphs(tree: TreeNode): string {
+		let result = '';
+
+		if (tree.content) {
+			result += `${tree.content}\n\n`;
+		}
+
+		if (tree.children) {
+			tree.children.forEach(child => {
+				result += this.renderAsParagraphs(child);
+			});
+		}
+
+		return result;
+	}
+
 	renderAsMarkdownDocument(tree: TreeNode, level: number = 1): string {
 		let result = '';
 
-		if (tree.subHeader) {
-			result += `${'#'.repeat(level)} ${tree.subHeader}\n\n`;
-		}
+		result += `${'#'.repeat(level)} ${tree.subHeader}\n\n`;
 
 		if (tree.content) {
 			result += `${tree.content}\n\n`;
@@ -657,30 +671,32 @@ export class CannoliNode extends CannoliVertex {
 		let itemIndex = 0;
 		let listItems: string[] = [];
 
-		if (this.type === ContentNodeType.Http && this.outgoingEdges.some(edge => this.graph[edge].type === EdgeType.Item)) {
-			// Parse the text of the edge with remeda
-			const path = stringToPath(this.graph[this.outgoingEdges.find(edge => this.graph[edge].type === EdgeType.Item)!].text);
+		if (this.outgoingEdges.some(edge => this.graph[edge].type === EdgeType.Item)) {
+			if (this.type === ContentNodeType.Http) {
+				// Parse the text of the edge with remeda
+				const path = stringToPath(this.graph[this.outgoingEdges.find(edge => this.graph[edge].type === EdgeType.Item)!].text);
 
-			let contentObject;
+				let contentObject;
 
-			// Try to parse the content as JSON
-			try {
-				contentObject = JSON.parse(content as string);
-			} catch (e) {
-				// If parsing fails, continue with markdown list parsing
-			}
+				// Try to parse the content as JSON
+				try {
+					contentObject = JSON.parse(content as string);
+				} catch (e) {
+					// If parsing fails, continue with markdown list parsing
+				}
 
-			// If we parsed the content as JSON, use the parsed object
-			if (contentObject) {
-				// Get the value from the parsed text
-				const value = pathOr(contentObject, path, content);
-				listItems = this.getListArrayFromContent(JSON.stringify(value, null, 2));
+				// If we parsed the content as JSON, use the parsed object
+				if (contentObject) {
+					// Get the value from the parsed text
+					const value = pathOr(contentObject, path, content);
+					listItems = this.getListArrayFromContent(JSON.stringify(value, null, 2));
+				} else {
+					// If we didn't parse the content as JSON, use the original content
+					listItems = this.getListArrayFromContent(content);
+				}
 			} else {
-				// If we didn't parse the content as JSON, use the original content
 				listItems = this.getListArrayFromContent(content);
 			}
-		} else {
-			listItems = this.getListArrayFromContent(content);
 		}
 
 		for (const edge of this.outgoingEdges) {
@@ -717,8 +733,6 @@ export class CannoliNode extends CannoliVertex {
 					// If we didn't parse the content as JSON, use the original content
 					contentToLoad = content;
 				}
-
-
 			}
 
 
@@ -2384,8 +2398,8 @@ const HTTPConfigSchema = z.object({
 	url: z.string().optional(),
 	method: z.string().optional(),
 	headers: z.string().optional(),
-	catch: z.boolean().optional(),
-	timeout: z.number().optional(),
+	catch: z.coerce.boolean().optional(),
+	timeout: z.coerce.number().optional(),
 	messenger: z.string().optional(),
 }).passthrough();
 
@@ -2718,6 +2732,67 @@ export class HttpNode extends ContentNode {
 		}
 
 		return parsedTemplate;
+	}
+}
+
+const SearchConfigSchema = z.object({
+	source: z.string().optional(),
+	limit: z.coerce.number().optional(),
+}).passthrough();
+
+export type SearchConfig = z.infer<typeof SearchConfigSchema>;
+
+export class SearchNode extends ContentNode {
+	logDetails(): string {
+		return super.logDetails() + `Subtype: Search\n`;
+	}
+
+	async execute(): Promise<void> {
+		const overrides = this.getConfig(HTTPConfigSchema) as HttpConfig;
+		if (overrides instanceof Error) {
+			this.error(overrides.message);
+			return;
+		}
+
+		const config = { ...defaultHttpConfig, ...overrides };
+
+		this.executing();
+
+		const content = await this.processReferences([], true);
+
+		if (this.run.isMock) {
+			this.loadOutgoingEdges("Mock response");
+			this.completed();
+			return;
+		}
+
+		const searchSource = this.run.searchSources?.find((searchSource) => searchSource.name === config.source);
+		if (!searchSource) {
+			this.error(`Search source ${config.source} not found.`);
+			return;
+		}
+
+		let output: string;
+
+		const results = await searchSource.search(content, config);
+
+		if (results instanceof Error) {
+			if (config.catch) {
+				this.error(results.message);
+				return;
+			}
+			output = results.message;
+		} else {
+			// If there are any outgoing edges of type Item from this node, output should be a stringified json array
+			if (this.outgoingEdges.some((edge) => this.graph[edge].type === EdgeType.Item)) {
+				output = JSON.stringify(results);
+			} else {
+				output = results.join("\n\n");
+			}
+		}
+
+		this.loadOutgoingEdges(output);
+		this.completed();
 	}
 }
 

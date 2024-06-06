@@ -16,6 +16,7 @@ import { FilesystemInterface } from "./filesystem_interface";
 import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
 import { CannoliGroup, RepeatGroup } from "./models/group";
 import { Messenger } from "./messenger";
+import { SearchSource } from "./search_source";
 
 export interface HttpTemplate {
 	id: string;
@@ -91,6 +92,7 @@ export function runCannoli({
 	llm,
 	fileSystemInterface,
 	messengers,
+	searchSources,
 	isMock,
 	fetcher,
 	settings,
@@ -103,6 +105,7 @@ export function runCannoli({
 	canvas?: Canvas;
 	fileSystemInterface?: FilesystemInterface;
 	messengers?: Messenger[];
+	searchSources?: SearchSource[];
 	isMock?: boolean;
 	fetcher?: ResponseTextFetcher;
 }): [Promise<Stoppage>, () => void] {
@@ -122,6 +125,7 @@ export function runCannoli({
 		},
 		fileSystemInterface: fileSystemInterface,
 		messengers: messengers,
+		searchSources: searchSources,
 		isMock: isMock ?? false,
 		fetcher: fetcher,
 	});
@@ -141,6 +145,7 @@ export class Run {
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
 	messengers: Messenger[] | null;
+	searchSources: SearchSource[] | null;
 	llm: Llm;
 	llmLimit: Limit;
 	canvas: Canvas | null;
@@ -200,6 +205,7 @@ export class Run {
 		llm,
 		fetcher,
 		messengers,
+		searchSources,
 		settings,
 		args
 
@@ -214,6 +220,7 @@ export class Run {
 		canvas?: Canvas;
 		fileSystemInterface?: FilesystemInterface;
 		messengers?: Messenger[];
+		searchSources?: SearchSource[];
 	}) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
@@ -266,6 +273,8 @@ export class Run {
 		this.fileSystemInterface = fileSystemInterface ?? null;
 
 		this.messengers = messengers ?? null;
+
+		this.searchSources = searchSources ?? null;
 
 
 		const factory = new CannoliFactory(

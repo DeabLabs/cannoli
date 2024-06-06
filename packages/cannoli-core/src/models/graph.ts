@@ -19,6 +19,7 @@ import {
 	FormatterNode,
 	HttpNode,
 	ReferenceNode,
+	SearchNode,
 } from "./node";
 import {
 	CannoliEdge,
@@ -82,6 +83,7 @@ export enum ContentNodeType {
 	Reference = "reference",
 	Formatter = "formatter",
 	Http = "http",
+	Search = "search",
 }
 
 export enum FloatingNodeType {
@@ -307,6 +309,15 @@ export class CannoliGraph {
 						node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new HttpNode(
 						httpNode,
+						this.cannoliCanvasData
+					);
+					break;
+				}
+				case ContentNodeType.Search: {
+					const searchNode =
+						node as VerifiedCannoliCanvasTextData;
+					this.graph[node.id] = new SearchNode(
+						searchNode,
 						this.cannoliCanvasData
 					);
 					break;

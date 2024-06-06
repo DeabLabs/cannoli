@@ -21,6 +21,7 @@ import {
 	CanvasData,
 	CanvasGroupData,
 	Messenger,
+	SearchSource,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -32,6 +33,8 @@ import { CannoliHooksMessenger } from "./plugin_hook_handler";
 import { DiscordMessenger } from "./discord_messenger";
 import { ObsidianMessenger } from "./obsidian_messenger";
 import CannoliDiscordBotClient from "./discord_bot_client";
+import { ExaSearchSource } from "./exa_search_source";
+import { SmartConnectionsSearchSource } from "./smart_connections_search_source";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -64,6 +67,9 @@ interface CannoliSettings {
 	pLimit: number;
 	contentIsColorless: boolean;
 	valTownAPIKey: string;
+	defaultSearchSource: string;
+	exaAPIKey: string;
+	exaDefaultLimit: number;
 	cannoliWebsiteAPIKey: string;
 	discordVaultKey: string;
 	discordVaultID: string;
@@ -104,6 +110,9 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	pLimit: 50,
 	contentIsColorless: false,
 	valTownAPIKey: "",
+	defaultSearchSource: "smart-connections",
+	exaAPIKey: "",
+	exaDefaultLimit: 5,
 	cannoliWebsiteAPIKey: "",
 	discordVaultKey: "",
 	discordVaultID: "",
@@ -827,9 +836,19 @@ export default class Cannoli extends Plugin {
 			messengers.push(discordMessenger);
 		}
 
-
 		const obsidianMessenger = new ObsidianMessenger(this.app);
 		messengers.push(obsidianMessenger);
+
+		const searchSources: SearchSource[] = [
+			new ExaSearchSource(this.settings.exaAPIKey, this.settings.exaDefaultLimit),
+			new SmartConnectionsSearchSource(vaultInterface)
+		];
+
+		// Make sure the default search source is first in the array
+		const defaultSearchSource = searchSources.find(source => source.name === this.settings.defaultSearchSource);
+		if (defaultSearchSource) {
+			searchSources.unshift(defaultSearchSource);
+		}
 
 
 		// Do the validation run
@@ -838,6 +857,7 @@ export default class Cannoli extends Plugin {
 			cannoliJSON: canvasData,
 			fileSystemInterface: vaultInterface,
 			messengers: messengers,
+			searchSources: searchSources,
 			isMock: true,
 			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher,
@@ -870,6 +890,7 @@ export default class Cannoli extends Plugin {
 			cannoliJSON: canvasData,
 			fileSystemInterface: vaultInterface,
 			messengers: messengers,
+			searchSources: searchSources,
 			isMock: false,
 			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher,
@@ -1856,6 +1877,37 @@ class CannoliSettingTab extends PluginSettingTab {
 							await this.plugin.saveSettings();
 						}
 					})
+			);
+
+
+		containerEl.createEl("h1", { text: "Search" });
+
+		new Setting(containerEl)
+			.setName("Default search source")
+			.setDesc("This search source will be used for all search nodes unless overridden with a config arrow.")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("exa", "Exa")
+					.addOption("smart-connections", "Smart connections")
+					.setValue(this.plugin.settings.defaultSearchSource)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultSearchSource = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Exa API key")
+			.setDesc("This key will be used to make all Exa search calls.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.exaAPIKey)
+					.setPlaceholder("...")
+					.onChange(async (value) => {
+						this.plugin.settings.exaAPIKey = value;
+						await this.plugin.saveSettings();
+					})
+					.inputEl.setAttribute("type", "password")
 			);
 
 		containerEl.createEl("h1", { text: "Canvas preferences" });

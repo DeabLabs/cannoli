@@ -52,6 +52,7 @@ export class CannoliFactory {
 		"2": IndicatedNodeType.Content,
 		"3": IndicatedNodeType.Call,
 		"4": IndicatedNodeType.Call,
+		"5": IndicatedNodeType.Content,
 		"6": IndicatedNodeType.Content,
 	};
 
@@ -125,6 +126,7 @@ export class CannoliFactory {
 				"2": IndicatedNodeType.Content,
 				"3": IndicatedNodeType.Call,
 				"4": IndicatedNodeType.Call,
+				"5": IndicatedNodeType.Content,
 				"6": IndicatedNodeType.Call,
 			};
 		}
@@ -845,6 +847,11 @@ export class CannoliFactory {
 		// If its color is "2", return http
 		if (node.color === "2") {
 			return ContentNodeType.Http;
+		}
+
+		// If its color is "5", return search
+		if (node.color === "5") {
+			return ContentNodeType.Search;
 		}
 
 		// If its text starts and ends with double double quotes, it's a formatter node
