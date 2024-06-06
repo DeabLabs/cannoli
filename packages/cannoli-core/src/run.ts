@@ -1,13 +1,12 @@
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { CannoliArgs, CannoliGraph, CannoliObjectStatus, CannoliRunSettings, ContentNodeType } from "./models/graph";
+import { CannoliGraph, CannoliObjectStatus, ContentNodeType } from "./models/graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
 	GenericFunctionCall,
 	GenericModelConfig,
-	LLMProvider,
 	LLMProvider as Llm,
 } from "./providers";
 import invariant from "tiny-invariant";
@@ -17,6 +16,7 @@ import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
 import { CannoliGroup, RepeatGroup } from "./models/group";
 import { Messenger } from "./messenger";
 import { SearchSource } from "./search_source";
+import { Action } from "./cannoli";
 
 export interface HttpTemplate {
 	id: string;
@@ -86,64 +86,16 @@ export function isValidKey(
 	return key in config;
 }
 
-export function runCannoli({
-	cannoliJSON,
-	canvas,
-	llm,
-	fileSystemInterface,
-	messengers,
-	searchSources,
-	isMock,
-	fetcher,
-	settings,
-	args
-}: {
-	cannoliJSON: unknown;
-	llm: LLMProvider;
-	settings?: CannoliRunSettings;
-	args?: CannoliArgs;
-	canvas?: Canvas;
-	fileSystemInterface?: FilesystemInterface;
-	messengers?: Messenger[];
-	searchSources?: SearchSource[];
-	isMock?: boolean;
-	fetcher?: ResponseTextFetcher;
-}): [Promise<Stoppage>, () => void] {
-	let resolver: (stoppage: Stoppage) => void;
-	const done = new Promise<Stoppage>((resolve) => {
-		resolver = resolve;
-	});
-
-	const run = new Run({
-		llm: llm,
-		cannoliJSON: cannoliJSON,
-		settings: settings,
-		args: args,
-		canvas: canvas,
-		onFinish: (stoppage: Stoppage) => {
-			resolver(stoppage);
-		},
-		fileSystemInterface: fileSystemInterface,
-		messengers: messengers,
-		searchSources: searchSources,
-		isMock: isMock ?? false,
-		fetcher: fetcher,
-	});
-
-	run.start();
-
-	return [done, () => run.stop()];
-}
-
 export class Run {
 	graph: Record<string, CannoliObject> = {};
 	onFinish: (stoppage: Stoppage) => void;
 
-	settings: CannoliRunSettings | null;
-	args: CannoliArgs | null;
+	settings: Record<string, string | boolean | number> | null;
+	args: Record<string, string> | null;
 
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
+	actions: Action[] | undefined;
 	messengers: Messenger[] | null;
 	searchSources: SearchSource[] | null;
 	llm: Llm;
@@ -204,6 +156,7 @@ export class Run {
 		fileSystemInterface,
 		llm,
 		fetcher,
+		actions,
 		messengers,
 		searchSources,
 		settings,
@@ -213,12 +166,13 @@ export class Run {
 		cannoliJSON: unknown;
 		llm: Llm;
 		fetcher?: ResponseTextFetcher;
-		settings?: CannoliRunSettings;
-		args?: CannoliArgs;
+		settings?: Record<string, string | boolean | number>;
+		args?: Record<string, string>;
 		onFinish?: (stoppage: Stoppage) => void;
 		isMock?: boolean;
 		canvas?: Canvas;
 		fileSystemInterface?: FilesystemInterface;
+		actions?: Action[];
 		messengers?: Messenger[];
 		searchSources?: SearchSource[];
 	}) {
@@ -271,6 +225,8 @@ export class Run {
 		delete this.args?.selection;
 
 		this.fileSystemInterface = fileSystemInterface ?? null;
+
+		this.actions = actions ?? undefined;
 
 		this.messengers = messengers ?? null;
 

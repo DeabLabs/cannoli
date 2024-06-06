@@ -25,8 +25,6 @@ import {
 	VerifiedCannoliCanvasGroupData,
 	AllVerifiedCannoliCanvasNodeData,
 	VerifiedCannoliCanvasEdgeData,
-	CannoliArgs,
-	CannoliRunSettings,
 } from "./models/graph";
 
 export enum IndicatedNodeType {
@@ -103,8 +101,8 @@ export class CannoliFactory {
 
 	constructor(
 		canvas: CanvasData,
-		settings: CannoliRunSettings,
-		args?: CannoliArgs
+		settings: Record<string, string | boolean | number>,
+		args?: Record<string, string>
 	) {
 		// Cast the canvas to a CannoliCanvasData
 		const cannoliCanvasData = canvas as CannoliCanvasData;

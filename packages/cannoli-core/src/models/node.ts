@@ -27,6 +27,7 @@ import {
 import invariant from "tiny-invariant";
 import { pathOr, stringToPath } from "remeda";
 import { ZodSchema, z } from "zod";
+import { Action } from "src/cannoli";
 
 type VariableValue = { name: string; content: string; edgeId: string | null };
 
@@ -2432,6 +2433,41 @@ export class HttpNode extends ContentNode {
 		let response: string | Error;
 		let request: GenericCompletionParams | undefined;
 
+		if (this.run.actions !== undefined && this.run.actions.length > 0) {
+			const maybeActionName = content.toLowerCase().trim();
+
+			const action = this.run.actions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
+			if (action) {
+				const argNames = this.getFunctionArgs(action);
+
+				const variableValues = this.getVariableValues(true);
+
+				// Get the value for each arg name from the variables, and error if any arg is missing
+				const args = argNames.map((argName) => {
+					const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
+					if (!variableValue) {
+						this.error(`Missing value for variable "${argName}" in available arrows. This action "${action.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
+						return "";
+					}
+					return variableValue.content || "";
+				});
+
+				response = await action.function(...args);
+
+				if (response instanceof Error) {
+					if (config.catch) {
+						this.error(response.message);
+						return;
+					} else {
+						response = response.message;
+					}
+				}
+				this.loadOutgoingEdges(response);
+				this.completed();
+				return;
+			}
+		}
+
 		if (config.messenger) {
 			response = await this.useMessenger(config, content);
 			if (response instanceof Error) {
@@ -2473,6 +2509,11 @@ export class HttpNode extends ContentNode {
 			this.loadOutgoingEdges(response);
 		}
 		this.completed();
+	}
+
+	getFunctionArgs(func: Action): string[] {
+		const args = func.toString().match(/\(([^)]*)\)/);
+		return args ? args[1].split(',').map((arg: string) => arg.trim()) : [];
 	}
 
 	private async useMessenger(config: HttpConfig, content: string): Promise<string | Error> {

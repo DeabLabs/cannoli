@@ -28,7 +28,7 @@ import {
 	LoggingEdge,
 	SystemMessageEdge,
 } from "./edge";
-import { GenericCompletionResponse, LLMProvider } from "../providers";
+import { GenericCompletionResponse } from "../providers";
 
 export enum CannoliObjectKind {
 	Node = "node",
@@ -113,14 +113,6 @@ export enum VaultModifier {
 	Note = "note",
 	Folder = "folder",
 	Property = "property",
-}
-
-export interface CannoliRunSettings {
-	[key: string]: string | boolean | number | LLMProvider;
-}
-
-export interface CannoliArgs {
-	[key: string]: string;
 }
 
 export interface CannoliData {

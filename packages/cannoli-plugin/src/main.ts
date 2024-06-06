@@ -17,11 +17,11 @@ import {
 	GetDefaultsByProvider,
 	LLMProvider,
 	SupportedProviders,
-	runCannoli,
 	CanvasData,
 	CanvasGroupData,
 	Messenger,
 	SearchSource,
+	Cannoli as CannoliRunner
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -852,19 +852,23 @@ export default class Cannoli extends Plugin {
 			searchSources.unshift(defaultSearchSource);
 		}
 
-
-		// Do the validation run
-		const [validationStoppagePromise] = runCannoli({
+		// Make the cannoli runner
+		const runner = new CannoliRunner({
 			llm: llm,
-			cannoliJSON: canvasData,
+			settings: cannoliSettings,
 			fileSystemInterface: vaultInterface,
 			messengers: messengers,
 			searchSources: searchSources,
-			isMock: true,
-			canvas: noCanvas ? undefined : canvas,
 			fetcher: fetcher,
-			settings: cannoliSettings,
-			args: cannoliArgs
+		});
+
+
+		// Do the validation run
+		const [validationStoppagePromise] = runner.runWithControl({
+			cannoliJSON: canvasData,
+			args: cannoliArgs,
+			canvas: noCanvas ? undefined : canvas,
+			isMock: true,
 		});
 		const validationStoppage = await validationStoppagePromise;
 
@@ -887,17 +891,11 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Do the live run
-		const [liveStoppagePromise, stopLiveCannoli] = runCannoli({
-			llm: llm,
+		const [liveStoppagePromise, stopLiveCannoli] = runner.runWithControl({
 			cannoliJSON: canvasData,
-			fileSystemInterface: vaultInterface,
-			messengers: messengers,
-			searchSources: searchSources,
-			isMock: false,
+			args: cannoliArgs,
 			canvas: noCanvas ? undefined : canvas,
-			fetcher: fetcher,
-			settings: cannoliSettings,
-			args: cannoliArgs
+			isMock: false,
 		});
 
 		// add to running cannolis
