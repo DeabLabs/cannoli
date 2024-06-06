@@ -384,6 +384,33 @@ export class VaultInterface implements FilesystemInterface {
 		return content;
 	}
 
+	async queryDataviewList(query: string): Promise<string[] | Error> {
+		const dvApi = getAPI(this.cannoli.app);
+		if (!dvApi) {
+			return new Error("Dataview plugin not found");
+		}
+
+		const testResult = await dvApi.query(query);
+
+		if (!testResult.successful) {
+			return new Error(testResult.error);
+		} else if (testResult.value.type !== "list") {
+			return new Error("Dataview query result must be a list");
+		}
+
+		const result = await dvApi.queryMarkdown(query);
+
+		const markdownList = result.successful ? result.value : "Invalid Dataview query";
+
+		// Turn the markdown list into an array of strings and clean up the list items
+		const list = markdownList.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line.length > 0) // Remove empty lines
+			.map((line) => line.replace(/^- /, "")); // Remove the leading "- "
+
+		return list;
+	}
+
 	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean, includeLink: boolean, isMock: boolean): Promise<string> {
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
 		let processedContent = "";

@@ -89,8 +89,8 @@ export class CannoliNode extends CannoliVertex {
 				return varMap.get(reference.name) ?? "{{invalid}}";
 			});
 
-			// Only replace dataview queries and smart connections if there's a fileSystemInterface
-			if (this.run.fileSystemInterface) {
+			// Only replace dataview queries and smart connections if there's a fileSystemInterface and it's not a search node
+			if (this.run.fileSystemInterface && this.type !== ContentNodeType.Search) {
 				// Render dataview queries
 				processedText = await this.run.fileSystemInterface.replaceDataviewQueries(processedText, this.run.isMock);
 

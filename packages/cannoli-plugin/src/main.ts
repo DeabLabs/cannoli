@@ -35,6 +35,7 @@ import { ObsidianMessenger } from "./obsidian_messenger";
 import CannoliDiscordBotClient from "./discord_bot_client";
 import { ExaSearchSource } from "./exa_search_source";
 import { SmartConnectionsSearchSource } from "./smart_connections_search_source";
+import { DataviewSearchSource } from "./dataview_search_source";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -841,7 +842,8 @@ export default class Cannoli extends Plugin {
 
 		const searchSources: SearchSource[] = [
 			new ExaSearchSource(this.settings.exaAPIKey, this.settings.exaDefaultLimit),
-			new SmartConnectionsSearchSource(vaultInterface)
+			new SmartConnectionsSearchSource(vaultInterface),
+			new DataviewSearchSource(vaultInterface)
 		];
 
 		// Make sure the default search source is first in the array
