@@ -1,5 +1,4 @@
 import { FilesystemInterface } from "./filesystem_interface";
-import { Messenger } from "./messenger";
 import { ResponseTextFetcher, Run, Stoppage } from "./run";
 import { SearchSource } from "./search_source";
 import { LLMProvider } from "./providers";
@@ -10,12 +9,18 @@ export type Action = {
     function: (...args: string[]) => string | Error | Promise<string | Error>;
 }
 
+export type LongAction = {
+    name: string;
+    send: (...args: string[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
+    receive: (receiveInfo: Record<string, string>) => string | Error | Promise<string | Error>;
+}
+
 export class Cannoli {
     private llm: LLMProvider;
     private settings: Record<string, string | boolean | number> | undefined;
     private fileSystemInterface: FilesystemInterface | undefined;
     private actions: Action[] | undefined;
-    private messengers: Messenger[] | undefined;
+    private longActions: LongAction[] | undefined;
     private searchSources: SearchSource[] | undefined;
     private fetcher: ResponseTextFetcher | undefined;
 
@@ -24,7 +29,7 @@ export class Cannoli {
         settings,
         fileSystemInterface,
         actions,
-        messengers,
+        longActions,
         searchSources,
         fetcher,
     }: {
@@ -32,7 +37,7 @@ export class Cannoli {
         settings?: Record<string, string | boolean | number>;
         fileSystemInterface?: FilesystemInterface;
         actions?: Action[];
-        messengers?: Messenger[];
+        longActions?: LongAction[];
         searchSources?: SearchSource[];
         fetcher?: ResponseTextFetcher;
     }) {
@@ -40,9 +45,30 @@ export class Cannoli {
         this.settings = settings;
         this.fileSystemInterface = fileSystemInterface;
         this.actions = actions;
-        this.messengers = messengers;
+        this.longActions = longActions;
         this.searchSources = searchSources;
         this.fetcher = fetcher;
+    }
+
+    async run({
+        cannoliJSON,
+        args,
+        canvas,
+        isMock,
+    }: {
+        cannoliJSON: unknown;
+        args?: Record<string, string>;
+        canvas?: Canvas;
+        isMock?: boolean;
+    }): Promise<Stoppage> {
+        const [done] = this.runWithControl({
+            cannoliJSON,
+            args,
+            canvas,
+            isMock,
+        });
+
+        return done;
     }
 
     runWithControl({
@@ -72,7 +98,7 @@ export class Cannoli {
             },
             fileSystemInterface: this.fileSystemInterface,
             actions: this.actions,
-            messengers: this.messengers,
+            longActions: this.longActions,
             searchSources: this.searchSources,
             isMock: isMock,
             fetcher: this.fetcher,
@@ -81,27 +107,6 @@ export class Cannoli {
         run.start();
 
         return [done, () => run.stop()];
-    }
-
-    async run({
-        cannoliJSON,
-        args,
-        canvas,
-        isMock,
-    }: {
-        cannoliJSON: unknown;
-        args?: Record<string, string>;
-        canvas?: Canvas;
-        isMock?: boolean;
-    }): Promise<Stoppage> {
-        const [done] = this.runWithControl({
-            cannoliJSON,
-            args,
-            canvas,
-            isMock,
-        });
-
-        return done;
     }
 
     async bake(

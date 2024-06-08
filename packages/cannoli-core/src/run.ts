@@ -14,9 +14,8 @@ import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
 import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
 import { CannoliGroup, RepeatGroup } from "./models/group";
-import { Messenger } from "./messenger";
 import { SearchSource } from "./search_source";
-import { Action } from "./cannoli";
+import { Action, LongAction } from "./cannoli";
 
 export interface HttpTemplate {
 	id: string;
@@ -96,7 +95,7 @@ export class Run {
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
 	actions: Action[] | undefined;
-	messengers: Messenger[] | null;
+	longActions: LongAction[] | undefined;
 	searchSources: SearchSource[] | null;
 	llm: Llm;
 	llmLimit: Limit;
@@ -157,7 +156,7 @@ export class Run {
 		llm,
 		fetcher,
 		actions,
-		messengers,
+		longActions,
 		searchSources,
 		settings,
 		args
@@ -173,7 +172,7 @@ export class Run {
 		canvas?: Canvas;
 		fileSystemInterface?: FilesystemInterface;
 		actions?: Action[];
-		messengers?: Messenger[];
+		longActions?: LongAction[];
 		searchSources?: SearchSource[];
 	}) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
@@ -227,8 +226,7 @@ export class Run {
 		this.fileSystemInterface = fileSystemInterface ?? null;
 
 		this.actions = actions ?? undefined;
-
-		this.messengers = messengers ?? null;
+		this.longActions = longActions ?? undefined;
 
 		this.searchSources = searchSources ?? null;
 

@@ -19,6 +19,7 @@ const chatFormatString = `---
 {{content}}`
 
 export class CannoliEdge extends CannoliObject {
+	canvasData: VerifiedCannoliCanvasEdgeData;
 	source: string;
 	target: string;
 	crossingInGroups: string[];
@@ -36,6 +37,7 @@ export class CannoliEdge extends CannoliObject {
 
 	constructor(edgeData: VerifiedCannoliCanvasEdgeData, fullCanvasData: VerifiedCannoliCanvasData) {
 		super(edgeData, fullCanvasData);
+		this.canvasData = edgeData;
 		this.source = edgeData.fromNode;
 		this.target = edgeData.toNode;
 		this.crossingInGroups = edgeData.cannoliData.crossingInGroups;

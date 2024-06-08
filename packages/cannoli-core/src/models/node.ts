@@ -27,7 +27,7 @@ import {
 import invariant from "tiny-invariant";
 import { pathOr, stringToPath } from "remeda";
 import { ZodSchema, z } from "zod";
-import { Action } from "src/cannoli";
+import { Action, LongAction } from "src/cannoli";
 
 type VariableValue = { name: string; content: string; edgeId: string | null };
 
@@ -2430,15 +2430,14 @@ export class HttpNode extends ContentNode {
 
 		const content = await this.processReferences([], true);
 
-		let response: string | Error;
-		let request: GenericCompletionParams | undefined;
+		const maybeActionName = content.toLowerCase().trim();
 
 		if (this.run.actions !== undefined && this.run.actions.length > 0) {
-			const maybeActionName = content.toLowerCase().trim();
 
 			const action = this.run.actions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
+
 			if (action) {
-				const argNames = this.getFunctionArgs(action);
+				const argNames = this.getActionArgs(action);
 
 				const variableValues = this.getVariableValues(true);
 
@@ -2452,102 +2451,102 @@ export class HttpNode extends ContentNode {
 					return variableValue.content || "";
 				});
 
-				response = await action.function(...args);
+				let actionResponse = await action.function(...args);
 
-				if (response instanceof Error) {
+				if (actionResponse instanceof Error) {
 					if (config.catch) {
-						this.error(response.message);
+						this.error(actionResponse.message);
 						return;
 					} else {
-						response = response.message;
+						actionResponse = actionResponse.message;
 					}
 				}
-				this.loadOutgoingEdges(response);
+
+
+				this.loadOutgoingEdges(actionResponse);
+				this.completed();
+				return;
+
+			}
+		} else if (this.run.longActions !== undefined && this.run.longActions.length > 0) {
+			const longAction = this.run.longActions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
+
+			if (longAction) {
+				// Check if the receiveinfo is set
+				if (this.canvasData.cannoliData.receiveInfo === undefined) {
+					const argNames = this.getLongActionArgs(longAction);
+
+					const variableValues = this.getVariableValues(true);
+
+					// Get the value for each arg name from the variables, and error if any arg is missing
+					const args = argNames.map((argName) => {
+						const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
+						if (!variableValue) {
+							this.error(`Missing value for variable "${argName}" in available arrows. This long action "${longAction.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
+							return "";
+						}
+						return variableValue.content || "";
+					});
+
+					const sendResponse = await longAction.send(...args);
+
+					if (sendResponse instanceof Error) {
+						if (config.catch) {
+							this.error(sendResponse.message);
+							return;
+						} else {
+							this.loadOutgoingEdges(sendResponse.message);
+							this.completed();
+							return;
+						}
+					}
+
+					this.canvasData.cannoliData.receiveInfo = sendResponse;
+				}
+
+				// Make the receive request
+				const receiveResponse = await longAction.receive(this.canvasData.cannoliData.receiveInfo);
+				if (receiveResponse instanceof Error) {
+					this.error(receiveResponse.message);
+					return;
+				}
+
+				this.loadOutgoingEdges(receiveResponse);
 				this.completed();
 				return;
 			}
 		}
 
-		if (config.messenger) {
-			response = await this.useMessenger(config, content);
-			if (response instanceof Error) {
-				if (config.catch) {
-					this.error(response.message);
-					return;
-				}
-				response = response.message;
-			}
+		const request = this.parseContentToRequest(content, config);
+		if (request instanceof Error) {
+			this.error(request.message);
+			return;
+		}
 
-			const messages = this.getPrependedMessages();
-			// If messages isnt empty
-			if (messages.length > 0) {
-				request = {
-					messages: messages,
-				} as GenericCompletionParams;
-			}
-		} else {
-			const request = this.parseContentToRequest(content, config);
-			if (request instanceof Error) {
-				this.error(request.message);
+		let response = await this.run.executeHttpRequest(request, config.timeout as number);
+
+		if (response instanceof Error) {
+			if (config.catch) {
+				this.error(response.message);
 				return;
 			}
-
-			response = await this.run.executeHttpRequest(request, config.timeout as number);
-
-			if (response instanceof Error) {
-				if (config.catch) {
-					this.error(response.message);
-					return;
-				}
-				response = response.message;
-			}
+			response = response.message;
 		}
 
-		if (request) {
-			this.loadOutgoingEdges(response, request);
-		} else {
-			this.loadOutgoingEdges(response);
-		}
+		this.loadOutgoingEdges(response);
 		this.completed();
 	}
 
-	getFunctionArgs(func: Action): string[] {
-		const args = func.toString().match(/\(([^)]*)\)/);
+
+	getActionArgs(action: Action): string[] {
+		const args = action.function.toString().match(/\(([^)]*)\)/);
 		return args ? args[1].split(',').map((arg: string) => arg.trim()) : [];
 	}
 
-	private async useMessenger(config: HttpConfig, content: string): Promise<string | Error> {
-		if (this.run.isMock) {
-			return "Mock response";
-		}
-
-		const messenger = this.run.messengers?.find((messenger) => messenger.name === config.messenger);
-		if (!messenger) {
-			return new Error(`Messenger ${config.messenger} not found.`);
-		}
-
-		const sendResult = await messenger.sendMessage(content, config);
-		if (sendResult instanceof Error) {
-			return new Error(`Could not send message to messenger "${config.messenger}": ${sendResult.message}`);
-		}
-
-		let response: string | Error;
-
-		const shouldContinueWaiting = () => !this.run.isStopped;
-
-		try {
-			response = await messenger.receiveMessage(shouldContinueWaiting, sendResult, config);
-			if (response instanceof Error) {
-				return new Error(`Could not receive message from messenger ${config.messenger}: ${response.message}`);
-			}
-		} catch (e) {
-			return new Error(`Could not receive message from messenger ${config.messenger}: ${e}`);
-		}
-
-		return response;
+	getLongActionArgs(longAction: LongAction): string[] {
+		const args = longAction.send.toString().match(/\(([^)]*)\)/);
+		return args ? args[1].split(',').map((arg: string) => arg.trim()) : [];
 	}
-
-
 
 	private parseContentToRequest(content: string, config: HttpConfig): HttpRequest | Error {
 		// If the url config is set, look for the method and headers, and interpret the content as the body

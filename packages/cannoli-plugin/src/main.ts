@@ -19,7 +19,6 @@ import {
 	SupportedProviders,
 	CanvasData,
 	CanvasGroupData,
-	Messenger,
 	SearchSource,
 	Cannoli as CannoliRunner
 } from "@deablabs/cannoli-core";
@@ -29,9 +28,6 @@ import invariant from "tiny-invariant";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
 import { SYMBOLS, cannoliValTemplate } from "./val_templates";
-import { CannoliHooksMessenger } from "./plugin_hook_handler";
-import { DiscordMessenger } from "./discord_messenger";
-import { ObsidianMessenger } from "./obsidian_messenger";
 import CannoliDiscordBotClient from "./discord_bot_client";
 import { ExaSearchSource } from "./exa_search_source";
 import { SmartConnectionsSearchSource } from "./smart_connections_search_source";
@@ -819,26 +815,11 @@ export default class Cannoli extends Plugin {
 			const headersObj = Array.isArray(headers) ? Object.fromEntries(headers) : headers instanceof Headers ? {} : headers;
 			const constrainedBody = typeof body === "string" ? body : body instanceof ArrayBuffer ? body : undefined;
 			return requestUrl({ body: constrainedBody || undefined, method, headers: headersObj, url }).then(response => {
-				return response.text
+				return response.text;
 			});
 		};
 
 		const vaultInterface = new VaultInterface(this, fetcher);
-
-		const messengers: Messenger[] = [];
-
-		const hooksMessenger = new CannoliHooksMessenger(this.settings.cannoliWebsiteAPIKey);
-		messengers.push(hooksMessenger);
-
-		let discordMessenger: DiscordMessenger | undefined;
-
-		if (this.settings.discordVaultID && this.settings.discordVaultKey) {
-			discordMessenger = new DiscordMessenger(this.discordBotClient);
-			messengers.push(discordMessenger);
-		}
-
-		const obsidianMessenger = new ObsidianMessenger(this.app);
-		messengers.push(obsidianMessenger);
 
 		const searchSources: SearchSource[] = [
 			new ExaSearchSource(this.settings.exaAPIKey, this.settings.exaDefaultLimit),
@@ -857,7 +838,6 @@ export default class Cannoli extends Plugin {
 			llm: llm,
 			settings: cannoliSettings,
 			fileSystemInterface: vaultInterface,
-			messengers: messengers,
 			searchSources: searchSources,
 			fetcher: fetcher,
 		});

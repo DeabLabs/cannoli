@@ -125,9 +125,8 @@ export interface CannoliData {
 }
 
 export interface CannoliVertexData extends CannoliData {
-	// outgoingEdges: string[];
-	// incomingEdges: string[];
 	groups: string[];
+	receiveInfo?: Record<string, string>;
 }
 
 export interface CannoliEdgeData extends CannoliData {

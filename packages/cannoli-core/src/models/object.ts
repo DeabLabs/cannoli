@@ -21,9 +21,6 @@ export class CannoliObject extends EventTarget {
 	dependencies: string[];
 	graph: Record<string, CannoliObject>;
 	cannoliGraph: CannoliGraph;
-	canvasData:
-		| AllVerifiedCannoliCanvasNodeData
-		| VerifiedCannoliCanvasEdgeData;
 	fullCanvasData: VerifiedCannoliCanvasData;
 	originalObject: string | null;
 	kind: CannoliObjectKind;
@@ -41,7 +38,6 @@ export class CannoliObject extends EventTarget {
 		this.originalObject = data.cannoliData.originalObject;
 		this.kind = data.cannoliData.kind;
 		this.type = data.cannoliData.type;
-		this.canvasData = data;
 		this.fullCanvasData = fullCanvasData;
 	}
 
@@ -318,12 +314,14 @@ export class CannoliObject extends EventTarget {
 }
 
 export class CannoliVertex extends CannoliObject {
+	canvasData: AllVerifiedCannoliCanvasNodeData;
 	outgoingEdges: string[];
 	incomingEdges: string[];
 	groups: string[]; // Sorted from immediate parent to most distant
 
 	constructor(vertexData: AllVerifiedCannoliCanvasNodeData, fullCanvasData: VerifiedCannoliCanvasData) {
 		super(vertexData, fullCanvasData);
+		this.canvasData = vertexData;
 		this.outgoingEdges = getOutgoingEdgesFromData(this.id, this.fullCanvasData);
 		this.incomingEdges = getIncomingEdgesFromData(this.id, this.fullCanvasData);
 		this.groups = vertexData.cannoliData.groups;
