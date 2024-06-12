@@ -67,6 +67,16 @@ export class CannoliObject extends EventTarget {
 		}
 	}
 
+	setStatus(status: CannoliObjectStatus) {
+		this.run.editGraphData(this.id, "status", status);
+		this.status = status;
+	}
+
+	setText(text: string) {
+		this.run.editGraphData(this.id, "text", text);
+		this.text = text;
+	}
+
 	getAllDependencies(): CannoliObject[] {
 		const dependencies: CannoliObject[] = [];
 		for (const dependency of this.dependencies) {
@@ -202,7 +212,7 @@ export class CannoliObject extends EventTarget {
 	}
 
 	executing() {
-		this.status = CannoliObjectStatus.Executing;
+		this.setStatus(CannoliObjectStatus.Executing);
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Executing },
 		});
@@ -210,7 +220,7 @@ export class CannoliObject extends EventTarget {
 	}
 
 	completed() {
-		this.status = CannoliObjectStatus.Complete;
+		this.setStatus(CannoliObjectStatus.Complete);
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Complete },
 		});
@@ -218,7 +228,7 @@ export class CannoliObject extends EventTarget {
 	}
 
 	pending() {
-		this.status = CannoliObjectStatus.Pending;
+		this.setStatus(CannoliObjectStatus.Pending);
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Pending },
 		});
@@ -226,7 +236,7 @@ export class CannoliObject extends EventTarget {
 	}
 
 	reject() {
-		this.status = CannoliObjectStatus.Rejected;
+		this.setStatus(CannoliObjectStatus.Rejected);
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Rejected },
 		});
@@ -284,7 +294,7 @@ export class CannoliObject extends EventTarget {
 	}
 
 	reset() {
-		this.status = CannoliObjectStatus.Pending;
+		this.setStatus(CannoliObjectStatus.Pending);
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Pending },
 		});
@@ -377,7 +387,7 @@ export class CannoliVertex extends CannoliObject {
 	}
 
 	error(message: string) {
-		this.status = CannoliObjectStatus.Error;
+		this.setStatus(CannoliObjectStatus.Error);
 		const event = new CustomEvent("update", {
 			detail: {
 				obj: this,
@@ -390,7 +400,7 @@ export class CannoliVertex extends CannoliObject {
 	}
 
 	warning(message: string) {
-		this.status = CannoliObjectStatus.Warning;
+		this.setStatus(CannoliObjectStatus.Warning);
 		const event = new CustomEvent("update", {
 			detail: {
 				obj: this,

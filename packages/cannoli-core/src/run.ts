@@ -1,7 +1,7 @@
 import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { CannoliGraph, CannoliObjectStatus, ContentNodeType } from "./models/graph";
+import { CannoliCanvasData, CannoliGraph, CannoliObjectStatus, ContentNodeType } from "./models/graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -88,6 +88,7 @@ export function isValidKey(
 export class Run {
 	graph: Record<string, CannoliObject> = {};
 	onFinish: (stoppage: Stoppage) => void;
+	graphData: CannoliCanvasData | null = null;
 
 	settings: Record<string, string | boolean | number> | null;
 	args: Record<string, string> | null;
@@ -257,6 +258,8 @@ export class Run {
 
 		this.forEachTracker = new Map();
 
+		this.graphData = graphData;
+
 		this.graph = new CannoliGraph(
 			graphData
 		).graph;
@@ -271,6 +274,11 @@ export class Run {
 	async start() {
 		// Log the graph
 		// this.logGraph();
+		console.log(this.graphData)
+
+		if (this.canvas !== null && this.graphData !== null && !this.isMock) {
+			await this.canvas.setCanvasData(this.graphData);
+		}
 
 		// Setup listeners
 		this.setupListeners();
@@ -298,6 +306,12 @@ export class Run {
 
 		if (executedObjectsCount === 0) {
 			this.error("No objects to execute");
+		}
+	}
+
+	editGraphData(objectId: string, field: string, value: unknown) {
+		if (this.canvas && !this.isMock) {
+			this.canvas.enqueueChangeCannoliData(objectId, field, value)
 		}
 	}
 

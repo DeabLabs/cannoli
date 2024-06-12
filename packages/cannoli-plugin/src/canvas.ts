@@ -1,17 +1,17 @@
 import { TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
-import { Canvas, CanvasColor, CanvasData, CanvasEdgeData, AllCanvasNodeData } from "@deablabs/cannoli-core";
-
-
+import { Canvas, CanvasColor, CanvasData, CanvasEdgeData, AllCanvasNodeData, CannoliCanvasData, VerifiedCannoliCanvasGroupData, CannoliObjectStatus, GenericCompletionResponse } from "@deablabs/cannoli-core";
 
 export class ObsidianCanvas implements Canvas {
 	canvasFile: TFile;
-	canvasData: CanvasData;
+	canvasData: CannoliCanvasData;
 	subCanvasGroupId?: string;
 	editQueue: Promise<unknown>;
+	allowCannoliData: boolean;
 
-	constructor(canvasData: CanvasData, persistor?: TFile) {
+	constructor(canvasData: CanvasData, persistor?: TFile, allowCannoliData: boolean = false) {
 		this.canvasData = canvasData;
+		this.allowCannoliData = allowCannoliData;
 
 		// Throw error if no persistor is provided
 		if (!persistor) {
@@ -23,6 +23,22 @@ export class ObsidianCanvas implements Canvas {
 		this.editQueue = Promise.resolve();
 	}
 
+	async setCanvasData(canvasData: CannoliCanvasData) {
+		if (!this.allowCannoliData) {
+			// Remove all of the cannoliData from the canvasData
+			canvasData.nodes.forEach((node) => {
+				delete node.cannoliData;
+			});
+			canvasData.edges.forEach((edge) => {
+				delete edge.cannoliData;
+			});
+		}
+
+		this.canvasData = canvasData;
+		console.log("canvasData", this.canvasData);
+		await this.writeCanvasData(this.canvasData);
+	}
+
 	getCanvasData(): CanvasData {
 		return this.canvasData;
 	}
@@ -32,7 +48,7 @@ export class ObsidianCanvas implements Canvas {
 		return JSON.parse(fileContent);
 	}
 
-	private async writeCanvasData(data: CanvasData) {
+	private async writeCanvasData(data: CannoliCanvasData) {
 		const newContent = JSON.stringify(data);
 		// await this.canvasFile.vault.modify(this.canvasFile, newContent);
 
@@ -40,6 +56,8 @@ export class ObsidianCanvas implements Canvas {
 		const onEdit = (data: string) => {
 			return newContent;
 		};
+
+		console.log("newContent", newContent);
 
 		await this.canvasFile.vault.process(this.canvasFile, onEdit);
 	}
@@ -191,6 +209,59 @@ export class ObsidianCanvas implements Canvas {
 		return data;
 	}
 
+	private changeCannoliData(data: CannoliCanvasData, objectId: string, field: string, value: unknown) {
+		const node = data.nodes.find((node) => node.id === objectId);
+		const edge = data.edges.find((edge) => edge.id === objectId);
+
+		if (node && node.cannoliData) {
+			switch (field) {
+				case "receiveInfo":
+					node.cannoliData.receiveInfo = value as Record<string, string>;
+					break;
+				case "text":
+					node.cannoliData.text = value as string;
+					break;
+				case "currentLoop":
+					if (node.type === "group") {
+						const group = node as VerifiedCannoliCanvasGroupData;
+						group.cannoliData.currentLoop = Number(value);
+					}
+					break;
+				case "status":
+					node.cannoliData.status = value as CannoliObjectStatus;
+					break;
+				default:
+					throw new Error(`Unknown field: ${field}`);
+			}
+		} else if (edge && edge.cannoliData) {
+			switch (field) {
+				case "content":
+					edge.cannoliData.content = value as string;
+					break;
+				case "messages":
+					edge.cannoliData.messages = value as GenericCompletionResponse[];
+					break;
+				case "status":
+					edge.cannoliData.status = value as CannoliObjectStatus;
+					break;
+				case "versions": {
+					const versions = value as { index: number; header: string, subHeader: string };
+					if (edge.cannoliData.versions) {
+						edge.cannoliData.versions[versions.index] = {
+							header: versions.header,
+							subHeader: versions.subHeader,
+						};
+					}
+					break;
+				}
+				default:
+					throw new Error(`Unknown field: ${field}`);
+			}
+		}
+
+		return data;
+	}
+
 	async enqueueChangeNodeColor(nodeId: string, newColor?: CanvasColor) {
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
@@ -243,7 +314,20 @@ export class ObsidianCanvas implements Canvas {
 		});
 	}
 
+	async enqueueChangeCannoliData(objectId: string, field: string, value: unknown): Promise<void> {
+		if (!this.allowCannoliData) {
+			return;
+		}
+
+		this.editQueue = this.editQueue.then(async () => {
+			const data = await this.readCanvasData();
+			const newData = this.changeCannoliData(data, objectId, field, value);
+			await this.writeCanvasData(newData);
+		});
+	}
+
 	generateNewId(): string {
 		return uuidv4().replace(/-/g, "").substring(0, 16);
 	}
 }
+

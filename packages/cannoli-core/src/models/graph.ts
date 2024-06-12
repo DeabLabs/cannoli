@@ -139,7 +139,6 @@ export interface CannoliEdgeData extends CannoliData {
 	name?: string;
 	vaultModifier?: VaultModifier;
 	versions?: {
-		version: number,
 		header: string | null,
 		subHeader: string | null,
 	}[];

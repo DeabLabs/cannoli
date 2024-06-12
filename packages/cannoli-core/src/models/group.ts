@@ -29,6 +29,11 @@ export class CannoliGroup extends CannoliVertex {
 		this.originalObject = groupData.cannoliData.originalObject ?? null;
 	}
 
+	setCurrentLoop(currentLoop: number) {
+		this.run.editGraphData(this.id, "currentLoop", currentLoop);
+		this.currentLoop = currentLoop;
+	}
+
 	getMembers(): CannoliVertex[] {
 		return this.members.map(
 			(member) => this.graph[member] as CannoliVertex
@@ -121,7 +126,7 @@ export class CannoliGroup extends CannoliVertex {
 	}
 
 	async execute(): Promise<void> {
-		this.status = CannoliObjectStatus.Complete;
+		this.setStatus(CannoliObjectStatus.Complete);
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Complete },
 		});
@@ -313,38 +318,6 @@ export class CannoliGroup extends CannoliVertex {
 	}
 }
 
-// export class ForEachGroup extends CannoliGroup {
-// 	constructor(
-// 		forEachData: VerifiedCannoliCanvasGroupData,
-// 		fullCanvasData: VerifiedCannoliCanvasData
-// 	) {
-// 		super(forEachData, fullCanvasData);
-// 	}
-
-// 	logDetails(): string {
-// 		return (
-// 			super.logDetails() + `Type: ForEach\nIndex: ${this.currentLoop}\n`
-// 		);
-// 	}
-
-// 	async execute(): Promise<void> {
-// 		this.status = CannoliObjectStatus.Executing;
-// 		const event = new CustomEvent("update", {
-// 			detail: { obj: this, status: CannoliObjectStatus.Executing },
-// 		});
-// 		this.dispatchEvent(event);
-// 	}
-
-// 	dependencyCompleted(dependency: CannoliObject): void {
-// 		if (this.status === CannoliObjectStatus.Executing) {
-// 			// If all members are complete or rejected, call membersFinished
-// 			if (this.allMembersCompleteOrRejected()) {
-// 				this.completed();
-// 			}
-// 		}
-// 	}
-// }
-
 export class RepeatGroup extends CannoliGroup {
 	constructor(
 		groupData: VerifiedCannoliCanvasGroupData,
@@ -357,7 +330,7 @@ export class RepeatGroup extends CannoliGroup {
 	}
 
 	async execute(): Promise<void> {
-		this.status = CannoliObjectStatus.Executing;
+		this.setStatus(CannoliObjectStatus.Executing);
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: CannoliObjectStatus.Executing },
 		});
@@ -406,7 +379,7 @@ export class RepeatGroup extends CannoliGroup {
 				this.executeMembers();
 			}
 		} else {
-			this.status = CannoliObjectStatus.Complete;
+			this.setStatus(CannoliObjectStatus.Complete);
 			const event = new CustomEvent("update", {
 				detail: { obj: this, status: CannoliObjectStatus.Complete },
 			});

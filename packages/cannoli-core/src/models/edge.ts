@@ -30,7 +30,6 @@ export class CannoliEdge extends CannoliObject {
 	content: string | Record<string, string> | null;
 	messages: GenericCompletionResponse[] | null;
 	versions: {
-		version: number,
 		header: string | null,
 		subHeader: string | null,
 	}[] | null;
@@ -76,6 +75,29 @@ export class CannoliEdge extends CannoliObject {
 		return this.graph[this.target] as CannoliVertex;
 	}
 
+	setContent(content: string | Record<string, string> | undefined) {
+		this.run.editGraphData(this.id, "content", content);
+		this.content = content ?? null;
+	}
+
+	setMessages(messages: GenericCompletionResponse[] | undefined) {
+		this.run.editGraphData(this.id, "messages", messages);
+		this.messages = messages ?? null;
+	}
+
+	setVersionHeaders(index: number, header: string, subheader: string) {
+		this.run.editGraphData(this.id, "versions", {
+			index,
+			header,
+			subHeader: subheader
+		});
+		if (this.versions) {
+			this.versions[index].header = header;
+			this.versions[index].subHeader = subheader;
+		}
+
+	}
+
 	load({
 		content,
 		request,
@@ -95,10 +117,8 @@ export class CannoliEdge extends CannoliObject {
 					const itemEdgeObject = this.graph[itemEdge] as CannoliEdge;
 
 					// Set the version header to the name of the list edge
-					this.versions[versionCount].header = itemEdgeObject.text;
+					this.setVersionHeaders(versionCount, itemEdgeObject.text, itemEdgeObject.content as string);
 
-					// Set the version subheader to the header of the item edge object
-					this.versions[versionCount].subHeader = itemEdgeObject.content as string;
 					versionCount++;
 				}
 			}
@@ -109,8 +129,8 @@ export class CannoliEdge extends CannoliObject {
 			content !== null && content !== undefined ? content : null;
 
 		if (this.addMessages) {
-			this.messages =
-				request && request.messages ? request.messages : null;
+			this.setMessages(
+				request && request.messages ? request.messages : undefined);
 		}
 	}
 
@@ -191,8 +211,8 @@ export class ChatConverterEdge extends CannoliEdge {
 			);
 		}
 
-		this.content = messageString;
-		this.messages = messages;
+		this.setContent(messageString);
+		this.setMessages(messages);
 	}
 
 	stringToArray(str: string, format: string): GenericCompletionResponse[] {
@@ -339,16 +359,16 @@ export class ChatResponseEdge extends CannoliEdge {
 						.replace("{{role}}", "User")
 						.replace("{{content}}", "");
 
-					this.content = "\n\n" + userTemplate;
+					this.setContent("\n\n" + userTemplate);
 				} else {
-					this.content = content;
+					this.setContent(content);
 				}
 			} else {
 				const assistantTemplate = format
 					.replace("{{role}}", "Assistant")
 					.replace("{{content}}", content);
 
-				this.content = "\n\n" + assistantTemplate;
+				this.setContent("\n\n" + assistantTemplate);
 
 				this.beginningOfStream = false;
 			}
@@ -367,12 +387,12 @@ export class SystemMessageEdge extends CannoliEdge {
 		request?: GenericCompletionParams;
 	}): void {
 		if (content) {
-			this.messages = [
+			this.setMessages([
 				{
 					role: "system",
 					content: content as string,
 				},
-			];
+			]);
 		}
 	}
 }
@@ -430,9 +450,9 @@ export class LoggingEdge extends CannoliEdge {
 
 		// Append the logs to the content
 		if (this.content !== null) {
-			this.content = `${this.content}\n${logs}`;
+			this.setContent(`${this.content}\n${logs}`);
 		} else {
-			this.content = logs;
+			this.setContent(logs);
 		}
 	}
 

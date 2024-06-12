@@ -34,7 +34,6 @@ type VariableValue = { name: string; content: string; edgeId: string | null };
 type VersionedContent = {
 	content: string;
 	versionArray: {
-		version: number;
 		header: string | null;
 		subHeader: string | null;
 	}[];
@@ -373,7 +372,7 @@ export class CannoliNode extends CannoliVertex {
 			if (!(edgeObject.status === CannoliObjectStatus.Complete)) {
 				// If the edge is reflexive and not rejected, set its content to an empty string and keep going
 				if (edgeObject.isReflexive && edgeObject.status !== CannoliObjectStatus.Rejected) {
-					edgeObject.content = "";
+					edgeObject.setContent("");
 				} else if (
 					// If the edge is not rejected, not reflexive, or its content is null, skip it
 					!(edgeObject.status === CannoliObjectStatus.Rejected) ||
@@ -396,7 +395,6 @@ export class CannoliNode extends CannoliVertex {
 					const allVersions: VersionedContent[] = [{
 						content: edgeObject.content,
 						versionArray: edgeObject.versions.map((version) => ({
-							version: version.version,
 							header: version.header,
 							subHeader: version.subHeader
 						}))
@@ -1620,10 +1618,10 @@ export class ContentNode extends CannoliNode {
 			const name = this.getName();
 			if (name !== null && this.type !== ContentNodeType.StandardContent) {
 				// Clear everything except the first line
-				this.text = this.text.split("\n")[0];
+				this.setText(this.text.split("\n")[0]);
 			} else {
 				// Clear everything
-				this.text = "";
+				this.setText("");
 			}
 		}
 
@@ -1669,9 +1667,9 @@ export class ContentNode extends CannoliNode {
 				// Discard the first line of the new content
 				newContent = newContent.substring(newFirstLine.length).trim();
 			}
-			this.text = `${firstLine}\n${newContent}`;
+			this.setText(`${firstLine}\n${newContent}`);
 		} else {
-			this.text = newContent;
+			this.setText(newContent);
 		}
 	}
 
@@ -2413,6 +2411,24 @@ const defaultHttpConfig: HttpConfig = {
 };
 
 export class HttpNode extends ContentNode {
+	receiveInfo: Record<string, string> | undefined;
+
+	constructor(
+		nodeData:
+			| VerifiedCannoliCanvasFileData
+			| VerifiedCannoliCanvasLinkData
+			| VerifiedCannoliCanvasTextData,
+		fullCanvasData: VerifiedCannoliCanvasData
+	) {
+		super(nodeData, fullCanvasData);
+		this.receiveInfo = nodeData.cannoliData.receiveInfo
+	}
+
+	setReceiveInfo(info: Record<string, string>) {
+		this.run.editGraphData(this.id, "receiveInfo", info);
+		this.receiveInfo = info;
+	}
+
 	logDetails(): string {
 		return super.logDetails() + `Subtype: Http\n`;
 	}
@@ -2473,7 +2489,7 @@ export class HttpNode extends ContentNode {
 
 			if (longAction) {
 				// Check if the receiveinfo is set
-				if (this.canvasData.cannoliData.receiveInfo === undefined) {
+				if (this.receiveInfo === undefined) {
 					const argNames = this.getLongActionArgs(longAction);
 
 					const variableValues = this.getVariableValues(true);
@@ -2501,11 +2517,12 @@ export class HttpNode extends ContentNode {
 						}
 					}
 
-					this.canvasData.cannoliData.receiveInfo = sendResponse;
+					this.setReceiveInfo(sendResponse);
 				}
 
+				invariant(this.receiveInfo)
 				// Make the receive request
-				const receiveResponse = await longAction.receive(this.canvasData.cannoliData.receiveInfo);
+				const receiveResponse = await longAction.receive(this.receiveInfo);
 				if (receiveResponse instanceof Error) {
 					this.error(receiveResponse.message);
 					return;
@@ -2865,7 +2882,7 @@ export class FloatingNode extends CannoliNode {
 		fullCanvasData: VerifiedCannoliCanvasData
 	) {
 		super(nodeData, fullCanvasData);
-		this.status = CannoliObjectStatus.Complete;
+		this.setStatus(CannoliObjectStatus.Complete);
 	}
 
 	dependencyCompleted(dependency: CannoliObject): void {
@@ -2894,7 +2911,7 @@ export class FloatingNode extends CannoliNode {
 
 	editContent(newContent: string): void {
 		const firstLine = this.text.split("\n")[0];
-		this.text = `${firstLine}\n${newContent}`;
+		this.setText(`${firstLine}\n${newContent}`);
 
 		const event = new CustomEvent("update", {
 			detail: { obj: this, status: this.status },
