@@ -361,12 +361,14 @@ export class RepeatGroup extends CannoliGroup {
 	}
 
 	membersFinished(): void {
+		this.setCurrentLoop(this.currentLoop + 1);
+		this.setText(`${this.currentLoop}/${this.maxLoops}`);
+
 		if (
 			// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-			this.currentLoop < this.maxLoops! - 1 &&
+			this.currentLoop < this.maxLoops! &&
 			this.allEdgeDependenciesComplete()
 		) {
-			this.currentLoop++;
 
 			if (!this.run.isMock) {
 				// Sleep for 20ms to allow complete color to render
@@ -403,7 +405,8 @@ export class RepeatGroup extends CannoliGroup {
 
 	reset(): void {
 		super.reset();
-		this.currentLoop = 0;
+		this.setCurrentLoop(0);
+		this.setText(`0/${this.maxLoops}`);
 	}
 
 	logDetails(): string {
