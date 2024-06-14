@@ -2398,7 +2398,6 @@ const HTTPConfigSchema = z.object({
 	headers: z.string().optional(),
 	catch: z.coerce.boolean().optional(),
 	timeout: z.coerce.number().optional(),
-	messenger: z.string().optional(),
 }).passthrough();
 
 export type HttpConfig = z.infer<typeof HTTPConfigSchema>;
@@ -2459,12 +2458,22 @@ export class HttpNode extends ContentNode {
 
 				// Get the value for each arg name from the variables, and error if any arg is missing
 				const args = argNames.map((argName) => {
-					const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
-					if (!variableValue) {
-						this.error(`Missing value for variable "${argName}" in available arrows. This action "${action.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
-						return "";
+					// If the argName is in the configKeys, get the value from the config
+					if (action.configVars && action.configVars.includes(argName)) {
+						// Error if the config is not set
+						if (!config[argName]) {
+							this.error(`Missing value for config parameter "${argName}" in available config. This action "${action.name}" requires the following config keys:\n${action.configVars.map((arg) => `  - ${arg}`)}`);
+							return "";
+						}
+						return config[argName] as string;
+					} else {
+						const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
+						if (!variableValue) {
+							this.error(`Missing value for variable "${argName}" in available arrows. This action "${action.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
+							return "";
+						}
+						return variableValue.content || "";
 					}
-					return variableValue.content || "";
 				});
 
 				let actionResponse = await action.function(...args);
@@ -2496,12 +2505,22 @@ export class HttpNode extends ContentNode {
 
 					// Get the value for each arg name from the variables, and error if any arg is missing
 					const args = argNames.map((argName) => {
-						const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
-						if (!variableValue) {
-							this.error(`Missing value for variable "${argName}" in available arrows. This long action "${longAction.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
-							return "";
+						// If the argName is in the configKeys, get the value from the config
+						if (longAction.configVars && longAction.configVars.includes(argName)) {
+							// Error if the config is not set
+							if (!config[argName]) {
+								this.error(`Missing value for config parameter "${argName}" in available config. This long action "${longAction.name}" requires the following config keys:\n${longAction.configVars.map((arg) => `  - ${arg}`)}`);
+								return "";
+							}
+							return config[argName] as string;
+						} else {
+							const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
+							if (!variableValue) {
+								this.error(`Missing value for variable "${argName}" in available arrows. This long action "${longAction.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
+								return "";
+							}
+							return variableValue.content || "";
 						}
-						return variableValue.content || "";
 					});
 
 					const sendResponse = await longAction.send(...args);

@@ -836,7 +836,7 @@ export default class Cannoli extends Plugin {
 		// Make the cannoli runner
 		const runner = new CannoliRunner({
 			llm: llm,
-			settings: cannoliSettings,
+			config: cannoliSettings,
 			fileSystemInterface: vaultInterface,
 			searchSources: searchSources,
 			fetcher: fetcher,

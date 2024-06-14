@@ -7,47 +7,49 @@ import { Persistor } from "./persistor";
 export type Action = {
     name: string;
     function: (...args: string[]) => string | Error | Promise<string | Error>;
+    configVars?: string[];
 }
 
 export type LongAction = {
     name: string;
     send: (...args: string[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
     receive: (receiveInfo: Record<string, string>) => string | Error | Promise<string | Error>;
+    configVars?: string[];
 }
 
 export class Cannoli {
     private llm: LLMProvider;
-    private settings: Record<string, string | boolean | number> | undefined;
     private fileSystemInterface: FilesystemInterface | undefined;
     private actions: Action[] | undefined;
     private longActions: LongAction[] | undefined;
     private searchSources: SearchSource[] | undefined;
     private fetcher: ResponseTextFetcher | undefined;
+    private config: Record<string, unknown> | undefined;
 
     constructor({
         llm,
-        settings,
         fileSystemInterface,
         actions,
         longActions,
         searchSources,
         fetcher,
+        config,
     }: {
         llm: LLMProvider;
-        settings?: Record<string, string | boolean | number>;
         fileSystemInterface?: FilesystemInterface;
         actions?: Action[];
         longActions?: LongAction[];
         searchSources?: SearchSource[];
         fetcher?: ResponseTextFetcher;
+        config?: Record<string, unknown>;
     }) {
         this.llm = llm;
-        this.settings = settings;
         this.fileSystemInterface = fileSystemInterface;
         this.actions = actions;
         this.longActions = longActions;
         this.searchSources = searchSources;
         this.fetcher = fetcher;
+        this.config = config;
     }
 
     async run({
@@ -90,7 +92,6 @@ export class Cannoli {
         const run = new Run({
             llm: this.llm,
             cannoliJSON: cannoliJSON,
-            settings: this.settings,
             args: args,
             persistor: persistor,
             onFinish: (stoppage: Stoppage) => {
@@ -102,6 +103,7 @@ export class Cannoli {
             searchSources: this.searchSources,
             isMock: isMock,
             fetcher: this.fetcher,
+            config: this.config,
         });
 
         run.start();

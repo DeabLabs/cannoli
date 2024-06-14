@@ -194,7 +194,7 @@ export class ChatConverterEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		request?: GenericCompletionParams;
 	}): void {
-		const format = this.run.settings?.chatFormatString?.toString() ?? chatFormatString;
+		const format = this.run.config?.chatFormatString?.toString() ?? chatFormatString;
 		const messageString = "";
 		let messages: GenericCompletionResponse[] = [];
 
@@ -338,7 +338,7 @@ export class ChatResponseEdge extends CannoliEdge {
 		content?: string | Record<string, string>;
 		request?: GenericCompletionParams;
 	}): void {
-		const format = this.run.settings?.chatFormatString?.toString() ?? chatFormatString;
+		const format = this.run.config?.chatFormatString?.toString() ?? chatFormatString;
 
 		if (!format) {
 			throw new Error(

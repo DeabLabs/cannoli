@@ -88,8 +88,8 @@ export class Run {
 	onFinish: (stoppage: Stoppage) => void;
 	canvasData: VerifiedCannoliCanvasData | null = null;
 
-	settings: Record<string, string | boolean | number> | null;
 	args: Record<string, string> | null;
+	config: Record<string, unknown> | null;
 
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
@@ -155,7 +155,7 @@ export class Run {
 		actions,
 		longActions,
 		searchSources,
-		settings,
+		config,
 		args,
 		resume
 
@@ -163,7 +163,7 @@ export class Run {
 		cannoliJSON: unknown;
 		llm: Llm;
 		fetcher?: ResponseTextFetcher;
-		settings?: Record<string, string | boolean | number>;
+		config?: Record<string, unknown>;
 		args?: Record<string, string>;
 		onFinish?: (stoppage: Stoppage) => void;
 		isMock?: boolean;
@@ -188,7 +188,7 @@ export class Run {
 
 		this.llm = llm ?? null;
 
-		this.settings = settings ?? null;
+		this.config = config ?? null;
 		this.args = args ?? null;
 
 		let parsedCannoliJSON: CanvasData;
@@ -201,11 +201,9 @@ export class Run {
 			return;
 		}
 
-		// add the settings and args to the cannoli
-		parsedCannoliJSON.settings = settings;
 		parsedCannoliJSON.args = args;
 
-		const limit = this.settings?.pLimit ?? 1000;
+		const limit = this.config?.pLimit ?? 1000;
 
 		// Check that the plimit is a number
 		if (typeof limit == "number") {
@@ -232,9 +230,9 @@ export class Run {
 
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
-			this.settings ?? {},
 			this.args ?? {},
-			resume
+			resume,
+			this.config?.contentIsColorless as boolean
 		);
 
 		const canvasData = factory.getCannoliData();

@@ -102,15 +102,13 @@ export class CannoliFactory {
 
 	constructor(
 		canvas: CanvasData,
-		settings: Record<string, string | boolean | number>,
 		args?: Record<string, string>,
-		resume: boolean = false
+		resume: boolean = false,
+		contentIsColorless: boolean = false
 	) {
 		// Cast the canvas to a CannoliCanvasData
 		const cannoliCanvasData = canvas as CannoliCanvasData;
 
-		// Add the settings and args to the canvas
-		cannoliCanvasData.settings = settings;
 		cannoliCanvasData.args = args;
 
 		this.cannoliData = cannoliCanvasData;
@@ -120,7 +118,7 @@ export class CannoliFactory {
 
 
 		// If contentIsColorless setting is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
-		if (settings.contentIsColorless) {
+		if (contentIsColorless) {
 			this.nodeColorMap = {
 				undefined: IndicatedNodeType.Content,
 				"0": IndicatedNodeType.Content,

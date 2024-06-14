@@ -77,7 +77,7 @@ export class CannoliObject extends EventTarget {
 
 			if (this.type === CallNodeType.StandardCall || this.type === CallNodeType.Choose || this.type === CallNodeType.Form) {
 				if (status === CannoliObjectStatus.Pending) {
-					if (this.run.settings && this.run.settings.contentIsColorless) {
+					if (this.run.config && this.run.config.contentIsColorless) {
 						data.color = "6";
 					} else {
 						data.color = undefined;
