@@ -117,10 +117,6 @@ export class CannoliObject extends EventTarget {
 	}
 
 	dependencyUpdated(dependency: CannoliObject, status: CannoliObjectStatus) {
-		if (this.run.isStopped) {
-			return;
-		}
-
 		switch (status) {
 			case CannoliObjectStatus.Complete:
 				this.dependencyCompleted(dependency);

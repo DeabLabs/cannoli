@@ -100,7 +100,7 @@ export class Run {
 	llmLimit: Limit;
 	persistor: Persistor | null;
 	isMock: boolean;
-	isStopped = false;
+	stopTime: number | null = null;
 	currentNote: string | null = null;
 	selection: string | null = null;
 
@@ -299,7 +299,7 @@ export class Run {
 	}
 
 	error(message: string) {
-		this.isStopped = true;
+		this.stopTime = Date.now();
 
 		this.onFinish({
 			reason: "error",
@@ -313,7 +313,7 @@ export class Run {
 	}
 
 	stop() {
-		this.isStopped = true;
+		this.stopTime = Date.now();
 
 		this.onFinish({
 			reason: "user",
@@ -324,7 +324,7 @@ export class Run {
 	}
 
 	reset() {
-		this.isStopped = false;
+		this.stopTime = null;
 
 		// Call reset on all objects
 		for (const object of Object.values(this.graph)) {
@@ -371,6 +371,16 @@ export class Run {
 		status: CannoliObjectStatus,
 		message?: string
 	) {
+		const currentTime = Date.now();
+		if (this.stopTime) {
+			const elapsed = currentTime - this.stopTime;
+			if (elapsed > 10) {
+				return;
+			}
+		}
+
+
+
 		switch (status) {
 			case CannoliObjectStatus.Complete: {
 				this.objectCompleted(object);
@@ -423,8 +433,8 @@ export class Run {
 	objectCompleted(object: CannoliObject) {
 		this.updateObject(object);
 
-		if (this.allObjectsFinished() && !this.isStopped) {
-			this.isStopped = true;
+		if (this.allObjectsFinished() && !this.stopTime) {
+			this.stopTime = Date.now();
 			this.onFinish({
 				reason: "complete",
 				usage: this.calculateAllLLMCosts(),
@@ -437,8 +447,8 @@ export class Run {
 	objectRejected(object: CannoliObject) {
 		this.updateObject(object);
 
-		if (this.allObjectsFinished() && !this.isStopped) {
-			this.isStopped = true;
+		if (this.allObjectsFinished() && !this.stopTime) {
+			this.stopTime = Date.now();
 			this.onFinish({
 				reason: "complete",
 				usage: this.calculateAllLLMCosts(),
