@@ -36,6 +36,7 @@ export enum IndicatedNodeType {
 export class CannoliFactory {
 	cannoliData: CannoliCanvasData;
 	currentNote: string;
+	resume: boolean;
 
 	vaultModifierMap: Record<string, VaultModifier> = {
 		"[": VaultModifier.Note,
@@ -102,7 +103,8 @@ export class CannoliFactory {
 	constructor(
 		canvas: CanvasData,
 		settings: Record<string, string | boolean | number>,
-		args?: Record<string, string>
+		args?: Record<string, string>,
+		resume: boolean = false
 	) {
 		// Cast the canvas to a CannoliCanvasData
 		const cannoliCanvasData = canvas as CannoliCanvasData;
@@ -113,6 +115,8 @@ export class CannoliFactory {
 
 		this.cannoliData = cannoliCanvasData;
 		this.currentNote = args?.currentNote ?? "No active note";
+
+		this.resume = resume;
 
 
 		// If contentIsColorless setting is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
@@ -233,8 +237,7 @@ export class CannoliFactory {
 			| CannoliCanvasLinkData
 			| CannoliCanvasTextData
 	): CannoliNodeData | null {
-		// If the node already has a cannoliData object, return it
-		if (node.cannoliData) {
+		if (node.cannoliData && this.resume) {
 			return node.cannoliData;
 		}
 
@@ -290,8 +293,7 @@ export class CannoliFactory {
 	}
 
 	createGroupData(group: CannoliCanvasGroupData): CannoliGroupData | null {
-		// If the node already has a cannoliData object, return it
-		if (group.cannoliData) {
+		if (group.cannoliData && this.resume) {
 			return group.cannoliData;
 		}
 
@@ -330,8 +332,7 @@ export class CannoliFactory {
 	}
 
 	createEdgeData(edge: CannoliCanvasEdgeData): CannoliEdgeData | null {
-		// If the node already has a cannoliData object, return it
-		if (edge.cannoliData) {
+		if (edge.cannoliData && this.resume) {
 			return edge.cannoliData;
 		}
 

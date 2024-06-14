@@ -1,6 +1,6 @@
 import { TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
-import { Persistor, CannoliCanvasData, CanvasData, AllCanvasNodeData, CanvasEdgeData, VerifiedCannoliCanvasData, AllVerifiedCannoliCanvasNodeData, VerifiedCannoliCanvasEdgeData } from "@deablabs/cannoli-core";
+import { Persistor, CannoliCanvasData, CanvasData, AllCanvasNodeData, CanvasEdgeData, AllCannoliCanvasNodeData, CannoliCanvasEdgeData } from "@deablabs/cannoli-core";
 
 export class ObsidianCanvas implements Persistor {
 	canvasFile: TFile;
@@ -19,13 +19,18 @@ export class ObsidianCanvas implements Persistor {
 		this.editQueue = Promise.resolve();
 	}
 
-	async start(newCanvasData: VerifiedCannoliCanvasData) {
+	async start(newCanvasData: CannoliCanvasData) {
 		this.enqueueRemoveAllErrorNodes();
 
 		const canvasData = await this.readCanvasData();
 
 		newCanvasData.nodes.forEach((node) => {
 			const existingNode = canvasData.nodes.find((n) => n.id === node.id);
+
+			if (!this.allowCannoliData) {
+				node.cannoliData = undefined;
+			}
+
 			if (existingNode) {
 				Object.assign(existingNode, node);
 			} else {
@@ -35,6 +40,11 @@ export class ObsidianCanvas implements Persistor {
 
 		newCanvasData.edges.forEach((edge) => {
 			const existingEdge = canvasData.edges.find((e) => e.id === edge.id);
+
+			if (!this.allowCannoliData) {
+				edge.cannoliData = undefined;
+			}
+
 			if (existingEdge) {
 				Object.assign(existingEdge, edge);
 			} else {
@@ -45,7 +55,7 @@ export class ObsidianCanvas implements Persistor {
 		await this.writeCanvasData(canvasData);
 	}
 
-	async editNode(newNode: AllVerifiedCannoliCanvasNodeData): Promise<void> {
+	async editNode(newNode: AllCannoliCanvasNodeData): Promise<void> {
 		this.editQueue = this.editQueue.then(async () => {
 			const canvasData = await this.readCanvasData();
 			const existingNode = canvasData.nodes.find((n) => n.id === newNode.id);
@@ -56,19 +66,28 @@ export class ObsidianCanvas implements Persistor {
 				newNode.height = existingNode.height;
 				newNode.width = existingNode.width;
 
+				if (!this.allowCannoliData) {
+					newNode.cannoliData = undefined;
+				}
+
 				Object.assign(existingNode, newNode);
 			}
 			await this.writeCanvasData(canvasData);
 		});
 	}
 
-	async editEdge(newEdge: VerifiedCannoliCanvasEdgeData): Promise<void> {
+	async editEdge(newEdge: CannoliCanvasEdgeData): Promise<void> {
 		this.editQueue = this.editQueue.then(async () => {
 			const canvasData = await this.readCanvasData();
 			const existingEdge = canvasData.edges.find((e) => e.id === newEdge.id);
 			if (existingEdge) {
+				if (!this.allowCannoliData) {
+					newEdge.cannoliData = undefined;
+				}
+
 				Object.assign(existingEdge, newEdge);
 			}
+
 			await this.writeCanvasData(canvasData);
 		});
 	}

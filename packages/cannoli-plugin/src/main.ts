@@ -809,7 +809,7 @@ export default class Cannoli extends Plugin {
 		};
 
 
-		const canvas = new ObsidianCanvas(canvasData, file, true);
+		const canvas = new ObsidianCanvas(canvasData, file);
 
 		const fetcher: ResponseTextFetcher = async (url: string, { body, method, headers }: RequestInit) => {
 			const headersObj = Array.isArray(headers) ? Object.fromEntries(headers) : headers instanceof Headers ? {} : headers;

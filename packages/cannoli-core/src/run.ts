@@ -156,7 +156,8 @@ export class Run {
 		longActions,
 		searchSources,
 		settings,
-		args
+		args,
+		resume
 
 	}: {
 		cannoliJSON: unknown;
@@ -171,6 +172,7 @@ export class Run {
 		actions?: Action[];
 		longActions?: LongAction[];
 		searchSources?: SearchSource[];
+		resume?: boolean;
 	}) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
@@ -231,7 +233,8 @@ export class Run {
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
 			this.settings ?? {},
-			this.args ?? {}
+			this.args ?? {},
+			resume
 		);
 
 		const canvasData = factory.getCannoliData();
@@ -270,7 +273,7 @@ export class Run {
 		// this.logGraph();
 
 		if (this.persistor !== null && this.canvasData !== null) {
-			await this.persistor.start(this.canvasData);
+			await this.persistor.start(JSON.parse(JSON.stringify(this.canvasData)));
 		}
 
 		// Setup listeners
@@ -411,10 +414,10 @@ export class Run {
 		if (!this.isMock && this.persistor) {
 			if (object.kind === CannoliObjectKind.Node || object.kind === CannoliObjectKind.Group) {
 				const data = this.canvasData?.nodes.find((node) => node.id === object.id);
-				this.persistor.editNode(data as AllVerifiedCannoliCanvasNodeData);
+				this.persistor.editNode(JSON.parse(JSON.stringify(data)) as AllVerifiedCannoliCanvasNodeData);
 			} else if (object.kind === CannoliObjectKind.Edge) {
 				const data = this.canvasData?.edges.find((edge) => edge.id === object.id);
-				this.persistor.editEdge(data as VerifiedCannoliCanvasEdgeData);
+				this.persistor.editEdge(JSON.parse(JSON.stringify(data)) as VerifiedCannoliCanvasEdgeData);
 			}
 		}
 	}
