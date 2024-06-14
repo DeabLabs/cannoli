@@ -19,7 +19,6 @@ const chatFormatString = `---
 {{content}}`
 
 export class CannoliEdge extends CannoliObject {
-	canvasData: VerifiedCannoliCanvasEdgeData;
 	source: string;
 	target: string;
 	crossingInGroups: string[];
@@ -36,7 +35,6 @@ export class CannoliEdge extends CannoliObject {
 
 	constructor(edgeData: VerifiedCannoliCanvasEdgeData, fullCanvasData: VerifiedCannoliCanvasData) {
 		super(edgeData, fullCanvasData);
-		this.canvasData = edgeData;
 		this.source = edgeData.fromNode;
 		this.target = edgeData.toNode;
 		this.crossingInGroups = edgeData.cannoliData.crossingInGroups;
@@ -76,26 +74,25 @@ export class CannoliEdge extends CannoliObject {
 	}
 
 	setContent(content: string | Record<string, string> | undefined) {
-		this.run.editGraphData(this.id, "content", content);
-		this.content = content ?? null;
+		this.content = content ?? "";
+		const data = this.canvasData.edges.find((edge) => edge.id === this.id) as VerifiedCannoliCanvasEdgeData;
+		data.cannoliData.content = content ?? "";
 	}
 
 	setMessages(messages: GenericCompletionResponse[] | undefined) {
-		this.run.editGraphData(this.id, "messages", messages);
 		this.messages = messages ?? null;
+		const data = this.canvasData.edges.find((edge) => edge.id === this.id) as VerifiedCannoliCanvasEdgeData;
+		data.cannoliData.messages = messages;
 	}
 
 	setVersionHeaders(index: number, header: string, subheader: string) {
-		this.run.editGraphData(this.id, "versions", {
-			index,
-			header,
-			subHeader: subheader
-		});
 		if (this.versions) {
 			this.versions[index].header = header;
 			this.versions[index].subHeader = subheader;
-		}
 
+			const data = this.canvasData.edges.find((edge) => edge.id === this.id) as VerifiedCannoliCanvasEdgeData;
+			data.cannoliData.versions = this.versions;
+		}
 	}
 
 	load({
@@ -125,8 +122,7 @@ export class CannoliEdge extends CannoliObject {
 
 		}
 
-		this.content =
-			content !== null && content !== undefined ? content : null;
+		this.setContent(content);
 
 		if (this.addMessages) {
 			this.setMessages(

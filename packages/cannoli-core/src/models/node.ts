@@ -3,6 +3,7 @@ import { ChatRole, HttpRequest, HttpTemplate } from "../run";
 import { CannoliEdge, ChatResponseEdge, LoggingEdge } from "./edge";
 import { CannoliGroup } from "./group";
 import {
+	AllVerifiedCannoliCanvasNodeData,
 	CannoliObjectStatus,
 	ContentNodeType,
 	EdgeType,
@@ -1678,18 +1679,16 @@ export class ContentNode extends CannoliNode {
 
 		let content = this.getWriteOrLoggingContent();
 
-		if (!content) {
+		if (content === null) {
 			const variableValues = this.getVariableValues(false);
 
 			// Get first variable value
 			if (variableValues.length > 0) {
 				content = variableValues[0].content || "";
-			} else {
-				content = "";
 			}
 		}
 
-		if (content !== null && content !== undefined && content !== "") {
+		if (content !== null && content !== undefined) {
 			this.editContentCheckName(content);
 		} else {
 			content = await this.processReferences();
@@ -2425,8 +2424,9 @@ export class HttpNode extends ContentNode {
 	}
 
 	setReceiveInfo(info: Record<string, string>) {
-		this.run.editGraphData(this.id, "receiveInfo", info);
 		this.receiveInfo = info;
+		const data = this.canvasData.nodes.find((node) => node.id === this.id) as AllVerifiedCannoliCanvasNodeData;
+		data.cannoliData.receiveInfo = info;
 	}
 
 	logDetails(): string {

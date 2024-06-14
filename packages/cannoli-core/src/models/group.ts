@@ -1,6 +1,7 @@
 import { CannoliObject, CannoliVertex } from "./object";
 import { CannoliEdge } from "./edge";
 import {
+	AllVerifiedCannoliCanvasNodeData,
 	CannoliObjectStatus,
 	EdgeType,
 	VerifiedCannoliCanvasData,
@@ -30,8 +31,10 @@ export class CannoliGroup extends CannoliVertex {
 	}
 
 	setCurrentLoop(currentLoop: number) {
-		this.run.editGraphData(this.id, "currentLoop", currentLoop);
 		this.currentLoop = currentLoop;
+
+		const data = this.canvasData.nodes.find((node) => node.id === this.id) as VerifiedCannoliCanvasGroupData;
+		data.cannoliData.currentLoop = currentLoop;
 	}
 
 	getMembers(): CannoliVertex[] {
@@ -241,11 +244,13 @@ export class CannoliGroup extends CannoliVertex {
 	}
 
 	checkOverlap(): void {
+		const data = this.canvasData.nodes.find((node) => node.id === this.id) as VerifiedCannoliCanvasGroupData;
+
 		const currentGroupRectangle = this.createRectangle(
-			this.canvasData.x,
-			this.canvasData.y,
-			this.canvasData.width,
-			this.canvasData.height
+			data.x,
+			data.y,
+			data.width,
+			data.height
 		);
 
 		// Iterate through all objects in the graph
@@ -256,11 +261,13 @@ export class CannoliGroup extends CannoliVertex {
 				// Skip the current group to avoid self-comparison
 				if (object === this) continue;
 
+				const objectData = this.canvasData.nodes.find((node) => node.id === object.id) as AllVerifiedCannoliCanvasNodeData;
+
 				const objectRectangle = this.createRectangle(
-					object.canvasData.x,
-					object.canvasData.y,
-					object.canvasData.width,
-					object.canvasData.height
+					objectData.x,
+					objectData.y,
+					objectData.width,
+					objectData.height
 				);
 
 				// Check if the object overlaps with the current group

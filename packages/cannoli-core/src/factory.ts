@@ -1,4 +1,4 @@
-import { CanvasData } from "./canvas_interface";
+import { CanvasData } from "./persistor";
 import {
 	AllCannoliCanvasNodeData,
 	CannoliCanvasData,
@@ -524,7 +524,6 @@ export class CannoliFactory {
 				edge.cannoliData.versions = [];
 			}
 			edge.cannoliData.versions.push({
-				version: index,
 				header: null,
 				subHeader: null,
 			});

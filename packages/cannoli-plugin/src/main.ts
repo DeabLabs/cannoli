@@ -847,7 +847,7 @@ export default class Cannoli extends Plugin {
 		const [validationStoppagePromise] = runner.runWithControl({
 			cannoliJSON: canvasData,
 			args: cannoliArgs,
-			canvas: noCanvas ? undefined : canvas,
+			persistor: noCanvas ? undefined : canvas,
 			isMock: true,
 		});
 		const validationStoppage = await validationStoppagePromise;
@@ -874,7 +874,7 @@ export default class Cannoli extends Plugin {
 		const [liveStoppagePromise, stopLiveCannoli] = runner.runWithControl({
 			cannoliJSON: canvasData,
 			args: cannoliArgs,
-			canvas: noCanvas ? undefined : canvas,
+			persistor: noCanvas ? undefined : canvas,
 			isMock: false,
 		});
 

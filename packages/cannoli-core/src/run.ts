@@ -1,7 +1,6 @@
-import { CallNode, ContentNode, FloatingNode } from "./models/node";
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { CannoliCanvasData, CannoliGraph, CannoliObjectStatus, ContentNodeType } from "./models/graph";
+import { AllVerifiedCannoliCanvasNodeData, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -12,8 +11,7 @@ import {
 import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
-import { Canvas, CanvasData, canvasDataSchema } from "./canvas_interface";
-import { CannoliGroup, RepeatGroup } from "./models/group";
+import { CanvasData, Persistor, canvasDataSchema } from "./persistor";
 import { SearchSource } from "./search_source";
 import { Action, LongAction } from "./cannoli";
 
@@ -88,7 +86,7 @@ export function isValidKey(
 export class Run {
 	graph: Record<string, CannoliObject> = {};
 	onFinish: (stoppage: Stoppage) => void;
-	graphData: CannoliCanvasData | null = null;
+	canvasData: VerifiedCannoliCanvasData | null = null;
 
 	settings: Record<string, string | boolean | number> | null;
 	args: Record<string, string> | null;
@@ -100,13 +98,11 @@ export class Run {
 	searchSources: SearchSource[] | null;
 	llm: Llm;
 	llmLimit: Limit;
-	canvas: Canvas | null;
+	persistor: Persistor | null;
 	isMock: boolean;
 	isStopped = false;
 	currentNote: string | null = null;
 	selection: string | null = null;
-
-	forEachTracker: Map<string, number>;
 
 	modelInfo: Record<string, Model> = {
 		"gpt-4-1106-preview": {
@@ -152,7 +148,7 @@ export class Run {
 		cannoliJSON,
 		isMock,
 		onFinish,
-		canvas,
+		persistor,
 		fileSystemInterface,
 		llm,
 		fetcher,
@@ -170,7 +166,7 @@ export class Run {
 		args?: Record<string, string>;
 		onFinish?: (stoppage: Stoppage) => void;
 		isMock?: boolean;
-		canvas?: Canvas;
+		persistor?: Persistor;
 		fileSystemInterface?: FilesystemInterface;
 		actions?: Action[];
 		longActions?: LongAction[];
@@ -178,7 +174,7 @@ export class Run {
 	}) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
-		this.canvas = canvas ?? null;
+		this.persistor = persistor ?? null;
 		this.usage = {};
 
 		const defaultFetcher: ResponseTextFetcher = async (url, options) => {
@@ -238,10 +234,10 @@ export class Run {
 			this.args ?? {}
 		);
 
-		const graphData = factory.getCannoliData();
+		const canvasData = factory.getCannoliData();
 
 		// Find all nodes of type "variable" or "input"
-		const argNodes = graphData.nodes.filter((node) => node.cannoliData.type === "variable"
+		const argNodes = canvasData.nodes.filter((node) => node.cannoliData.type === "variable"
 			|| node.cannoliData.type === "input");
 
 		// For each arg, check if the key matches the first line of the text in the variable/input node
@@ -256,12 +252,10 @@ export class Run {
 			}
 		}
 
-		this.forEachTracker = new Map();
-
-		this.graphData = graphData;
+		this.canvasData = canvasData;
 
 		this.graph = new CannoliGraph(
-			graphData
+			canvasData
 		).graph;
 
 
@@ -274,10 +268,9 @@ export class Run {
 	async start() {
 		// Log the graph
 		// this.logGraph();
-		console.log(this.graphData)
 
-		if (this.canvas !== null && this.graphData !== null && !this.isMock) {
-			await this.canvas.setCanvasData(this.graphData);
+		if (this.persistor !== null && this.canvasData !== null) {
+			await this.persistor.start(this.canvasData);
 		}
 
 		// Setup listeners
@@ -288,11 +281,6 @@ export class Run {
 
 		// Validate the graph
 		this.validate();
-
-		// If we have a canvas and its mock, remove all error nodes
-		if (this.canvas && this.isMock) {
-			await this.canvas.enqueueRemoveAllErrorNodes();
-		}
 
 		let executedObjectsCount = 0;
 
@@ -306,12 +294,6 @@ export class Run {
 
 		if (executedObjectsCount === 0) {
 			this.error("No objects to execute");
-		}
-	}
-
-	editGraphData(objectId: string, field: string, value: unknown) {
-		if (this.canvas && !this.isMock) {
-			this.canvas.enqueueChangeCannoliData(objectId, field, value)
 		}
 	}
 
@@ -425,21 +407,20 @@ export class Run {
 		}
 	}
 
-	objectCompleted(object: CannoliObject) {
-		if (!this.isMock && this.canvas && !object.originalObject) {
-			if (object instanceof CallNode) {
-				this.canvas.enqueueChangeNodeColor(object.id, "4");
-			} else if (
-				object.type === ContentNodeType.Output ||
-				object.type === ContentNodeType.StandardContent ||
-				object instanceof FloatingNode
-			) {
-				this.canvas.enqueueChangeNodeText(object.id, object.text);
-			} else if (object instanceof RepeatGroup) {
-				this.canvas.enqueueChangeNodeText(object.id, `${object.currentLoop + 1}/${object.maxLoops}`);
+	updateObject(object: CannoliObject) {
+		if (!this.isMock && this.persistor) {
+			if (object.kind === CannoliObjectKind.Node || object.kind === CannoliObjectKind.Group) {
+				const data = this.canvasData?.nodes.find((node) => node.id === object.id);
+				this.persistor.editNode(data as AllVerifiedCannoliCanvasNodeData);
+			} else if (object.kind === CannoliObjectKind.Edge) {
+				const data = this.canvasData?.edges.find((edge) => edge.id === object.id);
+				this.persistor.editEdge(data as VerifiedCannoliCanvasEdgeData);
 			}
 		}
+	}
 
+	objectCompleted(object: CannoliObject) {
+		this.updateObject(object);
 
 		if (this.allObjectsFinished() && !this.isStopped) {
 			this.isStopped = true;
@@ -453,6 +434,8 @@ export class Run {
 	}
 
 	objectRejected(object: CannoliObject) {
+		this.updateObject(object);
+
 		if (this.allObjectsFinished() && !this.isStopped) {
 			this.isStopped = true;
 			this.onFinish({
@@ -465,63 +448,60 @@ export class Run {
 	}
 
 	objectExecuting(object: CannoliObject) {
-		if (
-			!this.isMock &&
-			this.canvas &&
-			object instanceof CallNode &&
-			object.originalObject === null
-		) {
-			this.canvas.enqueueChangeNodeColor(object.id, "3");
-		}
+		this.updateObject(object);
 	}
 
 	objectPending(object: CannoliObject) {
-		if (this.canvas && object instanceof CallNode) {
-			if (this.settings?.contentIsColorless) {
-				this.canvas.enqueueChangeNodeColor(object.id, "6");
-			} else {
-				this.canvas.enqueueChangeNodeColor(object.id);
-			}
-		} else if (
-			this.canvas &&
-			object instanceof ContentNode &&
-			object.text === ""
-		) {
-			this.canvas.enqueueChangeNodeText(object.id, "");
-		} else if (
-			this.canvas &&
-			(object instanceof RepeatGroup)
-		) {
-			this.canvas.enqueueChangeNodeText(object.id, `0/${object.maxLoops}`);
-		} else if (this.canvas && object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
-			this.canvas.enqueueChangeNodeText(object.originalObject, `0/${object.maxLoops}`);
-		}
+		this.updateObject(object);
+
+		// if (this.canvas && object instanceof CallNode) {
+		// 	if (this.settings?.contentIsColorless) {
+		// 		this.canvas.enqueueChangeNodeColor(object.id, "6");
+		// 	} else {
+		// 		this.canvas.enqueueChangeNodeColor(object.id);
+		// 	}
+		// } else if (
+		// 	this.canvas &&
+		// 	object instanceof ContentNode &&
+		// 	object.text === ""
+		// ) {
+		// 	this.canvas.enqueueChangeNodeText(object.id, "");
+		// } else if (
+		// 	this.canvas &&
+		// 	(object instanceof RepeatGroup)
+		// ) {
+		// 	this.canvas.enqueueChangeNodeText(object.id, `0/${object.maxLoops}`);
+		// } else if (this.canvas && object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
+		// 	this.canvas.enqueueChangeNodeText(object.originalObject, `0/${object.maxLoops}`);
+		// }
 	}
 
 	objectVersionComplete(object: CannoliObject, message?: string) {
-		if (this.canvas && !this.isMock) {
-			if (object instanceof RepeatGroup && message) {
-				this.canvas.enqueueChangeNodeText(object.id, `${message}/${object.maxLoops}`);
-			} else if (object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
-				const originalGroupId = object.originalObject;
+		this.updateObject(object);
 
-				if (!this.forEachTracker.has(originalGroupId)) {
-					this.forEachTracker.set(originalGroupId, 1);
-				} else {
-					const current = this.forEachTracker.get(originalGroupId);
-					if (current) {
-						this.forEachTracker.set(originalGroupId, current + 1);
-					}
-				}
+		// if (this.canvas && !this.isMock) {
+		// 	if (object instanceof RepeatGroup && message) {
+		// 		this.canvas.enqueueChangeNodeText(object.id, `${message}/${object.maxLoops}`);
+		// 	} else if (object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
+		// 		const originalGroupId = object.originalObject;
 
-				this.canvas.enqueueChangeNodeText(originalGroupId, `${this.forEachTracker.get(originalGroupId)}/${object.maxLoops}`);
-			}
-		}
+		// 		if (!this.forEachTracker.has(originalGroupId)) {
+		// 			this.forEachTracker.set(originalGroupId, 1);
+		// 		} else {
+		// 			const current = this.forEachTracker.get(originalGroupId);
+		// 			if (current) {
+		// 				this.forEachTracker.set(originalGroupId, current + 1);
+		// 			}
+		// 		}
+
+		// 		this.canvas.enqueueChangeNodeText(originalGroupId, `${this.forEachTracker.get(originalGroupId)}/${object.maxLoops}`);
+		// 	}
+		// }
 	}
 
 	objectError(object: CannoliObject, message?: string) {
-		if (this.canvas && object instanceof CannoliVertex) {
-			this.canvas.enqueueAddErrorNode(
+		if (this.persistor && object instanceof CannoliVertex) {
+			this.persistor.addError(
 				object.id,
 				message ?? "Unknown error"
 			);
@@ -531,8 +511,8 @@ export class Run {
 	}
 
 	objectWarning(object: CannoliObject, message?: string) {
-		if (this.canvas && object instanceof CannoliVertex) {
-			this.canvas.enqueueAddWarningNode(
+		if (this.persistor && object instanceof CannoliVertex) {
+			this.persistor.addWarning(
 				object.id,
 				message ?? "Unknown warning"
 			);

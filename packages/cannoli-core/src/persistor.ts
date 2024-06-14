@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
-import { CannoliCanvasData } from "./models/graph";
+import { AllVerifiedCannoliCanvasNodeData, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
 
 export const hexColorSchema = z.custom<`#${string}`>(v => {
 	return /^#[0-9a-fA-F]{6}$/.test(v);
@@ -98,14 +98,12 @@ export const canvasDataSchema = z.object({
 
 export type CanvasData = z.infer<typeof canvasDataSchema>;
 
-export interface Canvas {
-	setCanvasData(canvasData: CannoliCanvasData): Promise<void>;
-	enqueueChangeNodeColor(nodeId: string, newColor?: CanvasColor): Promise<void>;
-	enqueueAddErrorNode(nodeId: string, message: string): Promise<void>;
-	enqueueAddWarningNode(nodeId: string, message: string): Promise<void>;
-	enqueueChangeNodeText(nodeId: string, newText: string): Promise<void>;
-	enqueueRemoveAllErrorNodes(): Promise<void>;
-	enqueueChangeCannoliData(objectId: string, field: string, value: unknown): Promise<void>;
+export interface Persistor {
+	start(canvasData: VerifiedCannoliCanvasData): Promise<void>;
+	editNode(newNode: AllVerifiedCannoliCanvasNodeData): Promise<void>;
+	editEdge(newEdge: VerifiedCannoliCanvasEdgeData): Promise<void>;
+	addError(nodeId: string, message: string): Promise<void>;
+	addWarning(nodeId: string, message: string): Promise<void>;
 }
 
 

@@ -2,7 +2,7 @@ import { FilesystemInterface } from "./filesystem_interface";
 import { ResponseTextFetcher, Run, Stoppage } from "./run";
 import { SearchSource } from "./search_source";
 import { LLMProvider } from "./providers";
-import { Canvas } from "./canvas_interface";
+import { Persistor } from "./persistor";
 
 export type Action = {
     name: string;
@@ -53,18 +53,18 @@ export class Cannoli {
     async run({
         cannoliJSON,
         args,
-        canvas,
+        persistor,
         isMock,
     }: {
         cannoliJSON: unknown;
         args?: Record<string, string>;
-        canvas?: Canvas;
+        persistor?: Persistor;
         isMock?: boolean;
     }): Promise<Stoppage> {
         const [done] = this.runWithControl({
             cannoliJSON,
             args,
-            canvas,
+            persistor,
             isMock,
         });
 
@@ -74,12 +74,12 @@ export class Cannoli {
     runWithControl({
         cannoliJSON,
         args,
-        canvas,
+        persistor,
         isMock,
     }: {
         cannoliJSON: unknown;
         args?: Record<string, string>;
-        canvas?: Canvas;
+        persistor?: Persistor;
         isMock?: boolean;
     }): [Promise<Stoppage>, () => void] {
         let resolver: (stoppage: Stoppage) => void;
@@ -92,7 +92,7 @@ export class Cannoli {
             cannoliJSON: cannoliJSON,
             settings: this.settings,
             args: args,
-            canvas: canvas,
+            persistor: persistor,
             onFinish: (stoppage: Stoppage) => {
                 resolver(stoppage);
             },

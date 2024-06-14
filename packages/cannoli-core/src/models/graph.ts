@@ -5,7 +5,7 @@ import {
 	CanvasGroupData,
 	CanvasLinkData,
 	CanvasTextData,
-} from "../canvas_interface";
+} from "../persistor";
 
 import { CannoliObject } from "./object";
 import { CannoliGroup, RepeatGroup } from "./group";

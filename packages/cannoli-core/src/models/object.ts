@@ -3,6 +3,7 @@ import type { CannoliGroup } from "./group";
 import type { Run } from "../run";
 import {
 	AllVerifiedCannoliCanvasNodeData,
+	CallNodeType,
 	CannoliGraph,
 	CannoliObjectKind,
 	CannoliObjectStatus,
@@ -11,6 +12,7 @@ import {
 	NodeType,
 	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasEdgeData,
+	VerifiedCannoliCanvasGroupData,
 } from "./graph";
 import { getIncomingEdgesFromData, getOutgoingEdgesFromData } from "src/factory";
 export class CannoliObject extends EventTarget {
@@ -21,14 +23,14 @@ export class CannoliObject extends EventTarget {
 	dependencies: string[];
 	graph: Record<string, CannoliObject>;
 	cannoliGraph: CannoliGraph;
-	fullCanvasData: VerifiedCannoliCanvasData;
+	canvasData: VerifiedCannoliCanvasData;
 	originalObject: string | null;
 	kind: CannoliObjectKind;
 	type: EdgeType | NodeType | GroupType;
 
 	constructor(
 		data: AllVerifiedCannoliCanvasNodeData | VerifiedCannoliCanvasEdgeData,
-		fullCanvasData: VerifiedCannoliCanvasData
+		canvasData: VerifiedCannoliCanvasData
 	) {
 		super();
 		this.id = data.id;
@@ -38,7 +40,7 @@ export class CannoliObject extends EventTarget {
 		this.originalObject = data.cannoliData.originalObject;
 		this.kind = data.cannoliData.kind;
 		this.type = data.cannoliData.type;
-		this.fullCanvasData = fullCanvasData;
+		this.canvasData = canvasData;
 	}
 
 	setRun(run: Run) {
@@ -68,13 +70,41 @@ export class CannoliObject extends EventTarget {
 	}
 
 	setStatus(status: CannoliObjectStatus) {
-		this.run.editGraphData(this.id, "status", status);
 		this.status = status;
+		if (this.kind === CannoliObjectKind.Node || this.kind === CannoliObjectKind.Group) {
+			const data = this.canvasData.nodes.find((node) => node.id === this.id) as AllVerifiedCannoliCanvasNodeData;
+			data.cannoliData.status = status;
+
+			if (this.type === CallNodeType.StandardCall || this.type === CallNodeType.Choose || this.type === CallNodeType.Form) {
+				if (status === CannoliObjectStatus.Pending) {
+					if (this.run.settings && this.run.settings.contentIsColorless) {
+						data.color = "6";
+					} else {
+						data.color = undefined;
+					}
+				} else if (status === CannoliObjectStatus.Executing) {
+					data.color = "3";
+				} else if (status === CannoliObjectStatus.Complete) {
+					data.color = "4";
+				}
+			}
+		} else if (this.kind === CannoliObjectKind.Edge) {
+			const data = this.canvasData.edges.find((edge) => edge.id === this.id) as VerifiedCannoliCanvasEdgeData;
+			data.cannoliData.status = status;
+		}
 	}
 
 	setText(text: string) {
-		this.run.editGraphData(this.id, "text", text);
 		this.text = text;
+		if (this.kind === CannoliObjectKind.Node) {
+			const data = this.canvasData.nodes.find((node) => node.id === this.id) as AllVerifiedCannoliCanvasNodeData;
+			data.cannoliData.text = text;
+			data.text = text;
+		} else if (this.kind === CannoliObjectKind.Group) {
+			const data = this.canvasData.nodes.find((group) => group.id === this.id) as VerifiedCannoliCanvasGroupData;
+			data.cannoliData.text = text;
+			data.label = text;
+		}
 	}
 
 	getAllDependencies(): CannoliObject[] {
@@ -324,16 +354,14 @@ export class CannoliObject extends EventTarget {
 }
 
 export class CannoliVertex extends CannoliObject {
-	canvasData: AllVerifiedCannoliCanvasNodeData;
 	outgoingEdges: string[];
 	incomingEdges: string[];
 	groups: string[]; // Sorted from immediate parent to most distant
 
 	constructor(vertexData: AllVerifiedCannoliCanvasNodeData, fullCanvasData: VerifiedCannoliCanvasData) {
 		super(vertexData, fullCanvasData);
-		this.canvasData = vertexData;
-		this.outgoingEdges = getOutgoingEdgesFromData(this.id, this.fullCanvasData);
-		this.incomingEdges = getIncomingEdgesFromData(this.id, this.fullCanvasData);
+		this.outgoingEdges = getOutgoingEdgesFromData(this.id, this.canvasData);
+		this.incomingEdges = getIncomingEdgesFromData(this.id, this.canvasData);
 		this.groups = vertexData.cannoliData.groups;
 	}
 
