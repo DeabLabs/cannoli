@@ -28,7 +28,25 @@ export class ObsidianCanvas implements Persistor {
 			const existingNode = canvasData.nodes.find((n) => n.id === node.id);
 
 			if (!this.allowCannoliData) {
-				node.cannoliData = undefined;
+				if (node.cannoliData?.originalObject) {
+					// if (node.color === "5" && node.type === "group") {
+					// 	const parallelGroup = node as CannoliCanvasGroupData;
+
+					// 	const parentGroups = parallelGroup.cannoliData?.groups || [];
+					// 	const hasParentParallelGroup = parentGroups.some((group) => newCanvasData.nodes.find((n) => n.id === group)?.color === "5");
+
+					// 	const originalParallelGroup = canvasData.nodes.find((n) => n.id === parallelGroup.cannoliData?.originalObject) as CannoliCanvasGroupData;
+
+					// 	if (!hasParentParallelGroup && originalParallelGroup) {
+					// 		this.parallelGroupTracker.set(originalParallelGroup.id, 0);
+					// 		originalParallelGroup.label = `0/${parallelGroup.cannoliData?.maxLoops}`;
+					// 	}
+					// }
+
+					return;
+				}
+
+				delete node.cannoliData;
 			}
 
 			if (existingNode) {
@@ -42,7 +60,11 @@ export class ObsidianCanvas implements Persistor {
 			const existingEdge = canvasData.edges.find((e) => e.id === edge.id);
 
 			if (!this.allowCannoliData) {
-				edge.cannoliData = undefined;
+				if (edge.cannoliData?.originalObject) {
+					return;
+				}
+
+				delete edge.cannoliData;
 			}
 
 			if (existingEdge) {
@@ -67,7 +89,21 @@ export class ObsidianCanvas implements Persistor {
 				newNode.width = existingNode.width;
 
 				if (!this.allowCannoliData) {
-					newNode.cannoliData = undefined;
+					if (newNode.cannoliData?.originalObject) {
+						// if (newNode.cannoliData?.status === CannoliObjectStatus.Complete &&
+						// 	this.parallelGroupTracker.get(newNode.cannoliData?.originalObject)
+						// ) {
+						// 	const currentCount = this.parallelGroupTracker.get(newNode.cannoliData?.originalObject) || 0;
+
+						// 	this.parallelGroupTracker.set(newNode.cannoliData?.originalObject, currentCount + 1);
+						// 	const originalParallelGroup = canvasData.nodes.find((n) => n.id === newNode.cannoliData?.originalObject) as CannoliCanvasGroupData;
+						// 	originalParallelGroup.label = `${currentCount + 1}/${originalParallelGroup.cannoliData?.maxLoops}`;
+						// }
+
+						return;
+					}
+
+					delete newNode.cannoliData;
 				}
 
 				Object.assign(existingNode, newNode);
@@ -82,7 +118,11 @@ export class ObsidianCanvas implements Persistor {
 			const existingEdge = canvasData.edges.find((e) => e.id === newEdge.id);
 			if (existingEdge) {
 				if (!this.allowCannoliData) {
-					newEdge.cannoliData = undefined;
+					if (newEdge.cannoliData?.originalObject) {
+						return;
+					}
+
+					delete newEdge.cannoliData;
 				}
 
 				Object.assign(existingEdge, newEdge);
@@ -92,7 +132,7 @@ export class ObsidianCanvas implements Persistor {
 		});
 	}
 
-	async readCanvasData(): Promise<CanvasData> {
+	async readCanvasData(): Promise<CannoliCanvasData> {
 		const fileContent = await this.canvasFile.vault.read(this.canvasFile);
 		return JSON.parse(fileContent);
 	}

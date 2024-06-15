@@ -1094,7 +1094,6 @@ export class RunPriceAlertModal extends Modal {
 		});
 
 		// Convert usage object to array
-
 		for (const [model, usage] of Object.entries(this.usage)) {
 			contentEl.createEl("h2", { text: `Model: ${model}` });
 			contentEl
@@ -1128,7 +1127,7 @@ export class RunPriceAlertModal extends Modal {
 
 		panel.addButton((btn) =>
 			btn
-				.setButtonText("Continue")
+				.setButtonText("Run anyway")
 				.setCta()
 				.onClick(() => {
 					this.close();

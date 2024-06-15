@@ -495,7 +495,6 @@ export class CannoliFactory {
 		duplicateGroup.cannoliData.currentLoop = index;
 		duplicateGroup.cannoliData.type = GroupType.Basic;
 		duplicateGroup.cannoliData.fromForEach = true;
-		duplicateGroup.cannoliData.originalObject = originalGroup.id;
 
 		const duplicateIncomingEdges = incomingEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
 		duplicateIncomingEdges.forEach((edge) => {
@@ -591,9 +590,10 @@ export class CannoliFactory {
 		data.nodes.push(...duplicateMembers);
 	}
 
-	duplicateObject(data: unknown, newId: string) {
+	duplicateObject(data: AllCannoliCanvasNodeData | CannoliCanvasEdgeData, newId: string) {
 		const duplicate = JSON.parse(JSON.stringify(data));
 		duplicate.id = newId;
+		duplicate.cannoliData.originalObject = data.id;
 		return duplicate;
 	}
 
