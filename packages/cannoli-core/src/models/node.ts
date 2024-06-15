@@ -419,7 +419,13 @@ export class CannoliNode extends CannoliVertex {
 
 					const modifier = edgeObject.edgeModifier;
 
-					content = this.renderMergedContent(allVersions, modifier);
+					let fromFormatterNode = false;
+
+					if (this.graph[edgeObject.source].type === ContentNodeType.Formatter) {
+						fromFormatterNode = true;
+					}
+
+					content = this.renderMergedContent(allVersions, modifier, fromFormatterNode);
 				} else {
 					content = edgeObject.content;
 				}
@@ -482,7 +488,7 @@ export class CannoliNode extends CannoliVertex {
 		return resolvedVariableValues;
 	}
 
-	renderMergedContent(allVersions: VersionedContent[], modifier: EdgeModifier | null): string {
+	renderMergedContent(allVersions: VersionedContent[], modifier: EdgeModifier | null, fromFormatterNode: boolean): string {
 		const tree = this.transformToTree(allVersions);
 		if (modifier === EdgeModifier.Table) {
 			return this.renderAsMarkdownTable(tree);
@@ -491,7 +497,7 @@ export class CannoliNode extends CannoliVertex {
 		} else if (modifier === EdgeModifier.Headers) {
 			return this.renderAsMarkdownHeaders(tree);
 		} else {
-			return this.renderAsParagraphs(tree);
+			return this.renderAsParagraphs(tree, fromFormatterNode);
 		}
 	}
 
@@ -529,16 +535,20 @@ export class CannoliNode extends CannoliVertex {
 		return root;
 	}
 
-	renderAsParagraphs(tree: TreeNode): string {
+	renderAsParagraphs(tree: TreeNode, fromFormatterNode: boolean): string {
 		let result = '';
 
 		if (tree.content) {
-			result += `${tree.content}\n`;
+			if (fromFormatterNode) {
+				result += `${tree.content}`;
+			} else {
+				result += `${tree.content}\n\n`;
+			}
 		}
 
 		if (tree.children) {
 			tree.children.forEach(child => {
-				result += this.renderAsParagraphs(child);
+				result += this.renderAsParagraphs(child, fromFormatterNode);
 			});
 		}
 
@@ -1825,7 +1835,13 @@ export class ContentNode extends CannoliNode {
 
 			const modifier = edgesWithVersions[0].edgeModifier;
 
-			const mergedContent = this.renderMergedContent(allVersions, modifier);
+			let fromFormatterNode = false;
+
+			if (this.graph[edgesWithVersions[0].source].type === ContentNodeType.Formatter) {
+				fromFormatterNode = true;
+			}
+
+			const mergedContent = this.renderMergedContent(allVersions, modifier, fromFormatterNode);
 
 			if (mergedContent) {
 				return mergedContent;
