@@ -10,7 +10,7 @@ import {
 	GroupType,
 	Reference,
 	ReferenceType,
-	VaultModifier,
+	EdgeModifier,
 	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasFileData,
 	VerifiedCannoliCanvasLinkData,
@@ -417,7 +417,9 @@ export class CannoliNode extends CannoliVertex {
 						}
 					}
 
-					content = this.renderAsParagraphs(this.transformToTree(allVersions));
+					const modifier = edgeObject.edgeModifier;
+
+					content = this.renderMergedContent(allVersions, modifier);
 				} else {
 					content = edgeObject.content;
 				}
@@ -480,6 +482,19 @@ export class CannoliNode extends CannoliVertex {
 		return resolvedVariableValues;
 	}
 
+	renderMergedContent(allVersions: VersionedContent[], modifier: EdgeModifier | null): string {
+		const tree = this.transformToTree(allVersions);
+		if (modifier === EdgeModifier.Table) {
+			return this.renderAsMarkdownTable(tree);
+		} else if (modifier === EdgeModifier.List) {
+			return this.renderAsMarkdownList(tree);
+		} else if (modifier === EdgeModifier.Headers) {
+			return this.renderAsMarkdownHeaders(tree);
+		} else {
+			return this.renderAsParagraphs(tree);
+		}
+	}
+
 	transformToTree(allVersions: VersionedContent[]): TreeNode {
 		const root: TreeNode = { header: null, subHeader: null, children: [] };
 
@@ -518,7 +533,7 @@ export class CannoliNode extends CannoliVertex {
 		let result = '';
 
 		if (tree.content) {
-			result += `${tree.content}\n\n`;
+			result += `${tree.content}\n`;
 		}
 
 		if (tree.children) {
@@ -530,10 +545,12 @@ export class CannoliNode extends CannoliVertex {
 		return result;
 	}
 
-	renderAsMarkdownDocument(tree: TreeNode, level: number = 1): string {
+	renderAsMarkdownHeaders(tree: TreeNode, level: number = 0): string {
 		let result = '';
 
-		result += `${'#'.repeat(level)} ${tree.subHeader}\n\n`;
+		if (level !== 0) {
+			result += `${'#'.repeat(level)} ${tree.subHeader}\n\n`;
+		}
 
 		if (tree.content) {
 			result += `${tree.content}\n\n`;
@@ -541,7 +558,7 @@ export class CannoliNode extends CannoliVertex {
 
 		if (tree.children) {
 			tree.children.forEach(child => {
-				result += this.renderAsMarkdownDocument(child, level + 1);
+				result += this.renderAsMarkdownHeaders(child, level + 1);
 			});
 		}
 
@@ -556,7 +573,8 @@ export class CannoliNode extends CannoliVertex {
 		}
 
 		if (tree.content) {
-			result += `${indent}  ${tree.content}\n`;
+			const indentedContent = tree.content.split('\n').map(line => `${indent}    ${line}`).join('\n');
+			result += `${indentedContent}\n`;
 		}
 
 		if (tree.children) {
@@ -575,22 +593,34 @@ export class CannoliNode extends CannoliVertex {
 			return table;
 		}
 
-		// Extract the headers from the first child
-		const headers = tree.children.map(child => child.subHeader);
+		// Check if there's only one level
+		const isSingleLevel = !tree.children.some(child => child.children && child.children.length > 0);
 
-		// Create the table header with an empty cell for the main header
-		table += '| |' + headers.join(' | ') + ' |\n';
-		table += '| --- |' + headers.map(() => ' --- ').join(' | ') + ' |\n';
+		if (isSingleLevel) {
+			table = "| ~ | ~ |\n| --- | --- |\n"
 
-		// Create the table rows
-		tree.children[0].children!.forEach((subChild, index) => {
-			table += '| ' + subChild.subHeader + ' |';
-			tree.children?.forEach(child => {
-				const content = child.children![index].content ?? '';
-				table += ` ${content} |`;
+			// Create the table rows
+			tree.children.forEach(child => {
+				table += '| ' + (child.subHeader ?? '') + ' | ' + (child.content ?? '') + ' |\n';
 			});
-			table += '\n';
-		});
+		} else {
+			// Extract the headers from the first child
+			const headers = tree.children[0].children?.map(child => child.subHeader) ?? [];
+
+			// Create the table header with an empty cell for the main header
+			table += '| |' + headers.join(' | ') + ' |\n';
+			table += '| --- |' + headers.map(() => ' --- ').join(' | ') + ' |\n';
+
+			// Create the table rows
+			tree.children.forEach(child => {
+				table += '| ' + (child.subHeader ?? '') + ' |';
+				child.children?.forEach(subChild => {
+					const content = subChild.content ?? '';
+					table += ` ${content} |`;
+				});
+				table += '\n';
+			});
+		}
 
 		return table;
 	}
@@ -1382,7 +1412,7 @@ export class CallNode extends CannoliNode {
 	getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
 		if (
 			this.getOutgoingEdges().some(
-				(edge) => edge.vaultModifier === VaultModifier.Note
+				(edge) => edge.edgeModifier === EdgeModifier.Note
 			)
 		) {
 			const noteNames = this.findNoteReferencesInMessages(messages);
@@ -1412,7 +1442,7 @@ export class FormNode extends CallNode {
 
 		// If one of the outgoing edges has a vault modifier of type "note", get the note names and pass it into that field
 		const noteEdges = this.getOutgoingEdges().filter(
-			(edge) => edge.vaultModifier === VaultModifier.Note
+			(edge) => edge.edgeModifier === EdgeModifier.Note
 		);
 
 		for (const item of fields) {
@@ -1492,7 +1522,7 @@ export class FormNode extends CallNode {
 						if (fieldContent) {
 							// If it has a note modifier, add double brackets around the note name
 							if (
-								edgeObject.vaultModifier === VaultModifier.Note
+								edgeObject.edgeModifier === EdgeModifier.Note
 							) {
 								edgeObject.load({
 									content: `[[${fieldContent}]]`,
@@ -1765,15 +1795,44 @@ export class ContentNode extends CannoliNode {
 		// Remove all edges with a vault modifier of type folder or property
 		filteredEdges = filteredEdges.filter(
 			(edge) =>
-				edge.vaultModifier !== VaultModifier.Folder &&
-				edge.vaultModifier !== VaultModifier.Property
+				edge.edgeModifier !== EdgeModifier.Folder &&
+				edge.edgeModifier !== EdgeModifier.Property
 		);
 
 		if (filteredEdges.length === 0) {
 			return null;
 		}
 
-		// If there are write or logging edges, return the content of the first one
+		// Check for edges with versions
+		const edgesWithVersions = filteredEdges.filter(
+			(edge) => {
+				const edgeObject = this.graph[edge.id];
+				return edgeObject instanceof CannoliEdge && edgeObject.versions && edgeObject.versions.length > 0;
+			}
+		);
+
+		if (edgesWithVersions.length > 0) {
+			const allVersions: VersionedContent[] = [];
+			for (const edge of edgesWithVersions) {
+				const edgeObject = this.graph[edge.id] as CannoliEdge;
+				if (edgeObject.content !== null) {
+					allVersions.push({
+						content: edgeObject.content as string,
+						versionArray: edgeObject.versions as { header: string | null; subHeader: string | null; }[]
+					});
+				}
+			}
+
+			const modifier = edgesWithVersions[0].edgeModifier;
+
+			const mergedContent = this.renderMergedContent(allVersions, modifier);
+
+			if (mergedContent) {
+				return mergedContent;
+			}
+		}
+
+		// If there are write or chatResponse edges, return the content of the first one
 		const firstEdge = filteredEdges[0];
 		const firstEdgeObject = this.graph[firstEdge.id];
 		if (firstEdgeObject instanceof CannoliEdge) {
@@ -1832,10 +1891,10 @@ export class ReferenceNode extends ContentNode {
 				(variableValueEdge) => {
 					return (
 						variableValueEdge.text !== this.reference.name &&
-						variableValueEdge.vaultModifier !==
-						VaultModifier.Folder &&
-						variableValueEdge.vaultModifier !==
-						VaultModifier.Property
+						variableValueEdge.edgeModifier !==
+						EdgeModifier.Folder &&
+						variableValueEdge.edgeModifier !==
+						EdgeModifier.Property
 					);
 				}
 			);
@@ -1867,7 +1926,7 @@ export class ReferenceNode extends ContentNode {
 		// Get the property edges
 		const propertyEdges = this.getIncomingEdges().filter(
 			(edge) =>
-				edge.vaultModifier === VaultModifier.Property &&
+				edge.edgeModifier === EdgeModifier.Property &&
 				edge.text !== this.reference.name
 		);
 
@@ -2024,7 +2083,7 @@ export class ReferenceNode extends ContentNode {
 
 		// Look for an incoming edge with a vault modifier of type folder
 		const folderEdge = incomingEdges.find(
-			(edge) => edge.vaultModifier === VaultModifier.Folder
+			(edge) => edge.edgeModifier === EdgeModifier.Folder
 		);
 
 		let path = "";
@@ -2045,7 +2104,7 @@ export class ReferenceNode extends ContentNode {
 		// Look for incoming edges with a vault modifier of type property
 		const propertyEdges = incomingEdges.filter(
 			(edge) =>
-				edge.vaultModifier === VaultModifier.Property &&
+				edge.edgeModifier === EdgeModifier.Property &&
 				edge.text !== this.reference.name
 		);
 
@@ -2272,7 +2331,7 @@ export class ReferenceNode extends ContentNode {
 				continue;
 			}
 
-			if (edgeObject.vaultModifier === VaultModifier.Property) {
+			if (edgeObject.edgeModifier === EdgeModifier.Property) {
 				let value;
 
 				if (edgeObject.text.length === 0) {
@@ -2305,13 +2364,13 @@ export class ReferenceNode extends ContentNode {
 						request: request,
 					});
 				}
-			} else if (edgeObject.vaultModifier === VaultModifier.Note) {
+			} else if (edgeObject.edgeModifier === EdgeModifier.Note) {
 				// Load the edge with the name of the note
 				edgeObject.load({
 					content: `${this.reference.name}`,
 					request: request,
 				});
-			} else if (edgeObject.vaultModifier === VaultModifier.Folder) {
+			} else if (edgeObject.edgeModifier === EdgeModifier.Folder) {
 				// If there's no fileSystemInterface, throw an error
 				if (!this.run.fileSystemInterface) {
 					throw new Error("No fileSystemInterface found");
@@ -2350,12 +2409,12 @@ export class ReferenceNode extends ContentNode {
 			}
 
 			// If the edge has a note modifier, load it with the name of the floating node
-			if (edgeObject.vaultModifier === VaultModifier.Note) {
+			if (edgeObject.edgeModifier === EdgeModifier.Note) {
 				edgeObject.load({
 					content: `${this.reference.name}`,
 					request: request,
 				});
-			} else if (edgeObject.vaultModifier === VaultModifier.Property) {
+			} else if (edgeObject.edgeModifier === EdgeModifier.Property) {
 				// Find the floating node with the same name as this reference
 				let propertyContent = "";
 

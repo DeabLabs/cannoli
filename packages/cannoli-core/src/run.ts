@@ -336,6 +336,9 @@ export class Run {
 		// Call validate on each object
 		for (const object of Object.values(this.graph)) {
 			object.validate();
+			if (this.stopTime) {
+				return;
+			}
 		}
 
 		// Check if the graph is a DAG
@@ -378,8 +381,6 @@ export class Run {
 				return;
 			}
 		}
-
-
 
 		switch (status) {
 			case CannoliObjectStatus.Complete: {

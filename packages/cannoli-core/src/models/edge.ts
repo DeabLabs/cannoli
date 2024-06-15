@@ -2,8 +2,8 @@ import { CannoliObject, CannoliVertex } from "./object";
 import { CannoliGroup, RepeatGroup } from "./group";
 import {
 	CannoliObjectStatus,
+	EdgeModifier,
 	EdgeType,
-	VaultModifier,
 	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
@@ -25,7 +25,7 @@ export class CannoliEdge extends CannoliObject {
 	crossingOutGroups: string[];
 	isReflexive: boolean;
 	addMessages: boolean;
-	vaultModifier: VaultModifier | null;
+	edgeModifier: EdgeModifier | null;
 	content: string | Record<string, string> | null;
 	messages: GenericCompletionResponse[] | null;
 	versions: {
@@ -41,8 +41,8 @@ export class CannoliEdge extends CannoliObject {
 		this.crossingOutGroups = edgeData.cannoliData.crossingOutGroups;
 		this.isReflexive = edgeData.cannoliData.isReflexive;
 		this.addMessages = edgeData.cannoliData.addMessages;
-		this.vaultModifier = edgeData.cannoliData.vaultModifier
-			? edgeData.cannoliData.vaultModifier
+		this.edgeModifier = edgeData.cannoliData.edgeModifier
+			? edgeData.cannoliData.edgeModifier
 			: null;
 		this.content = edgeData.cannoliData.content
 			? edgeData.cannoliData.content

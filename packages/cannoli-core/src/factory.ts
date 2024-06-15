@@ -20,7 +20,7 @@ import {
 	GroupType,
 	EdgeType,
 	CannoliVertexData,
-	VaultModifier,
+	EdgeModifier,
 	VerifiedCannoliCanvasData,
 	VerifiedCannoliCanvasGroupData,
 	AllVerifiedCannoliCanvasNodeData,
@@ -38,10 +38,13 @@ export class CannoliFactory {
 	currentNote: string;
 	resume: boolean;
 
-	vaultModifierMap: Record<string, VaultModifier> = {
-		"[": VaultModifier.Note,
-		"/": VaultModifier.Folder,
-		":": VaultModifier.Property,
+	edgeModifierMap: Record<string, EdgeModifier> = {
+		"[": EdgeModifier.Note,
+		"/": EdgeModifier.Folder,
+		":": EdgeModifier.Property,
+		"-": EdgeModifier.List,
+		"#": EdgeModifier.Headers,
+		"_": EdgeModifier.Table,
 	};
 
 	nodeColorMap: Record<string, IndicatedNodeType> = {
@@ -351,7 +354,7 @@ export class CannoliFactory {
 		const kind = CannoliObjectKind.Edge;
 		const type = this.getEdgeType(edge);
 		const text = labelInfo?.text || "";
-		const vaultModifier = labelInfo?.vaultModifier || undefined;
+		const edgeModifier = labelInfo?.edgeModifier || undefined;
 
 		let addMessages = false;
 
@@ -385,7 +388,7 @@ export class CannoliFactory {
 			crossingOutGroups,
 			status,
 			isReflexive,
-			vaultModifier,
+			edgeModifier,
 		};
 	}
 
@@ -1126,7 +1129,7 @@ export class CannoliFactory {
 
 	parseEdgeLabel(edge: CannoliCanvasEdgeData): {
 		text: string;
-		vaultModifier: VaultModifier | null;
+		edgeModifier: EdgeModifier | null;
 		addMessages: boolean | null;
 	} | null {
 		if (!edge.label) {
@@ -1134,15 +1137,15 @@ export class CannoliFactory {
 		}
 
 		let text = edge.label;
-		let vaultModifier: VaultModifier | null = null;
+		let edgeModifier: EdgeModifier | null = null;
 		let addMessages: boolean | null = null;
 
-		// If the label starts with a vault modifier from the map, set the vault modifier and remove it from the label. The vault modifier can be 1 or 2 characters long.
-		if (this.vaultModifierMap[edge.label[0]]) {
-			vaultModifier = this.vaultModifierMap[edge.label[0]];
+		// If the label starts with an edge modifier from the map, set the edge modifier and remove it from the label. The edge modifier can be 1 or 2 characters long.
+		if (this.edgeModifierMap[edge.label[0]]) {
+			edgeModifier = this.edgeModifierMap[edge.label[0]];
 			text = text.slice(1);
-		} else if (this.vaultModifierMap[edge.label.slice(0, 2)]) {
-			vaultModifier = this.vaultModifierMap[edge.label.slice(0, 2)];
+		} else if (this.edgeModifierMap[edge.label.slice(0, 2)]) {
+			edgeModifier = this.edgeModifierMap[edge.label.slice(0, 2)];
 			text = text.slice(2);
 		}
 
@@ -1158,7 +1161,7 @@ export class CannoliFactory {
 
 		return {
 			text,
-			vaultModifier,
+			edgeModifier,
 			addMessages,
 		};
 	}

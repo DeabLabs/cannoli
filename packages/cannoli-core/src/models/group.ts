@@ -314,7 +314,7 @@ export class CannoliGroup extends CannoliVertex {
 		}
 	}
 
-	validate(): void {
+	validate() {
 		super.validate();
 
 		// Check for exiting and re-entering paths
@@ -322,6 +322,25 @@ export class CannoliGroup extends CannoliVertex {
 
 		// Check overlap
 		this.checkOverlap();
+
+		// If the group is fromForEach
+		if (this.fromForEach) {
+			// Check that it has one and only one incoming edge of type item
+			const itemEdges = this.incomingEdges.filter(
+				(edge) => this.graph[edge].type === EdgeType.Item
+			);
+			if (itemEdges.length !== 1) {
+				this.error(`Parallel groups must have one incoming list arrow.`);
+				return;
+			}
+
+			// Check that there are no item edges crossing into it
+			const crossingInEdges = this.getCrossingAndInternalEdges().crossingInEdges;
+			if (crossingInEdges.length > 0) {
+				this.error(`List edges can't cross into parallel groups. Try putting the node it's coming from inside the parallel group or using a non-list edge and an intermediary node.`);
+				return;
+			}
+		}
 	}
 }
 

@@ -109,10 +109,13 @@ export interface Reference {
 	subpath?: string;
 }
 
-export enum VaultModifier {
+export enum EdgeModifier {
 	Note = "note",
 	Folder = "folder",
 	Property = "property",
+	List = "list",
+	Headers = "headers",
+	Table = "table",
 }
 
 export interface CannoliData {
@@ -137,7 +140,7 @@ export interface CannoliEdgeData extends CannoliData {
 	content?: string | Record<string, string>;
 	messages?: GenericCompletionResponse[];
 	name?: string;
-	vaultModifier?: VaultModifier;
+	edgeModifier?: EdgeModifier;
 	versions?: {
 		header: string | null,
 		subHeader: string | null,
