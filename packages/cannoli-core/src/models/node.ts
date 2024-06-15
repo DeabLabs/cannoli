@@ -425,7 +425,7 @@ export class CannoliNode extends CannoliVertex {
 						fromFormatterNode = true;
 					}
 
-					content = this.renderMergedContent(allVersions, modifier, fromFormatterNode);
+					content = this.renderMergedContent(allVersions, modifier, fromFormatterNode, edgeObject.text);
 				} else {
 					content = edgeObject.content;
 				}
@@ -488,10 +488,10 @@ export class CannoliNode extends CannoliVertex {
 		return resolvedVariableValues;
 	}
 
-	renderMergedContent(allVersions: VersionedContent[], modifier: EdgeModifier | null, fromFormatterNode: boolean): string {
+	renderMergedContent(allVersions: VersionedContent[], modifier: EdgeModifier | null, fromFormatterNode: boolean, edgeName: string): string {
 		const tree = this.transformToTree(allVersions);
 		if (modifier === EdgeModifier.Table) {
-			return this.renderAsMarkdownTable(tree);
+			return this.renderAsMarkdownTable(tree, edgeName);
 		} else if (modifier === EdgeModifier.List) {
 			return this.renderAsMarkdownList(tree);
 		} else if (modifier === EdgeModifier.Headers) {
@@ -596,26 +596,31 @@ export class CannoliNode extends CannoliVertex {
 		return result;
 	}
 
-	renderAsMarkdownTable(tree: TreeNode): string {
+	renderAsMarkdownTable(tree: TreeNode, edgeName: string): string {
 		let table = '';
 
 		if (!tree.children) {
 			return table;
 		}
 
+		// Helper function to replace newlines with <br>
+		const replaceNewlines = (text: string | null | undefined): string => {
+			return (text ?? '').replace(/\n/g, '<br>');
+		};
+
 		// Check if there's only one level
 		const isSingleLevel = !tree.children.some(child => child.children && child.children.length > 0);
 
 		if (isSingleLevel) {
-			table = "| ~ | ~ |\n| --- | --- |\n"
+			table = `| ${replaceNewlines(tree.children[0].header)} | ${edgeName} |\n| --- | --- |\n`
 
 			// Create the table rows
 			tree.children.forEach(child => {
-				table += '| ' + (child.subHeader ?? '') + ' | ' + (child.content ?? '') + ' |\n';
+				table += '| ' + replaceNewlines(child.subHeader) + ' | ' + replaceNewlines(child.content) + ' |\n';
 			});
 		} else {
 			// Extract the headers from the first child
-			const headers = tree.children[0].children?.map(child => child.subHeader) ?? [];
+			const headers = tree.children[0].children?.map(child => replaceNewlines(child.subHeader)) ?? [];
 
 			// Create the table header with an empty cell for the main header
 			table += '| |' + headers.join(' | ') + ' |\n';
@@ -623,9 +628,9 @@ export class CannoliNode extends CannoliVertex {
 
 			// Create the table rows
 			tree.children.forEach(child => {
-				table += '| ' + (child.subHeader ?? '') + ' |';
+				table += '| ' + replaceNewlines(child.subHeader) + ' |';
 				child.children?.forEach(subChild => {
-					const content = subChild.content ?? '';
+					const content = replaceNewlines(subChild.content);
 					table += ` ${content} |`;
 				});
 				table += '\n';
@@ -1841,7 +1846,7 @@ export class ContentNode extends CannoliNode {
 				fromFormatterNode = true;
 			}
 
-			const mergedContent = this.renderMergedContent(allVersions, modifier, fromFormatterNode);
+			const mergedContent = this.renderMergedContent(allVersions, modifier, fromFormatterNode, edgesWithVersions[0].text);
 
 			if (mergedContent) {
 				return mergedContent;
