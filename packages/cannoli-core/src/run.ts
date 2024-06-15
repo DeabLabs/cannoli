@@ -14,6 +14,7 @@ import { FilesystemInterface } from "./filesystem_interface";
 import { CanvasData, Persistor, canvasDataSchema } from "./persistor";
 import { SearchSource } from "./search_source";
 import { Action, LongAction } from "./cannoli";
+import { CannoliGroup } from "./models/group";
 
 export interface HttpTemplate {
 	id: string;
@@ -92,6 +93,8 @@ export class Run {
 	selection: string | null = null;
 
 	usage: Record<string, ModelUsage>;
+
+	forEachTracker: Map<string, number> = new Map();
 
 	constructor({
 		cannoliJSON,
@@ -381,6 +384,8 @@ export class Run {
 	objectCompleted(object: CannoliObject) {
 		this.updateObject(object);
 
+		this.updateOriginalParallelGroupLabel(object, "executing");
+
 		if (this.allObjectsFinished() && !this.stopTime) {
 			this.stopTime = Date.now();
 			this.onFinish({
@@ -411,6 +416,8 @@ export class Run {
 	objectPending(object: CannoliObject) {
 		this.updateObject(object);
 
+		this.updateOriginalParallelGroupLabel(object, "reset");
+
 		// if (this.canvas && object instanceof CallNode) {
 		// 	if (this.settings?.contentIsColorless) {
 		// 		this.canvas.enqueueChangeNodeColor(object.id, "6");
@@ -436,24 +443,7 @@ export class Run {
 	objectVersionComplete(object: CannoliObject, message?: string) {
 		this.updateObject(object);
 
-		// if (this.canvas && !this.isMock) {
-		// 	if (object instanceof RepeatGroup && message) {
-		// 		this.canvas.enqueueChangeNodeText(object.id, `${message}/${object.maxLoops}`);
-		// 	} else if (object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
-		// 		const originalGroupId = object.originalObject;
-
-		// 		if (!this.forEachTracker.has(originalGroupId)) {
-		// 			this.forEachTracker.set(originalGroupId, 1);
-		// 		} else {
-		// 			const current = this.forEachTracker.get(originalGroupId);
-		// 			if (current) {
-		// 				this.forEachTracker.set(originalGroupId, current + 1);
-		// 			}
-		// 		}
-
-		// 		this.canvas.enqueueChangeNodeText(originalGroupId, `${this.forEachTracker.get(originalGroupId)}/${object.maxLoops}`);
-		// 	}
-		// }
+		this.updateOriginalParallelGroupLabel(object);
 	}
 
 	objectError(object: CannoliObject, message?: string) {
@@ -473,6 +463,34 @@ export class Run {
 				object.id,
 				message ?? "Unknown warning"
 			);
+		}
+	}
+
+	updateOriginalParallelGroupLabel(object: CannoliObject, flag?: "reset" | "executing") {
+		if (this.persistor && !this.isMock) {
+			if (object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
+				const originalGroupId = object.originalObject;
+
+				if (flag === "reset") {
+					this.forEachTracker.delete(originalGroupId);
+					this.persistor.editOriginalParallelGroupLabel(originalGroupId, `${object.maxLoops}`);
+					return;
+				} else if (flag === "executing") {
+					this.persistor.editOriginalParallelGroupLabel(originalGroupId, `0/${object.maxLoops}`);
+					return;
+				}
+
+				if (!this.forEachTracker.has(originalGroupId)) {
+					this.forEachTracker.set(originalGroupId, 1);
+				} else {
+					const current = this.forEachTracker.get(originalGroupId);
+					if (current !== undefined) {
+						this.forEachTracker.set(originalGroupId, current + 1);
+					}
+				}
+
+				this.persistor.editOriginalParallelGroupLabel(originalGroupId, `${this.forEachTracker.get(originalGroupId)}/${object.maxLoops}`);
+			}
 		}
 	}
 

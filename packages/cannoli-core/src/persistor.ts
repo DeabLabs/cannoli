@@ -104,6 +104,7 @@ export interface Persistor {
 	editEdge(newEdge: VerifiedCannoliCanvasEdgeData): Promise<void>;
 	addError(nodeId: string, message: string): Promise<void>;
 	addWarning(nodeId: string, message: string): Promise<void>;
+	editOriginalParallelGroupLabel(originalGroupId: string, label: string): Promise<void>;
 }
 
 
