@@ -13,14 +13,14 @@ import {
 import {
 	HttpTemplate,
 	ResponseTextFetcher,
-	Usage,
 	GetDefaultsByProvider,
 	LLMProvider,
 	SupportedProviders,
 	CanvasData,
 	CanvasGroupData,
 	SearchSource,
-	Cannoli as CannoliRunner
+	Cannoli as CannoliRunner,
+	ModelUsage
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -49,7 +49,7 @@ interface CannoliSettings {
 	groqTemperature: number;
 	openaiAPIKey: string;
 	openaiBaseURL: string;
-	costThreshold: number;
+	requestThreshold: number;
 	defaultModel: string;
 	defaultTemperature: number;
 	httpTemplates: HttpTemplate[];
@@ -93,7 +93,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	groqTemperature: 1,
 	openaiAPIKey: "",
 	openaiBaseURL: "",
-	costThreshold: 0.5,
+	requestThreshold: 20,
 	defaultModel: "gpt-3.5-turbo",
 	defaultTemperature: 1,
 	httpTemplates: [],
@@ -860,13 +860,20 @@ export default class Cannoli extends Plugin {
 
 		let shouldContinue = true;
 
-		// If the total price is greater than the threshold, ask the user if they want to continue
-		if (validationStoppage.totalCost > this.settings.costThreshold) {
-			shouldContinue = await this.showRunPriceAlertModal(validationStoppage.usage);
+		let totalCalls = 0;
+
+		// For all models in the usage object, add up the number of calls
+		for (const model in validationStoppage.usage) {
+			totalCalls += validationStoppage.usage[model].numberOfCalls;
+		}
+
+		// If the total number of requests is greater than the threshold, ask the user if they want to continue
+		if (totalCalls > this.settings.requestThreshold) {
+			shouldContinue = await this.showRunUsageAlertModal(validationStoppage.usage);
 		}
 
 		if (!shouldContinue) {
-			new Notice(`Cannoli ${name} was cancelled due to cost.`);
+			new Notice(`Cannoli ${name} was cancelled.`);
 			return;
 		}
 
@@ -886,19 +893,37 @@ export default class Cannoli extends Plugin {
 		delete this.runningCannolis[file.basename];
 
 
-		let costString = "";
+		let usageString = "";
 
-		// If the cost is less than 0.01, don't show the notice
-		if (liveStoppage.totalCost > 0.01) {
-			costString = `\n$${liveStoppage.totalCost.toFixed(2)}`;
+		if (liveStoppage.usage) {
+			let totalCalls = 0;
+			let totalPromptTokens = 0;
+			let totalCompletionTokens = 0;
+
+			for (const model in liveStoppage.usage) {
+				totalCalls += liveStoppage.usage[model].numberOfCalls;
+				totalPromptTokens += liveStoppage.usage[model].promptTokens ?? 0;
+				totalCompletionTokens += liveStoppage.usage[model].completionTokens ?? 0;
+			}
+
+			if (totalCalls > 0) {
+				usageString = `\nAI Requests: ${totalCalls}`;
+			}
+
+			if (totalPromptTokens > 0) {
+				usageString += `\nPrompt Tokens: ${totalPromptTokens}`;
+			}
+			if (totalCompletionTokens > 0) {
+				usageString += `\nCompletion Tokens: ${totalCompletionTokens}`;
+			}
 		}
 
 		if (liveStoppage.reason === "error") {
-			new Notice(`Cannoli ${name} failed with the error:\n\n${liveStoppage.message}${costString}`);
+			new Notice(`Cannoli ${name} failed with the error:\n\n${liveStoppage.message}${usageString}`);
 		} else if (liveStoppage.reason === "complete") {
-			new Notice(`Cannoli complete: ${name}${costString}`);
+			new Notice(`Cannoli complete: ${name}${usageString}`);
 		} else {
-			new Notice(`Cannoli stopped: ${name}${costString}`);
+			new Notice(`Cannoli stopped: ${name}${usageString}`);
 		}
 	};
 
@@ -987,7 +1012,7 @@ export default class Cannoli extends Plugin {
 		return horizontalOverlap && verticalOverlap;
 	}
 
-	showRunPriceAlertModal = (usage: Record<string, Usage>): Promise<boolean> => {
+	showRunUsageAlertModal = (usage: Record<string, ModelUsage>): Promise<boolean> => {
 		return new Promise((resolve) => {
 			const onContinueCallback = () => resolve(true);
 			const onCancelCallback = () => resolve(false);
@@ -995,6 +1020,7 @@ export default class Cannoli extends Plugin {
 			new RunPriceAlertModal(
 				this.app,
 				usage,
+				this.settings.requestThreshold,
 				onContinueCallback,
 				onCancelCallback
 			).open();
@@ -1032,62 +1058,63 @@ export default class Cannoli extends Plugin {
 }
 
 export class RunPriceAlertModal extends Modal {
-	usage: Usage[];
+	usage: Record<string, ModelUsage>;
 	onContinue: () => void;
 	onCancel: () => void;
+	requestThreshold: number;
 
 	constructor(
 		app: App,
-		usage: Record<string, Usage>,
+		usage: Record<string, ModelUsage>,
+		requestThreshold: number,
 		onContinue: () => void,
-		onCancel: () => void
+		onCancel: () => void,
 	) {
 		super(app);
-		this.usage = Object.values(usage);
+		this.usage = usage;
 		this.onContinue = onContinue;
 		this.onCancel = onCancel;
+		this.requestThreshold = requestThreshold;
 	}
 
 	onOpen() {
 		const { contentEl } = this;
 
-		let totalCost = 0;
+		let totalCalls = 0;
+		let totalPromptTokens = 0;
 
-		for (const usageItem of this.usage) {
-			totalCost += usageItem.modelUsage.totalCost;
+		for (const usage of Object.values(this.usage)) {
+			totalCalls += usage.numberOfCalls;
+			totalPromptTokens += usage.promptTokens ?? 0;
 		}
 
-		contentEl.createEl("h1", { text: "Run cost alert" });
+		contentEl.createEl("h1", { text: "Run usage alert" });
 		contentEl.createEl("p", {
-			text: "Check the cost of your run before continuing",
+			text: `This run exceeds the AI requests threshold defined in your settings: ${this.requestThreshold}`,
 		});
 
 		// Convert usage object to array
 
-		this.usage.forEach((usage) => {
-			contentEl.createEl("h2", { text: `Model: ${usage.model.name}` });
+		for (const [model, usage] of Object.entries(this.usage)) {
+			contentEl.createEl("h2", { text: `Model: ${model}` });
 			contentEl
 				.createEl("p", {
-					text: `\t\tEstimated prompt tokens: ${usage.modelUsage.promptTokens}`,
+					text: `\t\tEstimated prompt tokens: ${usage.promptTokens}`,
 				})
 				.addClass("whitespace");
 			contentEl
 				.createEl("p", {
-					text: `\t\tNumber of API calls: ${usage.modelUsage.apiCalls}`,
+					text: `\t\tNumber of AI requests: ${usage.numberOfCalls}`,
 				})
 				.addClass("whitespace");
-			contentEl
-				.createEl("p", {
-					text: `\t\tCost: $${(
-						usage.modelUsage.promptTokens *
-						usage.model.promptTokenPrice
-					).toFixed(2)}`,
-				})
-				.addClass("whitespace");
+		}
+
+		contentEl.createEl("h2", {
+			text: `Total AI requests: ${totalCalls}`,
 		});
 
 		contentEl.createEl("h2", {
-			text: `Total cost: $${totalCost.toFixed(2)}`,
+			text: `Total estimated prompt tokens: ${totalPromptTokens}`,
 		});
 
 		const panel = new Setting(contentEl);
@@ -1513,29 +1540,27 @@ class CannoliSettingTab extends PluginSettingTab {
 						}).inputEl.setAttribute("type", "password")
 				);
 
-			// Cost threshold setting. This is the cost at which the user will be alerted before running a Cannoli
+			// Request threshold setting. This is the number of AI requests at which the user will be alerted before running a Cannoli
 			new Setting(containerEl)
-				.setName("Cost threshold")
+				.setName("AI requests threshold")
 				.setDesc(
-					"If the cannoli you are about to run is estimated to cost more than this amount (USD$), you will be alerted before running it."
+					"If the cannoli you are about to run is estimated to make more than this amount of AI requests, you will be alerted before running it."
 				)
 				.addText((text) =>
 					text
 						.setValue(
-							!isNaN(this.plugin.settings.costThreshold)
-								? this.plugin.settings.costThreshold.toString()
-								: DEFAULT_SETTINGS.costThreshold.toString()
+							Number.isInteger(this.plugin.settings.requestThreshold)
+								? this.plugin.settings.requestThreshold.toString()
+								: DEFAULT_SETTINGS.requestThreshold.toString()
 						)
 						.onChange(async (value) => {
-							// If it's not empty and it's a number, save it
-							if (!isNaN(parseFloat(value))) {
-								this.plugin.settings.costThreshold =
-									parseFloat(value);
+							// If it's not empty and it's an integer, save it
+							if (!isNaN(parseInt(value)) && Number.isInteger(parseInt(value))) {
+								this.plugin.settings.requestThreshold = parseInt(value);
 								await this.plugin.saveSettings();
 							} else {
 								// Otherwise, reset it to the default
-								this.plugin.settings.costThreshold =
-									DEFAULT_SETTINGS.costThreshold;
+								this.plugin.settings.requestThreshold = DEFAULT_SETTINGS.requestThreshold;
 								await this.plugin.saveSettings();
 							}
 						})

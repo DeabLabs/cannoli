@@ -44,28 +44,15 @@ interface Limit {
 
 export interface Stoppage {
 	reason: StoppageReason;
-	usage: Record<string, Usage>;
-	totalCost: number;
+	usage: Record<string, ModelUsage>;
 	results: { [key: string]: string };
 	message?: string; // Additional information, like an error message
 }
 
-export interface Usage {
-	model: Model;
-	modelUsage: ModelUsage;
-}
-
-export interface Model {
-	name: string;
-	promptTokenPrice: number;
-	completionTokenPrice: number;
-}
-
 export interface ModelUsage {
-	promptTokens: number;
-	completionTokens: number;
-	apiCalls: number;
-	totalCost: number;
+	numberOfCalls: number;
+	promptTokens?: number;
+	completionTokens?: number;
 }
 
 export type ChatRole = "user" | "assistant" | "system";
@@ -104,45 +91,7 @@ export class Run {
 	currentNote: string | null = null;
 	selection: string | null = null;
 
-	modelInfo: Record<string, Model> = {
-		"gpt-4-1106-preview": {
-			name: "gpt-4-1106-preview",
-			promptTokenPrice: 0.01 / 1000, // $0.01 per 1K tokens
-			completionTokenPrice: 0.03 / 1000, // $0.03 per 1K tokens
-		},
-		"gpt-4-1106-vision-preview": {
-			name: "gpt-4-1106-vision-preview",
-			promptTokenPrice: 0.01 / 1000, // $0.01 per 1K tokens
-			completionTokenPrice: 0.03 / 1000, // $0.03 per 1K tokens
-		},
-		"gpt-4": {
-			name: "gpt-4",
-			promptTokenPrice: 0.03 / 1000, // $0.03 per 1K tokens
-			completionTokenPrice: 0.06 / 1000, // $0.06 per 1K tokens
-		},
-		"gpt-4-32k": {
-			name: "gpt-4-32k",
-			promptTokenPrice: 0.06 / 1000, // $0.06 per 1K tokens
-			completionTokenPrice: 0.12 / 1000, // $0.12 per 1K tokens
-		},
-		"gpt-3.5-turbo": {
-			name: "gpt-3.5-turbo",
-			promptTokenPrice: 0.001 / 1000, // $0.0010 per 1K tokens
-			completionTokenPrice: 0.002 / 1000, // $0.0020 per 1K tokens
-		},
-		"gpt-3.5-turbo-1106": {
-			name: "gpt-3.5-turbo-1106",
-			promptTokenPrice: 0.001 / 1000, // $0.0010 per 1K tokens
-			completionTokenPrice: 0.002 / 1000, // $0.0020 per 1K tokens
-		},
-		"gpt-3.5-turbo-instruct": {
-			name: "gpt-3.5-turbo-instruct",
-			promptTokenPrice: 0.0015 / 1000, // $0.0015 per 1K tokens
-			completionTokenPrice: 0.002 / 1000, // $0.0020 per 1K tokens
-		},
-	};
-
-	usage: Record<string, Usage>;
+	usage: Record<string, ModelUsage>;
 
 	constructor({
 		cannoliJSON,
@@ -303,10 +252,9 @@ export class Run {
 
 		this.onFinish({
 			reason: "error",
-			usage: this.calculateAllLLMCosts(),
-			totalCost: this.getTotalCost(),
 			message,
 			results: this.getResults(),
+			usage: this.usage,
 		});
 
 		throw new Error(message);
@@ -317,9 +265,8 @@ export class Run {
 
 		this.onFinish({
 			reason: "user",
-			usage: this.calculateAllLLMCosts(),
-			totalCost: this.getTotalCost(),
 			results: this.getResults(),
+			usage: this.usage,
 		});
 	}
 
@@ -438,9 +385,8 @@ export class Run {
 			this.stopTime = Date.now();
 			this.onFinish({
 				reason: "complete",
-				usage: this.calculateAllLLMCosts(),
-				totalCost: this.getTotalCost(),
 				results: this.getResults(),
+				usage: this.usage,
 			});
 		}
 	}
@@ -452,9 +398,8 @@ export class Run {
 			this.stopTime = Date.now();
 			this.onFinish({
 				reason: "complete",
-				usage: this.calculateAllLLMCosts(),
-				totalCost: this.getTotalCost(),
 				results: this.getResults(),
+				usage: this.usage,
 			});
 		}
 	}
@@ -596,17 +541,10 @@ export class Run {
 		request: GenericCompletionParams,
 		verbose?: boolean
 	): Promise<GenericCompletionResponse | Error> {
-		// console.log(`Request: ${JSON.stringify(request, null, 2)}`);
-
 		return this.llmLimit(
 			async (): Promise<GenericCompletionResponse | Error> => {
 				// Only call LLM if we're not mocking
 				if (this.isMock || !this.llm || !this.llm.initialized) {
-					// return {
-					// 	role: "assistant",
-					// 	content: "Mock response",
-					// };
-
 					return this.createMockFunctionResponse(request);
 				}
 
@@ -624,36 +562,19 @@ export class Run {
 						);
 					}
 
-					const responseUsage =
-						Llm.getCompletionResponseUsage(response);
-					if (responseUsage && request.model) {
-						// If the model doesn't exist in modelInfo, add it
-						if (!this.modelInfo[request.model]) {
-							this.modelInfo[request.model] = {
-								name: request.model,
-								promptTokenPrice: 0,
-								completionTokenPrice: 0,
-							};
-						}
+					// const responseUsage =
+					// 	Llm.getCompletionResponseUsage(response);
 
-						const model = this.modelInfo[request.model];
-						if (!this.usage[model.name]) {
-							this.usage[model.name] = {
-								model: model,
-								modelUsage: {
-									promptTokens: 0,
-									completionTokens: 0,
-									apiCalls: 0,
-									totalCost: 0,
-								},
-							};
-						}
+					if (request.model) {
+						const numberOfCalls = this.usage[request.model]?.numberOfCalls ?? 0;
+						// const promptTokens = this.usage[request.model]?.promptTokens ?? 0;
+						// const completionTokens = this.usage[request.model]?.completionTokens ?? 0;
 
-						this.usage[model.name].modelUsage.promptTokens +=
-							responseUsage.prompt_tokens;
-						this.usage[model.name].modelUsage.completionTokens +=
-							responseUsage.completion_tokens;
-						this.usage[model.name].modelUsage.apiCalls += 1;
+						this.usage[request.model] = {
+							numberOfCalls: numberOfCalls + 1,
+							// promptTokens: promptTokens + responseUsage.prompt_tokens,
+							// completionTokens: completionTokens + responseUsage.completion_tokens,
+						};
 					}
 
 					invariant(completion, "No message returned");
@@ -698,39 +619,20 @@ export class Run {
 		}
 
 		// Estimate the tokens using the rule of thumb that 4 characters is 1 token
-		const promptTokens = textMessages.length / 4;
+		const callPromptTokens = textMessages.length / 4;
 
 		if (
-			request.model &&
-			this.llm?.provider === "openai" &&
-			!this.usage[request.model]
+			request.model
+			// this.llm?.provider === "openai"
+			// !this.usage[request.model]
 		) {
-			// Find the right model from this.models
-
-			if (!this.modelInfo[request.model]) {
-				this.modelInfo[request.model] = {
-					name: request.model,
-					promptTokenPrice: 0,
-					completionTokenPrice: 0,
-				};
-			}
-
-			const model = this.modelInfo[request.model];
+			const numberOfCalls = this.usage[request.model]?.numberOfCalls ?? 0;
+			const promptTokens = this.usage[request.model]?.promptTokens ?? 0;
 
 			this.usage[request.model] = {
-				model: model,
-				modelUsage: {
-					promptTokens: 0,
-					completionTokens: 0,
-					apiCalls: 0,
-					totalCost: 0,
-				},
+				numberOfCalls: numberOfCalls + 1,
+				promptTokens: promptTokens + callPromptTokens,
 			};
-		}
-
-		if (request.model && this.usage[request.model]) {
-			this.usage[request.model].modelUsage.promptTokens += promptTokens;
-			this.usage[request.model].modelUsage.apiCalls += 1;
 		}
 
 		let calledFunction = "";
@@ -926,39 +828,6 @@ export class Run {
 				required: ["note"],
 			},
 		};
-	}
-
-	calculateAllLLMCosts(): Record<string, Usage> {
-		for (const usage of Object.values(this.usage)) {
-			usage.modelUsage.totalCost = this.calculateLLMCostForModel(usage);
-		}
-		return this.usage;
-	}
-
-	calculateLLMCostForModel(usage: Usage): number {
-		if (
-			this.llm?.provider === "ollama" ||
-			!usage ||
-			!usage.model ||
-			!usage.modelUsage
-		)
-			return 0;
-
-		const promptCost =
-			usage.model.promptTokenPrice * usage.modelUsage.promptTokens;
-		const completionCost =
-			usage.model.completionTokenPrice *
-			usage.modelUsage.completionTokens;
-		const totalCost = promptCost + completionCost;
-		return totalCost;
-	}
-
-	getTotalCost(): number {
-		let totalCost = 0;
-		for (const usage of Object.values(this.usage)) {
-			totalCost += this.calculateLLMCostForModel(usage);
-		}
-		return totalCost;
 	}
 
 	createHttpTemplate(inputString: string): HttpTemplate {

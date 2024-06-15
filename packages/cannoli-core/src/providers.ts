@@ -131,12 +131,12 @@ export class LLMProvider {
 		this.getDefaultConfigByProvider = initArgs.getDefaultConfigByProvider;
 	};
 
-	static getCompletionResponseUsage = (...args: unknown[]) => ({
-		prompt_tokens: 0,
-		completion_tokens: 0,
-		api_calls: 0,
-		total_cost: 0,
-	});
+	// static getCompletionResponseUsage = (...args: unknown[]) => ({
+	// 	prompt_tokens: 0,
+	// 	completion_tokens: 0,
+	// 	api_calls: 0,
+	// 	total_cost: 0,
+	// });
 
 	getConfig = () => ({ ...this.baseConfig });
 
