@@ -47,6 +47,8 @@ export interface Stoppage {
 	reason: StoppageReason;
 	usage: Record<string, ModelUsage>;
 	results: { [key: string]: string };
+	argNames: string[];
+	resultNames: string[];
 	message?: string; // Additional information, like an error message
 }
 
@@ -250,6 +252,40 @@ export class Run {
 		}
 	}
 
+	getArgNames(): string[] {
+		const argNames: string[] = [];
+
+		const argNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "variable" || node.cannoliData.type === "input");
+
+		invariant(argNodes, "No arg nodes found");
+
+		for (const node of argNodes) {
+			// Check if the first line of the text contains only a bracketed name
+			if (/^\[.*?\]$/.test(node.cannoliData.text.split("\n")[0])) {
+				argNames.push(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+			}
+		}
+
+		return argNames;
+	}
+
+	getResultNames(): string[] {
+		const resultNames: string[] = [];
+
+		const resultNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "variable" || node.cannoliData.type === "output");
+
+		invariant(resultNodes, "No result nodes found");
+
+		for (const node of resultNodes) {
+			// Check if the first line of the text contains only a bracketed name
+			if (/^\[.*?\]$/.test(node.cannoliData.text.split("\n")[0])) {
+				resultNames.push(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+			}
+		}
+
+		return resultNames;
+	}
+
 	error(message: string) {
 		this.stopTime = Date.now();
 
@@ -257,6 +293,8 @@ export class Run {
 			reason: "error",
 			message,
 			results: this.getResults(),
+			argNames: this.getArgNames(),
+			resultNames: this.getResultNames(),
 			usage: this.usage,
 		});
 
@@ -269,6 +307,8 @@ export class Run {
 		this.onFinish({
 			reason: "user",
 			results: this.getResults(),
+			argNames: this.getArgNames(),
+			resultNames: this.getResultNames(),
 			usage: this.usage,
 		});
 	}
@@ -391,6 +431,8 @@ export class Run {
 			this.onFinish({
 				reason: "complete",
 				results: this.getResults(),
+				argNames: this.getArgNames(),
+				resultNames: this.getResultNames(),
 				usage: this.usage,
 			});
 		}
@@ -404,6 +446,8 @@ export class Run {
 			this.onFinish({
 				reason: "complete",
 				results: this.getResults(),
+				argNames: this.getArgNames(),
+				resultNames: this.getResultNames(),
 				usage: this.usage,
 			});
 		}

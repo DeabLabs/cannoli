@@ -125,8 +125,8 @@ export class Cannoli {
         }
 
         // Get the args and results
-        const argNames: string[] = []; // Implement later
-        const resultNames: string[] = []; // Implement later
+        const argNames: string[] = stoppage.argNames;
+        const resultNames: string[] = stoppage.resultNames;
 
         // Build the function
         const cannoliFunction = async (args: Record<string, string>): Promise<Record<string, string>> => {

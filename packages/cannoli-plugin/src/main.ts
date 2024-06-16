@@ -852,7 +852,6 @@ export default class Cannoli extends Plugin {
 		});
 		const validationStoppage = await validationStoppagePromise;
 
-
 		if (validationStoppage.reason === "error") {
 			new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
 			return;
