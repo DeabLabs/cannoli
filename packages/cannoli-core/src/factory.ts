@@ -149,7 +149,7 @@ export class CannoliFactory {
 			if (edge.label && edge.label.includes("\n")) {
 				const lines = edge.label.split("\n");
 				lines.forEach((line) => {
-					const newEdge = this.duplicateObject(edge, `${edge.id}-${line}`) as CannoliCanvasEdgeData;
+					const newEdge = this.duplicateObject(edge, `${edge.id}-${line}`, false) as CannoliCanvasEdgeData;
 					newEdge.label = line;
 					addedEdges.push(newEdge);
 				});
@@ -590,10 +590,12 @@ export class CannoliFactory {
 		data.nodes.push(...duplicateMembers);
 	}
 
-	duplicateObject(data: AllCannoliCanvasNodeData | CannoliCanvasEdgeData, newId: string) {
+	duplicateObject(data: AllCannoliCanvasNodeData | CannoliCanvasEdgeData, newId: string, setOriginalObject: boolean = true) {
 		const duplicate = JSON.parse(JSON.stringify(data));
 		duplicate.id = newId;
-		duplicate.cannoliData.originalObject = data.id;
+		if (setOriginalObject) {
+			duplicate.cannoliData.originalObject = data.id;
+		}
 		return duplicate;
 	}
 
