@@ -1284,7 +1284,13 @@ export class CallNode extends CannoliNode {
 	async execute() {
 		this.executing();
 
-		const request = await this.createLLMRequest();
+		let request: GenericCompletionParams;
+		try {
+			request = await this.createLLMRequest();
+		} catch (error) {
+			this.error(`Error creating LLM request: ${error}`);
+			return;
+		}
 
 		// If the message array is empty, error
 		if (request.messages.length === 0) {

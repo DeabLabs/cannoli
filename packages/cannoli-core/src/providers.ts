@@ -19,6 +19,7 @@ const stringParser = new StringOutputParser();
 export type SupportedProviders = "openai" | "ollama" | "gemini" | "anthropic" | "groq" | "azure_openai";
 
 import { z } from "zod";
+import invariant from "tiny-invariant";
 
 export const GenericFunctionCallSchema = z.object({
 	name: z.string(),
@@ -61,10 +62,10 @@ export const GenericModelConfigSchema = z.object({
 
 export type GenericModelConfig = z.infer<typeof GenericModelConfigSchema>;
 
+export type LLMConfig = (Omit<GenericModelConfig, "provider"> & { provider: SupportedProviders });
+
 type ConstructorArgs = {
-	provider: SupportedProviders;
-	baseConfig?: GenericModelConfig;
-	getDefaultConfigByProvider?: GetDefaultsByProvider;
+	configs: LLMConfig[];
 };
 
 export type GenericCompletionParams = {
@@ -106,7 +107,7 @@ export const makeSampleConfig = (): GenericModelConfig => ({
 	top_k: undefined,
 });
 
-export type GetDefaultsByProvider = (provider: SupportedProviders) => GenericModelConfig;
+export type GetDefaultsByProvider = (provider: SupportedProviders) => GenericModelConfig | undefined;
 
 export type LangchainMessages = ReturnType<typeof LLMProvider.convertMessages>;
 
@@ -129,9 +130,11 @@ export class LLMProvider {
 	}
 
 	init = (initArgs: ConstructorArgs) => {
-		this.provider = initArgs.provider;
-		this.baseConfig = initArgs.baseConfig || {};
-		this.getDefaultConfigByProvider = initArgs.getDefaultConfigByProvider;
+		this.provider = initArgs.configs[0].provider as SupportedProviders;
+		this.baseConfig = initArgs.configs[0];
+		this.getDefaultConfigByProvider = (provider: SupportedProviders) => {
+			return initArgs.configs.find((config) => config.provider === provider);
+		}
 	};
 
 	// static getCompletionResponseUsage = (...args: unknown[]) => ({
@@ -161,7 +164,12 @@ export class LLMProvider {
 	}>) => {
 		let { configOverrides = {}, provider } = args || {};
 		if (!provider) provider = this.provider;
-		configOverrides = { ...this.getDefaultsByProvider(provider), ...removeUndefinedKeys(configOverrides), }
+
+		const providerConfig = this.getDefaultsByProvider(provider);
+
+		invariant(providerConfig.provider, `No provider config found for provider ${provider}`);
+
+		configOverrides = { ...providerConfig, ...removeUndefinedKeys(configOverrides), }
 		return { ...this.baseConfig, ...configOverrides, provider };
 
 	}

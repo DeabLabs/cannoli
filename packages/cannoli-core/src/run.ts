@@ -6,6 +6,8 @@ import {
 	GenericCompletionResponse,
 	GenericFunctionCall,
 	GenericModelConfig,
+	LLMConfig,
+	LLMProvider,
 	LLMProvider as Llm,
 } from "./providers";
 import invariant from "tiny-invariant";
@@ -104,7 +106,7 @@ export class Run {
 		onFinish,
 		persistor,
 		fileSystemInterface,
-		llm,
+		llmConfigs,
 		fetcher,
 		actions,
 		longActions,
@@ -115,7 +117,7 @@ export class Run {
 
 	}: {
 		cannoliJSON: unknown;
-		llm: Llm;
+		llmConfigs: LLMConfig[];
 		fetcher?: ResponseTextFetcher;
 		config?: Record<string, unknown>;
 		args?: Record<string, string>;
@@ -140,7 +142,7 @@ export class Run {
 
 		this.fetcher = fetcher ?? defaultFetcher;
 
-		this.llm = llm ?? null;
+		this.llm = new LLMProvider({ configs: llmConfigs });
 
 		this.config = config ?? null;
 		this.args = args ?? null;

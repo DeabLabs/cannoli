@@ -1,7 +1,7 @@
 import { FilesystemInterface } from "./filesystem_interface";
 import { ResponseTextFetcher, Run, Stoppage } from "./run";
 import { SearchSource } from "./search_source";
-import { LLMProvider } from "./providers";
+import { LLMConfig } from "./providers";
 import { Persistor } from "./persistor";
 
 export type Action = {
@@ -18,7 +18,7 @@ export type LongAction = {
 }
 
 export class Cannoli {
-    private llm: LLMProvider;
+    private llmConfigs: LLMConfig[];
     private fileSystemInterface: FilesystemInterface | undefined;
     private actions: Action[] | undefined;
     private longActions: LongAction[] | undefined;
@@ -27,7 +27,7 @@ export class Cannoli {
     private config: Record<string, unknown> | undefined;
 
     constructor({
-        llm,
+        llmConfigs,
         fileSystemInterface,
         actions,
         longActions,
@@ -35,7 +35,7 @@ export class Cannoli {
         fetcher,
         config,
     }: {
-        llm: LLMProvider;
+        llmConfigs: LLMConfig[];
         fileSystemInterface?: FilesystemInterface;
         actions?: Action[];
         longActions?: LongAction[];
@@ -43,7 +43,7 @@ export class Cannoli {
         fetcher?: ResponseTextFetcher;
         config?: Record<string, unknown>;
     }) {
-        this.llm = llm;
+        this.llmConfigs = llmConfigs;
         this.fileSystemInterface = fileSystemInterface;
         this.actions = actions;
         this.longActions = longActions;
@@ -90,7 +90,7 @@ export class Cannoli {
         });
 
         const run = new Run({
-            llm: this.llm,
+            llmConfigs: this.llmConfigs,
             cannoliJSON: cannoliJSON,
             args: args,
             persistor: persistor,

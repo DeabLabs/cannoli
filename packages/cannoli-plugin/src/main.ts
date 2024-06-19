@@ -13,18 +13,17 @@ import {
 import {
 	HttpTemplate,
 	ResponseTextFetcher,
-	GetDefaultsByProvider,
-	LLMProvider,
 	SupportedProviders,
 	CanvasData,
 	CanvasGroupData,
 	SearchSource,
 	Cannoli as CannoliRunner,
-	ModelUsage
+	ModelUsage,
+	LLMConfig,
+	GenericModelConfig
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
-import invariant from "tiny-invariant";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
 import { SYMBOLS, cannoliValTemplate } from "./val_templates";
@@ -705,7 +704,7 @@ export default class Cannoli extends Plugin {
 		}
 
 		// map cannoli settings to provider config
-		const getConfigByProvider: GetDefaultsByProvider = (p) => {
+		const getConfigByProvider = (p: SupportedProviders): GenericModelConfig => {
 			switch (p) {
 				case "openai":
 					return {
@@ -751,65 +750,11 @@ export default class Cannoli extends Plugin {
 			}
 		}
 
-		// Create an instance of llm
-		let llm: LLMProvider | undefined;
-		switch (this.settings.llmProvider) {
-			case "openai": {
-				const config = getConfigByProvider("openai");
-				llm = new LLMProvider({
-					provider: "openai",
-					baseConfig: config,
-					getDefaultConfigByProvider: getConfigByProvider,
-				});
-				break;
-			}
-			case "azure_openai": {
-				const config = getConfigByProvider("azure_openai");
-				llm = new LLMProvider({
-					provider: "azure_openai",
-					baseConfig: config,
-					getDefaultConfigByProvider: getConfigByProvider,
-				});
-				break;
-			}
-			case "ollama": {
-				const config = getConfigByProvider("ollama");
-				llm = new LLMProvider({
-					provider: "ollama",
-					baseConfig: config,
-					getDefaultConfigByProvider: getConfigByProvider,
-				});
-				break;
-			}
-			case "gemini": {
-				const config = getConfigByProvider("gemini");
-				llm = new LLMProvider({
-					provider: "gemini",
-					baseConfig: config,
-					getDefaultConfigByProvider: getConfigByProvider,
-				});
-				break;
-			}
-			case "anthropic": {
-				const config = getConfigByProvider("anthropic");
-				llm = new LLMProvider({
-					provider: "anthropic",
-					baseConfig: config,
-					getDefaultConfigByProvider: getConfigByProvider,
-				});
-				break;
-			}
-			case "groq": {
-				const config = getConfigByProvider("groq");
-				llm = new LLMProvider({
-					provider: "groq",
-					baseConfig: config,
-					getDefaultConfigByProvider: getConfigByProvider,
-				});
-				break;
-			}
-		}
-		invariant(llm, "LLM provider not found");
+		const providers: SupportedProviders[] = ["openai", "azure_openai", "ollama", "gemini", "anthropic", "groq"];
+		const llmConfigs: LLMConfig[] = providers.map((provider) => ({
+			...getConfigByProvider(provider),
+			provider,
+		}));
 
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
@@ -868,7 +813,7 @@ export default class Cannoli extends Plugin {
 
 		// Make the cannoli runner
 		const runner = new CannoliRunner({
-			llm: llm,
+			llmConfigs: llmConfigs,
 			config: cannoliSettings,
 			fileSystemInterface: vaultInterface,
 			searchSources: searchSources,
