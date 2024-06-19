@@ -1,4 +1,4 @@
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI, AzureChatOpenAI } from "@langchain/openai";
 import { OllamaFunctions } from "langchain/experimental/chat_models/ollama_functions";
 import { ChatOllama } from "@langchain/community/chat_models/ollama";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
@@ -13,10 +13,11 @@ import { AIMessage, ChatMessage, HumanMessage, SystemMessage } from "@langchain/
 
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { messagesWithFnCallPrompts } from "src/fn_calling";
+import { DefaultQuery } from "openai/core";
 
 const stringParser = new StringOutputParser();
 
-export type SupportedProviders = "openai" | "ollama" | "gemini" | "anthropic" | "groq";
+export type SupportedProviders = "openai" | "ollama" | "gemini" | "anthropic" | "groq" | "azure_openai";
 
 export type GenericFunctionCall = {
 	name: string;
@@ -53,6 +54,10 @@ export type GenericModelConfig = {
 	seed?: number;
 	tfs_z?: number;
 	num_predict?: number;
+
+	azureOpenAIApiDeploymentName?: string,
+	azureOpenAIApiInstanceName?: string,
+	azureOpenAIApiVersion?: string,
 };
 
 type ConstructorArgs = {
@@ -104,7 +109,7 @@ export type GetDefaultsByProvider = (provider: SupportedProviders) => GenericMod
 
 export type LangchainMessages = ReturnType<typeof LLMProvider.convertMessages>;
 
-const SUPPORTED_FN_PROVIDERS = ["openai", "ollama"];
+const SUPPORTED_FN_PROVIDERS = ["openai", "ollama", "azure_openai"];
 
 const removeUndefinedKeys = <T extends Record<string, unknown>>(obj: T): T => {
 	Object.keys(obj).forEach((key: keyof T) => obj[key] === undefined && delete obj[key]);
@@ -169,6 +174,9 @@ export class LLMProvider {
 	): BaseChatModel => {
 		const config = this.getMergedConfig(args);
 		const provider = config.provider;
+		const [urlString, queryString] = config.baseURL?.split("?") || [undefined, undefined];
+		const url = urlString || undefined;
+		const query = queryString ? Object.fromEntries(new URLSearchParams(queryString).entries()) : undefined
 		switch (provider) {
 			case "openai":
 				return new ChatOpenAI({
@@ -176,7 +184,22 @@ export class LLMProvider {
 					model: config.model,
 					temperature: config.temperature,
 					configuration: {
-						baseURL: config.baseURL,
+						baseURL: url,
+						defaultQuery: query
+					}
+				});
+			case "azure_openai":
+				return new AzureChatOpenAI({
+					temperature: config.temperature,
+					model: config.model,
+					apiKey: config.apiKey,
+					azureOpenAIApiDeploymentName: config.azureOpenAIApiDeploymentName,
+					azureOpenAIApiInstanceName: config.azureOpenAIApiInstanceName,
+					azureOpenAIApiVersion: config.azureOpenAIApiVersion,
+					azureOpenAIBasePath: url,
+					configuration: {
+						baseURL: url,
+						defaultQuery: query,
 					}
 				});
 			case "ollama":
