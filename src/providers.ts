@@ -1,6 +1,6 @@
 import { ChatOpenAI, AzureChatOpenAI } from "@langchain/openai";
-import { OllamaFunctions } from "langchain/experimental/chat_models/ollama_functions";
 import { ChatOllama } from "@langchain/community/chat_models/ollama";
+import { OllamaFunctions } from "@langchain/community/experimental/chat_models/ollama_functions";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { ChatGroq } from "@langchain/groq";
@@ -13,7 +13,6 @@ import { AIMessage, ChatMessage, HumanMessage, SystemMessage } from "@langchain/
 
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { messagesWithFnCallPrompts } from "src/fn_calling";
-import { DefaultQuery } from "openai/core";
 
 const stringParser = new StringOutputParser();
 
@@ -193,10 +192,12 @@ export class LLMProvider {
 					temperature: config.temperature,
 					model: config.model,
 					apiKey: config.apiKey,
+					azureOpenAIApiKey: config.apiKey,
 					azureOpenAIApiDeploymentName: config.azureOpenAIApiDeploymentName,
 					azureOpenAIApiInstanceName: config.azureOpenAIApiInstanceName,
 					azureOpenAIApiVersion: config.azureOpenAIApiVersion,
 					azureOpenAIBasePath: url,
+					maxRetries: 3,
 					configuration: {
 						baseURL: url,
 						defaultQuery: query,
