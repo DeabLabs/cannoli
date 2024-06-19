@@ -38,6 +38,13 @@ interface CannoliSettings {
 	ollamaBaseUrl: string;
 	ollamaModel: string;
 	ollamaTemperature: number;
+	azureAPIKey: string;
+	azureModel: string;
+	azureTemperature: number;
+	azureOpenAIApiDeploymentName: string;
+	azureOpenAIApiInstanceName: string;
+	azureOpenAIApiVersion: string;
+	azureBaseURL: string;
 	geminiModel: string;
 	geminiAPIKey: string;
 	geminiTemperature: number;
@@ -82,6 +89,13 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	ollamaBaseUrl: "http://127.0.0.1:11434",
 	ollamaModel: "llama2",
 	ollamaTemperature: 1,
+	azureModel: "",
+	azureAPIKey: "",
+	azureTemperature: 1,
+	azureOpenAIApiDeploymentName: "",
+	azureOpenAIApiInstanceName: "",
+	azureOpenAIApiVersion: "",
+	azureBaseURL: "",
 	geminiModel: "gemini-1.0-pro-latest",
 	geminiAPIKey: "",
 	geminiTemperature: 1,
@@ -700,6 +714,16 @@ export default class Cannoli extends Plugin {
 						temperature: this.settings.defaultTemperature,
 						baseURL: this.settings.openaiBaseURL,
 					};
+				case "azure_openai":
+					return {
+						apiKey: this.settings.azureAPIKey,
+						model: this.settings.azureModel,
+						temperature: this.settings.azureTemperature,
+						azureOpenAIApiDeploymentName: this.settings.azureOpenAIApiDeploymentName,
+						azureOpenAIApiInstanceName: this.settings.azureOpenAIApiInstanceName,
+						azureOpenAIApiVersion: this.settings.azureOpenAIApiVersion,
+						baseURL: this.settings.azureBaseURL,
+					};
 				case "ollama":
 					return {
 						baseURL: this.settings.ollamaBaseUrl,
@@ -734,6 +758,15 @@ export default class Cannoli extends Plugin {
 				const config = getConfigByProvider("openai");
 				llm = new LLMProvider({
 					provider: "openai",
+					baseConfig: config,
+					getDefaultConfigByProvider: getConfigByProvider,
+				});
+				break;
+			}
+			case "azure_openai": {
+				const config = getConfigByProvider("azure_openai");
+				llm = new LLMProvider({
+					provider: "azure_openai",
 					baseConfig: config,
 					getDefaultConfigByProvider: getConfigByProvider,
 				});
@@ -1505,6 +1538,7 @@ class CannoliSettingTab extends PluginSettingTab {
 			)
 			.addDropdown((dropdown) => {
 				dropdown.addOption("openai", "OpenAI");
+				dropdown.addOption("azure_openai", "Azure OpenAI");
 				dropdown.addOption("ollama", "Ollama");
 				dropdown.addOption("gemini", "Gemini");
 				dropdown.addOption("anthropic", "Anthropic");
@@ -1619,6 +1653,127 @@ class CannoliSettingTab extends PluginSettingTab {
 						.setPlaceholder("https://api.openai.com/v1/")
 						.onChange(async (value) => {
 							this.plugin.settings.openaiBaseURL = value;
+							await this.plugin.saveSettings();
+						})
+				);
+		} else if (this.plugin.settings.llmProvider === "azure_openai") {
+			// azure openai api key setting
+			new Setting(containerEl)
+				.setName("Azure OpenAI API key")
+				.setDesc(
+					"This key will be used to make all Azure OpenAI LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.azureAPIKey)
+						.setPlaceholder("sk-...")
+						.onChange(async (value) => {
+							this.plugin.settings.azureAPIKey = value;
+							await this.plugin.saveSettings();
+						}).inputEl.setAttribute("type", "password")
+				);
+			// azure openai model setting
+			new Setting(containerEl)
+				.setName("Azure OpenAI model")
+				.setDesc(
+					"This model will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.azureModel)
+						.onChange(async (value) => {
+							this.plugin.settings.azureModel = value;
+							await this.plugin.saveSettings();
+						})
+				);
+			// Default LLM temperature setting
+			new Setting(containerEl)
+				.setName("LLM temperature")
+				.setDesc(
+					"This temperature will be used for all LLM nodes unless overridden with a config arrow."
+				)
+				.addText((text) =>
+					text
+						.setValue(
+							!isNaN(this.plugin.settings.azureTemperature) &&
+								this.plugin.settings.azureTemperature
+								? this.plugin.settings.azureTemperature.toString()
+								: DEFAULT_SETTINGS.azureTemperature.toString()
+						)
+						.onChange(async (value) => {
+							// If it's not empty and it's a number, save it
+							if (!isNaN(parseFloat(value))) {
+								this.plugin.settings.azureTemperature =
+									parseFloat(value);
+								await this.plugin.saveSettings();
+							} else {
+								// Otherwise, reset it to the default
+								this.plugin.settings.azureTemperature =
+									DEFAULT_SETTINGS.azureTemperature;
+								await this.plugin.saveSettings();
+							}
+						})
+				);
+			// azure openai api deployment name setting
+			new Setting(containerEl)
+				.setName("Azure OpenAI API deployment name")
+				.setDesc(
+					"This deployment will be used to make all Azure OpenAI LLM calls."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.azureOpenAIApiDeploymentName)
+						.setPlaceholder("deployment-name")
+						.onChange(async (value) => {
+							this.plugin.settings.azureOpenAIApiDeploymentName = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// azure openai api instance name setting
+			new Setting(containerEl)
+				.setName("Azure OpenAI API instance name")
+				.setDesc(
+					"This instance will be used to make all Azure OpenAI LLM calls."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.azureOpenAIApiInstanceName)
+						.setPlaceholder("instance-name")
+						.onChange(async (value) => {
+							this.plugin.settings.azureOpenAIApiInstanceName = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// azure openai api version setting
+			new Setting(containerEl)
+				.setName("Azure OpenAI API version")
+				.setDesc(
+					"This version will be used to make all Azure OpenAI LLM calls. Be aware that complex cannolis, can be expensive to run."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.azureOpenAIApiVersion)
+						.setPlaceholder("xxxx-xx-xx")
+						.onChange(async (value) => {
+							this.plugin.settings.azureOpenAIApiVersion = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
+			// azure base url setting
+			new Setting(containerEl)
+				.setName("Azure base url")
+				.setDesc(
+					"This url will be used to make azure openai llm calls against a different endpoint. This is useful for switching to an azure enterprise endpoint, or, some other openai compatible service."
+				)
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.azureBaseURL)
+						.setPlaceholder("https://api.openai.com/v1/")
+						.onChange(async (value) => {
+							this.plugin.settings.azureBaseURL = value;
 							await this.plugin.saveSettings();
 						})
 				);

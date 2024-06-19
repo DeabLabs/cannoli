@@ -1,5 +1,5 @@
-import { ChatOpenAI } from "@langchain/openai";
-import { OllamaFunctions } from "langchain/experimental/chat_models/ollama_functions";
+import { AzureChatOpenAI, ChatOpenAI } from "@langchain/openai";
+import { OllamaFunctions } from "@langchain/community/experimental/chat_models/ollama_functions";
 import { ChatOllama } from "@langchain/community/chat_models/ollama";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -16,7 +16,7 @@ import { messagesWithFnCallPrompts } from "./fn_calling";
 
 const stringParser = new StringOutputParser();
 
-export type SupportedProviders = "openai" | "ollama" | "gemini" | "anthropic" | "groq";
+export type SupportedProviders = "openai" | "ollama" | "gemini" | "anthropic" | "groq" | "azure_openai";
 
 import { z } from "zod";
 
@@ -54,6 +54,9 @@ export const GenericModelConfigSchema = z.object({
 	seed: z.coerce.number().optional(),
 	tfs_z: z.coerce.number().optional(),
 	num_predict: z.coerce.number().optional(),
+	azureOpenAIApiDeploymentName: z.string().optional(),
+	azureOpenAIApiInstanceName: z.string().optional(),
+	azureOpenAIApiVersion: z.string().optional(),
 });
 
 export type GenericModelConfig = z.infer<typeof GenericModelConfigSchema>;
@@ -107,7 +110,7 @@ export type GetDefaultsByProvider = (provider: SupportedProviders) => GenericMod
 
 export type LangchainMessages = ReturnType<typeof LLMProvider.convertMessages>;
 
-const SUPPORTED_FN_PROVIDERS = ["openai", "ollama"];
+const SUPPORTED_FN_PROVIDERS = ["openai", "ollama", "azure_openai"];
 
 const removeUndefinedKeys = <T extends Record<string, unknown>>(obj: T): T => {
 	Object.keys(obj).forEach((key: keyof T) => obj[key] === undefined && delete obj[key]);
@@ -172,27 +175,49 @@ export class LLMProvider {
 	): BaseChatModel => {
 		const config = this.getMergedConfig(args);
 		const provider = config.provider;
+		const [urlString, queryString] = config.baseURL?.split("?") || [undefined, undefined];
+		const url = urlString || undefined;
+		const query = queryString ? Object.fromEntries(new URLSearchParams(queryString).entries()) : undefined
+
 		switch (provider) {
 			case "openai":
 				return new ChatOpenAI({
 					apiKey: config.apiKey,
 					model: config.model,
 					temperature: config.temperature,
+					maxRetries: 3,
 					configuration: {
-						baseURL: config.baseURL,
+						baseURL: url,
+						defaultQuery: query
+					}
+				});
+			case "azure_openai":
+				return new AzureChatOpenAI({
+					temperature: config.temperature,
+					model: config.model,
+					apiKey: config.apiKey,
+					azureOpenAIApiKey: config.apiKey,
+					azureOpenAIApiDeploymentName: config.azureOpenAIApiDeploymentName,
+					azureOpenAIApiInstanceName: config.azureOpenAIApiInstanceName,
+					azureOpenAIApiVersion: config.azureOpenAIApiVersion,
+					azureOpenAIBasePath: url,
+					maxRetries: 3,
+					configuration: {
+						baseURL: url,
+						defaultQuery: query,
 					}
 				});
 			case "ollama":
 				if (args?.hasFunctionCall) {
 					return new OllamaFunctions({
-						baseUrl: config.baseURL,
+						baseUrl: url,
 						model: config.model,
 						temperature: config.temperature,
 					});
 				}
 
 				return new ChatOllama({
-					baseUrl: config.baseURL,
+					baseUrl: url,
 					model: config.model,
 					temperature: config.temperature,
 				});
