@@ -23,6 +23,7 @@ import {
 	GenericFunctionCall,
 	GenericModelConfig,
 	GenericModelConfigSchema,
+	ImageReference,
 	SupportedProviders,
 } from "../providers";
 import invariant from "tiny-invariant";
@@ -1395,6 +1396,21 @@ export class CallNode extends CannoliNode {
 		this.completed();
 	}
 
+	extractImages(message: GenericCompletionResponse, index: number): ImageReference[] {
+		const imageReferences: ImageReference[] = [];
+		const imageRegex = /!\[.*?\]\((.*?)\)/g;
+		let match;
+
+		while ((match = imageRegex.exec(message.content)) !== null) {
+			imageReferences.push({
+				url: match[1],
+				messageIndex: index,
+			});
+		}
+
+		return imageReferences;
+	}
+
 	async createLLMRequest(): Promise<GenericCompletionParams> {
 		const overrides = this.getConfig(GenericModelConfigSchema) as GenericModelConfig;
 		const config = this.run.llm?.getMergedConfig({
@@ -1414,6 +1430,12 @@ export class CallNode extends CannoliNode {
 			messages.push(newMessage);
 		}
 
+		const imageReferences: ImageReference[] = [];
+
+		messages.forEach((message, index) => {
+			imageReferences.push(...this.extractImages(message, index));
+		});
+
 		const functions = this.getFunctions(messages);
 
 		const function_call =
@@ -1423,6 +1445,7 @@ export class CallNode extends CannoliNode {
 
 		return {
 			messages: messages,
+			imageReferences: imageReferences,
 			...config,
 			functions:
 				functions && functions.length > 0 ? functions : undefined,

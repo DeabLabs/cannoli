@@ -9,7 +9,7 @@ import {
 	ChatCompletionAssistantMessageParam,
 	ChatCompletionMessageParam,
 } from "openai/resources";
-import { AIMessage, ChatMessage, HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { AIMessage, ChatMessage, HumanMessage, MessageContentImageUrl, SystemMessage } from "@langchain/core/messages";
 
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { messagesWithFnCallPrompts } from "./fn_calling";
@@ -70,6 +70,7 @@ type ConstructorArgs = {
 
 export type GenericCompletionParams = {
 	messages: GenericCompletionResponse[];
+	imageReferences?: ImageReference[];
 } & GenericModelConfig;
 
 export type GenericCompletionResponse = {
@@ -110,6 +111,11 @@ export const makeSampleConfig = (): GenericModelConfig => ({
 export type GetDefaultsByProvider = (provider: SupportedProviders) => GenericModelConfig | undefined;
 
 export type LangchainMessages = ReturnType<typeof LLMProvider.convertMessages>;
+
+export type ImageReference = {
+	url: string;
+	messageIndex: number;
+}
 
 const SUPPORTED_FN_PROVIDERS = ["openai", "ollama", "azure_openai"];
 
@@ -256,9 +262,10 @@ export class LLMProvider {
 	};
 
 	static convertMessages = (
-		messages: ChatCompletionMessageParam[] | GenericCompletionResponse[]
+		messages: ChatCompletionMessageParam[] | GenericCompletionResponse[],
+		imageReferences: ImageReference[] = []
 	) => {
-		return messages.map((m) => {
+		return messages.map((m, i) => {
 			if ("function_call" in m) {
 				return new AIMessage({
 					// name: m.function_call?.name ?? "",
@@ -266,8 +273,15 @@ export class LLMProvider {
 				})
 			}
 
+			const relevantImages: MessageContentImageUrl[] = imageReferences.filter((img) => img.messageIndex === i).map(img => {
+				return {
+					type: "image_url",
+					image_url: { url: img.url },
+				}
+			});
+
 			return m.role === "user"
-				? new HumanMessage({ content: m.content })
+				? new HumanMessage({ content: relevantImages.length ? [{ type: "text", text: m.content }, ...relevantImages] : m.content })
 				: m.role === "assistant"
 					? new AIMessage({ content: m.content ?? "" })
 					: m.role === "system" ? new SystemMessage({
@@ -288,6 +302,7 @@ export class LLMProvider {
 
 	getCompletion = async ({
 		messages,
+		imageReferences,
 		...configOverrides
 	}: GenericCompletionParams): Promise<GenericCompletionResponse> => {
 		const hasFunctionCall = !!configOverrides.functions && !!configOverrides.function_call;
@@ -298,7 +313,7 @@ export class LLMProvider {
 			hasFunctionCall,
 		});
 
-		const convertedMessages = LLMProvider.convertMessages(messages);
+		const convertedMessages = LLMProvider.convertMessages(messages, imageReferences);
 
 		if (configOverrides.functions && configOverrides.function_call) {
 			return await this.fn_call({
