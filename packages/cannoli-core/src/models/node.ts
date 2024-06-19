@@ -123,6 +123,12 @@ export class CannoliNode extends CannoliVertex {
 
 				let subpath;
 
+				// Image extensions
+				const imageExtensions = [".jpg", ".png", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg", ".ico", ".jfif", ".avif"];
+				if (imageExtensions.some(ext => noteName.endsWith(ext))) {
+					continue;
+				}
+
 				// If there's a pipe, split and use the first part as the note name
 				if (noteName.includes("|")) {
 					noteName = noteName.split("|")[0];
@@ -1396,16 +1402,42 @@ export class CallNode extends CannoliNode {
 		this.completed();
 	}
 
-	extractImages(message: GenericCompletionResponse, index: number): ImageReference[] {
+	async extractImages(message: GenericCompletionResponse, index: number): Promise<ImageReference[]> {
 		const imageReferences: ImageReference[] = [];
-		const imageRegex = /!\[.*?\]\((.*?)\)/g;
+		const markdownImageRegex = /!\[.*?\]\((.*?)\)/g;
 		let match;
 
-		while ((match = imageRegex.exec(message.content)) !== null) {
+		while ((match = markdownImageRegex.exec(message.content)) !== null) {
 			imageReferences.push({
 				url: match[1],
 				messageIndex: index,
 			});
+		}
+
+		if (this.run.fileSystemInterface) {
+			const imageExtensions = [".jpg", ".png", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg", ".ico", ".jfif", ".avif"];
+			// should match instances like ![[image.jpg]]
+			const fileImageRegex = new RegExp(`!\\[\\[([^\\]]+(${imageExtensions.join("|")}))\\]\\]`, "g");
+			while ((match = fileImageRegex.exec(message.content)) !== null) {
+				// "image.jpg"
+				const fileName = match[1];
+
+				// get file somehow from the filename
+				const file = await this.run.fileSystemInterface.getFile(fileName, this.run.isMock);
+
+				if (!file) {
+					continue;
+				}
+
+				// turn file into base64
+				let base64 = Buffer.from(file).toString('base64');
+				base64 = `data:image/${fileName.split('.').pop()};base64,${base64}`;
+
+				imageReferences.push({
+					url: base64,
+					messageIndex: index,
+				});
+			}
 		}
 
 		return imageReferences;
@@ -1430,11 +1462,9 @@ export class CallNode extends CannoliNode {
 			messages.push(newMessage);
 		}
 
-		const imageReferences: ImageReference[] = [];
-
-		messages.forEach((message, index) => {
-			imageReferences.push(...this.extractImages(message, index));
-		});
+		const imageReferences = await Promise.all(messages.map(async (message, index) => {
+			return await this.extractImages(message, index);
+		})).then(ir => ir.flat());
 
 		const functions = this.getFunctions(messages);
 

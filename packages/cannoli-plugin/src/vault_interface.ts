@@ -110,6 +110,21 @@ export class VaultInterface implements FilesystemInterface {
 		return;
 	}
 
+	async getFile(
+		fileName: string,
+	): Promise<ArrayBuffer | null> {
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			fileName,
+			""
+		);
+
+		if (!file) {
+			return null;
+		}
+
+		return await this.cannoli.app.vault.readBinary(file);
+	}
+
 	async getNote(
 		reference: Reference,
 		isMock: boolean,
@@ -216,6 +231,12 @@ export class VaultInterface implements FilesystemInterface {
 					.replace("]]", "");
 
 				let subpath;
+
+				// Image extensions
+				const imageExtensions = [".jpg", ".png", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg", ".ico", ".jfif", ".avif"];
+				if (imageExtensions.some(ext => noteName.endsWith(ext))) {
+					continue;
+				}
 
 				// If there's a pipe, split and use the first part as the note name
 				if (noteName.includes("|")) {

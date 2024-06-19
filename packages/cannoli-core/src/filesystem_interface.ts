@@ -19,6 +19,11 @@ export interface FilesystemInterface {
         recursionCount?: number
     ): Promise<string | null>;
 
+    getFile(
+        fileName: string,
+        isMock: boolean,
+    ): Promise<ArrayBuffer | null>;
+
 
     replaceDataviewQueries(content: string, isMock: boolean): Promise<string>;
 
