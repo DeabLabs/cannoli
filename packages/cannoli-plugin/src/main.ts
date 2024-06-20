@@ -16,7 +16,6 @@ import {
 	SupportedProviders,
 	CanvasData,
 	CanvasGroupData,
-	SearchSource,
 	Cannoli as CannoliRunner,
 	ModelUsage,
 	LLMConfig,
@@ -29,9 +28,6 @@ import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
 import { SYMBOLS, cannoliValTemplate } from "./val_templates";
 import CannoliDiscordBotClient from "./discord_bot_client";
-import { ExaSearchSource } from "./exa_search_source";
-import { SmartConnectionsSearchSource } from "./smart_connections_search_source";
-import { DataviewSearchSource } from "./dataview_search_source";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -800,18 +796,6 @@ export default class Cannoli extends Plugin {
 
 		const vaultInterface = new VaultInterface(this, fetcher);
 
-		const searchSources: SearchSource[] = [
-			new ExaSearchSource(this.settings.exaAPIKey, this.settings.exaDefaultLimit),
-			new SmartConnectionsSearchSource(vaultInterface),
-			new DataviewSearchSource(vaultInterface)
-		];
-
-		// Make sure the default search source is first in the array
-		const defaultSearchSource = searchSources.find(source => source.name === this.settings.defaultSearchSource);
-		if (defaultSearchSource) {
-			searchSources.unshift(defaultSearchSource);
-		}
-
 		const dalleAction: Action = {
 			name: "dalle",
 			function: async (prompt: string, model: string = "dall-e-3", size: string = "1024x1024") => {
@@ -854,6 +838,181 @@ export default class Cannoli extends Plugin {
 			}
 		};
 
+		const dataviewAction: Action = {
+			name: "dataview",
+			function: async (query: string, limit: number = 50, extract: boolean = true, includeName: boolean = true, includeProperties: boolean = true, includeLink: boolean = true): Promise<string[] | Error> => {
+				try {
+					// If the content is wrapped in a code-block, with or without the "dataview" language identifier, remove it
+					if (query.startsWith("```dataview\n") || query.startsWith("```\n")) {
+						// Remove the first line (code block start) and the last line (code block end)
+						query = query.split('\n').slice(1, -1).join('\n');
+					}
+
+					query = query.trim();
+
+					const results = await vaultInterface.queryDataviewList(query);
+					if (results instanceof Error) {
+						return results;
+					}
+
+					if (results.length > limit) {
+						results.length = limit;
+					}
+
+					if (!extract) {
+						return results;
+					}
+
+					const noteContents = await vaultInterface.extractNoteContents(
+						results,
+						includeName,
+						includeProperties,
+						includeLink,
+						false
+					);
+
+					return noteContents;
+				} catch (error) {
+					return new Error(`Search failed: ${error.message}`);
+				}
+			},
+			argInfo: {
+				query: {
+					category: "arg",
+				},
+				limit: {
+					category: "config",
+					type: "number",
+				},
+				extract: {
+					category: "config",
+					type: "boolean",
+				},
+				includeName: {
+					category: "config",
+					type: "boolean",
+				},
+				includeProperties: {
+					category: "config",
+					type: "boolean",
+				},
+				includeLink: {
+					category: "config",
+					type: "boolean",
+				},
+			}
+		}
+
+		const smartConnectionsAction: Action = {
+			name: "smart-connections",
+			function: async (query: string, limit: number = 10, extract: boolean = true, includeName: boolean = true, includeProperties: boolean = true, includeLink: boolean = true): Promise<string[] | Error> => {
+				try {
+					// If the content is wrapped in a code-block, with or without the "smart-connections" language identifier, remove it
+					if (query.startsWith("```smart-connections\n") || query.startsWith("```\n")) {
+						// Remove the first line (code block start) and the last line (code block end)
+						query = query.split('\n').slice(1, -1).join('\n');
+					}
+
+					query = query.trim();
+
+					const noteLinks = await vaultInterface.querySmartConnections(query, limit);
+					if (noteLinks instanceof Error) {
+						return noteLinks;
+					}
+
+					if (!extract) {
+						return noteLinks;
+					}
+
+					const noteContents = await vaultInterface.extractNoteContents(
+						noteLinks,
+						includeName,
+						includeProperties,
+						includeLink,
+						false
+					);
+
+					return noteContents;
+				} catch (error) {
+					return new Error(`Search failed: ${error.message}`);
+				}
+			},
+			argInfo: {
+				query: {
+					category: "arg",
+				},
+				limit: {
+					category: "config",
+					type: "number",
+				},
+				extract: {
+					category: "config",
+					type: "boolean",
+				},
+				includeName: {
+					category: "config",
+					type: "boolean",
+				},
+				includeProperties: {
+					category: "config",
+					type: "boolean",
+				},
+				includeLink: {
+					category: "config",
+					type: "boolean",
+				},
+			}
+		}
+
+		const exaSearchAction: Action = {
+			name: "exa",
+			function: async (query: string, limit: number = 10): Promise<string[] | Error> => {
+				try {
+					const searchResponse = await requestUrl({
+						url: `https://api.exa.ai/search`,
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"x-api-key": this.settings.exaAPIKey,
+						},
+						body: JSON.stringify({ query, numResults: limit, useAutoprompt: true }),
+					});
+
+					const searchResults = await searchResponse.json;
+					const ids = searchResults.results.map((result: { id: string }) => result.id);
+
+					const contentResponse = await requestUrl({
+						url: `https://api.exa.ai/contents`,
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"x-api-key": this.settings.exaAPIKey,
+						},
+						body: JSON.stringify({ ids }),
+					});
+
+					const contents = await contentResponse.json;
+					const markdown = contents.results.map((result: { id: string, url: string, title: string, author: string, text: string }) => {
+						const authorField = result.author ? `**Author:** ${result.author}\n\n` : '';
+						return `# ${result.title}\n[${result.url}](${result.url})\n${authorField}${result.text}`;
+					});
+
+					return markdown;
+				} catch (error) {
+					return new Error(`Search failed: ${error.message}`);
+				}
+			},
+			argInfo: {
+				query: {
+					category: "arg",
+					type: "string",
+				},
+				limit: {
+					category: "config",
+					type: "number",
+				},
+			},
+		};
 
 		// Make the cannoli runner
 		const runner = new CannoliRunner({
@@ -861,9 +1020,11 @@ export default class Cannoli extends Plugin {
 			config: cannoliSettings,
 			fileSystemInterface: vaultInterface,
 			actions: [
-				...(this.settings.openaiAPIKey ? [dalleAction] : [])
+				...(this.settings.openaiAPIKey ? [dalleAction] : []),
+				...(this.settings.exaAPIKey ? [exaSearchAction] : []),
+				dataviewAction,
+				smartConnectionsAction
 			],
-			searchSources: searchSources,
 			fetcher: fetcher,
 		});
 

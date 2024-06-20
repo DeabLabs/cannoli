@@ -719,6 +719,35 @@ export class CannoliNode extends CannoliVertex {
 		return finalVariables;
 	}
 
+	private parseContent(content: string, path: never): string {
+		let contentObject;
+
+		// Try to parse the content as JSON
+		try {
+			contentObject = JSON.parse(content as string);
+		} catch (e) {
+			// If parsing fails, return the original content
+			return content;
+		}
+
+		// If we parsed the content as JSON and it's not an array, use the parsed object
+		if (contentObject && !Array.isArray(contentObject)) {
+			// Get the value from the parsed text
+			const value = pathOr(contentObject, path, content);
+
+			// If the value is a string, return it
+			if (typeof value === "string") {
+				return value;
+			} else {
+				// Otherwise, return the stringified value
+				return JSON.stringify(value, null, 2);
+			}
+		}
+
+		// If we didn't parse the content as JSON, return the original content
+		return content;
+	}
+
 	loadOutgoingEdges(content: string, request?: GenericCompletionParams) {
 		let itemIndex = 0;
 		let listItems: string[] = [];
@@ -727,25 +756,7 @@ export class CannoliNode extends CannoliVertex {
 			if (this.type === ContentNodeType.Http) {
 				// Parse the text of the edge with remeda
 				const path = stringToPath(this.graph[this.outgoingEdges.find(edge => this.graph[edge].type === EdgeType.Item)!].text);
-
-				let contentObject;
-
-				// Try to parse the content as JSON
-				try {
-					contentObject = JSON.parse(content as string);
-				} catch (e) {
-					// If parsing fails, continue with markdown list parsing
-				}
-
-				// If we parsed the content as JSON, use the parsed object
-				if (contentObject) {
-					// Get the value from the parsed text
-					const value = pathOr(contentObject, path, content);
-					listItems = this.getListArrayFromContent(JSON.stringify(value, null, 2));
-				} else {
-					// If we didn't parse the content as JSON, use the original content
-					listItems = this.getListArrayFromContent(content);
-				}
+				listItems = this.getListArrayFromContent(this.parseContent(content, path));
 			} else {
 				listItems = this.getListArrayFromContent(content);
 			}
@@ -759,34 +770,8 @@ export class CannoliNode extends CannoliVertex {
 			if (this.type === ContentNodeType.Http) {
 				// Parse the text of the edge with remeda
 				const path = stringToPath(edgeObject.text);
-
-				let contentObject;
-
-				// Try to parse the content as JSON
-				try {
-					contentObject = JSON.parse(content as string);
-				} catch (e) {
-					// If parsing fails, continue with markdown list parsing
-				}
-
-				// If we parsed the content as JSON, use the parsed object
-				if (contentObject) {
-
-					// Get the value from the parsed text
-					const value = pathOr(contentObject, path, content);
-
-					// If the value is a string, just set content to it
-					if (typeof value === "string") {
-						contentToLoad = value;
-					} else {
-						contentToLoad = JSON.stringify(value, null, 2);
-					}
-				} else {
-					// If we didn't parse the content as JSON, use the original content
-					contentToLoad = content;
-				}
+				contentToLoad = this.parseContent(content, path);
 			}
-
 
 			if (edgeObject instanceof CannoliEdge && !(edgeObject instanceof ChatResponseEdge) && edgeObject.type !== EdgeType.Item) {
 				edgeObject.load({
@@ -3094,7 +3079,6 @@ export class HttpNode extends ContentNode {
 }
 
 const SearchConfigSchema = z.object({
-	source: z.string().optional(),
 	limit: z.coerce.number().optional(),
 }).passthrough();
 
@@ -3119,20 +3103,14 @@ export class SearchNode extends ContentNode {
 		const content = await this.processReferences([], true);
 
 		if (this.run.isMock) {
-			this.loadOutgoingEdges("Mock response");
+			this.loadOutgoingEdges("[Mock response]");
 			this.completed();
-			return;
-		}
-
-		const searchSource = this.run.searchSources?.find((searchSource) => searchSource.name === config.source);
-		if (!searchSource) {
-			this.error(`Search source ${config.source} not found.`);
 			return;
 		}
 
 		let output: string;
 
-		const results = await searchSource.search(content, config);
+		const results = await this.search(content, config);
 
 		if (results instanceof Error) {
 			if (config.catch) {
@@ -3151,6 +3129,10 @@ export class SearchNode extends ContentNode {
 
 		this.loadOutgoingEdges(output);
 		this.completed();
+	}
+
+	async search(query: string, config: SearchConfig): Promise<string[] | Error> {
+		return new Error("Search nodes not implemented.");
 	}
 }
 

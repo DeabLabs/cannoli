@@ -1,6 +1,5 @@
 import { FilesystemInterface } from "./filesystem_interface";
 import { ResponseTextFetcher, Run, Stoppage } from "./run";
-import { SearchSource } from "./search_source";
 import { LLMConfig } from "./providers";
 import { Persistor } from "./persistor";
 
@@ -14,6 +13,7 @@ export type ArgInfo = {
 export type Action = {
     name: string;
     function: (...args: (string | number | boolean | undefined)[]) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
+    displayName?: string;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
     resultKeys?: string[];
@@ -23,6 +23,7 @@ export type LongAction = {
     name: string;
     send: (...args: (string | number | boolean | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
     receive: (receiveInfo: Record<string, string>) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
+    displayName?: string;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
     resultKeys?: string[];
@@ -33,7 +34,6 @@ export class Cannoli {
     private fileSystemInterface: FilesystemInterface | undefined;
     private actions: Action[] | undefined;
     private longActions: LongAction[] | undefined;
-    private searchSources: SearchSource[] | undefined;
     private fetcher: ResponseTextFetcher | undefined;
     private config: Record<string, unknown> | undefined;
 
@@ -42,7 +42,6 @@ export class Cannoli {
         fileSystemInterface,
         actions,
         longActions,
-        searchSources,
         fetcher,
         config,
     }: {
@@ -50,7 +49,6 @@ export class Cannoli {
         fileSystemInterface?: FilesystemInterface;
         actions?: Action[];
         longActions?: LongAction[];
-        searchSources?: SearchSource[];
         fetcher?: ResponseTextFetcher;
         config?: Record<string, unknown>;
     }) {
@@ -58,7 +56,6 @@ export class Cannoli {
         this.fileSystemInterface = fileSystemInterface;
         this.actions = actions;
         this.longActions = longActions;
-        this.searchSources = searchSources;
         this.fetcher = fetcher;
         this.config = config;
     }
@@ -111,7 +108,6 @@ export class Cannoli {
             fileSystemInterface: this.fileSystemInterface,
             actions: this.actions,
             longActions: this.longActions,
-            searchSources: this.searchSources,
             isMock: isMock,
             fetcher: this.fetcher,
             config: this.config,
