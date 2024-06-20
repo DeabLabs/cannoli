@@ -6,13 +6,13 @@ import { Persistor } from "./persistor";
 
 export type Action = {
     name: string;
-    function: (...args: string[]) => string | Error | Promise<string | Error>;
+    function: (...args: (string | undefined)[]) => string | Error | Promise<string | Error>;
     configVars?: string[];
 }
 
 export type LongAction = {
     name: string;
-    send: (...args: string[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
+    send: (...args: (string | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
     receive: (receiveInfo: Record<string, string>) => string | Error | Promise<string | Error>;
     configVars?: string[];
 }

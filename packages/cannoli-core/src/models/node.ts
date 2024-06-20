@@ -2591,7 +2591,7 @@ export class HttpNode extends ContentNode {
 			const action = this.run.actions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
 
 			if (action) {
-				const argNames = this.getActionArgs(action);
+				const { args: argNames, optionalArgs } = this.getActionArgs(action);
 
 				const variableValues = this.getVariableValues(true);
 
@@ -2600,22 +2600,38 @@ export class HttpNode extends ContentNode {
 					// If the argName is in the configKeys, get the value from the config
 					if (action.configVars && action.configVars.includes(argName)) {
 						// Error if the config is not set
-						if (!config[argName]) {
-							this.error(`Missing value for config parameter "${argName}" in available config. This action "${action.name}" requires the following config keys:\n${action.configVars.map((arg) => `  - ${arg}`)}`);
-							return "";
+						if (!config[argName] && !optionalArgs[argName]) {
+							this.error(`Missing value for config parameter "${argName}" in available config. This action "${action.name}" accepts the following config keys:\n${action.configVars.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
+							return;
 						}
-						return config[argName] as string;
+
+						if (config[argName]) {
+							return config[argName] as string;
+						}
+
+						return;
 					} else {
 						const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
-						if (!variableValue) {
-							this.error(`Missing value for variable "${argName}" in available arrows. This action "${action.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
-							return "";
+						if (!variableValue && !optionalArgs[argName]) {
+							this.error(`Missing value for variable "${argName}" in available arrows. This action "${action.name}" accepts the following variables:\n${argNames.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
+							return;
 						}
-						return variableValue.content || "";
+
+						if (variableValue) {
+							return variableValue.content || "";
+						}
+
+						return;
 					}
 				});
 
-				let actionResponse = await action.function(...args);
+				let actionResponse: string | Error;
+
+				if (this.run.isMock) {
+					actionResponse = "This is a mock response";
+				} else {
+					actionResponse = await action.function(...args);
+				}
 
 				if (actionResponse instanceof Error) {
 					if (config.catch) {
@@ -2626,11 +2642,9 @@ export class HttpNode extends ContentNode {
 					}
 				}
 
-
 				this.loadOutgoingEdges(actionResponse);
 				this.completed();
 				return;
-
 			}
 		} else if (this.run.longActions !== undefined && this.run.longActions.length > 0) {
 			const longAction = this.run.longActions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
@@ -2638,7 +2652,7 @@ export class HttpNode extends ContentNode {
 			if (longAction) {
 				// Check if the receiveinfo is set
 				if (this.receiveInfo === undefined) {
-					const argNames = this.getLongActionArgs(longAction);
+					const { args: argNames, optionalArgs } = this.getLongActionArgs(longAction);
 
 					const variableValues = this.getVariableValues(true);
 
@@ -2647,22 +2661,33 @@ export class HttpNode extends ContentNode {
 						// If the argName is in the configKeys, get the value from the config
 						if (longAction.configVars && longAction.configVars.includes(argName)) {
 							// Error if the config is not set
-							if (!config[argName]) {
-								this.error(`Missing value for config parameter "${argName}" in available config. This long action "${longAction.name}" requires the following config keys:\n${longAction.configVars.map((arg) => `  - ${arg}`)}`);
-								return "";
+							if (!config[argName] && !optionalArgs[argName]) {
+								this.error(`Missing value for config parameter "${argName}" in available config. This long action "${longAction.name}" accepts the following config keys:\n${longAction.configVars.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
+								return;
 							}
 							return config[argName] as string;
 						} else {
 							const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
-							if (!variableValue) {
-								this.error(`Missing value for variable "${argName}" in available arrows. This long action "${longAction.name}" requires the following variables:\n${argNames.map((arg) => `  - ${arg}`)}`);
-								return "";
+							if (!variableValue && !optionalArgs[argName]) {
+								this.error(`Missing value for variable "${argName}" in available arrows. This long action "${longAction.name}" accepts the following variables:\n${argNames.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
+								return;
 							}
-							return variableValue.content || "";
+							if (variableValue) {
+								return variableValue.content || "";
+							}
+							return;
 						}
 					});
 
-					const sendResponse = await longAction.send(...args);
+					let sendResponse: Record<string, string> | Error;
+
+					if (this.run.isMock) {
+						sendResponse = {
+							content: "This is a mock response",
+						};
+					} else {
+						sendResponse = await longAction.send(...args);
+					}
 
 					if (sendResponse instanceof Error) {
 						if (config.catch) {
@@ -2680,7 +2705,14 @@ export class HttpNode extends ContentNode {
 
 				invariant(this.receiveInfo)
 				// Make the receive request
-				const receiveResponse = await longAction.receive(this.receiveInfo);
+
+				let receiveResponse: string | Error;
+
+				if (this.run.isMock) {
+					receiveResponse = "This is a mock response";
+				} else {
+					receiveResponse = await longAction.receive(this.receiveInfo);
+				}
 				if (receiveResponse instanceof Error) {
 					this.error(receiveResponse.message);
 					return;
@@ -2713,14 +2745,25 @@ export class HttpNode extends ContentNode {
 	}
 
 
-	getActionArgs(action: Action): string[] {
-		const args = action.function.toString().match(/\(([^)]*)\)/);
-		return args ? args[1].split(',').map((arg: string) => arg.trim()) : [];
+	getFunctionArgs(stringifiedFn: string): { args: string[], optionalArgs: Record<string, boolean> } {
+		const args = stringifiedFn.match(/\(([^)]*)\)/)?.[1] ?? "";
+		const requiredArgs = args ? args.split(',').filter(arg => !arg.includes('=')).map((arg: string) => arg.trim()) : [];
+		const optionalArgs = args ? args.split(',').filter(arg => arg.includes('=')).map((arg: string) => arg.trim().split("=")[0].trim()) : [];
+		const optionalArgsObject: Record<string, boolean> = {};
+		optionalArgs.forEach(arg => optionalArgsObject[arg] = true);
+		return { args: [...requiredArgs, ...optionalArgs], optionalArgs: optionalArgsObject };
 	}
 
-	getLongActionArgs(longAction: LongAction): string[] {
-		const args = longAction.send.toString().match(/\(([^)]*)\)/);
-		return args ? args[1].split(',').map((arg: string) => arg.trim()) : [];
+	getActionArgs(action: Action) {
+		return this.getFunctionArgs(action.function.toString());
+	}
+
+	getLongActionArgs(longAction: LongAction) {
+		return this.getFunctionArgs(longAction.send.toString());
+	}
+
+	getActionArgsFromString(args: string): string[] {
+		return args.split(',').map((arg: string) => arg.trim().split("=")[0].trim());
 	}
 
 	private parseContentToRequest(content: string, config: HttpConfig): HttpRequest | Error {

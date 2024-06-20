@@ -20,7 +20,8 @@ import {
 	Cannoli as CannoliRunner,
 	ModelUsage,
 	LLMConfig,
-	GenericModelConfig
+	GenericModelConfig,
+	Action
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -811,11 +812,46 @@ export default class Cannoli extends Plugin {
 			searchSources.unshift(defaultSearchSource);
 		}
 
+		const dalleAction: Action = {
+			name: "dalle",
+			function: async (prompt: string, model: string = "dall-e-3", size: string = "1024x1024") => {
+				try {
+					const response = await fetch("https://api.openai.com/v1/images/generations", {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							"Authorization": `Bearer ${this.settings.openaiAPIKey}`,
+						},
+						body: JSON.stringify({
+							model: model,
+							prompt: prompt,
+							n: 1,
+							size: size,
+						}),
+					});
+
+					const data = await response.json();
+
+					if (!response.ok) {
+						throw new Error(data.error?.message || "Unknown error");
+					}
+
+					return `![${data.data?.[0]?.revised_prompt}](${data.data?.[0]?.url})`;
+				} catch (error) {
+					return new Error(`Error: ${error.message}`);
+				}
+			}
+		};
+
+
 		// Make the cannoli runner
 		const runner = new CannoliRunner({
 			llmConfigs: llmConfigs,
 			config: cannoliSettings,
 			fileSystemInterface: vaultInterface,
+			actions: [
+				...(this.settings.openaiAPIKey ? [dalleAction] : [])
+			],
 			searchSources: searchSources,
 			fetcher: fetcher,
 		});
