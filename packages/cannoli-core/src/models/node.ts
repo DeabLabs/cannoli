@@ -2642,14 +2642,56 @@ export class HttpNode extends ContentNode {
 		});
 
 		if (this.run.isMock) {
-			return isLongAction ? { content: "This is a mock response" } : "This is a mock response";
+			if (isLongAction) {
+				return { content: "This is a mock response" };
+			}
+
+			if (action.resultKeys) {
+				// Make an object with the keys and values
+				const result = action.resultKeys.reduce<Record<string, string>>((acc, key) => {
+					acc[key] = "This is a mock response";
+					return acc;
+				}, {});
+				return result;
+			}
+
+			return "This is a mock response";
 		}
 
 		if (isLongAction) {
 			return await (action as LongAction).send(...args);
 		} else {
-			return await (action as Action).function(...args);
+			const result = await (action as Action).function(...args);
+			return this.handleFunctionResult(result);
 		}
+	}
+
+	handleFunctionResult(result: string | string[] | Record<string, (string | string[])> | Error): string | Error {
+		if (result instanceof Error) {
+			return result;
+		}
+		else if (typeof result === "string") {
+			return result;
+		}
+		else if (Array.isArray(result)) {
+			return JSON.stringify(result);
+		}
+		else if (typeof result === "object") {
+			const objectKeys = Object.keys(result);
+
+			// Check if there are any outgoing edges whose text isn't a key in the object
+			const outgoingEdgeNames = this.outgoingEdges.map((edge) => this.graph[edge].text);
+			const keysNotInObject = outgoingEdgeNames.filter((name) => !objectKeys.includes(name));
+
+			// If there are, error
+			if (keysNotInObject.length > 0) {
+				return new Error(`This action returns multiple variables, but there are outgoing arrows that don't match any names of the variables. The variables are: ${objectKeys.join(", ")}. The incorrect outgoing arrows are: ${keysNotInObject.join(", ")}.`);
+			}
+
+			return JSON.stringify(result);
+		}
+
+		return new Error(`Action returned an unknown type: ${typeof result}.`);
 	}
 
 	async execute(): Promise<void> {
@@ -2722,9 +2764,19 @@ export class HttpNode extends ContentNode {
 				let receiveResponse: string | Error;
 
 				if (this.run.isMock) {
+					if (longAction.resultKeys) {
+						// Make an object with the keys and values
+						const result = longAction.resultKeys.reduce<Record<string, string>>((acc, key) => {
+							acc[key] = "This is a mock response";
+							return acc;
+						}, {});
+						receiveResponse = this.handleFunctionResult(result);
+					}
+
 					receiveResponse = "This is a mock response";
 				} else {
-					receiveResponse = await longAction.receive(this.receiveInfo);
+					const result = await longAction.receive(this.receiveInfo);
+					receiveResponse = this.handleFunctionResult(result);
 				}
 				if (receiveResponse instanceof Error) {
 					this.error(receiveResponse.message);

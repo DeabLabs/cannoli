@@ -12,17 +12,19 @@ export type ArgInfo = {
 
 export type Action = {
     name: string;
-    function: (...args: (string | undefined)[]) => string | Error | Promise<string | Error>;
+    function: (...args: (string | undefined)[]) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
+    resultKeys?: string[];
 }
 
 export type LongAction = {
     name: string;
     send: (...args: (string | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
-    receive: (receiveInfo: Record<string, string>) => string | Error | Promise<string | Error>;
+    receive: (receiveInfo: Record<string, string>) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
+    resultKeys?: string[];
 }
 
 export class Cannoli {
