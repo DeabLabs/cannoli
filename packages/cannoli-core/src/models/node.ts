@@ -2613,14 +2613,23 @@ export class HttpNode extends ContentNode {
 				}
 
 				if (config[argName]) {
-					return config[argName] as string;
+					if (action.argInfo[argName].type === "number") {
+						return this.coerceValue(config[argName] as string, argName, action.argInfo[argName].type);
+					} else {
+						return config[argName] as string;
+					}
 				}
 
 				return;
 			} else {
 				if (isFirstArg && namedActionContent) {
 					isFirstArg = false;
-					return namedActionContent;
+
+					if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].type) {
+						return this.coerceValue(namedActionContent, argName, action.argInfo[argName].type);
+					} else {
+						return namedActionContent;
+					}
 				}
 
 				const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
@@ -2634,7 +2643,11 @@ export class HttpNode extends ContentNode {
 				}
 
 				if (variableValue) {
-					return variableValue.content || "";
+					if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].type) {
+						return this.coerceValue(variableValue.content || "", argName, action.argInfo[argName].type);
+					} else {
+						return variableValue.content || "";
+					}
 				}
 
 				return;
@@ -2663,6 +2676,28 @@ export class HttpNode extends ContentNode {
 		} else {
 			const result = await (action as Action).function(...args);
 			return this.handleFunctionResult(result);
+		}
+	}
+
+	private coerceValue(value: string, argName: string, type: "number" | "boolean" | "string" | string[] | undefined): number | boolean | string {
+		if (type === "number") {
+			const numberValue = parseFloat(value);
+			if (isNaN(numberValue)) {
+				this.error(`Invalid number value: "${value}" for variable: "${argName}"`);
+			}
+			return numberValue;
+		} else if (type === "boolean") {
+			if (value !== "true" && value !== "false") {
+				this.error(`Invalid boolean value: "${value}" for variable: "${argName}"`);
+			}
+			return value === "true";
+		} else if (Array.isArray(type)) {
+			if (!type.includes(value)) {
+				this.error(`Invalid value: "${value}" for variable: "${argName}". Expected one of:\n${type.map((t) => `  - ${t}`).join("\n")}`);
+			}
+			return value;
+		} else {
+			return value;
 		}
 	}
 

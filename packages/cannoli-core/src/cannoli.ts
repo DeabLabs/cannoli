@@ -6,13 +6,14 @@ import { Persistor } from "./persistor";
 
 export type ArgInfo = {
     category: "config" | "env" | "arg";
-    description?: string;
     type?: "string" | "number" | "boolean" | string[];
+    displayName?: string;
+    description?: string;
 }
 
 export type Action = {
     name: string;
-    function: (...args: (string | undefined)[]) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
+    function: (...args: (string | number | boolean | undefined)[]) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
     resultKeys?: string[];
@@ -20,7 +21,7 @@ export type Action = {
 
 export type LongAction = {
     name: string;
-    send: (...args: (string | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
+    send: (...args: (string | number | boolean | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
     receive: (receiveInfo: Record<string, string>) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
