@@ -27,7 +27,6 @@ import { cannoliIcon } from "../assets/cannoliIcon";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
 import { SYMBOLS, cannoliValTemplate } from "./val_templates";
-import CannoliDiscordBotClient from "./discord_bot_client";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -67,17 +66,7 @@ interface CannoliSettings {
 	pLimit: number;
 	contentIsColorless: boolean;
 	valTownAPIKey: string;
-	defaultSearchSource: string;
 	exaAPIKey: string;
-	exaDefaultLimit: number;
-	cannoliWebsiteAPIKey: string;
-	discordVaultKey: string;
-	discordVaultID: string;
-	discordBotKey: string;
-	discordPrivateKey: string;
-	discordPublicKey: string;
-	discordBotUrl: string;
-	discordCommandsEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -117,23 +106,12 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	pLimit: 50,
 	contentIsColorless: false,
 	valTownAPIKey: "",
-	defaultSearchSource: "smart-connections",
 	exaAPIKey: "",
-	exaDefaultLimit: 5,
-	cannoliWebsiteAPIKey: "",
-	discordVaultKey: "",
-	discordVaultID: "",
-	discordBotKey: "",
-	discordPrivateKey: "",
-	discordPublicKey: "",
-	discordBotUrl: "",
-	discordCommandsEnabled: false,
 };
 
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
 	runningCannolis: { [key: string]: () => void } = {};
-	discordBotClient: CannoliDiscordBotClient;
 
 	async onload() {
 		await this.loadSettings();
@@ -200,12 +178,6 @@ export default class Cannoli extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
-
-		this.discordBotClient = new CannoliDiscordBotClient(this);
-
-		if (this.settings.discordVaultID && this.settings.discordVaultKey) {
-			this.discordBotClient.connect();
-		}
 	}
 
 	onunload() { }
@@ -1538,150 +1510,6 @@ class CannoliSettingTab extends PluginSettingTab {
 					this.plugin.addSampleFolder();
 				})
 			);
-		new Setting(containerEl)
-			.setName("ValTown API key")
-			.setDesc(
-				`This key will be used to create Vals on your Val Town account when you run the "Create Val" command.`
-			)
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.valTownAPIKey)
-					.setPlaceholder("...")
-					.onChange(async (value) => {
-						this.plugin.settings.valTownAPIKey = value;
-						await this.plugin.saveSettings();
-					}).inputEl.setAttribute("type", "password")
-			);
-
-		new Setting(containerEl)
-			.setName("Cannoli.website API key")
-			.setDesc(
-				"Get an API key from our website to use hook nodes."
-			)
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.cannoliWebsiteAPIKey)
-					.setPlaceholder("...")
-					.onChange(async (value) => {
-						this.plugin.settings.cannoliWebsiteAPIKey = value;
-						await this.plugin.saveSettings();
-					}).inputEl.setAttribute("type", "password")
-			);
-
-		// Discord bot settings
-		new Setting(containerEl)
-			.setName("Enable Discord Commands")
-			.setDesc("Enable or disable the Discord bot to trigger cannolis on your vault using commands.")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.discordCommandsEnabled)
-					.onChange(async (value) => {
-						this.plugin.settings.discordCommandsEnabled = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Manage Discord Bot Connection")
-			.setDesc("Initialize and connect to the Discord bot, or delete the vault from the bot.")
-			.addButton((button) => {
-				if (this.plugin.settings.discordVaultID) {
-					button.setButtonText("Disconnect")
-						.setWarning()
-						.onClick(async () => {
-							this.plugin.discordBotClient.disconnect();
-							const error = await this.plugin.discordBotClient.deleteVault();
-							if (error) {
-								new Notice("Failed to disconnect vault from Discord bot: " + error.message);
-								return;
-							}
-							this.plugin.settings.discordVaultID = "";
-							this.plugin.settings.discordVaultKey = "";
-							this.plugin.settings.discordPrivateKey = "";
-							this.plugin.settings.discordPublicKey = "";
-							new Notice("Vault disconnected from Discord bot.");
-							await this.plugin.saveSettings();
-							this.display();
-						});
-				} else {
-					button.setButtonText("Connect")
-						.onClick(async () => {
-							button.setDisabled(true);
-							button.setButtonText("Connecting...");
-
-							try {
-								const { vaultKey, vaultID, privateKey, publicKey } = await this.plugin.discordBotClient.initializeVault();
-								this.plugin.settings.discordVaultKey = vaultKey;
-								this.plugin.settings.discordVaultID = vaultID;
-								this.plugin.settings.discordPrivateKey = privateKey;
-								this.plugin.settings.discordPublicKey = publicKey;
-							} catch (error) {
-								new Notice("Failed to connect to Discord bot: " + error.message);
-							}
-
-							try {
-								this.plugin.discordBotClient.connect();
-							} catch (error) {
-								new Notice("Failed to start listening to Discord bot: " + error.message);
-							}
-
-							new Notice("Successfully connected to Discord bot.");
-
-							button.setDisabled(false);
-							button.setButtonText("Connect");
-							await this.plugin.saveSettings();
-							this.display();
-						});
-				}
-			});
-
-		new Setting(containerEl)
-			.setName("Discord Bot Key")
-			.setDesc("The key used initialize vaults on the Discord bot.")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.discordBotKey ?? "")
-					.onChange(async (value) => {
-						this.plugin.settings.discordBotKey = value;
-						await this.plugin.saveSettings();
-					})
-					.inputEl.setAttribute("type", "password")
-			);
-
-		new Setting(containerEl)
-			.setName("Discord Bot URL")
-			.setDesc("The URL of the Discord bot.")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.discordBotUrl ?? "")
-					.onChange(async (value) => {
-						this.plugin.settings.discordBotUrl = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Discord Vault Key")
-			.setDesc(
-				"Copy this key and give it to the discord bot using the 'link-vault' command. Only one discord server can be linked at a time. Linking a new server will unlink the server that's currently linked to this vault."
-			)
-			.addText((text) =>
-				text
-					.setValue((this.plugin.settings.discordVaultID && this.plugin.settings.discordVaultKey) ? `${this.plugin.settings.discordVaultID}:${this.plugin.settings.discordVaultKey}` : "")
-					.setDisabled(true)
-					.inputEl.setAttribute("type", "password")
-			)
-			.addButton((button) =>
-				button
-					.setButtonText("Copy")
-					.setCta()
-					.onClick(async () => {
-						const key = `${this.plugin.settings.discordVaultID}:${this.plugin.settings.discordVaultKey}`;
-						await navigator.clipboard.writeText(key);
-						new Notice("Discord Vault Key copied to clipboard");
-					})
-			);
-
 
 		// Add dropdown for AI provider with options OpenAI and Ollama
 		new Setting(containerEl)
@@ -2190,37 +2018,6 @@ class CannoliSettingTab extends PluginSettingTab {
 					})
 			);
 
-
-		containerEl.createEl("h1", { text: "Search" });
-
-		new Setting(containerEl)
-			.setName("Default search source")
-			.setDesc("This search source will be used for all search nodes unless overridden with a config arrow.")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("exa", "Exa")
-					.addOption("smart-connections", "Smart connections")
-					.setValue(this.plugin.settings.defaultSearchSource)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultSearchSource = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Exa API key")
-			.setDesc("This key will be used to make all Exa search calls.")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.exaAPIKey)
-					.setPlaceholder("...")
-					.onChange(async (value) => {
-						this.plugin.settings.exaAPIKey = value;
-						await this.plugin.saveSettings();
-					})
-					.inputEl.setAttribute("type", "password")
-			);
-
 		containerEl.createEl("h1", { text: "Canvas preferences" });
 
 		// Add toggle for contentIsColorless
@@ -2416,6 +2213,37 @@ class CannoliSettingTab extends PluginSettingTab {
 						})
 				);
 		}
+
+		containerEl.createEl("h1", { text: "Integrations" });
+
+		new Setting(containerEl)
+			.setName("ValTown API key")
+			.setDesc(
+				`This key will be used to create Vals on your Val Town account when you run the "Create Val" command.`
+			)
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.valTownAPIKey)
+					.setPlaceholder("...")
+					.onChange(async (value) => {
+						this.plugin.settings.valTownAPIKey = value;
+						await this.plugin.saveSettings();
+					}).inputEl.setAttribute("type", "password")
+			);
+
+		new Setting(containerEl)
+			.setName("Exa API key")
+			.setDesc("This key will be used to make all Exa search requests.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.exaAPIKey)
+					.setPlaceholder("...")
+					.onChange(async (value) => {
+						this.plugin.settings.exaAPIKey = value;
+						await this.plugin.saveSettings();
+					})
+					.inputEl.setAttribute("type", "password")
+			);
 
 		containerEl.createEl("h1", { text: "Action nodes" });
 
