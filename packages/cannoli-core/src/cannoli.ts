@@ -4,17 +4,25 @@ import { SearchSource } from "./search_source";
 import { LLMConfig } from "./providers";
 import { Persistor } from "./persistor";
 
+export type ArgInfo = {
+    category: "config" | "env" | "arg";
+    description?: string;
+    type?: "string" | "number" | "boolean" | string[];
+}
+
 export type Action = {
     name: string;
     function: (...args: (string | undefined)[]) => string | Error | Promise<string | Error>;
-    configVars?: string[];
+    description?: string;
+    argInfo?: Record<string, ArgInfo>;
 }
 
 export type LongAction = {
     name: string;
     send: (...args: (string | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
     receive: (receiveInfo: Record<string, string>) => string | Error | Promise<string | Error>;
-    configVars?: string[];
+    description?: string;
+    argInfo?: Record<string, ArgInfo>;
 }
 
 export class Cannoli {

@@ -1733,8 +1733,14 @@ export class ContentNode extends CannoliNode {
 		super.reset();
 	}
 
-	getName(): string | null {
-		const firstLine = this.text.split("\n")[0].trim();
+	getName(content?: string): string | null {
+		let contentToCheck = content;
+
+		if (!contentToCheck) {
+			contentToCheck = this.text;
+		}
+
+		const firstLine = contentToCheck.split("\n")[0].trim();
 		if (
 			firstLine.startsWith("[") &&
 			firstLine.endsWith("]") &&
@@ -1753,11 +1759,17 @@ export class ContentNode extends CannoliNode {
 	}
 
 	// Content is everything after the first line
-	getContentCheckName(): string {
-		const name = this.getName();
+	getContentCheckName(content?: string): string {
+		let contentToCheck = content;
+
+		if (!contentToCheck) {
+			contentToCheck = this.text;
+		}
+
+		const name = this.getName(contentToCheck);
 		if (name !== null) {
-			const firstLine = this.text.split("\n")[0];
-			return this.text.substring(firstLine.length + 1);
+			const firstLine = contentToCheck.split("\n")[0];
+			return contentToCheck.substring(firstLine.length + 1);
 		}
 		return this.text;
 	}
@@ -2571,6 +2583,75 @@ export class HttpNode extends ContentNode {
 		return super.logDetails() + `Subtype: Http\n`;
 	}
 
+	private async prepareAndExecuteAction(
+		action: Action | LongAction,
+		namedActionContent: string | null,
+		config: HttpConfig,
+		isLongAction: boolean = false
+	): Promise<string | Record<string, string> | Error> {
+		const { args: argNames, optionalArgs } = isLongAction
+			? this.getLongActionArgs(action as LongAction)
+			: this.getActionArgs(action as Action);
+
+		const variableValues = this.getVariableValues(true);
+
+		let isFirstArg = true;
+
+		// Get the value for each arg name from the variables, and error if any arg is missing
+		const args = argNames.map((argName) => {
+			// If the argName is in the configKeys, get the value from the config
+			if (action.argInfo && action.argInfo[argName] && (action.argInfo[argName].category === "config" || action.argInfo[argName].category === "env")) {
+				// Error if the config is not set
+				if (!config[argName] && !optionalArgs[argName]) {
+					this.error(
+						`Missing value for config parameter "${argName}" in available config. This action "${action.name}" accepts the following config keys:\n${Object.keys(action.argInfo)
+							.filter((arg) => action.argInfo?.[arg].category === "config" || action.argInfo?.[arg].category === "env")
+							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
+							.join('\n')}`
+					);
+					return;
+				}
+
+				if (config[argName]) {
+					return config[argName] as string;
+				}
+
+				return;
+			} else {
+				if (isFirstArg && namedActionContent) {
+					isFirstArg = false;
+					return namedActionContent;
+				}
+
+				const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
+				if (!variableValue && !optionalArgs[argName]) {
+					this.error(
+						`Missing value for variable "${argName}" in available arrows. This action "${action.name}" accepts the following variables:\n${argNames
+							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
+							.join('\n')}`
+					);
+					return;
+				}
+
+				if (variableValue) {
+					return variableValue.content || "";
+				}
+
+				return;
+			}
+		});
+
+		if (this.run.isMock) {
+			return isLongAction ? { content: "This is a mock response" } : "This is a mock response";
+		}
+
+		if (isLongAction) {
+			return await (action as LongAction).send(...args);
+		} else {
+			return await (action as Action).function(...args);
+		}
+	}
+
 	async execute(): Promise<void> {
 		const overrides = this.getConfig(HTTPConfigSchema) as HttpConfig;
 		if (overrides instanceof Error) {
@@ -2584,54 +2665,21 @@ export class HttpNode extends ContentNode {
 
 		const content = await this.processReferences([], true);
 
-		const maybeActionName = content.toLowerCase().trim();
+		let maybeActionName = this.getName(content);
+		let namedActionContent = null;
+
+		if (maybeActionName !== null) {
+			maybeActionName = maybeActionName.toLowerCase().trim();
+			namedActionContent = this.getContentCheckName(content);
+		} else {
+			maybeActionName = content.toLowerCase().trim();
+		}
 
 		if (this.run.actions !== undefined && this.run.actions.length > 0) {
-
 			const action = this.run.actions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
 
 			if (action) {
-				const { args: argNames, optionalArgs } = this.getActionArgs(action);
-
-				const variableValues = this.getVariableValues(true);
-
-				// Get the value for each arg name from the variables, and error if any arg is missing
-				const args = argNames.map((argName) => {
-					// If the argName is in the configKeys, get the value from the config
-					if (action.configVars && action.configVars.includes(argName)) {
-						// Error if the config is not set
-						if (!config[argName] && !optionalArgs[argName]) {
-							this.error(`Missing value for config parameter "${argName}" in available config. This action "${action.name}" accepts the following config keys:\n${action.configVars.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
-							return;
-						}
-
-						if (config[argName]) {
-							return config[argName] as string;
-						}
-
-						return;
-					} else {
-						const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
-						if (!variableValue && !optionalArgs[argName]) {
-							this.error(`Missing value for variable "${argName}" in available arrows. This action "${action.name}" accepts the following variables:\n${argNames.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
-							return;
-						}
-
-						if (variableValue) {
-							return variableValue.content || "";
-						}
-
-						return;
-					}
-				});
-
-				let actionResponse: string | Error;
-
-				if (this.run.isMock) {
-					actionResponse = "This is a mock response";
-				} else {
-					actionResponse = await action.function(...args);
-				}
+				let actionResponse = await this.prepareAndExecuteAction(action, namedActionContent, config);
 
 				if (actionResponse instanceof Error) {
 					if (config.catch) {
@@ -2642,7 +2690,7 @@ export class HttpNode extends ContentNode {
 					}
 				}
 
-				this.loadOutgoingEdges(actionResponse);
+				this.loadOutgoingEdges(actionResponse as string);
 				this.completed();
 				return;
 			}
@@ -2652,42 +2700,7 @@ export class HttpNode extends ContentNode {
 			if (longAction) {
 				// Check if the receiveinfo is set
 				if (this.receiveInfo === undefined) {
-					const { args: argNames, optionalArgs } = this.getLongActionArgs(longAction);
-
-					const variableValues = this.getVariableValues(true);
-
-					// Get the value for each arg name from the variables, and error if any arg is missing
-					const args = argNames.map((argName) => {
-						// If the argName is in the configKeys, get the value from the config
-						if (longAction.configVars && longAction.configVars.includes(argName)) {
-							// Error if the config is not set
-							if (!config[argName] && !optionalArgs[argName]) {
-								this.error(`Missing value for config parameter "${argName}" in available config. This long action "${longAction.name}" accepts the following config keys:\n${longAction.configVars.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
-								return;
-							}
-							return config[argName] as string;
-						} else {
-							const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
-							if (!variableValue && !optionalArgs[argName]) {
-								this.error(`Missing value for variable "${argName}" in available arrows. This long action "${longAction.name}" accepts the following variables:\n${argNames.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`).join('\n')}`);
-								return;
-							}
-							if (variableValue) {
-								return variableValue.content || "";
-							}
-							return;
-						}
-					});
-
-					let sendResponse: Record<string, string> | Error;
-
-					if (this.run.isMock) {
-						sendResponse = {
-							content: "This is a mock response",
-						};
-					} else {
-						sendResponse = await longAction.send(...args);
-					}
+					const sendResponse = await this.prepareAndExecuteAction(longAction, namedActionContent, config, true);
 
 					if (sendResponse instanceof Error) {
 						if (config.catch) {
@@ -2700,10 +2713,10 @@ export class HttpNode extends ContentNode {
 						}
 					}
 
-					this.setReceiveInfo(sendResponse);
+					this.setReceiveInfo(sendResponse as Record<string, string>);
 				}
 
-				invariant(this.receiveInfo)
+				invariant(this.receiveInfo);
 				// Make the receive request
 
 				let receiveResponse: string | Error;

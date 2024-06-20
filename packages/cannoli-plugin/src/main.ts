@@ -840,6 +840,17 @@ export default class Cannoli extends Plugin {
 				} catch (error) {
 					return new Error(`Error: ${error.message}`);
 				}
+			},
+			argInfo: {
+				prompt: {
+					category: "arg",
+				},
+				model: {
+					category: "config",
+				},
+				size: {
+					category: "config",
+				}
 			}
 		};
 
