@@ -12,7 +12,7 @@ export type ArgInfo = {
 
 export type Action = {
     name: string;
-    function: (...args: (string | number | boolean | undefined)[]) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
+    function: (...args: (string | number | boolean | undefined)[]) => string | string[] | Record<string, (string | string[])> | void | Error | Promise<string | string[] | Record<string, (string | string[])> | void | Error>;
     displayName?: string;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
@@ -22,7 +22,7 @@ export type Action = {
 export type LongAction = {
     name: string;
     send: (...args: (string | number | boolean | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
-    receive: (receiveInfo: Record<string, string>) => string | string[] | Record<string, (string | string[])> | Error | Promise<string | string[] | Record<string, (string | string[])> | Error>;
+    receive: (receiveInfo: Record<string, string>) => string | string[] | Record<string, (string | string[])> | void | Error | Promise<string | string[] | Record<string, (string | string[])> | void | Error>;
     displayName?: string;
     description?: string;
     argInfo?: Record<string, ArgInfo>;

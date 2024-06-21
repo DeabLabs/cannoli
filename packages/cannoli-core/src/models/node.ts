@@ -2683,7 +2683,10 @@ export class HttpNode extends ContentNode {
 		}
 	}
 
-	handleFunctionResult(result: string | string[] | Record<string, (string | string[])> | Error): string | Error {
+	handleFunctionResult(result: string | string[] | Record<string, (string | string[])> | Error | void): string | Error {
+		if (result === undefined) {
+			return "";
+		}
 		if (result instanceof Error) {
 			return result;
 		}
