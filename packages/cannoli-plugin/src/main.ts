@@ -725,6 +725,14 @@ export default class Cannoli extends Plugin {
 			provider,
 		}));
 
+		// Ensure the default provider is first
+		const defaultProviderIndex = llmConfigs.findIndex((config) => config.provider === this.settings.llmProvider);
+		const defaultProvider = llmConfigs[defaultProviderIndex];
+		if (defaultProviderIndex !== 0) {
+			llmConfigs.splice(defaultProviderIndex, 1);
+			llmConfigs.unshift(defaultProvider);
+		}
+
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
 			? file.basename.slice(0, -4)

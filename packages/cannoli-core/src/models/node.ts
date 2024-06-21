@@ -328,8 +328,13 @@ export class CannoliNode extends CannoliVertex {
 	}
 
 	getLoopIndex(depth: number): number | null {
+		const groups = this.groups.map((group) => this.graph[group] as CannoliGroup);
+
+		// Filter to only repeat or forEach groups
+		const repeatOrForEachGroups = groups.filter((group) => group.type === GroupType.Repeat || group.fromForEach);
+
 		// Get the group at the specified depth (0 is the most immediate group)
-		const group = this.graph[this.groups[depth]];
+		const group = repeatOrForEachGroups[depth];
 
 		// If group is not there, return null
 		if (!group) {
@@ -338,14 +343,6 @@ export class CannoliNode extends CannoliVertex {
 
 		// If group is not a CannoliGroup, return null
 		if (!(group instanceof CannoliGroup)) {
-			return null;
-		}
-
-		// If the group is not a repeat or forEach group, return null
-		if (
-			group.type !== GroupType.Repeat &&
-			group.type !== GroupType.ForEach
-		) {
 			return null;
 		}
 

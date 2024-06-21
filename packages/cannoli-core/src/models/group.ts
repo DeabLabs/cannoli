@@ -143,7 +143,6 @@ export class CannoliGroup extends CannoliVertex {
 			// If all dependencies are complete or rejected, call membersFinished
 			if (this.allDependenciesCompleteOrRejected()) {
 				this.membersFinished();
-
 			}
 		} else if (this.status === CannoliObjectStatus.Complete) {
 			if (this.fromForEach && this.allDependenciesCompleteOrRejected()) {
@@ -163,6 +162,9 @@ export class CannoliGroup extends CannoliVertex {
 
 	dependencyRejected(dependency: CannoliObject) {
 		if (this.noEdgeDependenciesRejected()) {
+			if (this.allDependenciesCompleteOrRejected()) {
+				this.reject();
+			}
 			return;
 		} else {
 			this.reject();
@@ -325,19 +327,58 @@ export class CannoliGroup extends CannoliVertex {
 
 		// If the group is fromForEach
 		if (this.fromForEach) {
-			// Check that it has one and only one incoming edge of type item
-			const itemEdges = this.incomingEdges.filter(
-				(edge) => this.graph[edge].type === EdgeType.Item
+			const { crossingInEdges, crossingOutEdges } = this.getCrossingAndInternalEdges();
+
+
+			// Check that there are no item edges crossing into it
+			const crossingInItemEdges = crossingInEdges.filter(
+				(edge) => this.graph[edge.id].type === EdgeType.Item
 			);
-			if (itemEdges.length !== 1) {
-				this.error(`Parallel groups must have one incoming list arrow.`);
+
+			if (crossingInItemEdges.length > 0) {
+				this.error(`List edges can't cross into parallel groups. Try putting the node it's coming from inside the parallel group or using a non-list edge and an intermediary node.`);
 				return;
 			}
 
-			// Check that there are no item edges crossing into it
-			const crossingInEdges = this.getCrossingAndInternalEdges().crossingInEdges;
-			if (crossingInEdges.length > 0) {
-				this.error(`List edges can't cross into parallel groups. Try putting the node it's coming from inside the parallel group or using a non-list edge and an intermediary node.`);
+			// Check that there are no item edges crossing out of it and crossing into a different fromForEach group
+			const crossingOutItemOrListEdges = crossingOutEdges.filter(
+				(edge) => this.graph[edge.id].type === EdgeType.Item || this.graph[edge.id].type === EdgeType.List
+			);
+
+			if (crossingOutItemOrListEdges.length > 0) {
+				for (const edge of crossingOutItemOrListEdges) {
+					const edgeObject = this.graph[edge.id] as CannoliEdge;
+
+					const crossingInGroups = edgeObject.crossingInGroups.map((group) => this.graph[group] as CannoliGroup);
+
+					const crossingInParallelGroups = crossingInGroups.filter((group) => group.fromForEach);
+
+					if (crossingInParallelGroups.length > 1) {
+						this.error(`List edges can't cross between parallel groups.`);
+						return;
+					}
+				}
+			}
+
+			// Check that it has one and only one incoming edge of type item
+			const itemOrListEdges = this.incomingEdges.filter(
+				(edge) => this.graph[edge].type === EdgeType.Item || this.graph[edge].type === EdgeType.List
+			);
+			if (itemOrListEdges.length < 1) {
+				this.error(`Parallel groups must have at least one incoming list arrow.`);
+				return;
+			} else if (itemOrListEdges.length > 1) {
+				// Check if one of the edges crosses a fromForEach group
+				const itemEdges = itemOrListEdges.filter(
+					(edge) => (this.graph[edge] as CannoliEdge).crossingOutGroups.some((group) => (this.graph[group] as CannoliGroup).fromForEach)
+				);
+
+				if (itemEdges.length > 0) {
+					this.error(`List edges can't cross between parallel groups.`);
+					return;
+				}
+
+				this.error(`Parallel groups can't have more than one incoming list arrow.`);
 				return;
 			}
 		}
@@ -444,15 +485,15 @@ export class RepeatGroup extends CannoliGroup {
 			);
 		}
 
-		// Repeat groups can't have incoming edges of type list or category
-		const listOrCategoryEdges = this.incomingEdges.filter(
+		// Repeat groups can't have incoming edges of type list
+		const listEdges = this.incomingEdges.filter(
 			(edge) =>
 				this.graph[edge].type === EdgeType.List
 		);
 
-		if (listOrCategoryEdges.length !== 0) {
+		if (listEdges.length !== 0) {
 			this.error(
-				`Repeat groups can't have incoming edges of type list or category.`
+				`Repeat groups can't have incoming edges of type list.`
 			);
 		}
 

@@ -455,17 +455,24 @@ export class LoggingEdge extends CannoliEdge {
 	getConfigString(request: GenericCompletionParams) {
 		let configString = "";
 
-		// Loop through all the properties of the request except for messages, and if they aren't undefined add them to the config string formatted nicely
+		// Extract imageReferences separately
+		const imageReferences = request.imageReferences;
+
+		// Loop through all the properties of the request except for messages and imageReferences
 		for (const key in request) {
-			if (key !== "messages" && request[key as keyof typeof request]) {
+			if (key !== "messages" && key !== "imageReferences" && request[key as keyof typeof request]) {
 				// If its apiKey, don't log the value
 				if (key === "apiKey") {
 					continue;
 				}
 
-				configString += `${key}: ${request[key as keyof typeof request]
-					}\n`;
+				configString += `${key}: ${request[key as keyof typeof request]}\n`;
 			}
+		}
+
+		// Check for imageReferences and log the size of the array if it has elements
+		if (Array.isArray(imageReferences) && imageReferences.length > 0) {
+			configString += `images: ${imageReferences.length}\n`;
 		}
 
 		return configString;

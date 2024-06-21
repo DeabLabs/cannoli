@@ -180,6 +180,7 @@ export class Run {
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
 			this.args ?? {},
+			persistor,
 			resume,
 			this.config?.contentIsColorless as boolean
 		);
@@ -334,6 +335,7 @@ export class Run {
 					object.error(
 						"Cycle detected in graph. Please make sure the graph is a DAG.\n(exception: edges between groups and their members)"
 					);
+				return;
 			}
 		}
 	}

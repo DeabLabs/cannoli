@@ -1,4 +1,4 @@
-import { CanvasData } from "./persistor";
+import { CanvasData, Persistor } from "./persistor";
 import {
 	AllCannoliCanvasNodeData,
 	CannoliCanvasData,
@@ -37,6 +37,7 @@ export class CannoliFactory {
 	cannoliData: CannoliCanvasData;
 	currentNote: string;
 	resume: boolean;
+	persistor: Persistor | undefined;
 
 	edgeModifierMap: Record<string, EdgeModifier> = {
 		"[": EdgeModifier.Note,
@@ -106,6 +107,7 @@ export class CannoliFactory {
 	constructor(
 		canvas: CanvasData,
 		args?: Record<string, string>,
+		persistor?: Persistor,
 		resume: boolean = false,
 		contentIsColorless: boolean = false
 	) {
@@ -118,6 +120,8 @@ export class CannoliFactory {
 		this.currentNote = args?.currentNote ?? "No active note";
 
 		this.resume = resume;
+
+		this.persistor = persistor;
 
 
 		// If contentIsColorless setting is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
@@ -136,6 +140,27 @@ export class CannoliFactory {
 	}
 
 	getCannoliData(): VerifiedCannoliCanvasData {
+		// Check if there are any groups with the label "cannoli"
+		const allGroups = this.cannoliData.nodes.filter((node) => node.type === "group") as CannoliCanvasGroupData[];
+		const cannoliGroups = allGroups.filter((group) => group.label === "cannoli");
+
+		if (cannoliGroups.length > 0) {
+			// Collect IDs of nodes in "cannoli" groups
+			const cannoliNodeIds = new Set<string>();
+			cannoliGroups.forEach((group) => {
+				const members = this.getMembersForGroup(group);
+				members.forEach((memberId) => cannoliNodeIds.add(memberId));
+			});
+
+			// Filter nodes to keep only those in "cannoli" groups
+			this.cannoliData.nodes = this.cannoliData.nodes.filter((node) => cannoliNodeIds.has(node.id));
+
+			// Filter edges to keep only those with both source and target in "cannoli" groups
+			this.cannoliData.edges = this.cannoliData.edges.filter((edge) =>
+				cannoliNodeIds.has(edge.fromNode) && cannoliNodeIds.has(edge.toNode)
+			);
+		}
+
 		const addedEdges: CannoliCanvasEdgeData[] = [];
 
 		// Look for multi-edges
@@ -411,6 +436,10 @@ export class CannoliFactory {
 					const castGroup = group as VerifiedCannoliCanvasGroupData;
 
 					if (!castGroup || !castGroup.cannoliData.maxLoops) {
+						this.persistor?.addError(
+							group.id,
+							"Parallel groups must have a valid limit number in their label. Please ensure the label is a positive integer."
+						);
 						throw new Error(
 							"createForEachDuplicates: castGroup is undefined or castGroup.cannoliData.maxLoops is undefined"
 						);
@@ -443,7 +472,7 @@ export class CannoliFactory {
 						// Create a duplicate group and its members and edges
 						this.createDuplicateGroup(
 							group as VerifiedCannoliCanvasGroupData,
-							i + 1,
+							i,
 							incomingEdges,
 							outgoingEdges,
 							crossingInEdges,
