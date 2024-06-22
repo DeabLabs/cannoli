@@ -30,6 +30,7 @@
 	"dependencies": {
 		"@deablabs/cannoli-core": "workspace:*",
 		"@types/node-rsa": "1.1.4",
+		"@valtown/sdk": "0.1.0-alpha.2",
 		"esbuild-plugin-wat": "^0.2.7",
 		"js-yaml": "^4.1.0",
 		"node-rsa": "1.1.1",

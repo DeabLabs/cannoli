@@ -29,6 +29,7 @@ import {
 	SystemMessageEdge,
 } from "./edge";
 import { GenericCompletionResponse } from "../providers";
+import { ReceiveInfo } from "src/cannoli";
 
 export enum CannoliObjectKind {
 	Node = "node",
@@ -129,7 +130,7 @@ export interface CannoliData {
 
 export interface CannoliVertexData extends CannoliData {
 	groups: string[];
-	receiveInfo?: Record<string, string>;
+	receiveInfo?: ReceiveInfo;
 }
 
 export interface CannoliEdgeData extends CannoliData {

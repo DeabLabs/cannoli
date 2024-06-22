@@ -29,7 +29,7 @@ import {
 import invariant from "tiny-invariant";
 import { pathOr, stringToPath } from "remeda";
 import { ZodSchema, z } from "zod";
-import { Action, LongAction } from "src/cannoli";
+import { Action, ActionArgs, ActionResponse, ReceiveInfo } from "src/cannoli";
 
 type VariableValue = { name: string; content: string; edgeId: string | null };
 
@@ -2542,7 +2542,7 @@ const defaultHttpConfig: HttpConfig = {
 };
 
 export class HttpNode extends ContentNode {
-	receiveInfo: Record<string, string> | undefined;
+	receiveInfo: ReceiveInfo | undefined;
 
 	constructor(
 		nodeData:
@@ -2555,7 +2555,7 @@ export class HttpNode extends ContentNode {
 		this.receiveInfo = nodeData.cannoliData.receiveInfo
 	}
 
-	setReceiveInfo(info: Record<string, string>) {
+	setReceiveInfo(info: ReceiveInfo) {
 		this.receiveInfo = info;
 		const data = this.canvasData.nodes.find((node) => node.id === this.id) as AllVerifiedCannoliCanvasNodeData;
 		data.cannoliData.receiveInfo = info;
@@ -2566,75 +2566,88 @@ export class HttpNode extends ContentNode {
 	}
 
 	private async prepareAndExecuteAction(
-		action: Action | LongAction,
+		action: Action,
 		namedActionContent: string | null,
 		config: HttpConfig,
 		isLongAction: boolean = false
-	): Promise<string | Record<string, string> | Error> {
-		const { args: argNames, optionalArgs } = isLongAction
-			? this.getLongActionArgs(action as LongAction)
-			: this.getActionArgs(action as Action);
+	): Promise<ActionResponse> {
+		const { args: argNames, optionalArgs } = this.getActionArgs(action);
 
 		const variableValues = this.getVariableValues(true);
 
 		let isFirstArg = true;
 
+		// Create an object to hold the argument values
+		const args: ActionArgs = {};
+
 		// Get the value for each arg name from the variables, and error if any arg is missing
-		const args = argNames.map((argName) => {
+		for (const argName of argNames) {
+			// If the arg has an argInfo and its category is files, give it the filesystem interface
+			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "files") {
+				// If the filesystemInterface is null, error
+				if (!this.run.fileSystemInterface) {
+					return new Error(`The action "${action.name}" requires a file interface, but there isn't one in this run.`);
+				}
+				args[argName] = this.run.fileSystemInterface;
+				continue;
+			}
+
+			// If the arg has an argInfo and its category is fetcher, give it the responseTextFetcher
+			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "fetcher") {
+				args[argName] = this.run.fetcher;
+				continue;
+			}
+
 			// If the argName is in the configKeys, get the value from the config
 			if (action.argInfo && action.argInfo[argName] && (action.argInfo[argName].category === "config" || action.argInfo[argName].category === "env")) {
 				// Error if the config is not set
 				if (!config[argName] && !optionalArgs[argName]) {
-					this.error(
+					return new Error(
 						`Missing value for config parameter "${argName}" in available config. This action "${action.name}" accepts the following config keys:\n${Object.keys(action.argInfo)
 							.filter((arg) => action.argInfo?.[arg].category === "config" || action.argInfo?.[arg].category === "env")
 							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
 							.join('\n')}`
 					);
-					return;
 				}
 
 				if (config[argName]) {
 					if (action.argInfo[argName].type === "number") {
-						return this.coerceValue(config[argName] as string, argName, action.argInfo[argName].type);
+						args[argName] = this.coerceValue(config[argName] as string, argName, action.argInfo[argName].type);
 					} else {
-						return config[argName] as string;
+						args[argName] = config[argName] as string;
 					}
 				}
-
-				return;
-			} else {
-				if (isFirstArg && namedActionContent) {
-					isFirstArg = false;
-
-					if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].type) {
-						return this.coerceValue(namedActionContent, argName, action.argInfo[argName].type);
-					} else {
-						return namedActionContent;
-					}
-				}
-
-				const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
-				if (!variableValue && !optionalArgs[argName]) {
-					this.error(
-						`Missing value for variable "${argName}" in available arrows. This action "${action.name}" accepts the following variables:\n${argNames
-							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
-							.join('\n')}`
-					);
-					return;
-				}
-
-				if (variableValue) {
-					if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].type) {
-						return this.coerceValue(variableValue.content || "", argName, action.argInfo[argName].type);
-					} else {
-						return variableValue.content || "";
-					}
-				}
-
-				return;
+				continue;
 			}
-		});
+
+			if (isFirstArg && namedActionContent) {
+				isFirstArg = false;
+
+				if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].type) {
+					args[argName] = this.coerceValue(namedActionContent, argName, action.argInfo[argName].type);
+				} else {
+					args[argName] = namedActionContent;
+				}
+				continue;
+			}
+
+			const variableValue = variableValues.find((variableValue) => variableValue.name === argName);
+			if (!variableValue && !optionalArgs[argName]) {
+				return new Error(
+					`Missing value for variable "${argName}" in available arrows. This action "${action.name}" accepts the following variables:\n${argNames
+						.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
+						.join('\n')}`
+				);
+			}
+
+			if (variableValue) {
+				if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].type) {
+					args[argName] = this.coerceValue(variableValue.content || "", argName, action.argInfo[argName].type);
+				} else {
+					args[argName] = variableValue.content || "";
+				}
+			}
+		}
 
 		if (this.run.isMock) {
 			if (isLongAction) {
@@ -2653,12 +2666,7 @@ export class HttpNode extends ContentNode {
 			return "This is a mock response";
 		}
 
-		if (isLongAction) {
-			return await (action as LongAction).send(...args);
-		} else {
-			const result = await (action as Action).function(...args);
-			return this.handleFunctionResult(result);
-		}
+		return await action.function(args);
 	}
 
 	private coerceValue(value: string, argName: string, type: "number" | "boolean" | "string" | string[] | undefined): number | boolean | string {
@@ -2683,8 +2691,8 @@ export class HttpNode extends ContentNode {
 		}
 	}
 
-	handleFunctionResult(result: string | string[] | Record<string, (string | string[])> | Error | void): string | Error {
-		if (result === undefined) {
+	coerceActionResponseToString(result: ActionResponse): string | Error {
+		if (result === undefined || result === null) {
 			return "";
 		}
 		if (result instanceof Error) {
@@ -2721,7 +2729,7 @@ export class HttpNode extends ContentNode {
 			return;
 		}
 
-		const config = { ...defaultHttpConfig, ...overrides };
+		const config = { ...this.run.config, ...defaultHttpConfig, ...overrides };
 
 		this.executing();
 
@@ -2741,69 +2749,36 @@ export class HttpNode extends ContentNode {
 			const action = this.run.actions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
 
 			if (action) {
-				let actionResponse = await this.prepareAndExecuteAction(action, namedActionContent, config);
+				let actionResponse: ActionResponse;
 
-				if (actionResponse instanceof Error) {
-					if (config.catch) {
-						this.error(actionResponse.message);
-						return;
-					} else {
-						actionResponse = actionResponse.message;
-					}
-				}
+				if (action.receive && this.receiveInfo) {
+					actionResponse = await this.handleReceiveFunction(action);
+				} else {
+					actionResponse = await this.prepareAndExecuteAction(action, namedActionContent, config);
 
-				this.loadOutgoingEdges(actionResponse as string);
-				this.completed();
-				return;
-			}
-		} else if (this.run.longActions !== undefined && this.run.longActions.length > 0) {
-			const longAction = this.run.longActions.find((action) => action.name.toLowerCase().trim() === maybeActionName);
-
-			if (longAction) {
-				// Check if the receiveinfo is set
-				if (this.receiveInfo === undefined) {
-					const sendResponse = await this.prepareAndExecuteAction(longAction, namedActionContent, config, true);
-
-					if (sendResponse instanceof Error) {
+					if (actionResponse instanceof Error) {
 						if (config.catch) {
-							this.error(sendResponse.message);
+							this.error(actionResponse.message);
 							return;
 						} else {
-							this.loadOutgoingEdges(sendResponse.message);
-							this.completed();
-							return;
+							actionResponse = actionResponse.message;
 						}
 					}
 
-					this.setReceiveInfo(sendResponse as Record<string, string>);
-				}
-
-				invariant(this.receiveInfo);
-				// Make the receive request
-
-				let receiveResponse: string | Error;
-
-				if (this.run.isMock) {
-					if (longAction.resultKeys) {
-						// Make an object with the keys and values
-						const result = longAction.resultKeys.reduce<Record<string, string>>((acc, key) => {
-							acc[key] = "This is a mock response";
-							return acc;
-						}, {});
-						receiveResponse = this.handleFunctionResult(result);
+					if (action.receive) {
+						this.setReceiveInfo(actionResponse ?? {});
+						actionResponse = await this.handleReceiveFunction(action);
+					} else {
+						actionResponse = this.coerceActionResponseToString(actionResponse);
 					}
-
-					receiveResponse = "This is a mock response";
-				} else {
-					const result = await longAction.receive(this.receiveInfo);
-					receiveResponse = this.handleFunctionResult(result);
 				}
-				if (receiveResponse instanceof Error) {
-					this.error(receiveResponse.message);
+
+				if (actionResponse instanceof Error) {
+					this.error(actionResponse.message);
 					return;
 				}
 
-				this.loadOutgoingEdges(receiveResponse);
+				this.loadOutgoingEdges(actionResponse);
 				this.completed();
 				return;
 			}
@@ -2829,26 +2804,40 @@ export class HttpNode extends ContentNode {
 		this.completed();
 	}
 
+	private async handleReceiveFunction(action: Action): Promise<string | Error> {
+		let receiveResponse: string | Error;
 
-	getFunctionArgs(stringifiedFn: string): { args: string[], optionalArgs: Record<string, boolean> } {
-		const args = stringifiedFn.match(/\(([^)]*)\)/)?.[1] ?? "";
+		if (this.run.isMock) {
+			if (action.resultKeys) {
+				const result = action.resultKeys.reduce<Record<string, string>>((acc, key) => {
+					acc[key] = "This is a mock response";
+					return acc;
+				}, {});
+				receiveResponse = this.coerceActionResponseToString(result);
+			} else {
+				receiveResponse = "This is a mock response";
+			}
+		} else {
+			const result = await action.receive!(this.receiveInfo!);
+			receiveResponse = this.coerceActionResponseToString(result);
+		}
+
+		return receiveResponse;
+	}
+
+
+	getActionArgs(action: Action): { args: string[], optionalArgs: Record<string, boolean> } {
+		const stringifiedFn = action.function.toString();
+		// Match the function body to find the destructured object keys
+		const argsMatch = stringifiedFn.match(/\(\s*{([^}]*)}\s*\)\s*=>/);
+		const args = argsMatch ? argsMatch[1] : "";
+
 		const requiredArgs = args ? args.split(',').filter(arg => !arg.includes('=')).map((arg: string) => arg.trim()) : [];
 		const optionalArgs = args ? args.split(',').filter(arg => arg.includes('=')).map((arg: string) => arg.trim().split("=")[0].trim()) : [];
 		const optionalArgsObject: Record<string, boolean> = {};
 		optionalArgs.forEach(arg => optionalArgsObject[arg] = true);
+
 		return { args: [...requiredArgs, ...optionalArgs], optionalArgs: optionalArgsObject };
-	}
-
-	getActionArgs(action: Action) {
-		return this.getFunctionArgs(action.function.toString());
-	}
-
-	getLongActionArgs(longAction: LongAction) {
-		return this.getFunctionArgs(longAction.send.toString());
-	}
-
-	getActionArgsFromString(args: string): string[] {
-		return args.split(',').map((arg: string) => arg.trim().split("=")[0].trim());
 	}
 
 	private parseContentToRequest(content: string, config: HttpConfig): HttpRequest | Error {

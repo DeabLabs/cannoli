@@ -14,7 +14,7 @@ import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FilesystemInterface } from "./filesystem_interface";
 import { CanvasData, Persistor, canvasDataSchema } from "./persistor";
-import { Action, LongAction } from "./cannoli";
+import { Action } from "./cannoli";
 import { CannoliGroup } from "./models/group";
 
 export interface HttpTemplate {
@@ -85,7 +85,6 @@ export class Run {
 	fileSystemInterface: FilesystemInterface | null;
 	fetcher: ResponseTextFetcher;
 	actions: Action[] | undefined;
-	longActions: LongAction[] | undefined;
 	llm: Llm;
 	llmLimit: Limit;
 	persistor: Persistor | null;
@@ -107,7 +106,6 @@ export class Run {
 		llmConfigs,
 		fetcher,
 		actions,
-		longActions,
 		config,
 		args,
 		resume
@@ -123,7 +121,6 @@ export class Run {
 		persistor?: Persistor;
 		fileSystemInterface?: FilesystemInterface;
 		actions?: Action[];
-		longActions?: LongAction[];
 		resume?: boolean;
 	}) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
@@ -175,7 +172,6 @@ export class Run {
 		this.fileSystemInterface = fileSystemInterface ?? null;
 
 		this.actions = actions ?? undefined;
-		this.longActions = longActions ?? undefined;
 
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,

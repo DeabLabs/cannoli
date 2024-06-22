@@ -20,13 +20,15 @@ import {
 	ModelUsage,
 	LLMConfig,
 	GenericModelConfig,
-	Action
+	dalleGenerate,
+	exaSearch,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
 import { SYMBOLS, cannoliValTemplate } from "./val_templates";
+import { dataviewQuery, smartConnectionsQuery } from "./actions";
 
 interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -752,11 +754,6 @@ export default class Cannoli extends Plugin {
 		// Parse the file into a CanvasData object
 		const canvasData = await this.fetchData(file);
 
-
-		const cannoliSettings = {
-			contentIsColorless: this.settings.contentIsColorless ?? false,
-			chatFormatString: this.settings.chatFormatString ?? DEFAULT_SETTINGS.chatFormatString
-		};
 		const cannoliArgs = {
 			currentNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
 				"No active note",
@@ -776,235 +773,22 @@ export default class Cannoli extends Plugin {
 
 		const vaultInterface = new VaultInterface(this, fetcher);
 
-		const dalleAction: Action = {
-			name: "dalle",
-			function: async (prompt: string, model: string = "dall-e-3", size: string = "1024x1024") => {
-				try {
-					const response = await fetch("https://api.openai.com/v1/images/generations", {
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							"Authorization": `Bearer ${this.settings.openaiAPIKey}`,
-						},
-						body: JSON.stringify({
-							model: model,
-							prompt: prompt,
-							n: 1,
-							size: size,
-						}),
-					});
-
-					const data = await response.json();
-
-					if (!response.ok) {
-						throw new Error(data.error?.message || "Unknown error");
-					}
-
-					return `![${data.data?.[0]?.revised_prompt}](${data.data?.[0]?.url})`;
-				} catch (error) {
-					return new Error(`Error: ${error.message}`);
-				}
-			},
-			argInfo: {
-				prompt: {
-					category: "arg",
-				},
-				model: {
-					category: "config",
-				},
-				size: {
-					category: "config",
-				}
-			}
-		};
-
-		const dataviewAction: Action = {
-			name: "dataview",
-			function: async (query: string, limit: number = 50, extract: boolean = true, includeName: boolean = true, includeProperties: boolean = true, includeLink: boolean = true): Promise<string[] | Error> => {
-				try {
-					// If the content is wrapped in a code-block, with or without the "dataview" language identifier, remove it
-					if (query.startsWith("```dataview\n") || query.startsWith("```\n")) {
-						// Remove the first line (code block start) and the last line (code block end)
-						query = query.split('\n').slice(1, -1).join('\n');
-					}
-
-					query = query.trim();
-
-					const results = await vaultInterface.queryDataviewList(query);
-					if (results instanceof Error) {
-						return results;
-					}
-
-					if (results.length > limit) {
-						results.length = limit;
-					}
-
-					if (!extract) {
-						return results;
-					}
-
-					const noteContents = await vaultInterface.extractNoteContents(
-						results,
-						includeName,
-						includeProperties,
-						includeLink,
-						false
-					);
-
-					return noteContents;
-				} catch (error) {
-					return new Error(`Search failed: ${error.message}`);
-				}
-			},
-			argInfo: {
-				query: {
-					category: "arg",
-				},
-				limit: {
-					category: "config",
-					type: "number",
-				},
-				extract: {
-					category: "config",
-					type: "boolean",
-				},
-				includeName: {
-					category: "config",
-					type: "boolean",
-				},
-				includeProperties: {
-					category: "config",
-					type: "boolean",
-				},
-				includeLink: {
-					category: "config",
-					type: "boolean",
-				},
-			}
-		}
-
-		const smartConnectionsAction: Action = {
-			name: "smart-connections",
-			function: async (query: string, limit: number = 10, extract: boolean = true, includeName: boolean = true, includeProperties: boolean = true, includeLink: boolean = true): Promise<string[] | Error> => {
-				try {
-					// If the content is wrapped in a code-block, with or without the "smart-connections" language identifier, remove it
-					if (query.startsWith("```smart-connections\n") || query.startsWith("```\n")) {
-						// Remove the first line (code block start) and the last line (code block end)
-						query = query.split('\n').slice(1, -1).join('\n');
-					}
-
-					query = query.trim();
-
-					const noteLinks = await vaultInterface.querySmartConnections(query, limit);
-					if (noteLinks instanceof Error) {
-						return noteLinks;
-					}
-
-					if (!extract) {
-						return noteLinks;
-					}
-
-					const noteContents = await vaultInterface.extractNoteContents(
-						noteLinks,
-						includeName,
-						includeProperties,
-						includeLink,
-						false
-					);
-
-					return noteContents;
-				} catch (error) {
-					return new Error(`Search failed: ${error.message}`);
-				}
-			},
-			argInfo: {
-				query: {
-					category: "arg",
-				},
-				limit: {
-					category: "config",
-					type: "number",
-				},
-				extract: {
-					category: "config",
-					type: "boolean",
-				},
-				includeName: {
-					category: "config",
-					type: "boolean",
-				},
-				includeProperties: {
-					category: "config",
-					type: "boolean",
-				},
-				includeLink: {
-					category: "config",
-					type: "boolean",
-				},
-			}
-		}
-
-		const exaSearchAction: Action = {
-			name: "exa",
-			function: async (query: string, limit: number = 10): Promise<string[] | Error> => {
-				try {
-					const searchResponse = await requestUrl({
-						url: `https://api.exa.ai/search`,
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							"x-api-key": this.settings.exaAPIKey,
-						},
-						body: JSON.stringify({ query, numResults: limit, useAutoprompt: true }),
-					});
-
-					const searchResults = await searchResponse.json;
-					const ids = searchResults.results.map((result: { id: string }) => result.id);
-
-					const contentResponse = await requestUrl({
-						url: `https://api.exa.ai/contents`,
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							"x-api-key": this.settings.exaAPIKey,
-						},
-						body: JSON.stringify({ ids }),
-					});
-
-					const contents = await contentResponse.json;
-					const markdown = contents.results.map((result: { id: string, url: string, title: string, author: string, text: string }) => {
-						const authorField = result.author ? `**Author:** ${result.author}\n\n` : '';
-						return `# ${result.title}\n[${result.url}](${result.url})\n${authorField}${result.text}`;
-					});
-
-					return markdown;
-				} catch (error) {
-					return new Error(`Search failed: ${error.message}`);
-				}
-			},
-			argInfo: {
-				query: {
-					category: "arg",
-					type: "string",
-				},
-				limit: {
-					category: "config",
-					type: "number",
-				},
-			},
-		};
-
 		// Make the cannoli runner
 		const runner = new CannoliRunner({
 			llmConfigs: llmConfigs,
-			config: cannoliSettings,
 			fileSystemInterface: vaultInterface,
 			actions: [
-				...(this.settings.openaiAPIKey ? [dalleAction] : []),
-				...(this.settings.exaAPIKey ? [exaSearchAction] : []),
-				dataviewAction,
-				smartConnectionsAction
+				...(this.settings.openaiAPIKey ? [dalleGenerate] : []),
+				...(this.settings.exaAPIKey ? [exaSearch] : []),
+				dataviewQuery,
+				smartConnectionsQuery
 			],
+			config: {
+				...(this.settings.openaiAPIKey ? { openaiAPIKey: this.settings.openaiAPIKey } : {}),
+				...(this.settings.exaAPIKey ? { exaAPIKey: this.settings.exaAPIKey } : {}),
+				contentIsColorless: this.settings.contentIsColorless ?? false,
+				chatFormatString: this.settings.chatFormatString ?? DEFAULT_SETTINGS.chatFormatString
+			},
 			fetcher: fetcher,
 		});
 

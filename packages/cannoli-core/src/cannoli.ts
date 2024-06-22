@@ -4,36 +4,34 @@ import { LLMConfig } from "./providers";
 import { Persistor } from "./persistor";
 
 export type ArgInfo = {
-    category: "config" | "env" | "arg";
+    category: "config" | "env" | "arg" | "files" | "fetcher";
     type?: "string" | "number" | "boolean" | string[];
     displayName?: string;
     description?: string;
 }
 
+export type ActionArgs = {
+    [key: string]: string | number | boolean | FilesystemInterface | ResponseTextFetcher | undefined;
+};
+
+export type ActionResponse = string | string[] | Record<string, string | string[]> | void | Error | Promise<string | string[] | Record<string, string | string[]> | void | Error>;
+
+export type ReceiveInfo = string | string[] | Record<string, string | string[]>
+
 export type Action = {
     name: string;
-    function: (...args: (string | number | boolean | undefined)[]) => string | string[] | Record<string, (string | string[])> | void | Error | Promise<string | string[] | Record<string, (string | string[])> | void | Error>;
+    function: (args: ActionArgs) => ActionResponse;
+    receive?: (receiveInfo: ReceiveInfo) => ActionResponse;
     displayName?: string;
     description?: string;
     argInfo?: Record<string, ArgInfo>;
     resultKeys?: string[];
-}
-
-export type LongAction = {
-    name: string;
-    send: (...args: (string | number | boolean | undefined)[]) => Record<string, string> | Error | Promise<Record<string, string> | Error>;
-    receive: (receiveInfo: Record<string, string>) => string | string[] | Record<string, (string | string[])> | void | Error | Promise<string | string[] | Record<string, (string | string[])> | void | Error>;
-    displayName?: string;
-    description?: string;
-    argInfo?: Record<string, ArgInfo>;
-    resultKeys?: string[];
-}
+};
 
 export class Cannoli {
     private llmConfigs: LLMConfig[];
     private fileSystemInterface: FilesystemInterface | undefined;
     private actions: Action[] | undefined;
-    private longActions: LongAction[] | undefined;
     private fetcher: ResponseTextFetcher | undefined;
     private config: Record<string, unknown> | undefined;
 
@@ -41,21 +39,18 @@ export class Cannoli {
         llmConfigs,
         fileSystemInterface,
         actions,
-        longActions,
         fetcher,
         config,
     }: {
         llmConfigs: LLMConfig[];
         fileSystemInterface?: FilesystemInterface;
         actions?: Action[];
-        longActions?: LongAction[];
         fetcher?: ResponseTextFetcher;
         config?: Record<string, unknown>;
     }) {
         this.llmConfigs = llmConfigs;
         this.fileSystemInterface = fileSystemInterface;
         this.actions = actions;
-        this.longActions = longActions;
         this.fetcher = fetcher;
         this.config = config;
     }
@@ -107,7 +102,6 @@ export class Cannoli {
             },
             fileSystemInterface: this.fileSystemInterface,
             actions: this.actions,
-            longActions: this.longActions,
             isMock: isMock,
             fetcher: this.fetcher,
             config: this.config,

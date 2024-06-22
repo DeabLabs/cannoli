@@ -96,6 +96,9 @@ importers:
       '@types/node-rsa':
         specifier: 1.1.4
         version: 1.1.4
+      '@valtown/sdk':
+        specifier: 0.1.0-alpha.2
+        version: 0.1.0-alpha.2
       esbuild-plugin-wat:
         specifier: ^0.2.7
         version: 0.2.7
@@ -1147,6 +1150,9 @@ packages:
 
   '@ungap/structured-clone@1.2.0':
     resolution: {integrity: sha512-zuVdFrMJiuCDQUMCzQaD6KL28MjnqqN8XnAqiEq9PNm/hCPTSGfrXCOfwj1ow4LFb/tNymJPwsNbVePc1xFqrQ==}
+
+  '@valtown/sdk@0.1.0-alpha.2':
+    resolution: {integrity: sha512-0mbh2qtj76caF5N8OL2A0pNT6zewKe5O6CNFAsNsXaTIWUjbjJwsR+kgqWNy8XkmWYa6SPiZx5XY/oiSKPJdNg==}
 
   '@vladfrangu/async_event_emitter@2.2.4':
     resolution: {integrity: sha512-ButUPz9E9cXMLgvAW8aLAKKJJsPu1dY1/l/E8xzLFuysowXygs6GBcyunK9rnGC4zTsnIc2mQo71rGw9U+Ykug==}
@@ -3393,6 +3399,19 @@ snapshots:
       eslint-visitor-keys: 3.4.3
 
   '@ungap/structured-clone@1.2.0': {}
+
+  '@valtown/sdk@0.1.0-alpha.2':
+    dependencies:
+      '@types/node': 18.19.33
+      '@types/node-fetch': 2.6.11
+      abort-controller: 3.0.0
+      agentkeepalive: 4.5.0
+      form-data-encoder: 1.7.2
+      formdata-node: 4.4.1
+      node-fetch: 2.7.0
+      web-streams-polyfill: 3.3.3
+    transitivePeerDependencies:
+      - encoding
 
   '@vladfrangu/async_event_emitter@2.2.4':
     optional: true
