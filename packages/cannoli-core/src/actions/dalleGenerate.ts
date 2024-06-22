@@ -4,12 +4,12 @@ export const dalleGenerate: Action = {
     name: "dalle",
     function: async ({
         prompt,
-        openaiAPIKey,
+        OPENAI_API_KEY,
         model = "dall-e-3",
         size = "1024x1024"
     }: {
         prompt: string;
-        openaiAPIKey: string;
+        OPENAI_API_KEY: string;
         model?: string;
         size?: string;
     }) => {
@@ -18,7 +18,7 @@ export const dalleGenerate: Action = {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${openaiAPIKey}`,
+                    "Authorization": `Bearer ${OPENAI_API_KEY}`,
                 },
                 body: JSON.stringify({
                     model: model,
@@ -49,7 +49,7 @@ export const dalleGenerate: Action = {
         size: {
             category: "config",
         },
-        openaiAPIKey: {
+        OPENAI_API_KEY: {
             category: "env",
         },
     }

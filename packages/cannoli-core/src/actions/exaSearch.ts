@@ -5,12 +5,12 @@ export const exaSearch: Action = {
     name: "exa",
     function: async ({
         query,
-        exaAPIKey,
+        EXA_API_KEY,
         limit = 10,
         fetcher,
     }: {
         query: string;
-        exaAPIKey: string;
+        EXA_API_KEY: string;
         limit?: number;
         fetcher: ResponseTextFetcher;
     }): Promise<string[] | Error> => {
@@ -19,7 +19,7 @@ export const exaSearch: Action = {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "x-api-key": exaAPIKey,
+                    "x-api-key": EXA_API_KEY,
                 },
                 body: JSON.stringify({ query, numResults: limit, useAutoprompt: true }),
             });
@@ -35,7 +35,7 @@ export const exaSearch: Action = {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "x-api-key": exaAPIKey,
+                    "x-api-key": EXA_API_KEY,
                 },
                 body: JSON.stringify({ ids }),
             });
@@ -64,7 +64,7 @@ export const exaSearch: Action = {
             category: "config",
             type: "number",
         },
-        exaAPIKey: {
+        EXA_API_KEY: {
             category: "env",
         },
         fetcher: {

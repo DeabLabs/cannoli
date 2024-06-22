@@ -784,8 +784,8 @@ export default class Cannoli extends Plugin {
 				smartConnectionsQuery
 			],
 			config: {
-				...(this.settings.openaiAPIKey ? { openaiAPIKey: this.settings.openaiAPIKey } : {}),
-				...(this.settings.exaAPIKey ? { exaAPIKey: this.settings.exaAPIKey } : {}),
+				...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
+				...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
 				contentIsColorless: this.settings.contentIsColorless ?? false,
 				chatFormatString: this.settings.chatFormatString ?? DEFAULT_SETTINGS.chatFormatString
 			},
