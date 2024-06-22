@@ -12,10 +12,10 @@ import {
 } from "./providers";
 import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
-import { FilesystemInterface } from "./filesystem_interface";
+import { FileManager } from "./fileManager";
 import { CanvasData, Persistor, canvasDataSchema } from "./persistor";
-import { Action } from "./cannoli";
 import { CannoliGroup } from "./models/group";
+import { CannoliNode } from "./models/node";
 
 export interface HttpTemplate {
 	id: string;
@@ -33,6 +33,33 @@ export interface HttpRequest {
 	headers?: string;
 	body?: string;
 }
+
+export type ArgInfo = {
+	category: "config" | "env" | "arg" | "fileManager" | "fetcher";
+	type?: "string" | "number" | "boolean" | string[];
+	displayName?: string;
+	description?: string;
+}
+
+export type ActionArgs = {
+	[key: string]: string | number | boolean | FileManager | ResponseTextFetcher | undefined;
+};
+
+export type ActionResponse = string | string[] | Record<string, string | string[]> | void | Error | Promise<string | string[] | Record<string, string | string[]> | void | Error>;
+
+export type ReceiveInfo = string | string[] | Record<string, string | string[]>
+
+export type Action = {
+	name: string;
+	function: (args: ActionArgs) => ActionResponse;
+	receive?: (receiveInfo: ReceiveInfo) => ActionResponse;
+	displayName?: string;
+	description?: string;
+	argInfo?: Record<string, ArgInfo>;
+	resultKeys?: string[];
+};
+
+export type Replacer = (content: string, isMock: boolean, node?: CannoliNode) => Promise<string>;
 
 export type StoppageReason = "user" | "error" | "complete";
 
@@ -74,6 +101,22 @@ export function isValidKey(
 	return key in config;
 }
 
+export interface RunArgs {
+	cannoli: unknown;
+	llmConfigs: LLMConfig[];
+	fetcher?: ResponseTextFetcher;
+	config?: Record<string, unknown>;
+	envVars?: Record<string, string>;
+	args?: Record<string, string>;
+	onFinish?: (stoppage: Stoppage) => void;
+	isMock?: boolean;
+	persistor?: Persistor;
+	fileManager?: FileManager;
+	actions?: Action[];
+	replacers?: Replacer[];
+	resume?: boolean;
+}
+
 export class Run {
 	graph: Record<string, CannoliObject> = {};
 	onFinish: (stoppage: Stoppage) => void;
@@ -81,10 +124,12 @@ export class Run {
 
 	args: Record<string, string> | null;
 	config: Record<string, unknown> | null;
+	envVars: Record<string, string> | null;
 
-	fileSystemInterface: FilesystemInterface | null;
+	fileManager: FileManager | null;
 	fetcher: ResponseTextFetcher;
-	actions: Action[] | undefined;
+	actions: Action[];
+	replacers: Replacer[];
 	llm: Llm;
 	llmLimit: Limit;
 	persistor: Persistor | null;
@@ -98,31 +143,21 @@ export class Run {
 	forEachTracker: Map<string, number> = new Map();
 
 	constructor({
-		cannoliJSON,
+		cannoli,
 		isMock,
 		onFinish,
 		persistor,
-		fileSystemInterface,
+		fileManager,
 		llmConfigs,
 		fetcher,
 		actions,
+		replacers,
 		config,
+		envVars,
 		args,
 		resume
 
-	}: {
-		cannoliJSON: unknown;
-		llmConfigs: LLMConfig[];
-		fetcher?: ResponseTextFetcher;
-		config?: Record<string, unknown>;
-		args?: Record<string, string>;
-		onFinish?: (stoppage: Stoppage) => void;
-		isMock?: boolean;
-		persistor?: Persistor;
-		fileSystemInterface?: FilesystemInterface;
-		actions?: Action[];
-		resume?: boolean;
-	}) {
+	}: RunArgs) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
 		this.persistor = persistor ?? null;
@@ -137,20 +172,20 @@ export class Run {
 
 		this.llm = new LLMProvider({ configs: llmConfigs });
 
-		this.config = config ?? null;
+		this.envVars = envVars ?? {};
+		this.config = { ...config ?? {}, ...this.envVars };
+
 		this.args = args ?? null;
 
 		let parsedCannoliJSON: CanvasData;
 
 		try {
 			// Parse the JSON and get the settings and args
-			parsedCannoliJSON = canvasDataSchema.parse(cannoliJSON);
+			parsedCannoliJSON = canvasDataSchema.parse(cannoli);
 		} catch (error) {
 			this.error(error.message);
 			return;
 		}
-
-		parsedCannoliJSON.args = args;
 
 		const limit = this.config?.pLimit ?? 1000;
 
@@ -169,9 +204,11 @@ export class Run {
 		delete this.args?.currentNote;
 		delete this.args?.selection;
 
-		this.fileSystemInterface = fileSystemInterface ?? null;
+		this.fileManager = fileManager ?? null;
 
-		this.actions = actions ?? undefined;
+		this.actions = actions ?? [];
+
+		this.replacers = replacers ?? [];
 
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
@@ -249,7 +286,9 @@ export class Run {
 
 		const argNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "variable" || node.cannoliData.type === "input");
 
-		invariant(argNodes, "No arg nodes found");
+		if (!argNodes) {
+			return argNames;
+		}
 
 		for (const node of argNodes) {
 			// Check if the first line of the text contains only a bracketed name
@@ -266,7 +305,9 @@ export class Run {
 
 		const resultNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "variable" || node.cannoliData.type === "output");
 
-		invariant(resultNodes, "No result nodes found");
+		if (!resultNodes) {
+			return resultNames;
+		}
 
 		for (const node of resultNodes) {
 			// Check if the first line of the text contains only a bracketed name

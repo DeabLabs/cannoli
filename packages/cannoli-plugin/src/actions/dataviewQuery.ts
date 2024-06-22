@@ -80,7 +80,7 @@ export const dataviewQuery: Action = {
             type: "boolean",
         },
         vaultInterface: {
-            category: "files",
+            category: "fileManager",
         }
     }
 }

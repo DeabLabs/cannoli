@@ -76,7 +76,7 @@ export const smartConnectionsQuery: Action = {
             type: "boolean",
         },
         vaultInterface: {
-            category: "files",
+            category: "fileManager",
         }
     }
 }

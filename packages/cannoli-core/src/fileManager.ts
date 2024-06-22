@@ -1,7 +1,7 @@
 import { Reference } from "./models/graph";
 import { HttpTemplate } from "./run";
 
-export interface FilesystemInterface {
+export interface FileManager {
     getHttpTemplateByName(
         name: string,
     ): HttpTemplate | Error;
@@ -23,13 +23,6 @@ export interface FilesystemInterface {
         fileName: string,
         isMock: boolean,
     ): Promise<ArrayBuffer | null>;
-
-
-    replaceDataviewQueries(content: string, isMock: boolean): Promise<string>;
-
-    replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean, includeLink: boolean, isMock: boolean): Promise<string>;
-
-    replaceSmartConnections(content: string, isMock: boolean): Promise<string>;
 
     editSelection(newContent: string, isMock: boolean): void;
 

@@ -1,4 +1,4 @@
-import { Action } from "src/cannoli";
+import { Action } from "src/run";
 import { ResponseTextFetcher } from "src/run";
 
 export const exaSearch: Action = {

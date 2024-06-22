@@ -114,15 +114,12 @@ export class CannoliFactory {
 		// Cast the canvas to a CannoliCanvasData
 		const cannoliCanvasData = canvas as CannoliCanvasData;
 
-		cannoliCanvasData.args = args;
-
 		this.cannoliData = cannoliCanvasData;
 		this.currentNote = args?.currentNote ?? "No active note";
 
 		this.resume = resume;
 
 		this.persistor = persistor;
-
 
 		// If contentIsColorless setting is true, change the node map so that "0" corresponds to "content" and "6" corresponds to "call"
 		if (contentIsColorless) {
@@ -229,8 +226,6 @@ export class CannoliFactory {
 		let verifiedCannoliData: CannoliCanvasData = {
 			nodes: this.cannoliData.nodes.filter((node) => !!node.cannoliData),
 			edges: this.cannoliData.edges.filter((edge) => !!edge.cannoliData),
-			settings: this.cannoliData.settings,
-			args: this.cannoliData.args,
 		};
 
 		// Create forEach duplicates

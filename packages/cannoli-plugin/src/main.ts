@@ -16,12 +16,14 @@ import {
 	SupportedProviders,
 	CanvasData,
 	CanvasGroupData,
-	Cannoli as CannoliRunner,
 	ModelUsage,
 	LLMConfig,
 	GenericModelConfig,
 	dalleGenerate,
 	exaSearch,
+	Action,
+	Replacer,
+	runWithControl,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -760,7 +762,6 @@ export default class Cannoli extends Plugin {
 			selection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
 		};
 
-
 		const canvas = new ObsidianCanvas(canvasData, file);
 
 		const fetcher: ResponseTextFetcher = async (url: string, { body, method, headers }: RequestInit) => {
@@ -771,35 +772,45 @@ export default class Cannoli extends Plugin {
 			});
 		};
 
+		const actions: Action[] = [
+			...(this.settings.openaiAPIKey ? [dalleGenerate] : []),
+			...(this.settings.exaAPIKey ? [exaSearch] : []),
+			dataviewQuery,
+			smartConnectionsQuery
+		];
+
 		const vaultInterface = new VaultInterface(this, fetcher);
 
-		// Make the cannoli runner
-		const runner = new CannoliRunner({
-			llmConfigs: llmConfigs,
-			fileSystemInterface: vaultInterface,
-			actions: [
-				...(this.settings.openaiAPIKey ? [dalleGenerate] : []),
-				...(this.settings.exaAPIKey ? [exaSearch] : []),
-				dataviewQuery,
-				smartConnectionsQuery
-			],
-			config: {
-				...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
-				...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
-				contentIsColorless: this.settings.contentIsColorless ?? false,
-				chatFormatString: this.settings.chatFormatString ?? DEFAULT_SETTINGS.chatFormatString
-			},
-			fetcher: fetcher,
-		});
+		const replacers: Replacer[] = [
+			vaultInterface.replaceDataviewQueries,
+			vaultInterface.replaceSmartConnections
+		];
 
+		const config = {
+			contentIsColorless: this.settings.contentIsColorless ?? false,
+			chatFormatString: this.settings.chatFormatString ?? DEFAULT_SETTINGS.chatFormatString
+		};
+
+		const envVars = {
+			...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
+			...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
+		};
 
 		// Do the validation run
-		const [validationStoppagePromise] = runner.runWithControl({
-			cannoliJSON: canvasData,
+		const [validationStoppagePromise] = await runWithControl({
+			cannoli: canvasData,
+			llmConfigs: llmConfigs,
+			actions: actions,
+			replacers: replacers,
+			config: config,
+			envVars: envVars,
+			fetcher: fetcher,
 			args: cannoliArgs,
 			persistor: noCanvas ? undefined : canvas,
-			isMock: true,
+			fileManager: vaultInterface,
+			isMock: true
 		});
+
 		const validationStoppage = await validationStoppagePromise;
 
 		if (validationStoppage.reason === "error") {
@@ -827,10 +838,17 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Do the live run
-		const [liveStoppagePromise, stopLiveCannoli] = runner.runWithControl({
-			cannoliJSON: canvasData,
+		const [liveStoppagePromise, stopLiveCannoli] = await runWithControl({
+			cannoli: canvasData,
+			llmConfigs: llmConfigs,
+			actions: actions,
+			replacers: replacers,
+			config: config,
+			envVars: envVars,
+			fetcher: fetcher,
 			args: cannoliArgs,
 			persistor: noCanvas ? undefined : canvas,
+			fileManager: vaultInterface,
 			isMock: false,
 		});
 

@@ -1,6 +1,6 @@
 export * from "./models/graph"
 export * from "./persistor"
-export * from "./filesystem_interface"
+export * from "./fileManager"
 export * from "./providers"
 export * from "./run"
 export * from "./models/node"

@@ -92,8 +92,6 @@ export type CanvasEdgeData = z.infer<typeof canvasEdgeDataSchema> & {
 export const canvasDataSchema = z.object({
 	nodes: z.array(allCanvasNodeDataSchema),
 	edges: z.array(canvasEdgeDataSchema),
-	settings: z.record(z.any()).optional(),
-	args: z.record(z.string()).optional(),
 });
 
 export type CanvasData = z.infer<typeof canvasDataSchema>;

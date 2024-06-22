@@ -1,156 +1,145 @@
-import { FilesystemInterface } from "./filesystem_interface";
-import { ResponseTextFetcher, Run, Stoppage } from "./run";
+import { FileManager } from "./fileManager";
+import { Action, Replacer, ResponseTextFetcher, Run, RunArgs, Stoppage } from "./run";
 import { LLMConfig } from "./providers";
-import { Persistor } from "./persistor";
 
-export type ArgInfo = {
-    category: "config" | "env" | "arg" | "files" | "fetcher";
-    type?: "string" | "number" | "boolean" | string[];
-    displayName?: string;
-    description?: string;
-}
+export async function runWithControl({
+    cannoli,
+    llmConfigs,
+    args,
+    fileManager,
+    persistor,
+    actions,
+    replacers,
+    fetcher,
+    config,
+    envVars,
+    isMock,
+    resume,
+    onFinish,
+}: RunArgs): Promise<[Promise<Stoppage>, () => void]> {
+    let resolver: (stoppage: Stoppage) => void;
+    const done = new Promise<Stoppage>((resolve) => {
+        resolver = resolve;
+    });
 
-export type ActionArgs = {
-    [key: string]: string | number | boolean | FilesystemInterface | ResponseTextFetcher | undefined;
-};
-
-export type ActionResponse = string | string[] | Record<string, string | string[]> | void | Error | Promise<string | string[] | Record<string, string | string[]> | void | Error>;
-
-export type ReceiveInfo = string | string[] | Record<string, string | string[]>
-
-export type Action = {
-    name: string;
-    function: (args: ActionArgs) => ActionResponse;
-    receive?: (receiveInfo: ReceiveInfo) => ActionResponse;
-    displayName?: string;
-    description?: string;
-    argInfo?: Record<string, ArgInfo>;
-    resultKeys?: string[];
-};
-
-export class Cannoli {
-    private llmConfigs: LLMConfig[];
-    private fileSystemInterface: FilesystemInterface | undefined;
-    private actions: Action[] | undefined;
-    private fetcher: ResponseTextFetcher | undefined;
-    private config: Record<string, unknown> | undefined;
-
-    constructor({
+    const run = new Run({
         llmConfigs,
-        fileSystemInterface,
+        cannoli,
+        args,
+        persistor,
+        onFinish: (stoppage: Stoppage) => {
+            resolver(stoppage);
+            if (onFinish) onFinish(stoppage);
+        },
+        fileManager,
         actions,
+        replacers,
+        isMock,
         fetcher,
         config,
-    }: {
-        llmConfigs: LLMConfig[];
-        fileSystemInterface?: FilesystemInterface;
-        actions?: Action[];
-        fetcher?: ResponseTextFetcher;
-        config?: Record<string, unknown>;
-    }) {
-        this.llmConfigs = llmConfigs;
-        this.fileSystemInterface = fileSystemInterface;
-        this.actions = actions;
-        this.fetcher = fetcher;
-        this.config = config;
+        envVars,
+        resume,
+    });
+
+    run.start();
+
+    return [done, () => run.stop()];
+}
+
+export async function bake(
+    cannoli: unknown,
+    llmConfigs: LLMConfig[],
+    fileManager?: FileManager,
+    actions?: Action[],
+    replacers?: Replacer[],
+    fetcher?: ResponseTextFetcher,
+    config?: Record<string, unknown>,
+    envVars?: Record<string, string>,
+): Promise<{
+    argNames: string[];
+    resultNames: string[];
+    cannoliFunction: (args: Record<string, string>) => Promise<Record<string, string>>;
+}> {
+    // Mock run the cannoli
+    const [done] = await runWithControl({
+        cannoli,
+        llmConfigs,
+        fileManager,
+        actions,
+        replacers,
+        fetcher,
+        config,
+        envVars,
+        isMock: true,
+    });
+
+    const stoppage = await done;
+
+    if (stoppage.reason == "error") {
+        throw new Error("There's an error in the cannoli. Please fix it before baking.");
     }
 
-    async run({
-        cannoliJSON,
-        args,
-        persistor,
-        isMock,
-    }: {
-        cannoliJSON: unknown;
-        args?: Record<string, string>;
-        persistor?: Persistor;
-        isMock?: boolean;
-    }): Promise<Stoppage> {
-        const [done] = this.runWithControl({
-            cannoliJSON,
-            args,
-            persistor,
-            isMock,
-        });
+    // Get the args and results
+    const argNames: string[] = stoppage.argNames;
+    const resultNames: string[] = stoppage.resultNames;
 
-        return done;
-    }
-
-    runWithControl({
-        cannoliJSON,
-        args,
-        persistor,
-        isMock,
-    }: {
-        cannoliJSON: unknown;
-        args?: Record<string, string>;
-        persistor?: Persistor;
-        isMock?: boolean;
-    }): [Promise<Stoppage>, () => void] {
-        let resolver: (stoppage: Stoppage) => void;
-        const done = new Promise<Stoppage>((resolve) => {
-            resolver = resolve;
-        });
-
-        const run = new Run({
-            llmConfigs: this.llmConfigs,
-            cannoliJSON: cannoliJSON,
-            args: args,
-            persistor: persistor,
-            onFinish: (stoppage: Stoppage) => {
-                resolver(stoppage);
-            },
-            fileSystemInterface: this.fileSystemInterface,
-            actions: this.actions,
-            isMock: isMock,
-            fetcher: this.fetcher,
-            config: this.config,
-        });
-
-        run.start();
-
-        return [done, () => run.stop()];
-    }
-
-    async bake(
-        cannoliJSON: unknown,
-    ): Promise<(args: Record<string, string>) => Promise<Record<string, string>>> {
-        // Mock run the cannoli
-        const stoppage = await this.run({
-            cannoliJSON,
-            isMock: true,
-        });
-
-        if (stoppage.reason == "error") {
-            throw new Error("There's an error in the cannoli. Please fix it before baking.");
+    // Build the function
+    const cannoliFunction = async (args: Record<string, string>): Promise<Record<string, string>> => {
+        const missingArgs = argNames.filter(arg => !(arg in args));
+        if (missingArgs.length > 0) {
+            throw new Error(`Missing required arguments: ${missingArgs.join(", ")}`);
         }
 
-        // Get the args and results
-        const argNames: string[] = stoppage.argNames;
-        const resultNames: string[] = stoppage.resultNames;
+        return run({
+            cannoli,
+            llmConfigs,
+            args,
+            fileManager,
+            actions,
+            replacers,
+            fetcher,
+            config,
+            envVars,
+        });
+    };
 
-        // Build the function
-        const cannoliFunction = async (args: Record<string, string>): Promise<Record<string, string>> => {
-            const missingArgs = argNames.filter(arg => !(arg in args));
-            if (missingArgs.length > 0) {
-                throw new Error(`Missing required arguments: ${missingArgs.join(", ")}`);
-            }
+    return { argNames, resultNames, cannoliFunction };
+}
 
-            return this.run({
-                cannoliJSON,
-                args,
-            }).then((stoppage) => {
-                // Assuming stoppage contains the results in some form
-                const results: Record<string, string> = {};
+export async function run({
+    cannoli,
+    llmConfigs,
+    args,
+    fileManager,
+    persistor,
+    actions,
+    replacers,
+    fetcher,
+    config,
+    envVars,
+    isMock,
+    resume,
+}: RunArgs): Promise<Record<string, string>> {
+    const [done] = await runWithControl({
+        cannoli,
+        llmConfigs,
+        args,
+        fileManager,
+        persistor,
+        actions,
+        replacers,
+        fetcher,
+        config,
+        envVars,
+        isMock,
+        resume,
+    });
 
-                resultNames.forEach((name) => {
-                    results[name] = stoppage.results[name];
-                });
+    const stoppage = await done;
 
-                return results;
-            });
-        };
-
-        return cannoliFunction;
+    if (stoppage.reason === "error") {
+        throw new Error("Error occurred during the run.");
     }
+
+    return stoppage.results;
 }

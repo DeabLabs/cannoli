@@ -1,10 +1,10 @@
 import Cannoli from "./main";
-import { ResponseTextFetcher, Reference, ReferenceType, FilesystemInterface, HttpTemplate } from "@deablabs/cannoli-core";
+import { ResponseTextFetcher, Reference, ReferenceType, FileManager, HttpTemplate, CannoliNode, ContentNodeType } from "@deablabs/cannoli-core";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";
 
-export class VaultInterface implements FilesystemInterface {
+export class VaultInterface implements FileManager {
 	private cannoli: Cannoli;
 	private fetcher: ResponseTextFetcher;
 
@@ -12,6 +12,8 @@ export class VaultInterface implements FilesystemInterface {
 		this.cannoli = cannoli;
 		this.fetcher = fetcher;
 
+		this.replaceDataviewQueries = this.replaceDataviewQueries.bind(this);
+		this.replaceSmartConnections = this.replaceSmartConnections.bind(this);
 	}
 
 	getHttpTemplateByName(
@@ -296,7 +298,11 @@ export class VaultInterface implements FilesystemInterface {
 		return content;
 	}
 
-	async replaceDataviewQueries(content: string, isMock: boolean): Promise<string> {
+	async replaceDataviewQueries(content: string, isMock: boolean, node?: CannoliNode): Promise<string> {
+		if (node && node.type === ContentNodeType.Http) {
+			return content;
+		}
+
 		const nonEmbedRegex = /```dataview\n([\s\S]*?)\n```/g;
 		const embedRegex = /{{\n```dataview\n([\s\S]*?)\n```\n([^\n]*)}}/g;
 		const anyDataviewRegex = /```dataview\n([\s\S]*?)\n```/;
@@ -464,7 +470,11 @@ export class VaultInterface implements FilesystemInterface {
 		return processedContent;
 	}
 
-	async replaceSmartConnections(content: string, isMock: boolean): Promise<string> {
+	async replaceSmartConnections(content: string, isMock: boolean, node?: CannoliNode): Promise<string> {
+		if (node && node.type === ContentNodeType.Http) {
+			return content;
+		}
+
 		const nonEmbedRegex = /```smart-connections\n([\s\S]*?)\n```/g;
 		const embedRegex = /{{([^\n]*)\n```smart-connections\n([\s\S]*?)\n```\n([^\n]*)}}/g;
 		const anySCRegex = /```smart-connections\n([\s\S]*?)\n```/;

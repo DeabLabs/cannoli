@@ -29,7 +29,7 @@ import {
 import invariant from "tiny-invariant";
 import { pathOr, stringToPath } from "remeda";
 import { ZodSchema, z } from "zod";
-import { Action, ActionArgs, ActionResponse, ReceiveInfo } from "src/cannoli";
+import { Action, ActionArgs, ActionResponse, ReceiveInfo } from "../run";
 
 type VariableValue = { name: string; content: string; edgeId: string | null };
 
@@ -91,16 +91,9 @@ export class CannoliNode extends CannoliVertex {
 				return varMap.get(reference.name) ?? "{{invalid}}";
 			});
 
-			// Only replace dataview queries and smart connections if there's a fileSystemInterface and it's not a search node
-			if (this.run.fileSystemInterface && this.type !== ContentNodeType.Search) {
-				// Render dataview queries
-				processedText = await this.run.fileSystemInterface.replaceDataviewQueries(processedText, this.run.isMock);
-
-				// Render smart connections
-				processedText = await this.run.fileSystemInterface.replaceSmartConnections(
-					processedText,
-					this.run.isMock
-				);
+			// Run replacer functions
+			for (const replacer of this.run.replacers) {
+				processedText = await replacer(processedText, this.run.isMock, this);
 			}
 
 			return processedText;
@@ -142,11 +135,11 @@ export class CannoliNode extends CannoliVertex {
 				}
 
 				// If there's no fileSystemInterface, throw an error
-				if (!this.run.fileSystemInterface) {
-					throw new Error("No fileSystemInterface found");
+				if (!this.run.fileManager) {
+					throw new Error("No fileManager found");
 				}
 
-				const noteContent = await this.run.fileSystemInterface.getNote({
+				const noteContent = await this.run.fileManager.getNote({
 					name: noteName,
 					type: ReferenceType.Note,
 					shouldExtract: true,
@@ -172,11 +165,11 @@ export class CannoliNode extends CannoliVertex {
 
 	async getContentFromNote(reference: Reference): Promise<string | null> {
 		// If there's no fileSystemInterface, throw an error
-		if (!this.run.fileSystemInterface) {
-			throw new Error("No fileSystemInterface found");
+		if (!this.run.fileManager) {
+			throw new Error("No fileManager found");
 		}
 
-		const note = await this.run.fileSystemInterface.getNote(reference, this.run.isMock);
+		const note = await this.run.fileManager.getNote(reference, this.run.isMock);
 
 		if (note === null) {
 			return null;
@@ -1396,7 +1389,7 @@ export class CallNode extends CannoliNode {
 			});
 		}
 
-		if (this.run.fileSystemInterface) {
+		if (this.run.fileManager) {
 			const imageExtensions = [".jpg", ".png", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg", ".ico", ".jfif", ".avif"];
 			// should match instances like ![[image.jpg]]
 			const fileImageRegex = new RegExp(`!\\[\\[([^\\]]+(${imageExtensions.join("|")}))\\]\\]`, "g");
@@ -1405,7 +1398,7 @@ export class CallNode extends CannoliNode {
 				const fileName = match[1];
 
 				// get file somehow from the filename
-				const file = await this.run.fileSystemInterface.getFile(fileName, this.run.isMock);
+				const file = await this.run.fileManager.getFile(fileName, this.run.isMock);
 
 				if (!file) {
 					continue;
@@ -2217,11 +2210,11 @@ export class ReferenceNode extends ContentNode {
 
 			try {
 				// If there's no fileSystemInterface, throw an error
-				if (!this.run.fileSystemInterface) {
-					throw new Error("No fileSystemInterface found");
+				if (!this.run.fileManager) {
+					throw new Error("No fileManager found");
 				}
 
-				noteName = await this.run.fileSystemInterface.createNoteAtExistingPath(
+				noteName = await this.run.fileManager.createNoteAtExistingPath(
 					referenceNameEdge.content,
 					path,
 					content
@@ -2273,11 +2266,11 @@ export class ReferenceNode extends ContentNode {
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
 				// If there's no fileSystemInterface, throw an error
-				if (!this.run.fileSystemInterface) {
-					throw new Error("No fileSystemInterface found");
+				if (!this.run.fileManager) {
+					throw new Error("No fileManager found");
 				}
 
-				const edit = await this.run.fileSystemInterface.editNote(
+				const edit = await this.run.fileManager.editNote(
 					this.reference,
 					newContent,
 					append ?? false
@@ -2292,11 +2285,11 @@ export class ReferenceNode extends ContentNode {
 				}
 			} else if (this.reference.type === ReferenceType.Selection) {
 				// If there's no fileSystemInterface, throw an error
-				if (!this.run.fileSystemInterface) {
-					throw new Error("No fileSystemInterface found");
+				if (!this.run.fileManager) {
+					throw new Error("No fileManager found");
 				}
 
-				this.run.fileSystemInterface.editSelection(newContent, this.run.isMock);
+				this.run.fileManager.editSelection(newContent, this.run.isMock);
 				return;
 			} else if (this.reference.type === ReferenceType.Floating) {
 				// Search through all nodes for a floating node with the correct name
@@ -2350,11 +2343,11 @@ export class ReferenceNode extends ContentNode {
 		if (this.reference) {
 			if (this.reference.type === ReferenceType.Note) {
 				// If there's no fileSystemInterface, throw an error
-				if (!this.run.fileSystemInterface) {
-					throw new Error("No fileSystemInterface found");
+				if (!this.run.fileManager) {
+					throw new Error("No fileManager found");
 				}
 
-				const edit = await this.run.fileSystemInterface.editPropertyOfNote(
+				const edit = await this.run.fileManager.editPropertyOfNote(
 					this.reference.name,
 					propertyName,
 					newContent.trim()
@@ -2410,22 +2403,22 @@ export class ReferenceNode extends ContentNode {
 
 				if (edgeObject.text.length === 0) {
 					// If there's no fileSystemInterface, throw an error
-					if (!this.run.fileSystemInterface) {
-						throw new Error("No fileSystemInterface found");
+					if (!this.run.fileManager) {
+						throw new Error("No fileManager found");
 					}
 
-					value = await this.run.fileSystemInterface.getAllPropertiesOfNote(
+					value = await this.run.fileManager.getAllPropertiesOfNote(
 						this.reference.name,
 						true
 					);
 				} else {
 					// If there's no fileSystemInterface, throw an error
-					if (!this.run.fileSystemInterface) {
-						throw new Error("No fileSystemInterface found");
+					if (!this.run.fileManager) {
+						throw new Error("No fileManager found");
 					}
 
 					// Get value of the property with the same name as the edge
-					value = await this.run.fileSystemInterface.getPropertyOfNote(
+					value = await this.run.fileManager.getPropertyOfNote(
 						this.reference.name,
 						edgeObject.text,
 						true
@@ -2446,11 +2439,11 @@ export class ReferenceNode extends ContentNode {
 				});
 			} else if (edgeObject.edgeModifier === EdgeModifier.Folder) {
 				// If there's no fileSystemInterface, throw an error
-				if (!this.run.fileSystemInterface) {
-					throw new Error("No fileSystemInterface found");
+				if (!this.run.fileManager) {
+					throw new Error("No fileManager found");
 				}
 
-				const path = await this.run.fileSystemInterface.getNotePath(
+				const path = await this.run.fileManager.getNotePath(
 					this.reference.name
 				);
 
@@ -2583,12 +2576,12 @@ export class HttpNode extends ContentNode {
 		// Get the value for each arg name from the variables, and error if any arg is missing
 		for (const argName of argNames) {
 			// If the arg has an argInfo and its category is files, give it the filesystem interface
-			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "files") {
+			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "fileManager") {
 				// If the filesystemInterface is null, error
-				if (!this.run.fileSystemInterface) {
+				if (!this.run.fileManager) {
 					return new Error(`The action "${action.name}" requires a file interface, but there isn't one in this run.`);
 				}
-				args[argName] = this.run.fileSystemInterface;
+				args[argName] = this.run.fileManager;
 				continue;
 			}
 
@@ -2605,7 +2598,7 @@ export class HttpNode extends ContentNode {
 					return new Error(
 						`Missing value for config parameter "${argName}" in available config. This action "${action.name}" accepts the following config keys:\n${Object.keys(action.argInfo)
 							.filter((arg) => action.argInfo?.[arg].category === "config" || action.argInfo?.[arg].category === "env")
-							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
+							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''} ${action.argInfo?.[arg].category === "env" ? '(env)' : ''}`)
 							.join('\n')}`
 					);
 				}
@@ -2949,11 +2942,11 @@ export class HttpNode extends ContentNode {
 			}
 		}
 
-		if (!this.run.fileSystemInterface) {
-			return new Error("No fileSystemInterface found");
+		if (!this.run.fileManager) {
+			return new Error("No fileManager found");
 		}
 
-		const settingsTemplate = this.run.fileSystemInterface.getHttpTemplateByName(name);
+		const settingsTemplate = this.run.fileManager.getHttpTemplateByName(name);
 		if (settingsTemplate instanceof Error) {
 			return new Error(`Could not get HTTP template with name "${name}" from floating nodes or pre-set templates.`);
 		}

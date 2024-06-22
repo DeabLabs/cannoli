@@ -29,7 +29,7 @@ import {
 	SystemMessageEdge,
 } from "./edge";
 import { GenericCompletionResponse } from "../providers";
-import { ReceiveInfo } from "src/cannoli";
+import { ReceiveInfo } from "../run";
 
 export enum CannoliObjectKind {
 	Node = "node",

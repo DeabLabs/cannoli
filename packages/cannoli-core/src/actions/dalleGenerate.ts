@@ -1,4 +1,4 @@
-import { Action } from "src/cannoli";
+import { Action } from "../run";
 
 export const dalleGenerate: Action = {
     name: "dalle",
