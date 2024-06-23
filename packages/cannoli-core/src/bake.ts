@@ -17,64 +17,101 @@ export type CannoliInfo = {
     version?: string;
 }
 
-function generateFunction(cannoliName: string, cannoliInfo: CannoliInfo, language: Language, availableArgs: string[]): string | Error {
+function generateCommentBlock(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, description?: string): string {
+    const formatDescription = (desc?: string) => desc ? desc.split('\n').map(line => ` * ${line}`).join('\n') : '';
+    const capitalizedCannoliName = cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1);
+
+    let typedefBlock = '';
+    let commentBlock = description ? `/**\n${formatDescription(description)}\n` : `/**\n`;
+
+    if (Object.keys(argInfo).length > 1) {
+        typedefBlock += `/**\n * @typedef {Object} ${capitalizedCannoliName}Args\n`;
+        for (const [arg, info] of Object.entries(argInfo)) {
+            typedefBlock += ` * @property {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
+        }
+        typedefBlock += ` */\n\n`;
+        commentBlock += ` * @param {${capitalizedCannoliName}Args} args\n`;
+    } else if (Object.keys(argInfo).length === 1) {
+        const [arg, info] = Object.entries(argInfo)[0];
+        commentBlock += ` * @param {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
+    }
+
+    if (Object.keys(resultInfo).length > 1) {
+        typedefBlock += `/**\n * @typedef {Object} ${capitalizedCannoliName}Results\n`;
+        for (const [result, info] of Object.entries(resultInfo)) {
+            typedefBlock += ` * @property {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
+        }
+        typedefBlock += ` */\n\n`;
+        commentBlock += ` * @returns {${capitalizedCannoliName}Results} results\n`;
+    } else if (Object.keys(resultInfo).length === 1) {
+        const [result, info] = Object.entries(resultInfo)[0];
+        commentBlock += ` * @returns {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
+    } else {
+        commentBlock += ` * @returns {void}\n`;
+    }
+
+    commentBlock += ` */`;
+    return typedefBlock + commentBlock;
+}
+
+function generateFunctionSignature(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: Language): string {
+    const argsType = Object.keys(argInfo).map(arg => `${arg}: string;`).join("\n  ");
+    const resultType = Object.keys(resultInfo).map(result => `${result}: string`).join(";\n  ") + ";";
+
+    if (Object.keys(argInfo).length === 1) {
+        const [arg] = Object.keys(argInfo);
+        return language === "typescript"
+            ? `export async function ${cannoliName}(${arg}: string): Promise<${Object.keys(resultInfo).length === 0 ? 'void' : Object.keys(resultInfo).length === 1 ? 'string' : `{\n  ${resultType}\n}`}>`
+            : `export async function ${cannoliName}(${arg})`;
+    } else if (Object.keys(argInfo).length > 1) {
+        return language === "typescript"
+            ? `export async function ${cannoliName}({\n  ${Object.keys(argInfo).join(",\n  ")}\n}: {\n  ${argsType}\n}): Promise<${Object.keys(resultInfo).length === 0 ? 'void' : Object.keys(resultInfo).length === 1 ? 'string' : `{\n  ${resultType}\n}`}>`
+            : `export async function ${cannoliName}({${Object.keys(argInfo).join(", ")}})`;
+    } else {
+        return language === "typescript"
+            ? `export async function ${cannoliName}(): Promise<${Object.keys(resultInfo).length === 0 ? 'void' : Object.keys(resultInfo).length === 1 ? 'string' : `{\n  ${resultType}\n}`}>`
+            : `export async function ${cannoliName}()`;
+    }
+}
+
+function generateReturnStatement(resultInfo: Record<string, VarInfo | null>): string {
+    if (Object.keys(resultInfo).length === 1) {
+        const [result] = Object.keys(resultInfo);
+        return `return runResult["${result}"];`;
+    } else if (Object.keys(resultInfo).length > 1) {
+        const returnObject = Object.keys(resultInfo)
+            .map(result => `    ${result}: runResult["${result}"]`)
+            .join(",\n");
+        return `return {\n${returnObject}\n  };`;
+    } else {
+        return `return;`;
+    }
+}
+
+function generateFunction(cannoliName: string, cannoliInfo: CannoliInfo, language: Language, argDeclarations: string, availableArgs: string[]): string | Error {
     if (!cannoliName) {
         return new Error("Cannoli name is empty");
     }
 
     const { argInfo, resultInfo, description } = cannoliInfo;
 
-    const formatDescription = (desc?: string) => desc ? desc.split('\n').map(line => ` * ${line}`).join('\n') : '';
-
-    const argsType = Object.keys(argInfo).map(arg => `${arg}: string`).join(";\n    ");
-    const resultType = Object.keys(resultInfo).map(result => `${result}: string`).join(";\n    ");
-
-    const argsComment = Object.entries(argInfo)
-        .map(([arg, info]) => {
-            const desc = info?.description ? ` - ${formatDescription(info.description)}` : '';
-            return ` * @param {string} ${arg}${desc}`;
-        })
-        .join("\n");
-    const resultsComment = Object.entries(resultInfo)
-        .map(([result, info]) => {
-            const desc = info?.description ? ` - ${formatDescription(info.description)}` : '';
-            return ` * @returns {string} ${result}${desc}`;
-        })
-        .join("\n");
-
-    const functionComment = description
-        ? `
-/**
-${formatDescription(description)}
-${argsComment}
-${resultsComment}
- */`
-        : `
-/**
-${argsComment}
-${resultsComment}
- */`;
-
-    const functionSignature = language === "typescript"
-        ? `export async function ${cannoliName}(args: {\n    ${argsType}\n}): Promise<{\n    ${resultType}\n}>`
-        : `export async function ${cannoliName}(args)`;
-
-    const runArgs = availableArgs.map(arg => `${arg}`).join(",\n    ");
-
-    const returnObject = Object.keys(resultInfo)
-        .map(result => `${result}: runResult["${result}"]`)
-        .join(",\n    ");
+    const commentBlock = generateCommentBlock(cannoliName, argInfo, resultInfo, description);
+    const functionSignature = generateFunctionSignature(cannoliName, argInfo, resultInfo, language);
+    const returnStatement = generateReturnStatement(resultInfo);
 
     const functionBody = `
-${functionComment}
+${commentBlock}
 ${functionSignature} {
+${indent(argDeclarations, "  ")}
+
   const runResult = await run({
-    ${runArgs}
+    args: {
+${Object.keys(argInfo).map(arg => `      ${arg}`).join(",\n")}
+    },
+${availableArgs.map(arg => `    ${arg}`).join(",\n")}
   });
 
-  return {
-    ${returnObject}
-  };
+  ${returnStatement}
 }
 `.trim();
 
@@ -140,16 +177,16 @@ export function writeCode({
 
     const camelCasedFunctionName = toCamelCase(cannoliName);
 
-    const generatedFunction = generateFunction(camelCasedFunctionName, cannoliInfo, language, availableArgs);
-
-    const code = `${importTemplate}
-const cannoli = ${JSON.stringify(cannoli, null, 2)};
+    const argDeclarations = `${optionalArgTemplates}
 
 ${llmConfigTemplate}
-${optionalArgTemplates}
+const cannoli = ${JSON.stringify(cannoli, null, 2)};`;
 
+    const generatedFunction = generateFunction(camelCasedFunctionName, cannoliInfo, language, argDeclarations, availableArgs);
+
+    const code = `${importTemplate}
 ${generatedFunction}
-`.trim();
+`;
 
     console.log(code);
     return {
@@ -160,16 +197,13 @@ ${generatedFunction}
 }
 
 function generateImportTemplates(language: Language): Record<Runtime, string> {
-    const llmConfigImport = language === "typescript" ? "LLMConfig, " : "";
+    const llmConfigImport = language === "typescript" ? "  LLMConfig,\n" : "";
     return {
-        node: `
-import { ${llmConfigImport}run } from "npm:@deablabs/cannoli-core@latest";
+        node: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core@latest";
 `,
-        deno: `
-import { ${llmConfigImport}run } from "npm:@deablabs/cannoli-core@latest";
+        deno: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core@latest";
 `,
-        bun: `
-import { ${llmConfigImport}run } from "npm:@deablabs/cannoli-core@latest";
+        bun: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core@latest";
 `
     };
 }
@@ -254,4 +288,8 @@ function toCamelCase(str: string): string {
     }
 
     return camelCased.charAt(0).toLowerCase() + camelCased.slice(1);
+}
+
+function indent(str: string, indentation: string): string {
+    return str.split('\n').map(line => `${indentation}${line}`).join('\n');
 }

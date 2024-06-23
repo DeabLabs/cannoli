@@ -364,8 +364,6 @@ export default class Cannoli extends Plugin {
 
 		const userId = userProfileResponse.json.id;
 
-		console.log(userId);
-
 		const myValsResponse = await requestUrl({
 			url: `https://api.val.town/v1/users/${userId}/vals`,
 			method: "GET",
