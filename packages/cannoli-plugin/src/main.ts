@@ -7,6 +7,7 @@ import {
 	RequestUrlParam,
 	Setting,
 	TFile,
+	TFolder,
 	addIcon,
 	requestUrl,
 } from "obsidian";
@@ -25,6 +26,8 @@ import {
 	Replacer,
 	runWithControl,
 	bake,
+	BakeLanguage,
+	BakeRuntime,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -171,7 +174,9 @@ export default class Cannoli extends Plugin {
 
 		this.createCopyCanvasToClipboardCommand();
 
-		this.createCreateValCommand();
+		this.createCreateOrEditValCommand();
+
+		this.createBakeCommand();
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon(
@@ -260,11 +265,20 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
-	createCreateValCommand = () => {
+	createCreateOrEditValCommand = () => {
 		this.addCommand({
-			id: "create-val",
-			name: "Create Val",
-			callback: this.createVal,
+			id: "create-or-edit-val",
+			name: "Create/edit Val",
+			callback: this.createOrEditVal,
+			icon: "cannoli",
+		});
+	};
+
+	createBakeCommand = () => {
+		this.addCommand({
+			id: "bake",
+			name: "Bake",
+			callback: this.bake,
 			icon: "cannoli",
 		});
 	};
@@ -319,7 +333,7 @@ export default class Cannoli extends Plugin {
 		new Notice("Canvas copied to clipboard");
 	};
 
-	createVal = async () => {
+	createOrEditVal = async () => {
 		// Check if the user's on a canvas
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
@@ -439,6 +453,81 @@ export default class Cannoli extends Plugin {
 
 		// Redirect to the val
 		window.open(valUrl, "_blank");
+	};
+
+	bake = async () => {
+		// Check if the user's on a canvas
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
+			new Notice("This file is not a canvas");
+			return;
+		}
+
+		// Check that the user has a val town api key
+		if (!this.settings.valTownAPIKey) {
+			new Notice("Please enter a Val Town API key in the Cannoli settings");
+			return;
+		}
+
+		const nameWithoutExtensions = activeFile.basename.replace(".canvas", "").replace(".cno", "");
+
+		// Get the content of the file
+		const content = JSON.parse(await this.app.vault.read(activeFile));
+
+		// Create a modal to get the language and runtime
+		const bakeModal = new BakeModal(this.app, async (options) => {
+			const bakeResult = await bake({
+				language: options.language,
+				runtime: options.runtime,
+				cannoliName: nameWithoutExtensions,
+				cannoli: content,
+				llmConfigs: this.getLLMConfigs(),
+				config: this.getConfig(),
+				envVars: this.getEnvVars(),
+			});
+
+			if (bakeResult instanceof Error) {
+				new Notice(`Error baking cannoli: ${bakeResult.message}`);
+				return;
+			}
+
+			// Check that the baked cannoli folder exists
+			let bakedCannoliFolder = this.app.vault.getFolderByPath("Baked Cannoli");
+			if (!bakedCannoliFolder) {
+				await this.app.vault.createFolder("Baked Cannoli");
+				bakedCannoliFolder = this.app.vault.getFolderByPath("Baked Cannoli");
+			}
+
+			// Function to find the file recursively
+			const findFileRecursively = async (folder: TFolder, fileName: string): Promise<TFile | null> => {
+				for (const child of folder.children) {
+					if (child instanceof TFile && child.name === fileName) {
+						return child;
+					} else if (child instanceof TFolder) {
+						const found = await findFileRecursively(child, fileName);
+						if (found) return found;
+					}
+				}
+				return null;
+			};
+
+			// Check if the file already exists
+			if (bakedCannoliFolder) {
+				const existingFile = await findFileRecursively(bakedCannoliFolder, bakeResult.fileName);
+				if (existingFile) {
+					// Overwrite the existing file
+					await this.app.vault.modify(existingFile, bakeResult.code);
+					new Notice(`Baked cannoli to ${existingFile.path}`);
+				} else {
+					// Create a new file in the vault in the "Baked Cannoli" folder
+					const newFile = await this.app.vault.create(`Baked Cannoli/${bakeResult.fileName}`, bakeResult.code);
+					new Notice(`Baked cannoli to ${newFile.path}`);
+				}
+			}
+		}, () => {
+			new Notice("Baking cancelled.");
+		});
+		bakeModal.open();
 	};
 
 	getArgsFromCanvas = (canvas: string) => {
@@ -1110,6 +1199,87 @@ export class EditValModal extends Modal {
 			this.close();
 			this.onCancel();
 		}));
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+export class BakeModal extends Modal {
+	onContinue: (options: {
+		language: BakeLanguage,
+		runtime: BakeRuntime
+	}) => void;
+	onCancel: () => void;
+
+	constructor(
+		app: App,
+		onContinue: (options: { language: BakeLanguage, runtime: BakeRuntime }) => void,
+		onCancel: () => void,
+	) {
+		super(app);
+		this.onContinue = onContinue;
+		this.onCancel = onCancel;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h1", { text: "Bake Cannoli" });
+
+		contentEl.createEl("p", {
+			text: "Select the language and runtime for baking the cannoli.",
+		});
+
+		let selectedLanguage: BakeLanguage = "typescript";
+		let selectedRuntime: BakeRuntime = "node";
+
+		// Language dropdown
+		new Setting(contentEl)
+			.setName("Language")
+			.setDesc("Choose the language for the cannoli.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("typescript", "TypeScript");
+				dropdown.addOption("javascript", "JavaScript");
+				dropdown.setValue(selectedLanguage);
+				dropdown.onChange((value) => {
+					selectedLanguage = value as BakeLanguage;
+				});
+			});
+
+		// Runtime dropdown
+		new Setting(contentEl)
+			.setName("Runtime")
+			.setDesc("Choose the runtime for the cannoli.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("node", "Node.js");
+				dropdown.addOption("deno", "Deno");
+				dropdown.addOption("bun", "Bun");
+				dropdown.setValue(selectedRuntime);
+				dropdown.onChange((value) => {
+					selectedRuntime = value as BakeRuntime;
+				});
+			});
+
+		contentEl.createEl("p", {
+			text: "Reminder: To see the files, ensure the 'Detect all file extensions' setting is turned on in the 'Files and links' page of your Obsidian settings.",
+		});
+
+		const panel = new Setting(contentEl);
+		panel.addButton((btn) => btn.setButtonText("Cancel").onClick(() => {
+			this.close();
+			this.onCancel();
+		}));
+		panel.addButton((btn) => btn.setButtonText("Bake").setCta().onClick(() => {
+			this.close();
+			this.onContinue({ language: selectedLanguage, runtime: selectedRuntime });
+		}));
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
 	}
 }
 

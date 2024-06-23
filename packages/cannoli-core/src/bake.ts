@@ -1,9 +1,6 @@
+import { BakeLanguage, BakeRuntime } from "./cannoli";
 import { VerifiedCannoliCanvasData } from "./models/graph";
 import { LLMConfig } from "./providers";
-
-export type Runtime = "node" | "deno" | "bun";
-
-export type Language = "typescript" | "javascript";
 
 export type VarInfo = {
     displayName: string;
@@ -42,7 +39,7 @@ function generateCommentBlock(cannoliName: string, argInfo: Record<string, VarIn
             typedefBlock += ` * @property {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
         }
         typedefBlock += ` */\n\n`;
-        commentBlock += ` * @returns {${capitalizedCannoliName}Results} results\n`;
+        commentBlock += ` * @returns {${capitalizedCannoliName}Results}\n`;
     } else if (Object.keys(resultInfo).length === 1) {
         const [result, info] = Object.entries(resultInfo)[0];
         commentBlock += ` * @returns {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
@@ -54,7 +51,7 @@ function generateCommentBlock(cannoliName: string, argInfo: Record<string, VarIn
     return typedefBlock + commentBlock;
 }
 
-function generateFunctionSignature(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: Language): string {
+function generateFunctionSignature(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage): string {
     const argsType = Object.keys(argInfo).map(arg => `${arg}: string;`).join("\n  ");
     const resultType = Object.keys(resultInfo).map(result => `${result}: string`).join(";\n  ") + ";";
 
@@ -88,7 +85,7 @@ function generateReturnStatement(resultInfo: Record<string, VarInfo | null>): st
     }
 }
 
-function generateFunction(cannoliName: string, cannoliInfo: CannoliInfo, language: Language, argDeclarations: string, availableArgs: string[]): string | Error {
+function generateFunction(cannoliName: string, cannoliInfo: CannoliInfo, language: BakeLanguage, argDeclarations: string, availableArgs: string[]): string | Error {
     if (!cannoliName) {
         return new Error("Cannoli name is empty");
     }
@@ -105,10 +102,9 @@ ${functionSignature} {
 ${indent(argDeclarations, "  ")}
 
   const runResult = await run({
-    args: {
+${Object.keys(argInfo).length > 0 ? `    args: {
 ${Object.keys(argInfo).map(arg => `      ${arg}`).join(",\n")}
-    },
-${availableArgs.map(arg => `    ${arg}`).join(",\n")}
+    },` : ''}${Object.keys(argInfo).length > 0 ? '\n' : ''}${availableArgs.filter(arg => arg !== 'args').map(arg => `    ${arg}`).join(",\n")}
   });
 
   ${returnStatement}
@@ -131,8 +127,8 @@ export function writeCode({
     // replacers,
     // fetcher,
 }: {
-    language: Language;
-    runtime: Runtime;
+    language: BakeLanguage;
+    runtime: BakeRuntime;
     cannoli: VerifiedCannoliCanvasData;
     llmConfigs: LLMConfig[];
     cannoliName: string;
@@ -188,7 +184,6 @@ const cannoli = ${JSON.stringify(cannoli, null, 2)};`;
 ${generatedFunction}
 `;
 
-    console.log(code);
     return {
         name: camelCasedFunctionName,
         fileName: `${camelCasedFunctionName}.${language === "typescript" ? "ts" : "js"}`,
@@ -196,7 +191,7 @@ ${generatedFunction}
     };
 }
 
-function generateImportTemplates(language: Language): Record<Runtime, string> {
+function generateImportTemplates(language: BakeLanguage): Record<BakeRuntime, string> {
     const llmConfigImport = language === "typescript" ? "  LLMConfig,\n" : "";
     return {
         node: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core@latest";
@@ -208,7 +203,7 @@ function generateImportTemplates(language: Language): Record<Runtime, string> {
     };
 }
 
-function generateEnvVarTemplate(runtime: Runtime, envVars: Record<string, string>): string {
+function generateEnvVarTemplate(runtime: BakeRuntime, envVars: Record<string, string>): string {
     const envVarLines = Object.keys(envVars).map(key => {
         switch (runtime) {
             case "node":
@@ -231,7 +226,7 @@ const envVars = {
 
 function printLLMConfigWithEnvReference(
     llmConfigs: LLMConfig[],
-    runtime: Runtime
+    runtime: BakeRuntime
 ): string {
     const updatedConfigs = llmConfigs.map(config => {
         const envKey = `${config.provider.toUpperCase()}_API_KEY`;

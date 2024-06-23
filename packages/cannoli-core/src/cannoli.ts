@@ -1,6 +1,6 @@
 import { Run, RunArgs, Stoppage } from "./run";
 import { LLMConfig } from "./providers";
-import { CannoliInfo, Language, Runtime, writeCode } from "./bake";
+import { CannoliInfo, writeCode } from "./bake";
 import { VerifiedCannoliCanvasData } from "./models/graph";
 
 export async function runWithControl({
@@ -47,6 +47,10 @@ export async function runWithControl({
     return [done, () => run.stop()];
 }
 
+export type BakeRuntime = "node" | "deno" | "bun";
+
+export type BakeLanguage = "typescript" | "javascript";
+
 export async function bake({
     language,
     runtime,
@@ -60,8 +64,8 @@ export async function bake({
     // replacers,
     // fetcher,
 }: {
-    language: Language,
-    runtime: Runtime,
+    language: BakeLanguage,
+    runtime: BakeRuntime,
     cannoliName: string,
     cannoli: unknown,
     llmConfigs: LLMConfig[],
@@ -93,6 +97,7 @@ export async function bake({
     // Get the args and results
     const argNames: string[] = stoppage.argNames;
     const resultNames: string[] = stoppage.resultNames;
+    const description: string | undefined = stoppage.description;
 
     let givenArgNames: string[] = [];
     let givenResultNames: string[] = [];
@@ -101,6 +106,7 @@ export async function bake({
         cannoliInfo = {
             argInfo: Object.fromEntries(argNames.map((name) => [name, null])),
             resultInfo: Object.fromEntries(resultNames.map((name) => [name, null])),
+            description,
         };
     } else {
         if (cannoliInfo.argInfo) {

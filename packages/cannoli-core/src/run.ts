@@ -77,6 +77,7 @@ export interface Stoppage {
 	results: { [key: string]: string };
 	argNames: string[];
 	resultNames: string[];
+	description?: string;
 	message?: string; // Additional information, like an error message
 }
 
@@ -318,6 +319,15 @@ export class Run {
 		return resultNames;
 	}
 
+	getDescription(): string | undefined {
+		// Find a node of type "variable" whose name is "DESCRIPTION"
+		const descriptionNode = this.canvasData?.nodes.find((node) => node.cannoliData.type === "variable" && node.cannoliData.text.split("\n")[0] === "[DESCRIPTION]");
+		if (descriptionNode) {
+			return descriptionNode.cannoliData.text.split("\n").slice(1).join("\n");
+		}
+		return undefined;
+	}
+
 	error(message: string) {
 		this.stopTime = Date.now();
 
@@ -327,6 +337,7 @@ export class Run {
 			results: this.getResults(),
 			argNames: this.getArgNames(),
 			resultNames: this.getResultNames(),
+			description: this.getDescription(),
 			usage: this.usage,
 		});
 
@@ -341,6 +352,7 @@ export class Run {
 			results: this.getResults(),
 			argNames: this.getArgNames(),
 			resultNames: this.getResultNames(),
+			description: this.getDescription(),
 			usage: this.usage,
 		});
 	}
@@ -466,6 +478,7 @@ export class Run {
 				results: this.getResults(),
 				argNames: this.getArgNames(),
 				resultNames: this.getResultNames(),
+				description: this.getDescription(),
 				usage: this.usage,
 			});
 		}
@@ -481,6 +494,7 @@ export class Run {
 				results: this.getResults(),
 				argNames: this.getArgNames(),
 				resultNames: this.getResultNames(),
+				description: this.getDescription(),
 				usage: this.usage,
 			});
 		}
