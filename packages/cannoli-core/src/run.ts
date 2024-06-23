@@ -34,7 +34,7 @@ export interface HttpRequest {
 	body?: string;
 }
 
-export type ArgInfo = {
+export type ActionArgInfo = {
 	category: "config" | "env" | "arg" | "fileManager" | "fetcher";
 	type?: "string" | "number" | "boolean" | string[];
 	displayName?: string;
@@ -55,7 +55,7 @@ export type Action = {
 	receive?: (receiveInfo: ReceiveInfo) => ActionResponse;
 	displayName?: string;
 	description?: string;
-	argInfo?: Record<string, ArgInfo>;
+	argInfo?: Record<string, ActionArgInfo>;
 	resultKeys?: string[];
 };
 
@@ -105,7 +105,7 @@ export interface RunArgs {
 	cannoli: unknown;
 	llmConfigs: LLMConfig[];
 	fetcher?: ResponseTextFetcher;
-	config?: Record<string, unknown>;
+	config?: Record<string, string | number | boolean>;
 	envVars?: Record<string, string>;
 	args?: Record<string, string>;
 	onFinish?: (stoppage: Stoppage) => void;
@@ -220,19 +220,18 @@ export class Run {
 
 		const canvasData = factory.getCannoliData();
 
-		// Find all nodes of type "variable" or "input"
-		const argNodes = canvasData.nodes.filter((node) => node.cannoliData.type === "variable"
-			|| node.cannoliData.type === "input");
+		// Find all nodes of type "input"
+		const argNodes = canvasData.nodes.filter((node) => node.cannoliData.type === "input");
 
-		// For each arg, check if the key matches the first line of the text in the variable/input node
+		// For each arg, check if the key matches the first line of the text in the input node
 		for (const arg of Object.entries(this.args ?? {})) {
 			const [key, value] = arg;
 			const argNode = argNodes.find((node) => node.cannoliData.text.split("\n")[0] === `[${key}]`);
 			if (argNode) {
-				// If so, set the text of the variable/input node after the first line to the value
+				// If so, set the text of the input node after the first line to the value
 				argNode.cannoliData.text = argNode.cannoliData.text.split("\n")[0] + "\n" + value;
 			} else {
-				throw new Error(`Argument key "${key}" not found in arg nodes.`);
+				throw new Error(`Argument key "${key}" not found in input nodes.`);
 			}
 		}
 
@@ -284,7 +283,7 @@ export class Run {
 	getArgNames(): string[] {
 		const argNames: string[] = [];
 
-		const argNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "variable" || node.cannoliData.type === "input");
+		const argNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "input");
 
 		if (!argNodes) {
 			return argNames;
@@ -303,7 +302,7 @@ export class Run {
 	getResultNames(): string[] {
 		const resultNames: string[] = [];
 
-		const resultNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "variable" || node.cannoliData.type === "output");
+		const resultNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "output");
 
 		if (!resultNodes) {
 			return resultNames;
@@ -587,7 +586,7 @@ export class Run {
 	}
 
 	getResults(): { [key: string]: string } {
-		const variableNodes = Object.values(this.graph).filter((object) => (object.type === "variable" || object.type === "output") && object.kind === "node");
+		const variableNodes = Object.values(this.graph).filter((object) => object.type === "output" && object.kind === "node");
 		const results: { [key: string]: string } = {};
 		for (const node of variableNodes) {
 			// The key should be the first line without the square brackets

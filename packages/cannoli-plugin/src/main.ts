@@ -24,12 +24,12 @@ import {
 	Action,
 	Replacer,
 	runWithControl,
+	bake,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
 import { VaultInterface } from "./vault_interface";
 import { ObsidianCanvas } from "./canvas";
-import { SYMBOLS, cannoliValTemplate } from "./val_templates";
 import { dataviewQuery, smartConnectionsQuery } from "./actions";
 
 interface CannoliSettings {
@@ -333,40 +333,101 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
+		const nameWithoutExtensions = activeFile.basename.replace(".canvas", "").replace(".cno", "");
+
 		// Get the content of the file
-		const content = await this.app.vault.read(activeFile);
-		const code = cannoliValTemplate.replace(SYMBOLS.defaultProvider, this.settings.llmProvider)
-			.replace(SYMBOLS.defaultModel, this.settings.defaultModel)
-			.replace(SYMBOLS.canvasJSON, content)
-			.replace(SYMBOLS.defaultGroqModel, this.settings.groqModel)
-			.replace(SYMBOLS.defaultOpenaiModel, this.settings.defaultModel)
-			.replace(SYMBOLS.defaultGeminiModel, this.settings.geminiModel)
-			.replace(SYMBOLS.defaultAnthropicModel, this.settings.anthropicModel)
-			.replace(SYMBOLS.defaultOpenaiTemperature, this.settings.defaultTemperature.toString())
-			.replace(SYMBOLS.defaultGeminiTemperature, this.settings.geminiTemperature.toString())
-			.replace(SYMBOLS.defaultAnthropicTemperature, this.settings.anthropicTemperature.toString())
-			.replace(SYMBOLS.defaultGroqTemperature, this.settings.groqTemperature.toString())
-			.replace(SYMBOLS.defaultOpenaiBaseURL, this.settings.openaiBaseURL)
+		const content = JSON.parse(await this.app.vault.read(activeFile));
 
+		const bakeResult = await bake({
+			language: "typescript",
+			runtime: "deno",
+			cannoliName: nameWithoutExtensions,
+			cannoli: content,
+			llmConfigs: this.getLLMConfigs(),
+			config: this.getConfig(),
+			envVars: this.getEnvVars(),
+		});
 
-		// const args = this.getArgsFromCanvas(content);
+		if (bakeResult instanceof Error) {
+			new Notice(`Error baking cannoli: ${bakeResult.message}`);
+			return;
+		}
 
-		const name = activeFile.basename.toLocaleLowerCase().replace(".canvas", "").replace(/ /g, "-").replace(/[^a-z]/g, "");
-
-
-
-		const response = await requestUrl({
-			url: "https://api.val.town/v1/vals",
-			method: "POST",
+		const userProfileResponse = await requestUrl({
+			url: "https://api.val.town/v1/me/",
+			method: "GET",
 			headers: {
 				"Content-Type": "application/json",
 				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
 			},
-			body: JSON.stringify({
-				name: name,
-				code: code,
-			}),
 		});
+
+		const userId = userProfileResponse.json.id;
+
+		console.log(userId);
+
+		const myValsResponse = await requestUrl({
+			url: `https://api.val.town/v1/users/${userId}/vals`,
+			method: "GET",
+			headers: {
+				"Content-Type": "application/json",
+				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+			},
+		});
+
+		const myVals = myValsResponse.json.data as { name: string, id: string }[];
+
+		// Check if the user has a val with the same name
+		const existingVal = myVals.find(val => val.name === bakeResult.name);
+
+		let editVal = false;
+
+		if (existingVal) {
+			// Make a modal to ask if they want to edit the existing val
+			const userResponse = await new Promise<boolean>((resolve) => {
+				const modal = new EditValModal(this.app, () => {
+					resolve(true);
+				}, () => {
+					resolve(false);
+				});
+				modal.open();
+			});
+
+			if (userResponse) {
+				editVal = true;
+			} else {
+				return;
+			}
+		}
+
+		let response;
+
+		if (editVal) {
+			response = await requestUrl({
+				url: `https://api.val.town/v1/vals/${existingVal?.id}/versions`,
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				},
+				body: JSON.stringify({
+					code: bakeResult.code,
+				}),
+			});
+		} else {
+			response = await requestUrl({
+				url: "https://api.val.town/v1/vals",
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				},
+				body: JSON.stringify({
+					name: bakeResult.name,
+					code: bakeResult.code,
+				}),
+			});
+		}
 
 		// If the response is not ok, send a notice
 		if (typeof response.json === "string") {
@@ -375,28 +436,6 @@ export default class Cannoli extends Plugin {
 		}
 
 		const valUrl = `https://www.val.town/v/${response.json.author.username}/${response.json.name}`;
-
-		// const readme = cannoliValReadmeTemplate(
-		// 	name,
-		// 	valUrl,
-		// 	args
-		// );
-
-		// console.log(readme);
-
-		// await requestUrl({
-		// 	url: `https://api.val.town/v1/vals/${response.json.id}`,
-		// 	method: "PUT",
-		// 	headers: {
-		// 		"Content-Type": "application/json",
-		// 		"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
-		// 	},
-		// 	body: JSON.stringify({
-		// 		name: name,
-		// 		readme: readme,
-		// 		code: code,
-		// 	}),
-		// });
 
 		new Notice(`Val created for ${activeFile.basename}`);
 
@@ -658,24 +697,23 @@ export default class Cannoli extends Plugin {
 		}
 	}
 
-	startCannoli = async (file: TFile, noCanvas = false) => {
-		// If the api key is the default, send a notice telling the user to add their key
-		const keyName = this.settings.llmProvider + "APIKey";
-		if (
-			this.settings.llmProvider !== "ollama" &&
-			// @ts-expect-error - This is a valid check
-			this.settings?.[keyName] !== undefined &&
-			// @ts-expect-error - Please forgive me
-			DEFAULT_SETTINGS?.[keyName] !== undefined &&
-			// @ts-expect-error - I'm sorry
-			this.settings?.[keyName] === DEFAULT_SETTINGS?.[keyName]
-		) {
-			new Notice(
-				`Please enter your ${this.settings.llmProvider} API key in the Cannoli settings`
-			);
-			return;
-		}
+	getEnvVars = () => {
+		return {
+			...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
+			...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
+		};
+	}
 
+	getConfig = () => {
+		const chatFormatStringIsDefault = this.settings.chatFormatString === DEFAULT_SETTINGS.chatFormatString;
+
+		return {
+			...(this.settings.contentIsColorless ? { contentIsColorless: this.settings.contentIsColorless } : {}),
+			...(!chatFormatStringIsDefault ? { chatFormatString: this.settings.chatFormatString } : {}),
+		};
+	}
+
+	getLLMConfigs = () => {
 		// map cannoli settings to provider config
 		const getConfigByProvider = (p: SupportedProviders): GenericModelConfig => {
 			switch (p) {
@@ -737,6 +775,29 @@ export default class Cannoli extends Plugin {
 			llmConfigs.unshift(defaultProvider);
 		}
 
+		return llmConfigs;
+	}
+
+	startCannoli = async (file: TFile, noCanvas = false) => {
+		// If the api key is the default, send a notice telling the user to add their key
+		const keyName = this.settings.llmProvider + "APIKey";
+		if (
+			this.settings.llmProvider !== "ollama" &&
+			// @ts-expect-error - This is a valid check
+			this.settings?.[keyName] !== undefined &&
+			// @ts-expect-error - Please forgive me
+			DEFAULT_SETTINGS?.[keyName] !== undefined &&
+			// @ts-expect-error - I'm sorry
+			this.settings?.[keyName] === DEFAULT_SETTINGS?.[keyName]
+		) {
+			new Notice(
+				`Please enter your ${this.settings.llmProvider} API key in the Cannoli settings`
+			);
+			return;
+		}
+
+		const llmConfigs = this.getLLMConfigs();
+
 		// If the file's basename ends with .cno, don't include the extension in the notice
 		const name = file.basename.endsWith(".cno")
 			? file.basename.slice(0, -4)
@@ -786,15 +847,9 @@ export default class Cannoli extends Plugin {
 			vaultInterface.replaceSmartConnections
 		];
 
-		const config = {
-			contentIsColorless: this.settings.contentIsColorless ?? false,
-			chatFormatString: this.settings.chatFormatString ?? DEFAULT_SETTINGS.chatFormatString
-		};
+		const config = this.getConfig();
 
-		const envVars = {
-			...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
-			...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
-		};
+		const envVars = this.getEnvVars();
 
 		// Do the validation run
 		const [validationStoppagePromise] = await runWithControl({
@@ -1022,6 +1077,42 @@ export default class Cannoli extends Plugin {
 		// Send a Notice that the folder has been created
 		new Notice("Cannoli College folder added");
 	};
+}
+
+export class EditValModal extends Modal {
+	onContinue: () => void;
+	onCancel: () => void;
+
+	constructor(
+		app: App,
+		onContinue: () => void,
+		onCancel: () => void,
+	) {
+		super(app);
+		this.onContinue = onContinue;
+		this.onCancel = onCancel;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h1", { text: "Val Already Exists" });
+
+		contentEl.createEl("p", {
+			text: "A Val with this name already exists. Would you like to update the existing Val with the new content?",
+		});
+
+		const panel = new Setting(contentEl);
+		panel.addButton((btn) => btn.setButtonText("Yes, Update")
+			.setCta()
+			.onClick(() => {
+				this.close();
+				this.onContinue();
+			}));
+		panel.addButton((btn) => btn.setButtonText("No, Cancel").onClick(() => {
+			this.close();
+			this.onCancel();
+		}));
+	}
 }
 
 export class RunPriceAlertModal extends Modal {

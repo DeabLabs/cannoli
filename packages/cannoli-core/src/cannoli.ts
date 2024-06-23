@@ -1,6 +1,7 @@
-import { FileManager } from "./fileManager";
-import { Action, Replacer, ResponseTextFetcher, Run, RunArgs, Stoppage } from "./run";
+import { Run, RunArgs, Stoppage } from "./run";
 import { LLMConfig } from "./providers";
+import { CannoliInfo, Language, Runtime, writeCode } from "./bake";
+import { VerifiedCannoliCanvasData } from "./models/graph";
 
 export async function runWithControl({
     cannoli,
@@ -46,64 +47,97 @@ export async function runWithControl({
     return [done, () => run.stop()];
 }
 
-export async function bake(
+export async function bake({
+    language,
+    runtime,
+    cannoliInfo,
+    cannoli,
+    cannoliName,
+    llmConfigs,
+    config,
+    envVars,
+    // actions,
+    // replacers,
+    // fetcher,
+}: {
+    language: Language,
+    runtime: Runtime,
+    cannoliName: string,
     cannoli: unknown,
     llmConfigs: LLMConfig[],
-    fileManager?: FileManager,
-    actions?: Action[],
-    replacers?: Replacer[],
-    fetcher?: ResponseTextFetcher,
-    config?: Record<string, unknown>,
+    cannoliInfo?: CannoliInfo,
+    config?: Record<string, string | number | boolean>,
     envVars?: Record<string, string>,
-): Promise<{
-    argNames: string[];
-    resultNames: string[];
-    cannoliFunction: (args: Record<string, string>) => Promise<Record<string, string>>;
-}> {
+    // actions?: Action[],
+    // replacers?: Replacer[],
+    // fetcher?: ResponseTextFetcher,
+}): Promise<{ name: string; fileName: string; code: string } | Error> {
     // Mock run the cannoli
     const [done] = await runWithControl({
         cannoli,
         llmConfigs,
-        fileManager,
-        actions,
-        replacers,
-        fetcher,
         config,
         envVars,
         isMock: true,
+        // actions,
+        // replacers,
+        // fetcher,
     });
 
     const stoppage = await done;
 
     if (stoppage.reason == "error") {
-        throw new Error("There's an error in the cannoli. Please fix it before baking.");
+        return new Error("There's an error in the cannoli. Please fix it before baking.");
     }
 
     // Get the args and results
     const argNames: string[] = stoppage.argNames;
     const resultNames: string[] = stoppage.resultNames;
 
-    // Build the function
-    const cannoliFunction = async (args: Record<string, string>): Promise<Record<string, string>> => {
-        const missingArgs = argNames.filter(arg => !(arg in args));
-        if (missingArgs.length > 0) {
-            throw new Error(`Missing required arguments: ${missingArgs.join(", ")}`);
+    let givenArgNames: string[] = [];
+    let givenResultNames: string[] = [];
+
+    if (!cannoliInfo) {
+        cannoliInfo = {
+            argInfo: Object.fromEntries(argNames.map((name) => [name, null])),
+            resultInfo: Object.fromEntries(resultNames.map((name) => [name, null])),
+        };
+    } else {
+        if (cannoliInfo.argInfo) {
+            givenArgNames = Object.keys(cannoliInfo.argInfo);
+        } else {
+            givenArgNames = argNames;
+            cannoliInfo.argInfo = Object.fromEntries(argNames.map((name) => [name, null]));
         }
 
-        return run({
-            cannoli,
-            llmConfigs,
-            args,
-            fileManager,
-            actions,
-            replacers,
-            fetcher,
-            config,
-            envVars,
-        });
-    };
+        if (cannoliInfo.resultInfo) {
+            givenResultNames = Object.keys(cannoliInfo.resultInfo);
+        } else {
+            givenResultNames = resultNames;
+            cannoliInfo.resultInfo = Object.fromEntries(resultNames.map((name) => [name, null]));
+        }
 
-    return { argNames, resultNames, cannoliFunction };
+        // Check that they contain the same names
+        const argNamesMatch = argNames.length === givenArgNames.length && argNames.every(name => givenArgNames.includes(name));
+        const resultNamesMatch = resultNames.length === givenResultNames.length && resultNames.every(name => givenResultNames.includes(name));
+
+        if (!argNamesMatch || !resultNamesMatch) {
+            return new Error("Mismatch between arg or result names in the cannoli info and the ones in the cannoli itself.");
+        }
+    }
+
+    const code = writeCode({
+        language,
+        runtime,
+        cannoli: cannoli as VerifiedCannoliCanvasData,
+        llmConfigs,
+        cannoliInfo,
+        cannoliName,
+        config,
+        envVars,
+    })
+
+    return code;
 }
 
 export async function run({

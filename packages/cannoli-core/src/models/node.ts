@@ -1917,6 +1917,36 @@ export class ContentNode extends CannoliNode {
 
 		return null;
 	}
+
+	isValidVariableName(name: string): boolean {
+		// Regular expression to match valid JavaScript variable names
+		const validNamePattern = /^[a-zA-Z_$][a-zA-Z_$0-9]*$/;
+		// Check if the name matches the pattern
+		return validNamePattern.test(name)
+	}
+
+	isReservedKeyword(name: string): boolean {
+		const reservedKeywords = [
+			"break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for", "function", "if", "import", "in", "instanceof", "new", "null", "return", "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield", "let", "static", "implements", "interface", "package", "private", "protected", "public"
+		];
+		return reservedKeywords.includes(name);
+	}
+
+	validate(): void {
+		super.validate();
+
+		if (this.type === ContentNodeType.Input || this.type === ContentNodeType.Output) {
+			const name = this.getName();
+			if (name !== null) {
+				if (!this.isValidVariableName(name)) {
+					this.error(`"${name}" is not a valid variable name. Input and output node names must start with a letter, underscore, or dollar sign, and can only contain letters, numbers, underscores, or dollar signs.`);
+				}
+				if (this.isReservedKeyword(name)) {
+					this.error(`"${name}" is a reserved keyword, and cannot be used as an input or output node name.`);
+				}
+			}
+		}
+	}
 }
 
 export class ReferenceNode extends ContentNode {
