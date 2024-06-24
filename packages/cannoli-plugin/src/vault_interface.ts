@@ -1,16 +1,14 @@
 import Cannoli from "./main";
-import { ResponseTextFetcher, Reference, ReferenceType, FileManager, HttpTemplate, CannoliNode, ContentNodeType } from "@deablabs/cannoli-core";
+import { Reference, ReferenceType, FileManager, HttpTemplate, CannoliNode, ContentNodeType } from "@deablabs/cannoli-core";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";
 
 export class VaultInterface implements FileManager {
 	private cannoli: Cannoli;
-	private fetcher: ResponseTextFetcher;
 
-	constructor(cannoli: Cannoli, fetcher: ResponseTextFetcher) {
+	constructor(cannoli: Cannoli) {
 		this.cannoli = cannoli;
-		this.fetcher = fetcher;
 
 		this.replaceDataviewQueries = this.replaceDataviewQueries.bind(this);
 		this.replaceSmartConnections = this.replaceSmartConnections.bind(this);

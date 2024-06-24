@@ -1,4 +1,5 @@
-import { BakeLanguage, BakeRuntime } from "./cannoli";
+import { runWithControl } from "./cannoli";
+import { FileManager } from "./fileManager";
 import { VerifiedCannoliCanvasData } from "./models/graph";
 import { LLMConfig } from "./providers";
 
@@ -14,104 +15,107 @@ export type CannoliInfo = {
     version?: string;
 }
 
-function generateCommentBlock(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, description?: string): string {
-    const formatDescription = (desc?: string) => desc ? desc.split('\n').map(line => ` * ${line}`).join('\n') : '';
-    const capitalizedCannoliName = cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1);
+export type BakeRuntime = "node" | "deno" | "bun";
 
-    let typedefBlock = '';
-    let commentBlock = description ? `/**\n${formatDescription(description)}\n` : `/**\n`;
+export type BakeLanguage = "typescript" | "javascript";
 
-    if (Object.keys(argInfo).length > 1) {
-        typedefBlock += `/**\n * @typedef {Object} ${capitalizedCannoliName}Args\n`;
-        for (const [arg, info] of Object.entries(argInfo)) {
-            typedefBlock += ` * @property {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
+export async function bake({
+    language,
+    runtime,
+    changeIndentToFour,
+    cannoliInfo,
+    cannoli,
+    cannoliName,
+    llmConfigs,
+    config,
+    envVars,
+    // actions,
+    // replacers,
+    // fetcher,
+}: {
+    language: BakeLanguage,
+    runtime: BakeRuntime,
+    cannoliName: string,
+    cannoli: unknown,
+    llmConfigs: LLMConfig[],
+    cannoliInfo?: CannoliInfo,
+    fileManager?: FileManager,
+    config?: Record<string, string | number | boolean>,
+    envVars?: Record<string, string>,
+    changeIndentToFour?: boolean,
+    // actions?: Action[],
+    // replacers?: Replacer[],
+    // fetcher?: ResponseTextFetcher,
+}): Promise<{ name: string; fileName: string; code: string } | Error> {
+    // Mock run the cannoli
+    const [done] = await runWithControl({
+        cannoli,
+        llmConfigs,
+        config,
+        envVars,
+        isMock: true,
+        // actions,
+        // replacers,
+        // fetcher,
+    });
+
+    const stoppage = await done;
+
+    if (stoppage.reason == "error") {
+        return new Error("There's an error in the cannoli. Please fix it before baking.");
+    }
+
+    // Get the args and results
+    const argNames: string[] = stoppage.argNames;
+    const resultNames: string[] = stoppage.resultNames;
+    const description: string | undefined = stoppage.description;
+
+    let givenArgNames: string[] = [];
+    let givenResultNames: string[] = [];
+
+    if (!cannoliInfo) {
+        cannoliInfo = {
+            argInfo: Object.fromEntries(argNames.map((name) => [name, null])),
+            resultInfo: Object.fromEntries(resultNames.map((name) => [name, null])),
+            description,
+        };
+    } else {
+        if (cannoliInfo.argInfo) {
+            givenArgNames = Object.keys(cannoliInfo.argInfo);
+        } else {
+            givenArgNames = argNames;
+            cannoliInfo.argInfo = Object.fromEntries(argNames.map((name) => [name, null]));
         }
-        typedefBlock += ` */\n\n`;
-        commentBlock += ` * @param {${capitalizedCannoliName}Args} args\n`;
-    } else if (Object.keys(argInfo).length === 1) {
-        const [arg, info] = Object.entries(argInfo)[0];
-        commentBlock += ` * @param {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
-    }
 
-    if (Object.keys(resultInfo).length > 1) {
-        typedefBlock += `/**\n * @typedef {Object} ${capitalizedCannoliName}Results\n`;
-        for (const [result, info] of Object.entries(resultInfo)) {
-            typedefBlock += ` * @property {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
+        if (cannoliInfo.resultInfo) {
+            givenResultNames = Object.keys(cannoliInfo.resultInfo);
+        } else {
+            givenResultNames = resultNames;
+            cannoliInfo.resultInfo = Object.fromEntries(resultNames.map((name) => [name, null]));
         }
-        typedefBlock += ` */\n\n`;
-        commentBlock += ` * @returns {${capitalizedCannoliName}Results}\n`;
-    } else if (Object.keys(resultInfo).length === 1) {
-        const [result, info] = Object.entries(resultInfo)[0];
-        commentBlock += ` * @returns {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
-    } else {
-        commentBlock += ` * @returns {void}\n`;
+
+        // Check that they contain the same names
+        const argNamesMatch = argNames.length === givenArgNames.length && argNames.every(name => givenArgNames.includes(name));
+        const resultNamesMatch = resultNames.length === givenResultNames.length && resultNames.every(name => givenResultNames.includes(name));
+
+        if (!argNamesMatch || !resultNamesMatch) {
+            return new Error("Mismatch between arg or result names in the cannoli info and the ones in the cannoli itself.");
+        }
     }
 
-    commentBlock += ` */`;
-    return typedefBlock + commentBlock;
-}
+    const code = writeCode({
+        language,
+        runtime,
+        changeIndentToFour,
+        cannoli: cannoli as VerifiedCannoliCanvasData,
+        llmConfigs,
+        cannoliInfo,
+        cannoliName,
+        config,
+        envVars,
+    })
 
-function generateFunctionSignature(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage): string {
-    const argsType = Object.keys(argInfo).map(arg => `${arg}: string;`).join("\n  ");
-    const resultType = Object.keys(resultInfo).map(result => `${result}: string`).join(";\n  ") + ";";
-
-    if (Object.keys(argInfo).length === 1) {
-        const [arg] = Object.keys(argInfo);
-        return language === "typescript"
-            ? `export async function ${cannoliName}(${arg}: string): Promise<${Object.keys(resultInfo).length === 0 ? 'void' : Object.keys(resultInfo).length === 1 ? 'string' : `{\n  ${resultType}\n}`}>`
-            : `export async function ${cannoliName}(${arg})`;
-    } else if (Object.keys(argInfo).length > 1) {
-        return language === "typescript"
-            ? `export async function ${cannoliName}({\n  ${Object.keys(argInfo).join(",\n  ")}\n}: {\n  ${argsType}\n}): Promise<${Object.keys(resultInfo).length === 0 ? 'void' : Object.keys(resultInfo).length === 1 ? 'string' : `{\n  ${resultType}\n}`}>`
-            : `export async function ${cannoliName}({${Object.keys(argInfo).join(", ")}})`;
-    } else {
-        return language === "typescript"
-            ? `export async function ${cannoliName}(): Promise<${Object.keys(resultInfo).length === 0 ? 'void' : Object.keys(resultInfo).length === 1 ? 'string' : `{\n  ${resultType}\n}`}>`
-            : `export async function ${cannoliName}()`;
-    }
-}
-
-function generateReturnStatement(resultInfo: Record<string, VarInfo | null>): string {
-    if (Object.keys(resultInfo).length === 1) {
-        const [result] = Object.keys(resultInfo);
-        return `return runResult["${result}"];`;
-    } else if (Object.keys(resultInfo).length > 1) {
-        const returnObject = Object.keys(resultInfo)
-            .map(result => `    ${result}: runResult["${result}"]`)
-            .join(",\n");
-        return `return {\n${returnObject}\n  };`;
-    } else {
-        return `return;`;
-    }
-}
-
-function generateFunction(cannoliName: string, cannoliInfo: CannoliInfo, language: BakeLanguage, argDeclarations: string, availableArgs: string[]): string | Error {
-    if (!cannoliName) {
-        return new Error("Cannoli name is empty");
-    }
-
-    const { argInfo, resultInfo, description } = cannoliInfo;
-
-    const commentBlock = generateCommentBlock(cannoliName, argInfo, resultInfo, description);
-    const functionSignature = generateFunctionSignature(cannoliName, argInfo, resultInfo, language);
-    const returnStatement = generateReturnStatement(resultInfo);
-
-    const functionBody = `
-${commentBlock}
-${functionSignature} {
-${indent(argDeclarations, "  ")}
-
-  const runResult = await run({
-${Object.keys(argInfo).length > 0 ? `    args: {
-${Object.keys(argInfo).map(arg => `      ${arg}`).join(",\n")}
-    },` : ''}${Object.keys(argInfo).length > 0 ? '\n' : ''}${availableArgs.filter(arg => arg !== 'args').map(arg => `    ${arg}`).join(",\n")}
-  });
-
-  ${returnStatement}
-}
-`.trim();
-
-    return functionBody;
+    return code;
 }
 
 export function writeCode({
@@ -123,6 +127,7 @@ export function writeCode({
     config,
     envVars,
     cannoliName,
+    changeIndentToFour,
     // actions,
     // replacers,
     // fetcher,
@@ -135,6 +140,7 @@ export function writeCode({
     cannoliInfo: CannoliInfo;
     config?: Record<string, string | number | boolean>;
     envVars?: Record<string, string>;
+    changeIndentToFour?: boolean;
     // actions?: Action[];
     // replacers?: Replacer[];
     // fetcher?: ResponseTextFetcher;
@@ -148,7 +154,7 @@ export function writeCode({
     let llmConfigTemplate = "";
     if (llmConfigs) {
         llmConfigTemplate = `const llmConfigs${language === "typescript" ? ": LLMConfig[]" : ""} = ${printLLMConfigWithEnvReference(llmConfigs, runtime)};
-        `;
+`;
     }
 
     let envVarTemplate = "";
@@ -180,9 +186,10 @@ const cannoli = ${JSON.stringify(cannoli, null, 2)};`;
 
     const generatedFunction = generateFunction(camelCasedFunctionName, cannoliInfo, language, argDeclarations, availableArgs);
 
-    const code = `${importTemplate}
+    const code = cleanCode(`${importTemplate}
 ${generatedFunction}
-`;
+`, changeIndentToFour);
+    console.log(code);
 
     return {
         name: camelCasedFunctionName,
@@ -191,14 +198,193 @@ ${generatedFunction}
     };
 }
 
+function generateCommentBlock(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage, description?: string): string {
+    const formatDescription = (desc?: string) => desc ? desc.split('\n').map(line => ` * ${line}`).join('\n') : '';
+    const capitalizedCannoliName = cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1);
+
+    let commentBlock = description ? `/**\n${formatDescription(description)}\n` : `/**\n`;
+
+    const args = Object.keys(argInfo);
+
+    if (language === "typescript") {
+        if (args.length > 3) {
+            const argNames = args.join(', ');
+            commentBlock += ` * @param {${capitalizedCannoliName}Args} args - ${argNames}\n`;
+        } else {
+            for (const [arg, info] of Object.entries(argInfo)) {
+                commentBlock += ` * @param {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
+            }
+        }
+
+        if (Object.keys(resultInfo).length > 1) {
+            const resultNames = Object.keys(resultInfo).join(', ');
+            commentBlock += ` * @returns {${capitalizedCannoliName}Results} ${resultNames}\n`;
+        } else if (Object.keys(resultInfo).length === 1) {
+            const [result, info] = Object.entries(resultInfo)[0];
+            commentBlock += ` * @returns {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
+        } else {
+            commentBlock += ` * @returns {void}\n`;
+        }
+    } else {
+        if (args.length > 3) {
+            const argNames = args.join(', ');
+            commentBlock += ` * @param {${capitalizedCannoliName}Args} args - ${argNames}\n`;
+        } else {
+            for (const [arg, info] of Object.entries(argInfo)) {
+                commentBlock += ` * @param {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
+            }
+        }
+
+        if (Object.keys(resultInfo).length > 1) {
+            const resultNames = Object.keys(resultInfo).join(', ');
+            commentBlock += ` * @returns {${capitalizedCannoliName}Results} ${resultNames}\n`;
+        } else if (Object.keys(resultInfo).length === 1) {
+            const [result, info] = Object.entries(resultInfo)[0];
+            commentBlock += ` * @returns {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
+        } else {
+            commentBlock += ` * @returns {void}\n`;
+        }
+    }
+
+    commentBlock += ` */`;
+    return commentBlock;
+}
+
+function generateTypeDefinitions(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage): string {
+    const args = Object.keys(argInfo);
+    const argsType = args.map(arg => `${arg}: string;`).join("\n  ");
+    const resultType = Object.keys(resultInfo).map(result => `${result}: string`).join(";\n  ") + ";";
+
+    let argTypeDef = '';
+    let resultTypeDef = '';
+
+    if (language === "typescript") {
+        if (args.length > 3) {
+            argTypeDef = `export type ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Args = {\n  ${argsType}\n};\n\n`;
+        }
+
+        if (Object.keys(resultInfo).length > 1) {
+            resultTypeDef = `export type ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Results = {\n  ${resultType}\n};\n\n`;
+        }
+    } else {
+        if (args.length > 3) {
+            argTypeDef = `/**\n * @typedef {Object} ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Args\n${args.map(arg => ` * @property {string} ${arg}`).join("\n")}\n */\n\n`;
+        }
+
+        if (Object.keys(resultInfo).length > 1) {
+            resultTypeDef = `/**\n * @typedef {Object} ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Results\n${Object.keys(resultInfo).map(result => ` * @property {string} ${result}`).join("\n")}\n */\n\n`;
+        }
+    }
+
+    return `${argTypeDef}${resultTypeDef}`;
+}
+
+function generateFunctionSignature(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage): string {
+    const args = Object.keys(argInfo);
+
+    if (language === "typescript") {
+        const argsString = args.length > 3
+            ? `args: ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Args`
+            : args.length > 1
+                ? `\n  ${args.map(arg => `${arg}: string`).join(",\n  ")}\n`
+                : args.map(arg => `${arg}: string`).join(", ");
+
+        const returnType = Object.keys(resultInfo).length === 0
+            ? 'void'
+            : Object.keys(resultInfo).length === 1
+                ? 'string'
+                : `${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Results`;
+
+        return `export async function ${cannoliName}(${argsString}): Promise<${returnType}>`;
+    } else {
+        if (args.length === 1) {
+            const [arg] = args;
+            return `export async function ${cannoliName}(${arg})`;
+        } else if (args.length > 1 && args.length <= 3) {
+            return `export async function ${cannoliName}(\n  ${args.join(",\n  ")}\n)`;
+        } else if (args.length > 3) {
+            return `export async function ${cannoliName}({\n  ${args.join(",\n  ")}\n})`;
+        } else {
+            return `export async function ${cannoliName}()`;
+        }
+    }
+}
+
+function generateReturnStatement(resultInfo: Record<string, VarInfo | null>): string {
+    if (Object.keys(resultInfo).length === 1) {
+        const [result] = Object.keys(resultInfo);
+        return `return runResult["${result}"];`;
+    } else if (Object.keys(resultInfo).length > 1) {
+        const returnObject = Object.keys(resultInfo)
+            .map(result => `    ${result}: runResult["${result}"]`)
+            .join(",\n");
+        return `return {\n${returnObject}\n  };`;
+    } else {
+        return `return;`;
+    }
+}
+
+function generateRunFunctionCall(args: string[], availableArgs: string[], language: BakeLanguage): string {
+    let runArgs = '';
+
+    if (args.length < 1) {
+        runArgs = '';
+    } else if (args.length <= 3 || language === "javascript") {
+        runArgs = `  args: {
+      ${args.join(",\n      ")}
+    }`
+    } else if (args.length > 3) {
+        runArgs = `  args`;
+    }
+
+    const additionalArgs = availableArgs.filter(arg => arg !== 'args').map(arg => `  ${arg}`).join(",\n  ");
+
+    const allArgs = [runArgs, additionalArgs].filter(Boolean).join(",\n  ");
+
+    return `  const runResult = await run({
+  ${allArgs}
+  });`;
+}
+
+function generateFunction(cannoliName: string, cannoliInfo: CannoliInfo, language: BakeLanguage, argDeclarations: string, availableArgs: string[]): string | Error {
+    if (!cannoliName) {
+        return new Error("Cannoli name is empty");
+    }
+
+    const { argInfo, resultInfo, description } = cannoliInfo;
+
+    const typeDefinitions = generateTypeDefinitions(cannoliName, argInfo, resultInfo, language);
+    const commentBlock = generateCommentBlock(cannoliName, argInfo, resultInfo, language, description);
+    const functionSignature = generateFunctionSignature(cannoliName, argInfo, resultInfo, language);
+    const returnStatement = generateReturnStatement(resultInfo);
+
+    const args = Object.keys(argInfo);
+    const runFunctionCall = generateRunFunctionCall(args, availableArgs, language);
+
+    const functionBody = `
+${typeDefinitions}${commentBlock}
+${functionSignature} {
+${indent(argDeclarations, "  ")}
+
+${runFunctionCall}
+
+  ${returnStatement}
+}
+`.trim();
+
+    return functionBody;
+}
+
+
+
 function generateImportTemplates(language: BakeLanguage): Record<BakeRuntime, string> {
     const llmConfigImport = language === "typescript" ? "  LLMConfig,\n" : "";
     return {
-        node: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core@latest";
+        node: `import {\n${llmConfigImport}  run\n} from "@deablabs/cannoli-core";
 `,
-        deno: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core@latest";
+        deno: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core";
 `,
-        bun: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core@latest";
+        bun: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core";
 `
     };
 }
@@ -287,4 +473,32 @@ function toCamelCase(str: string): string {
 
 function indent(str: string, indentation: string): string {
     return str.split('\n').map(line => `${indentation}${line}`).join('\n');
+}
+
+function cleanCode(code: string, changeIndentToFour: boolean = false): string {
+    const lines = code.split('\n');
+
+    const cleanedLines = lines.map(line => {
+        // Trim whitespace at the ends of lines
+        let cleanedLine = line.trimEnd();
+
+        // If the line contains only whitespace, make it empty
+        if (/^\s*$/.test(cleanedLine)) {
+            cleanedLine = '';
+        }
+
+        if (changeIndentToFour) {
+            const match = cleanedLine.match(/^(\s+)/);
+            if (match) {
+                const spaces = match[1].length;
+                if (spaces % 2 === 0) {
+                    cleanedLine = ' '.repeat(spaces * 2) + cleanedLine.trimStart();
+                }
+            }
+        }
+
+        return cleanedLine;
+    });
+
+    return cleanedLines.join('\n');
 }

@@ -27,7 +27,7 @@ import {
 	runWithControl,
 	bake,
 	BakeLanguage,
-	BakeRuntime,
+	BakeRuntime
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -74,6 +74,10 @@ interface CannoliSettings {
 	contentIsColorless: boolean;
 	valTownAPIKey: string;
 	exaAPIKey: string;
+	bakedCannoliFolder: string;
+	bakeLanguage: BakeLanguage;
+	bakeRuntime: BakeRuntime;
+	bakeIndent: "2" | "4";
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -114,6 +118,10 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	contentIsColorless: false,
 	valTownAPIKey: "",
 	exaAPIKey: "",
+	bakedCannoliFolder: "Baked Cannoli",
+	bakeLanguage: "typescript",
+	bakeRuntime: "node",
+	bakeIndent: "2",
 };
 
 export default class Cannoli extends Plugin {
@@ -357,7 +365,8 @@ export default class Cannoli extends Plugin {
 			runtime: "deno",
 			cannoliName: nameWithoutExtensions,
 			cannoli: content,
-			llmConfigs: this.getLLMConfigs(),
+			llmConfigs: this.getLLMConfigs().filter((config) => config.baseURL || config.apiKey),
+			fileManager: new VaultInterface(this),
 			config: this.getConfig(),
 			envVars: this.getEnvVars(),
 		});
@@ -474,60 +483,56 @@ export default class Cannoli extends Plugin {
 		// Get the content of the file
 		const content = JSON.parse(await this.app.vault.read(activeFile));
 
-		// Create a modal to get the language and runtime
-		const bakeModal = new BakeModal(this.app, async (options) => {
-			const bakeResult = await bake({
-				language: options.language,
-				runtime: options.runtime,
-				cannoliName: nameWithoutExtensions,
-				cannoli: content,
-				llmConfigs: this.getLLMConfigs(),
-				config: this.getConfig(),
-				envVars: this.getEnvVars(),
-			});
-
-			if (bakeResult instanceof Error) {
-				new Notice(`Error baking cannoli: ${bakeResult.message}`);
-				return;
-			}
-
-			// Check that the baked cannoli folder exists
-			let bakedCannoliFolder = this.app.vault.getFolderByPath("Baked Cannoli");
-			if (!bakedCannoliFolder) {
-				await this.app.vault.createFolder("Baked Cannoli");
-				bakedCannoliFolder = this.app.vault.getFolderByPath("Baked Cannoli");
-			}
-
-			// Function to find the file recursively
-			const findFileRecursively = async (folder: TFolder, fileName: string): Promise<TFile | null> => {
-				for (const child of folder.children) {
-					if (child instanceof TFile && child.name === fileName) {
-						return child;
-					} else if (child instanceof TFolder) {
-						const found = await findFileRecursively(child, fileName);
-						if (found) return found;
-					}
-				}
-				return null;
-			};
-
-			// Check if the file already exists
-			if (bakedCannoliFolder) {
-				const existingFile = await findFileRecursively(bakedCannoliFolder, bakeResult.fileName);
-				if (existingFile) {
-					// Overwrite the existing file
-					await this.app.vault.modify(existingFile, bakeResult.code);
-					new Notice(`Baked cannoli to ${existingFile.path}`);
-				} else {
-					// Create a new file in the vault in the "Baked Cannoli" folder
-					const newFile = await this.app.vault.create(`Baked Cannoli/${bakeResult.fileName}`, bakeResult.code);
-					new Notice(`Baked cannoli to ${newFile.path}`);
-				}
-			}
-		}, () => {
-			new Notice("Baking cancelled.");
+		const bakeResult = await bake({
+			language: this.settings.bakeLanguage,
+			runtime: this.settings.bakeRuntime,
+			changeIndentToFour: this.settings.bakeIndent === "4",
+			cannoliName: nameWithoutExtensions,
+			cannoli: content,
+			llmConfigs: this.getLLMConfigs().filter((config) => config.baseURL || config.apiKey),
+			fileManager: new VaultInterface(this),
+			config: this.getConfig(),
+			envVars: this.getEnvVars(),
 		});
-		bakeModal.open();
+
+		if (bakeResult instanceof Error) {
+			new Notice(`Error baking cannoli: ${bakeResult.message}`);
+			return;
+		}
+
+		// Check that the baked cannoli folder exists
+		let bakedCannoliFolder = this.app.vault.getFolderByPath(this.settings.bakedCannoliFolder);
+		if (!bakedCannoliFolder) {
+			await this.app.vault.createFolder(this.settings.bakedCannoliFolder);
+			bakedCannoliFolder = this.app.vault.getFolderByPath(this.settings.bakedCannoliFolder);
+		}
+
+		// Function to find the file recursively
+		const findFileRecursively = async (folder: TFolder, fileName: string): Promise<TFile | null> => {
+			for (const child of folder.children) {
+				if (child instanceof TFile && child.name === fileName) {
+					return child;
+				} else if (child instanceof TFolder) {
+					const found = await findFileRecursively(child, fileName);
+					if (found) return found;
+				}
+			}
+			return null;
+		};
+
+		// Check if the file already exists
+		if (bakedCannoliFolder) {
+			const existingFile = await findFileRecursively(bakedCannoliFolder, bakeResult.fileName);
+			if (existingFile) {
+				// Overwrite the existing file
+				await this.app.vault.modify(existingFile, bakeResult.code);
+				new Notice(`Baked cannoli to ${existingFile.path}`);
+			} else {
+				// Create a new file in the vault in the "Baked Cannoli" folder
+				const newFile = await this.app.vault.create(`${this.settings.bakedCannoliFolder}/${bakeResult.fileName}`, bakeResult.code);
+				new Notice(`Baked cannoli to ${newFile.path}`);
+			}
+		}
 	};
 
 	getArgsFromCanvas = (canvas: string) => {
@@ -849,10 +854,11 @@ export default class Cannoli extends Plugin {
 		}
 
 		const providers: SupportedProviders[] = ["openai", "azure_openai", "ollama", "gemini", "anthropic", "groq"];
-		const llmConfigs: LLMConfig[] = providers.map((provider) => ({
-			...getConfigByProvider(provider),
-			provider,
-		}));
+		const llmConfigs: LLMConfig[] = providers
+			.map((provider) => ({
+				...getConfigByProvider(provider),
+				provider,
+			}))
 
 		// Ensure the default provider is first
 		const defaultProviderIndex = llmConfigs.findIndex((config) => config.provider === this.settings.llmProvider);
@@ -927,7 +933,7 @@ export default class Cannoli extends Plugin {
 			smartConnectionsQuery
 		];
 
-		const vaultInterface = new VaultInterface(this, fetcher);
+		const vaultInterface = new VaultInterface(this);
 
 		const replacers: Replacer[] = [
 			vaultInterface.replaceDataviewQueries,
@@ -1207,81 +1213,81 @@ export class EditValModal extends Modal {
 	}
 }
 
-export class BakeModal extends Modal {
-	onContinue: (options: {
-		language: BakeLanguage,
-		runtime: BakeRuntime
-	}) => void;
-	onCancel: () => void;
+// export class BakeModal extends Modal {
+// 	onContinue: (options: {
+// 		language: BakeLanguage,
+// 		runtime: BakeRuntime
+// 	}) => void;
+// 	onCancel: () => void;
 
-	constructor(
-		app: App,
-		onContinue: (options: { language: BakeLanguage, runtime: BakeRuntime }) => void,
-		onCancel: () => void,
-	) {
-		super(app);
-		this.onContinue = onContinue;
-		this.onCancel = onCancel;
-	}
+// 	constructor(
+// 		app: App,
+// 		onContinue: (options: { language: BakeLanguage, runtime: BakeRuntime }) => void,
+// 		onCancel: () => void,
+// 	) {
+// 		super(app);
+// 		this.onContinue = onContinue;
+// 		this.onCancel = onCancel;
+// 	}
 
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.createEl("h1", { text: "Bake Cannoli" });
+// 	onOpen() {
+// 		const { contentEl } = this;
+// 		contentEl.createEl("h1", { text: "Bake Cannoli" });
 
-		contentEl.createEl("p", {
-			text: "Select the language and runtime for baking the cannoli.",
-		});
+// 		contentEl.createEl("p", {
+// 			text: "Select the language and runtime for baking the cannoli.",
+// 		});
 
-		let selectedLanguage: BakeLanguage = "typescript";
-		let selectedRuntime: BakeRuntime = "node";
+// 		let selectedLanguage: BakeLanguage = "typescript";
+// 		let selectedRuntime: BakeRuntime = "node";
 
-		// Language dropdown
-		new Setting(contentEl)
-			.setName("Language")
-			.setDesc("Choose the language for the cannoli.")
-			.addDropdown((dropdown) => {
-				dropdown.addOption("typescript", "TypeScript");
-				dropdown.addOption("javascript", "JavaScript");
-				dropdown.setValue(selectedLanguage);
-				dropdown.onChange((value) => {
-					selectedLanguage = value as BakeLanguage;
-				});
-			});
+// 		// Language dropdown
+// 		new Setting(contentEl)
+// 			.setName("Language")
+// 			.setDesc("Choose the language for the cannoli.")
+// 			.addDropdown((dropdown) => {
+// 				dropdown.addOption("typescript", "TypeScript");
+// 				dropdown.addOption("javascript", "JavaScript");
+// 				dropdown.setValue(selectedLanguage);
+// 				dropdown.onChange((value) => {
+// 					selectedLanguage = value as BakeLanguage;
+// 				});
+// 			});
 
-		// Runtime dropdown
-		new Setting(contentEl)
-			.setName("Runtime")
-			.setDesc("Choose the runtime for the cannoli.")
-			.addDropdown((dropdown) => {
-				dropdown.addOption("node", "Node.js");
-				dropdown.addOption("deno", "Deno");
-				dropdown.addOption("bun", "Bun");
-				dropdown.setValue(selectedRuntime);
-				dropdown.onChange((value) => {
-					selectedRuntime = value as BakeRuntime;
-				});
-			});
+// 		// Runtime dropdown
+// 		new Setting(contentEl)
+// 			.setName("Runtime")
+// 			.setDesc("Choose the runtime for the cannoli.")
+// 			.addDropdown((dropdown) => {
+// 				dropdown.addOption("node", "Node.js");
+// 				dropdown.addOption("deno", "Deno");
+// 				dropdown.addOption("bun", "Bun");
+// 				dropdown.setValue(selectedRuntime);
+// 				dropdown.onChange((value) => {
+// 					selectedRuntime = value as BakeRuntime;
+// 				});
+// 			});
 
-		contentEl.createEl("p", {
-			text: "Reminder: To see the files, ensure the 'Detect all file extensions' setting is turned on in the 'Files and links' page of your Obsidian settings.",
-		});
+// 		contentEl.createEl("p", {
+// 			text: "Reminder: To see the files, ensure the 'Detect all file extensions' setting is turned on in the 'Files and links' page of your Obsidian settings.",
+// 		});
 
-		const panel = new Setting(contentEl);
-		panel.addButton((btn) => btn.setButtonText("Cancel").onClick(() => {
-			this.close();
-			this.onCancel();
-		}));
-		panel.addButton((btn) => btn.setButtonText("Bake").setCta().onClick(() => {
-			this.close();
-			this.onContinue({ language: selectedLanguage, runtime: selectedRuntime });
-		}));
-	}
+// 		const panel = new Setting(contentEl);
+// 		panel.addButton((btn) => btn.setButtonText("Cancel").onClick(() => {
+// 			this.close();
+// 			this.onCancel();
+// 		}));
+// 		panel.addButton((btn) => btn.setButtonText("Bake").setCta().onClick(() => {
+// 			this.close();
+// 			this.onContinue({ language: selectedLanguage, runtime: selectedRuntime });
+// 		}));
+// 	}
 
-	onClose() {
-		const { contentEl } = this;
-		contentEl.empty();
-	}
-}
+// 	onClose() {
+// 		const { contentEl } = this;
+// 		contentEl.empty();
+// 	}
+// }
 
 export class RunPriceAlertModal extends Modal {
 	usage: Record<string, ModelUsage>;
@@ -2313,6 +2319,61 @@ class CannoliSettingTab extends PluginSettingTab {
 					})
 					.inputEl.setAttribute("type", "password")
 			);
+
+		containerEl.createEl("h1", { text: "Baking" });
+
+		// Filepath for baked cannoli folder
+		new Setting(containerEl)
+			.setName("Baked cannoli folder")
+			.setDesc("The path to the folder where baked cannolis will be saved. There can be subfolders.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.bakedCannoliFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.bakedCannoliFolder = value;
+						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Language")
+			.setDesc("The language to use for baking.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("typescript", "Typescript");
+				dropdown.addOption("javascript", "Javascript");
+				dropdown.setValue(this.plugin.settings.bakeLanguage);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.bakeLanguage = value as BakeLanguage;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Runtime")
+			.setDesc("The runtime to use for baking.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("node", "Node");
+				dropdown.addOption("deno", "Deno");
+				dropdown.addOption("bun", "Bun");
+				dropdown.setValue(this.plugin.settings.bakeRuntime);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.bakeRuntime = value as BakeRuntime;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Indent")
+			.setDesc("The indentation to use for baking.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("2", "2");
+				dropdown.addOption("4", "4");
+				dropdown.setValue(this.plugin.settings.bakeIndent);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.bakeIndent = value as "2" | "4";
+					await this.plugin.saveSettings();
+				});
+			});
 
 		containerEl.createEl("h1", { text: "Action nodes" });
 
