@@ -35,7 +35,7 @@ export interface HttpRequest {
 }
 
 export type ActionArgInfo = {
-	category: "config" | "env" | "arg" | "fileManager" | "fetcher";
+	category: "config" | "env" | "arg" | "fileManager" | "fetcher" | "extra";
 	type?: "string" | "number" | "boolean" | string[];
 	displayName?: string;
 	description?: string;
@@ -43,12 +43,10 @@ export type ActionArgInfo = {
 }
 
 export type ActionArgs = {
-	[key: string]: string | number | boolean | FileManager | ResponseTextFetcher | undefined;
+	[key: string]: string | number | boolean | FileManager | ResponseTextFetcher | Record<string, string> | undefined;
 };
 
 export type ActionResponse = string | string[] | Record<string, string | string[]> | void | Error | Promise<string | string[] | Record<string, string | string[]> | void | Error>;
-
-export type ReceiveInfo = string | string[] | Record<string, string | string[]>
 
 export type Action = {
 	name: string;
@@ -64,6 +62,8 @@ export type Action = {
 		path: string;
 	};
 };
+
+export type ReceiveInfo = string | string[] | Record<string, string | string[]>
 
 export type Replacer = (content: string, isMock: boolean, node?: CannoliNode) => Promise<string>;
 

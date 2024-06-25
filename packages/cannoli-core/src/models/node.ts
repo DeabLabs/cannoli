@@ -228,6 +228,9 @@ export class CannoliNode extends CannoliVertex {
 							} else {
 								content = `{{${reference.name}}}`;
 							}
+						} else if (this.run.envVars && this.run.envVars[reference.name]) {
+							// Check in this.run.envVars
+							content = this.run.envVars[reference.name];
 						} else {
 							// this.warning(`Variable "${reference.name}" not found`);
 							content = `{{${reference.name}}}`;
@@ -2611,6 +2614,11 @@ export class HttpNode extends ContentNode {
 
 		// Get the value for each arg name from the variables, and error if any arg is missing
 		for (const argName of argNames) {
+			// If the arg has argInfo and its category is extra, skip
+			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "extra") {
+				continue;
+			}
+
 			// If the arg has an argInfo and its category is files, give it the filesystem interface
 			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "fileManager") {
 				// If the filesystemInterface is null, error
@@ -2674,6 +2682,24 @@ export class HttpNode extends ContentNode {
 					args[argName] = this.coerceValue(variableValue.content || "", argName, action.argInfo[argName].type);
 				} else {
 					args[argName] = variableValue.content || "";
+				}
+			}
+		}
+
+		const extraArgs: Record<string, string> = {};
+
+		// Collect extra arguments
+		for (const variableValue of variableValues) {
+			if (!argNames.includes(variableValue.name)) {
+				extraArgs[variableValue.name] = variableValue.content || "";
+			}
+		}
+
+		// If the action has an "extra" category, add the extraArgs to the args
+		if (action.argInfo) {
+			for (const [argName, argInfo] of Object.entries(action.argInfo)) {
+				if (argInfo.category === "extra") {
+					args[argName] = extraArgs;
 				}
 			}
 		}

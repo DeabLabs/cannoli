@@ -182,7 +182,7 @@ export default class Cannoli extends Plugin {
 
 		this.createCopyCanvasToClipboardCommand();
 
-		this.createCreateOrEditValCommand();
+		this.createBakeToValTownCommand();
 
 		this.createBakeCommand();
 
@@ -273,11 +273,11 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
-	createCreateOrEditValCommand = () => {
+	createBakeToValTownCommand = () => {
 		this.addCommand({
-			id: "create-or-edit-val",
-			name: "Create/edit Val",
-			callback: this.createOrEditVal,
+			id: "bake-to-val-town",
+			name: "Bake to Val Town",
+			callback: this.bakeToValTown,
 			icon: "cannoli",
 		});
 	};
@@ -341,7 +341,7 @@ export default class Cannoli extends Plugin {
 		new Notice("Canvas copied to clipboard");
 	};
 
-	createOrEditVal = async () => {
+	bakeToValTown = async () => {
 		// Check if the user's on a canvas
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
@@ -461,7 +461,7 @@ export default class Cannoli extends Plugin {
 
 		const valUrl = `https://www.val.town/v/${response.json.author.username}/${response.json.name}`;
 
-		new Notice(`Val created for ${activeFile.basename}`);
+		new Notice(`${activeFile.basename} baked to Val Town`);
 
 		// Redirect to the val
 		window.open(valUrl, "_blank");
@@ -2335,7 +2335,7 @@ class CannoliSettingTab extends PluginSettingTab {
 		// Filepath for baked cannoli folder
 		new Setting(containerEl)
 			.setName("Baked cannoli folder")
-			.setDesc("The path to the folder where baked cannolis will be saved. There can be subfolders.")
+			.setDesc("The path to the folder where baked cannoli will be saved. There can be subfolders.")
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.bakedCannoliFolder)
@@ -2347,7 +2347,6 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Language")
-			.setDesc("The language to use for baking.")
 			.addDropdown((dropdown) => {
 				dropdown.addOption("typescript", "Typescript");
 				dropdown.addOption("javascript", "Javascript");
@@ -2360,7 +2359,6 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Runtime")
-			.setDesc("The runtime to use for baking.")
 			.addDropdown((dropdown) => {
 				dropdown.addOption("node", "Node");
 				dropdown.addOption("deno", "Deno");
@@ -2374,7 +2372,6 @@ class CannoliSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Indent")
-			.setDesc("The indentation to use for baking.")
 			.addDropdown((dropdown) => {
 				dropdown.addOption("2", "2");
 				dropdown.addOption("4", "4");
