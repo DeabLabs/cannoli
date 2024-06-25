@@ -31,6 +31,7 @@ export async function bake({
     config,
     envVars,
     actions,
+    fileManager,
     // replacers,
     // fetcher,
 }: {
@@ -200,7 +201,6 @@ const cannoli = ${JSON.stringify(cannoli, null, 2)};`;
     const code = cleanCode(`${importTemplate}
 ${generatedFunction}
 `, changeIndentToFour);
-    console.log(code);
 
     return {
         name: camelCasedFunctionName,
@@ -400,7 +400,7 @@ function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, a
     // Add action imports
     if (actions) {
         actions.forEach(action => {
-            let importPath = action.importInfo?.importPath || "Paste import path or implement action";
+            let importPath = action.importInfo?.path || "Paste import path or implement action";
             if (runtime === "node" && importPath.startsWith("npm:")) {
                 importPath = importPath.replace(/^npm:/, "");
             }

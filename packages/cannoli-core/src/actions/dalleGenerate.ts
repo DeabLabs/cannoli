@@ -55,6 +55,6 @@ export const dalleGenerate: Action = {
     },
     importInfo: {
         name: "dalleGenerate",
-        importPath: "npm:@deablabs/cannoli-core",
+        path: "npm:@deablabs/cannoli-core",
     },
 };

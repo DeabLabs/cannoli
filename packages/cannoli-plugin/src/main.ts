@@ -22,6 +22,7 @@ import {
 	GenericModelConfig,
 	dalleGenerate,
 	exaSearch,
+	valTownEvaluate,
 	Replacer,
 	runWithControl,
 	bake,
@@ -796,6 +797,7 @@ export default class Cannoli extends Plugin {
 		return {
 			...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
 			...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
+			...(this.settings.valTownAPIKey ? { VALTOWN_API_KEY: this.settings.valTownAPIKey } : {}),
 		};
 	}
 
@@ -813,7 +815,8 @@ export default class Cannoli extends Plugin {
 			...(this.settings.openaiAPIKey ? [dalleGenerate] : []),
 			...(this.settings.exaAPIKey ? [exaSearch] : []),
 			dataviewQuery,
-			smartConnectionsQuery
+			smartConnectionsQuery,
+			valTownEvaluate
 		];
 	}
 
@@ -937,8 +940,6 @@ export default class Cannoli extends Plugin {
 				return response.text;
 			});
 		};
-
-
 
 		const vaultInterface = new VaultInterface(this);
 

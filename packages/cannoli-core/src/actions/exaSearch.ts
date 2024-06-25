@@ -73,6 +73,6 @@ export const exaSearch: Action = {
     },
     importInfo: {
         name: "exaSearch",
-        importPath: "npm:@deablabs/cannoli-core",
+        path: "npm:@deablabs/cannoli-core",
     },
 };

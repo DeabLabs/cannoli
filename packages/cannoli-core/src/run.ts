@@ -39,6 +39,7 @@ export type ActionArgInfo = {
 	type?: "string" | "number" | "boolean" | string[];
 	displayName?: string;
 	description?: string;
+	prompt?: string;
 }
 
 export type ActionArgs = {
@@ -55,11 +56,12 @@ export type Action = {
 	receive?: (receiveInfo: ReceiveInfo) => ActionResponse;
 	displayName?: string;
 	description?: string;
+	version?: string;
 	argInfo?: Record<string, ActionArgInfo>;
 	resultKeys?: string[];
 	importInfo?: {
 		name: string;
-		importPath: string;
+		path: string;
 	};
 };
 
