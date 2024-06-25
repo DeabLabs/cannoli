@@ -57,6 +57,10 @@ export type Action = {
 	description?: string;
 	argInfo?: Record<string, ActionArgInfo>;
 	resultKeys?: string[];
+	importInfo?: {
+		name: string;
+		importPath: string;
+	};
 };
 
 export type Replacer = (content: string, isMock: boolean, node?: CannoliNode) => Promise<string>;
@@ -157,7 +161,6 @@ export class Run {
 		envVars,
 		args,
 		resume
-
 	}: RunArgs) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
 		this.isMock = isMock ?? false;
@@ -197,13 +200,13 @@ export class Run {
 			this.llmLimit = pLimit(1000);
 		}
 
-		this.currentNote = this.args?.currentNote ?? "No current note";
+		this.currentNote = this.args?.obsidianCurrentNote ?? "No current note";
 
-		this.selection = this.args?.selection ?? "No selection";
+		this.selection = this.args?.obsidianSelection ?? "No selection";
 
 		// Delete the current note and selection from the args
-		delete this.args?.currentNote;
-		delete this.args?.selection;
+		delete this.args?.obsidianCurrentNote;
+		delete this.args?.obsidianSelection;
 
 		this.fileManager = fileManager ?? null;
 
@@ -227,10 +230,12 @@ export class Run {
 		// For each arg, check if the key matches the first line of the text in the input node
 		for (const arg of Object.entries(this.args ?? {})) {
 			const [key, value] = arg;
-			const argNode = argNodes.find((node) => node.cannoliData.text.split("\n")[0] === `[${key}]`);
-			if (argNode) {
-				// If so, set the text of the input node after the first line to the value
-				argNode.cannoliData.text = argNode.cannoliData.text.split("\n")[0] + "\n" + value;
+			const matchingArgNodes = argNodes.filter((node) => node.cannoliData.text.split("\n")[0] === `[${key}]`);
+			if (matchingArgNodes.length > 0) {
+				// If so, set the text of each matching input node after the first line to the value
+				matchingArgNodes.forEach((argNode) => {
+					argNode.cannoliData.text = argNode.cannoliData.text.split("\n")[0] + "\n" + value;
+				});
 			} else {
 				throw new Error(`Argument key "${key}" not found in input nodes.`);
 			}
@@ -282,41 +287,41 @@ export class Run {
 	}
 
 	getArgNames(): string[] {
-		const argNames: string[] = [];
+		const argNames: Set<string> = new Set();
 
 		const argNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "input");
 
 		if (!argNodes) {
-			return argNames;
+			return Array.from(argNames);
 		}
 
 		for (const node of argNodes) {
 			// Check if the first line of the text contains only a bracketed name
 			if (/^\[.*?\]$/.test(node.cannoliData.text.split("\n")[0])) {
-				argNames.push(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+				argNames.add(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
 			}
 		}
 
-		return argNames;
+		return Array.from(argNames);
 	}
 
 	getResultNames(): string[] {
-		const resultNames: string[] = [];
+		const resultNames: Set<string> = new Set();
 
 		const resultNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "output");
 
 		if (!resultNodes) {
-			return resultNames;
+			return Array.from(resultNames);
 		}
 
 		for (const node of resultNodes) {
 			// Check if the first line of the text contains only a bracketed name
 			if (/^\[.*?\]$/.test(node.cannoliData.text.split("\n")[0])) {
-				resultNames.push(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+				resultNames.add(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
 			}
 		}
 
-		return resultNames;
+		return Array.from(resultNames);
 	}
 
 	getDescription(): string | undefined {
@@ -328,11 +333,10 @@ export class Run {
 		return undefined;
 	}
 
-	error(message: string) {
+	private handleFinish(reason: StoppageReason, message?: string) {
 		this.stopTime = Date.now();
-
 		this.onFinish({
-			reason: "error",
+			reason,
 			message,
 			results: this.getResults(),
 			argNames: this.getArgNames(),
@@ -340,21 +344,15 @@ export class Run {
 			description: this.getDescription(),
 			usage: this.usage,
 		});
+	}
 
+	error(message: string) {
+		this.handleFinish("error", message);
 		throw new Error(message);
 	}
 
 	stop() {
-		this.stopTime = Date.now();
-
-		this.onFinish({
-			reason: "user",
-			results: this.getResults(),
-			argNames: this.getArgNames(),
-			resultNames: this.getResultNames(),
-			description: this.getDescription(),
-			usage: this.usage,
-		});
+		this.handleFinish("user");
 	}
 
 	reset() {
@@ -468,19 +466,10 @@ export class Run {
 
 	objectCompleted(object: CannoliObject) {
 		this.updateObject(object);
-
 		this.updateOriginalParallelGroupLabel(object, "executing");
 
 		if (this.allObjectsFinished() && !this.stopTime) {
-			this.stopTime = Date.now();
-			this.onFinish({
-				reason: "complete",
-				results: this.getResults(),
-				argNames: this.getArgNames(),
-				resultNames: this.getResultNames(),
-				description: this.getDescription(),
-				usage: this.usage,
-			});
+			this.handleFinish("complete");
 		}
 	}
 
@@ -488,15 +477,7 @@ export class Run {
 		this.updateObject(object);
 
 		if (this.allObjectsFinished() && !this.stopTime) {
-			this.stopTime = Date.now();
-			this.onFinish({
-				reason: "complete",
-				results: this.getResults(),
-				argNames: this.getArgNames(),
-				resultNames: this.getResultNames(),
-				description: this.getDescription(),
-				usage: this.usage,
-			});
+			this.handleFinish("complete");
 		}
 	}
 

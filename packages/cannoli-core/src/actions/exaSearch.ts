@@ -71,4 +71,8 @@ export const exaSearch: Action = {
             category: "fetcher",
         },
     },
+    importInfo: {
+        name: "exaSearch",
+        importPath: "npm:@deablabs/cannoli-core",
+    },
 };

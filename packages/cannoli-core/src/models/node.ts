@@ -1944,6 +1944,12 @@ export class ContentNode extends CannoliNode {
 				if (this.isReservedKeyword(name)) {
 					this.error(`"${name}" is a reserved keyword, and cannot be used as an input or output node name.`);
 				}
+
+				if (this.type === ContentNodeType.Output) {
+					if (this.getGroups().some((group) => group.fromForEach)) {
+						this.error(`Named output nodes cannot be inside of parallel groups.`);
+					}
+				}
 			}
 		}
 	}

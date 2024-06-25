@@ -2,6 +2,7 @@ import { runWithControl } from "./cannoli";
 import { FileManager } from "./fileManager";
 import { VerifiedCannoliCanvasData } from "./models/graph";
 import { LLMConfig } from "./providers";
+import { Action } from "./run";
 
 export type VarInfo = {
     displayName: string;
@@ -29,7 +30,7 @@ export async function bake({
     llmConfigs,
     config,
     envVars,
-    // actions,
+    actions,
     // replacers,
     // fetcher,
 }: {
@@ -43,7 +44,7 @@ export async function bake({
     config?: Record<string, string | number | boolean>,
     envVars?: Record<string, string>,
     changeIndentToFour?: boolean,
-    // actions?: Action[],
+    actions?: Action[],
     // replacers?: Replacer[],
     // fetcher?: ResponseTextFetcher,
 }): Promise<{ name: string; fileName: string; code: string } | Error> {
@@ -54,7 +55,7 @@ export async function bake({
         config,
         envVars,
         isMock: true,
-        // actions,
+        actions,
         // replacers,
         // fetcher,
     });
@@ -103,16 +104,23 @@ export async function bake({
         }
     }
 
+    // Filter out llmconfig without baseURL or apiKey
+    const llmConfigsWithBaseURLorAPIKey = llmConfigs?.filter((config) => config.baseURL || config.apiKey)
+
+    // Filter out actions without importInfo
+    const actionsWithImportInfo = actions?.filter((action) => action.importInfo);
+
     const code = writeCode({
         language,
         runtime,
         changeIndentToFour,
         cannoli: cannoli as VerifiedCannoliCanvasData,
-        llmConfigs,
+        llmConfigs: llmConfigsWithBaseURLorAPIKey,
         cannoliInfo,
         cannoliName,
         config,
         envVars,
+        actions: actionsWithImportInfo,
     })
 
     return code;
@@ -128,7 +136,7 @@ export function writeCode({
     envVars,
     cannoliName,
     changeIndentToFour,
-    // actions,
+    actions,
     // replacers,
     // fetcher,
 }: {
@@ -141,7 +149,7 @@ export function writeCode({
     config?: Record<string, string | number | boolean>;
     envVars?: Record<string, string>;
     changeIndentToFour?: boolean;
-    // actions?: Action[];
+    actions?: Action[];
     // replacers?: Replacer[];
     // fetcher?: ResponseTextFetcher;
 }): {
@@ -149,7 +157,8 @@ export function writeCode({
     fileName: string;
     code: string;
 } | Error {
-    const importTemplate = generateImportTemplates(language)[runtime];
+    const importTemplate = generateImportTemplates(language, runtime, actions);
+    const availableArgs = ['cannoli', 'llmConfigs'];
 
     let llmConfigTemplate = "";
     if (llmConfigs) {
@@ -158,24 +167,26 @@ export function writeCode({
     }
 
     let envVarTemplate = "";
-    if (envVars) {
+    if (envVars && Object.keys(envVars).length > 0) {
+        availableArgs.push('envVars');
         envVarTemplate = generateEnvVarTemplate(runtime, envVars);
     }
 
     let configTemplate = "";
     if (config && Object.keys(config).length > 0) {
+        availableArgs.push('config');
         configTemplate = `\nconst config = ${JSON.stringify(config, null, 2)};
         `;
     }
 
-    const optionalArgTemplates = `${envVarTemplate}${configTemplate}`.trim();
+    let actionsTemplate = "";
+    if (actions && actions.length > 0) {
+        availableArgs.push('actions');
+        const actionNames = actions.map((action) => action.importInfo?.name);
+        actionsTemplate = `\nconst actions = [\n  ${actionNames.join(",\n  ")}\n];`
+    }
 
-    const availableArgs = ['cannoli', 'llmConfigs', 'args'];
-    if (envVars) availableArgs.push('envVars');
-    if (config) availableArgs.push('config');
-    // if (actions) availableArgs.push('actions');
-    // if (replacers) availableArgs.push('replacers');
-    // if (fetcher) availableArgs.push('fetcher');
+    const optionalArgTemplates = `${envVarTemplate}${configTemplate}${actionsTemplate}`.trim();
 
     const camelCasedFunctionName = toCamelCase(cannoliName);
 
@@ -337,7 +348,7 @@ function generateRunFunctionCall(args: string[], availableArgs: string[], langua
         runArgs = `  args`;
     }
 
-    const additionalArgs = availableArgs.filter(arg => arg !== 'args').map(arg => `  ${arg}`).join(",\n  ");
+    const additionalArgs = availableArgs.map(arg => `  ${arg}`).join(",\n  ");
 
     const allArgs = [runArgs, additionalArgs].filter(Boolean).join(",\n  ");
 
@@ -377,16 +388,42 @@ ${runFunctionCall}
 
 
 
-function generateImportTemplates(language: BakeLanguage): Record<BakeRuntime, string> {
-    const llmConfigImport = language === "typescript" ? "  LLMConfig,\n" : "";
-    return {
-        node: `import {\n${llmConfigImport}  run\n} from "@deablabs/cannoli-core";
-`,
-        deno: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core";
-`,
-        bun: `import {\n${llmConfigImport}  run\n} from "npm:@deablabs/cannoli-core";
-`
-    };
+function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, actions?: Action[]): string {
+    const importMap: Record<string, string[]> = {};
+
+    // Add LLMConfig import if language is TypeScript
+    if (language === "typescript") {
+        const corePath = runtime === "node" ? "@deablabs/cannoli-core" : "npm:@deablabs/cannoli-core";
+        importMap[corePath] = ["LLMConfig", "run"];
+    } else {
+        const corePath = runtime === "node" ? "@deablabs/cannoli-core" : "npm:@deablabs/cannoli-core";
+        importMap[corePath] = ["run"];
+    }
+
+    // Add action imports
+    if (actions) {
+        actions.forEach(action => {
+            let importPath = action.importInfo?.importPath || "Paste import path or implement action";
+            if (runtime === "node" && importPath.startsWith("npm:")) {
+                importPath = importPath.replace(/^npm:/, "");
+            }
+            if (!importMap[importPath]) {
+                importMap[importPath] = [];
+            }
+            importMap[importPath].push(action.importInfo?.name || "UnknownAction");
+        });
+    }
+
+    // Build the import statements
+    const importStatements = Object.entries(importMap).map(([path, imports]) => {
+        if (imports.length > 4) {
+            return `import {\n  ${imports.join(",\n  ")}\n} from "${path}";\n`;
+        } else {
+            return `import { ${imports.join(", ")} } from "${path}";\n`;
+        }
+    }).join("");
+
+    return importStatements;
 }
 
 function generateEnvVarTemplate(runtime: BakeRuntime, envVars: Record<string, string>): string {

@@ -52,5 +52,9 @@ export const dalleGenerate: Action = {
         OPENAI_API_KEY: {
             category: "env",
         },
-    }
+    },
+    importInfo: {
+        name: "dalleGenerate",
+        importPath: "npm:@deablabs/cannoli-core",
+    },
 };

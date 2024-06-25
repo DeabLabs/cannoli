@@ -22,7 +22,6 @@ import {
 	GenericModelConfig,
 	dalleGenerate,
 	exaSearch,
-	Action,
 	Replacer,
 	runWithControl,
 	bake,
@@ -365,8 +364,9 @@ export default class Cannoli extends Plugin {
 			runtime: "deno",
 			cannoliName: nameWithoutExtensions,
 			cannoli: content,
-			llmConfigs: this.getLLMConfigs().filter((config) => config.baseURL || config.apiKey),
+			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
+			actions: this.getActions(),
 			config: this.getConfig(),
 			envVars: this.getEnvVars(),
 		});
@@ -489,8 +489,9 @@ export default class Cannoli extends Plugin {
 			changeIndentToFour: this.settings.bakeIndent === "4",
 			cannoliName: nameWithoutExtensions,
 			cannoli: content,
-			llmConfigs: this.getLLMConfigs().filter((config) => config.baseURL || config.apiKey),
+			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
+			actions: this.getActions(),
 			config: this.getConfig(),
 			envVars: this.getEnvVars(),
 		});
@@ -805,6 +806,15 @@ export default class Cannoli extends Plugin {
 		};
 	}
 
+	getActions = () => {
+		return [
+			...(this.settings.openaiAPIKey ? [dalleGenerate] : []),
+			...(this.settings.exaAPIKey ? [exaSearch] : []),
+			dataviewQuery,
+			smartConnectionsQuery
+		];
+	}
+
 	getLLMConfigs = () => {
 		// map cannoli settings to provider config
 		const getConfigByProvider = (p: SupportedProviders): GenericModelConfig => {
@@ -911,9 +921,9 @@ export default class Cannoli extends Plugin {
 		const canvasData = await this.fetchData(file);
 
 		const cannoliArgs = {
-			currentNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
+			obsidianCurrentNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
 				"No active note",
-			selection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
+			obsidianSelection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
 		};
 
 		const canvas = new ObsidianCanvas(canvasData, file);
@@ -926,12 +936,7 @@ export default class Cannoli extends Plugin {
 			});
 		};
 
-		const actions: Action[] = [
-			...(this.settings.openaiAPIKey ? [dalleGenerate] : []),
-			...(this.settings.exaAPIKey ? [exaSearch] : []),
-			dataviewQuery,
-			smartConnectionsQuery
-		];
+
 
 		const vaultInterface = new VaultInterface(this);
 
@@ -943,6 +948,8 @@ export default class Cannoli extends Plugin {
 		const config = this.getConfig();
 
 		const envVars = this.getEnvVars();
+
+		const actions = this.getActions();
 
 		// Do the validation run
 		const [validationStoppagePromise] = await runWithControl({

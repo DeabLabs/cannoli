@@ -115,7 +115,7 @@ export class CannoliFactory {
 		const cannoliCanvasData = canvas as CannoliCanvasData;
 
 		this.cannoliData = cannoliCanvasData;
-		this.currentNote = args?.currentNote ?? "No active note";
+		this.currentNote = args?.obsidianCurrentNote ?? "No active note";
 
 		this.resume = resume;
 
