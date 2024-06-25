@@ -377,7 +377,7 @@ export default class Cannoli extends Plugin {
 		}
 
 		const userProfileResponse = await requestUrl({
-			url: "https://api.val.town/v1/me/",
+			url: "https://api.val.town/v1/me",
 			method: "GET",
 			headers: {
 				"Content-Type": "application/json",
@@ -385,7 +385,9 @@ export default class Cannoli extends Plugin {
 			},
 		});
 
-		const userId = userProfileResponse.json.id;
+		const userProfileJson = await userProfileResponse.json;
+
+		const userId = userProfileJson.id;
 
 		const myValsResponse = await requestUrl({
 			url: `https://api.val.town/v1/users/${userId}/vals`,

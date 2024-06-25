@@ -76,7 +76,7 @@ export async function run({
     const stoppage = await done;
 
     if (stoppage.reason === "error") {
-        throw new Error("Error occurred during the run.");
+        throw new Error(`Error occurred during the run: ${stoppage.message}`);
     }
 
     return stoppage.results;

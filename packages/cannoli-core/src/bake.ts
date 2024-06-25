@@ -386,17 +386,14 @@ ${runFunctionCall}
     return functionBody;
 }
 
-
-
 function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, actions?: Action[]): string {
     const importMap: Record<string, string[]> = {};
 
     // Add LLMConfig import if language is TypeScript
+    const corePath = runtime === "node" ? "@deablabs/cannoli-core" : "npm:@deablabs/cannoli-core";
     if (language === "typescript") {
-        const corePath = runtime === "node" ? "@deablabs/cannoli-core" : "npm:@deablabs/cannoli-core";
         importMap[corePath] = ["LLMConfig", "run"];
     } else {
-        const corePath = runtime === "node" ? "@deablabs/cannoli-core" : "npm:@deablabs/cannoli-core";
         importMap[corePath] = ["run"];
     }
 
@@ -416,14 +413,32 @@ function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, a
 
     // Build the import statements
     const importStatements = Object.entries(importMap).map(([path, imports]) => {
-        if (imports.length > 4) {
-            return `import {\n  ${imports.join(",\n  ")}\n} from "${path}";\n`;
+        if (language === "typescript") {
+            if (imports.length > 4) {
+                return `import {\n  ${imports.join(",\n  ")}\n} from "${path}";\n`;
+            } else {
+                return `import { ${imports.join(", ")} } from "${path}";\n`;
+            }
         } else {
-            return `import { ${imports.join(", ")} } from "${path}";\n`;
+            if (imports.length > 4) {
+                return `const {\n  ${imports.join(",\n  ")}\n} = require("${path}");\n`;
+            } else {
+                return `const { ${imports.join(", ")} } = require("${path}");\n`;
+            }
         }
     }).join("");
 
-    return importStatements;
+    // Add dotenv import and config call if runtime is node
+    const dotenvConfig = runtime === "node" ? (language === "typescript" ? `import dotenv from 'dotenv';\n\ndotenv.config();\n` : `const dotenv = require('dotenv');\ndotenv.config();\n`) : '';
+
+    // Generate copyable command for installing packages
+    let installCommand = '';
+    if (runtime === "node") {
+        const packageList = [...Object.keys(importMap), 'dotenv'].join(' ');
+        installCommand = `\n// To install the necessary packages, run:\n// npm install ${packageList}\n// or\n// yarn add ${packageList}\n`;
+    }
+
+    return `${importStatements}${dotenvConfig}${installCommand}`;
 }
 
 function generateEnvVarTemplate(runtime: BakeRuntime, envVars: Record<string, string>): string {
