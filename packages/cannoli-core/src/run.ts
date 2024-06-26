@@ -1,6 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { AllVerifiedCannoliCanvasNodeData, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
+import { AllVerifiedCannoliCanvasNodeData, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, EdgeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -84,6 +84,7 @@ export interface Stoppage {
 	argNames: string[];
 	resultNames: string[];
 	actionsOrHttpTemplatesReferenced: { names: string[], includesDynamicReference: boolean };
+	providersReferenced: { names: string[], includesDynamicReference: boolean };
 	description?: string;
 	message?: string; // Additional information, like an error message
 }
@@ -367,6 +368,33 @@ export class Run {
 		return { names, includesDynamicReference };
 	}
 
+	getProvidersReferenced(): { names: string[], includesDynamicReference: boolean } {
+		const providersReferenced: string[] = [];
+		let includesDynamicReference = false;
+
+		const incomingConfigProviderEdges = this.canvasData?.edges
+			.filter((edge) => edge.cannoliData.type === EdgeType.Config)
+			.filter((edge) => edge.cannoliData.text === "provider");
+
+		for (const edge of incomingConfigProviderEdges || []) {
+			const sourceNode = this.canvasData?.nodes.find((node) => node.id === edge.fromNode);
+			if (sourceNode && (sourceNode.cannoliData.type === ContentNodeType.StandardContent || sourceNode.cannoliData.type === ContentNodeType.Input)) {
+				// Check if the source node has a bracketed first line
+				if (/^\[.*?\]$/.test(sourceNode.cannoliData.text.split("\n")[0])) {
+					providersReferenced.push(sourceNode.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+					includesDynamicReference = true;
+				} else {
+					providersReferenced.push(sourceNode.cannoliData.text.trim());
+
+				}
+			} else if (sourceNode) {
+				includesDynamicReference = true;
+			}
+		}
+
+		return { names: providersReferenced, includesDynamicReference };
+	}
+
 	getDescription(): string | undefined {
 		// Find a node of type "variable" whose name is "DESCRIPTION"
 		const descriptionNode = this.canvasData?.nodes.find((node) => node.cannoliData.type === "variable" && node.cannoliData.text.split("\n")[0] === "[DESCRIPTION]");
@@ -385,6 +413,7 @@ export class Run {
 			argNames: this.getArgNames(),
 			resultNames: this.getResultNames(),
 			actionsOrHttpTemplatesReferenced: this.getActionsOrHttpTemplatesReferenced(),
+			providersReferenced: this.getProvidersReferenced(),
 			description: this.getDescription(),
 			usage: this.usage,
 		});

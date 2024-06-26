@@ -111,6 +111,9 @@ export async function bake({
     // Filter out llmconfig without baseURL or apiKey
     const llmConfigsWithBaseURLorAPIKey = llmConfigs?.filter((config) => config.baseURL || config.apiKey)
 
+    // Filter out llmconfig who's provider is not in stoppage.providersReferenced, except for the first one
+    const llmConfigsWithReferencedProvider = llmConfigsWithBaseURLorAPIKey?.filter((config, index) => stoppage.providersReferenced.names.includes(config.provider) || index === 0);
+
     // Filter out actions without importInfo
     const actionsWithImportInfo = actions?.filter((action) => action.importInfo);
 
@@ -167,7 +170,7 @@ export async function bake({
         runtime,
         changeIndentToFour,
         cannoli: cannoli as VerifiedCannoliCanvasData,
-        llmConfigs: llmConfigsWithBaseURLorAPIKey,
+        llmConfigs: llmConfigsWithReferencedProvider,
         cannoliInfo,
         cannoliName,
         config,
