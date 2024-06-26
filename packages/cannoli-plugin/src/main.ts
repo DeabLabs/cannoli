@@ -377,6 +377,8 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
+		bakeResult.code = bakeResult.code.replace(/Deno\.env\.get\("VALTOWN_API_KEY"\)/g, 'Deno.env.get("valtown")');
+
 		const userProfileResponse = await requestUrl({
 			url: "https://api.val.town/v1/me",
 			method: "GET",

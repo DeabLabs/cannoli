@@ -1,6 +1,6 @@
 {
 	"name": "@deablabs/cannoli-core",
-	"version": "1.0.17",
+	"version": "1.0.18",
 	"description": "[WORK IN PROGRESS]",
 	"main": "dist/index.js",
 	"type": "module",
