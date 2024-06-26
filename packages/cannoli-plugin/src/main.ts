@@ -370,6 +370,7 @@ export default class Cannoli extends Plugin {
 			actions: this.getActions(),
 			config: this.getConfig(),
 			envVars: this.getEnvVars(),
+			httpTemplates: this.settings.httpTemplates,
 		});
 
 		if (bakeResult instanceof Error) {
@@ -499,6 +500,7 @@ export default class Cannoli extends Plugin {
 			actions: this.getActions(),
 			config: this.getConfig(),
 			envVars: this.getEnvVars(),
+			httpTemplates: this.settings.httpTemplates,
 		});
 
 		if (bakeResult instanceof Error) {
@@ -961,6 +963,7 @@ export default class Cannoli extends Plugin {
 			cannoli: canvasData,
 			llmConfigs: llmConfigs,
 			actions: actions,
+			httpTemplates: this.settings.httpTemplates,
 			replacers: replacers,
 			config: config,
 			envVars: envVars,
@@ -1002,6 +1005,7 @@ export default class Cannoli extends Plugin {
 			cannoli: canvasData,
 			llmConfigs: llmConfigs,
 			actions: actions,
+			httpTemplates: this.settings.httpTemplates,
 			replacers: replacers,
 			config: config,
 			envVars: envVars,

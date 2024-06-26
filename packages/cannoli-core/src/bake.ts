@@ -2,7 +2,7 @@ import { runWithControl } from "./cannoli";
 import { FileManager } from "./fileManager";
 import { VerifiedCannoliCanvasData } from "./models/graph";
 import { LLMConfig } from "./providers";
-import { Action } from "./run";
+import { Action, HttpTemplate } from "./run";
 
 export type VarInfo = {
     displayName: string;
@@ -31,6 +31,7 @@ export async function bake({
     config,
     envVars,
     actions,
+    httpTemplates,
     fileManager,
     // replacers,
     // fetcher,
@@ -46,6 +47,7 @@ export async function bake({
     envVars?: Record<string, string>,
     changeIndentToFour?: boolean,
     actions?: Action[],
+    httpTemplates?: HttpTemplate[],
     // replacers?: Replacer[],
     // fetcher?: ResponseTextFetcher,
 }): Promise<{ name: string; fileName: string; code: string } | Error> {
@@ -57,6 +59,7 @@ export async function bake({
         envVars,
         isMock: true,
         actions,
+        httpTemplates,
         // replacers,
         // fetcher,
     });
@@ -111,7 +114,7 @@ export async function bake({
     // Filter out actions without importInfo
     const actionsWithImportInfo = actions?.filter((action) => action.importInfo);
 
-    const code = writeCode({
+    const result = writeCode({
         language,
         runtime,
         changeIndentToFour,
@@ -122,10 +125,43 @@ export async function bake({
         config,
         envVars,
         actions: actionsWithImportInfo,
-    })
+        httpTemplates,
+    });
 
-    return code;
+    if (result instanceof Error) {
+        return result;
+    }
+
+    // const apiKeyWarning = checkForAPIKeys(result.code);
+
+    return {
+        ...result,
+        // apiKeyWarning: apiKeyWarning ?? undefined,
+    };
 }
+
+// function checkForAPIKeys(code: string): string | null {
+//     const apiKeyPatterns = [
+//         /['"]?api[_-]?key['"]?\s*[:=]\s*['"][a-zA-Z0-9-_]{20,}['"]/i,
+//         /['"]?secret['"]?\s*[:=]\s*['"][a-zA-Z0-9-_]{20,}['"]/i,
+//         /['"]?token['"]?\s*[:=]\s*['"][a-zA-Z0-9-_]{20,}['"]/i,
+//     ];
+
+//     const lines = code.split('\n');
+//     const suspiciousLines: number[] = [];
+
+//     lines.forEach((line, index) => {
+//         if (apiKeyPatterns.some(pattern => pattern.test(line))) {
+//             suspiciousLines.push(index + 1); // Line numbers start at 1
+//         }
+//     });
+
+//     if (suspiciousLines.length > 0) {
+//         return `Please check the following lines in the resulting code for possible API keys before sharing the baked cannoli anywhere: ${suspiciousLines.join(', ')}.`;
+//     }
+
+//     return null;
+// }
 
 export function writeCode({
     language,
@@ -138,6 +174,7 @@ export function writeCode({
     cannoliName,
     changeIndentToFour,
     actions,
+    httpTemplates,
     // replacers,
     // fetcher,
 }: {
@@ -151,6 +188,7 @@ export function writeCode({
     envVars?: Record<string, string>;
     changeIndentToFour?: boolean;
     actions?: Action[];
+    httpTemplates?: HttpTemplate[];
     // replacers?: Replacer[];
     // fetcher?: ResponseTextFetcher;
 }): {
@@ -163,8 +201,7 @@ export function writeCode({
 
     let llmConfigTemplate = "";
     if (llmConfigs) {
-        llmConfigTemplate = `const llmConfigs${language === "typescript" ? ": LLMConfig[]" : ""} = ${printLLMConfigWithEnvReference(llmConfigs, runtime)};
-`;
+        llmConfigTemplate = `const llmConfigs${language === "typescript" ? ": LLMConfig[]" : ""} = ${printLLMConfigWithEnvReference(llmConfigs, runtime)};\n`;
     }
 
     let envVarTemplate = "";
@@ -176,18 +213,23 @@ export function writeCode({
     let configTemplate = "";
     if (config && Object.keys(config).length > 0) {
         availableArgs.push('config');
-        configTemplate = `\nconst config = ${JSON.stringify(config, null, 2)};
-        `;
+        configTemplate = `\nconst config = ${JSON.stringify(config, null, 2)};\n`;
     }
 
     let actionsTemplate = "";
     if (actions && actions.length > 0) {
         availableArgs.push('actions');
         const actionNames = actions.map((action) => action.importInfo?.name);
-        actionsTemplate = `\nconst actions = [\n  ${actionNames.join(",\n  ")}\n];`
+        actionsTemplate = `\nconst actions = [\n  ${actionNames.join(",\n  ")}\n];\n`
     }
 
-    const optionalArgTemplates = `${envVarTemplate}${configTemplate}${actionsTemplate}`.trim();
+    let httpTemplatesTemplate = "";
+    if (httpTemplates && httpTemplates.length > 0) {
+        availableArgs.push('httpTemplates');
+        httpTemplatesTemplate = `\nconst httpTemplates = ${JSON.stringify(httpTemplates, null, 2)};\n`
+    }
+
+    const optionalArgTemplates = `${envVarTemplate}${configTemplate}${actionsTemplate}${httpTemplatesTemplate}`.trim();
 
     const camelCasedFunctionName = toCamelCase(cannoliName);
 

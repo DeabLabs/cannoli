@@ -1,5 +1,5 @@
 import Cannoli from "./main";
-import { Reference, ReferenceType, FileManager, HttpTemplate, CannoliNode, ContentNodeType } from "@deablabs/cannoli-core";
+import { Reference, ReferenceType, FileManager, CannoliNode, ContentNodeType } from "@deablabs/cannoli-core";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";
@@ -12,28 +12,6 @@ export class VaultInterface implements FileManager {
 
 		this.replaceDataviewQueries = this.replaceDataviewQueries.bind(this);
 		this.replaceSmartConnections = this.replaceSmartConnections.bind(this);
-	}
-
-	getHttpTemplateByName(
-		name: string,
-	): HttpTemplate | Error {
-		// If we don't have an httpTemplates array, we can't get templates
-		if (!this.cannoli.settings.httpTemplates) {
-			return new Error(
-				"No HTTP templates available. You can add them in Cannoli Plugin settings."
-			);
-		}
-
-		// Find the template by name
-		const template = this.cannoli.settings.httpTemplates.find(
-			(template) => template.name === name
-		);
-
-		if (!template) {
-			return new Error(`HTTP template with name "${name}" not found.`);
-		}
-
-		return template;
 	}
 
 	async editNote(

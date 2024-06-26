@@ -120,6 +120,7 @@ export interface RunArgs {
 	persistor?: Persistor;
 	fileManager?: FileManager;
 	actions?: Action[];
+	httpTemplates?: HttpTemplate[];
 	replacers?: Replacer[];
 	resume?: boolean;
 }
@@ -136,6 +137,7 @@ export class Run {
 	fileManager: FileManager | null;
 	fetcher: ResponseTextFetcher;
 	actions: Action[];
+	httpTemplates: HttpTemplate[];
 	replacers: Replacer[];
 	llm: Llm;
 	llmLimit: Limit;
@@ -158,6 +160,7 @@ export class Run {
 		llmConfigs,
 		fetcher,
 		actions,
+		httpTemplates,
 		replacers,
 		config,
 		envVars,
@@ -213,6 +216,7 @@ export class Run {
 		this.fileManager = fileManager ?? null;
 
 		this.actions = actions ?? [];
+		this.httpTemplates = httpTemplates ?? [];
 
 		this.replacers = replacers ?? [];
 

@@ -1,11 +1,6 @@
 import { Reference } from "./models/graph";
-import { HttpTemplate } from "./run";
 
 export interface FileManager {
-    getHttpTemplateByName(
-        name: string,
-    ): HttpTemplate | Error;
-
     editNote(
         reference: Reference,
         newContent: string,
