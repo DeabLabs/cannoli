@@ -1,6 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { AllVerifiedCannoliCanvasNodeData, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
+import { AllVerifiedCannoliCanvasNodeData, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -83,6 +83,7 @@ export interface Stoppage {
 	results: { [key: string]: string };
 	argNames: string[];
 	resultNames: string[];
+	actionsOrHttpTemplatesReferenced: { names: string[], includesDynamicReference: boolean };
 	description?: string;
 	message?: string; // Additional information, like an error message
 }
@@ -110,7 +111,7 @@ export function isValidKey(
 
 export interface RunArgs {
 	cannoli: unknown;
-	llmConfigs: LLMConfig[];
+	llmConfigs?: LLMConfig[];
 	fetcher?: ResponseTextFetcher;
 	config?: Record<string, string | number | boolean>;
 	envVars?: Record<string, string>;
@@ -139,7 +140,7 @@ export class Run {
 	actions: Action[];
 	httpTemplates: HttpTemplate[];
 	replacers: Replacer[];
-	llm: Llm;
+	llm: Llm | null;
 	llmLimit: Limit;
 	persistor: Persistor | null;
 	isMock: boolean;
@@ -179,7 +180,7 @@ export class Run {
 
 		this.fetcher = fetcher ?? defaultFetcher;
 
-		this.llm = new LLMProvider({ configs: llmConfigs });
+		this.llm = llmConfigs ? new LLMProvider({ configs: llmConfigs }) : null;
 
 		this.envVars = envVars ?? {};
 		this.config = { ...config ?? {}, ...this.envVars };
@@ -330,6 +331,42 @@ export class Run {
 		return Array.from(resultNames);
 	}
 
+	getActionsOrHttpTemplatesReferenced(): { names: string[], includesDynamicReference: boolean } {
+		const names: string[] = [];
+		let includesDynamicReference = false;
+
+		// Get all action nodes
+		const actionNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === ContentNodeType.Http);
+
+		if (!actionNodes) {
+			return { names, includesDynamicReference };
+		}
+
+		// For each action node, check if it's a single line
+		for (const node of actionNodes) {
+			const trimmedText = node.cannoliData.text.trim();
+
+			if (trimmedText.split("\n").length === 1) {
+				names.push(trimmedText);
+
+				if (trimmedText.includes("{{") && trimmedText.includes("}}")) {
+					includesDynamicReference = true;
+				}
+				continue;
+			}
+
+			// If it's not a single line, check if the first line is a bracketed name
+			const firstLine = trimmedText.split("\n")[0];
+			const match = firstLine.match(/^\[(.*?)\]$/);
+			if (match) {
+				names.push(match[1]); // Push the content inside the brackets
+				continue;
+			}
+		}
+
+		return { names, includesDynamicReference };
+	}
+
 	getDescription(): string | undefined {
 		// Find a node of type "variable" whose name is "DESCRIPTION"
 		const descriptionNode = this.canvasData?.nodes.find((node) => node.cannoliData.type === "variable" && node.cannoliData.text.split("\n")[0] === "[DESCRIPTION]");
@@ -347,6 +384,7 @@ export class Run {
 			results: this.getResults(),
 			argNames: this.getArgNames(),
 			resultNames: this.getResultNames(),
+			actionsOrHttpTemplatesReferenced: this.getActionsOrHttpTemplatesReferenced(),
 			description: this.getDescription(),
 			usage: this.usage,
 		});

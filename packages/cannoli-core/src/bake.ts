@@ -114,6 +114,54 @@ export async function bake({
     // Filter out actions without importInfo
     const actionsWithImportInfo = actions?.filter((action) => action.importInfo);
 
+    const actionsOrHttpTemplatesReferenced = stoppage.actionsOrHttpTemplatesReferenced;
+
+    // Filter out actions and http templates that are not referenced
+    const referencedActions = actionsWithImportInfo?.filter((action) => actionsOrHttpTemplatesReferenced.names.includes(action.name));
+    const referencedHttpTemplates = httpTemplates?.filter((template) => actionsOrHttpTemplatesReferenced.names.includes(template.name));
+
+    const envVarsReferenced: string[] = [];
+
+    // Check each env var
+    outerLoop:
+    for (const [key] of Object.entries(envVars || {})) {
+        for (const action of referencedActions || []) {
+            if (action.argInfo && Object.keys(action.argInfo).includes(key)) {
+                envVarsReferenced.push(key);
+                continue outerLoop;
+            }
+        }
+
+        for (const template of referencedHttpTemplates || []) {
+            if (template.url && template.url.includes(`{{${key}}}`)) {
+                envVarsReferenced.push(key);
+                continue outerLoop;
+            }
+            if (template.headers && template.headers.includes(`{{${key}}}`)) {
+                envVarsReferenced.push(key);
+                continue outerLoop;
+            }
+            if (template.body && template.body.includes(`{{${key}}}`)) {
+                envVarsReferenced.push(key);
+                continue outerLoop;
+            }
+            if (template.bodyTemplate && template.bodyTemplate.includes(`{{${key}}}`)) {
+                envVarsReferenced.push(key);
+                continue outerLoop;
+            }
+        }
+
+        // Check if {{key}} is in the cannoli
+        if (JSON.stringify(cannoli).includes(`{{${key}}}`)) {
+            envVarsReferenced.push(key);
+            continue outerLoop;
+        }
+    }
+
+    const filteredEnvVars = Object.fromEntries(
+        Object.entries(envVars || {}).filter(([key]) => envVarsReferenced.includes(key))
+    );
+
     const result = writeCode({
         language,
         runtime,
@@ -123,9 +171,9 @@ export async function bake({
         cannoliInfo,
         cannoliName,
         config,
-        envVars,
-        actions: actionsWithImportInfo,
-        httpTemplates,
+        envVars: filteredEnvVars,
+        actions: referencedActions,
+        httpTemplates: referencedHttpTemplates,
     });
 
     if (result instanceof Error) {

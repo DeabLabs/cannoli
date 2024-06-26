@@ -368,7 +368,7 @@ export default class Cannoli extends Plugin {
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
 			actions: this.getActions(),
-			config: this.getConfig(),
+			config: this.getConfig(true),
 			envVars: this.getEnvVars(),
 			httpTemplates: this.settings.httpTemplates,
 		});
@@ -498,7 +498,7 @@ export default class Cannoli extends Plugin {
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
 			actions: this.getActions(),
-			config: this.getConfig(),
+			config: this.getConfig(true),
 			envVars: this.getEnvVars(),
 			httpTemplates: this.settings.httpTemplates,
 		});
@@ -805,8 +805,8 @@ export default class Cannoli extends Plugin {
 		};
 	}
 
-	getConfig = () => {
-		const chatFormatStringIsDefault = this.settings.chatFormatString === DEFAULT_SETTINGS.chatFormatString;
+	getConfig = (forBake = false) => {
+		const chatFormatStringIsDefault = this.settings.chatFormatString === DEFAULT_SETTINGS.chatFormatString || forBake;
 
 		return {
 			...(this.settings.contentIsColorless ? { contentIsColorless: this.settings.contentIsColorless } : {}),

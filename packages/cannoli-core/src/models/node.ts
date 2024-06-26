@@ -3004,10 +3004,6 @@ export class HttpNode extends ContentNode {
 			}
 		}
 
-		if (!this.run.fileManager) {
-			return new Error("No fileManager found");
-		}
-
 		const settingsTemplate = this.run.httpTemplates.find((template) => template.name === name);
 		if (!settingsTemplate) {
 			return new Error(`Could not get HTTP template with name "${name}" from floating nodes or pre-set templates.`);
