@@ -1,137 +1,178 @@
-export const SYMBOLS = {
-    canvasJSON: "@{1}",
-    defaultGroqModel: "@{2}",
-    defaultOpenaiModel: "@{3}",
-    defaultGeminiModel: "@{4}",
-    defaultAnthropicModel: "@{5}",
-    defaultGroqTemperature: "@{6}",
-    defaultOpenaiTemperature: "@{7}",
-    defaultGeminiTemperature: "@{8}",
-    defaultAnthropicTemperature: "@{9}",
-    defaultOpenaiBaseURL: "@{10}",
-    defaultGeminiBaseURL: "@{11}",
-    defaultProvider: "@{12}",
-    defaultModel: "@{13}",
-} as const
+export const cannoliServerCode = `
+import { Hono } from "npm:hono";
+import { bearerAuth } from "npm:hono/bearer-auth";
 
-export const cannoliValTemplate = `import { runCannoli, LLMProvider, ResponseTextFetcher, GetDefaultConfigByProvider } from "npm:@deablabs/cannoli-core@latest";
+const app = new Hono();
 
-export default async function (req: Request): Promise<Response> {
-  let args = {};
-  if (req.method === "POST") {
-    args = await req.json();
-  } else if (req.method === "GET") {
-    const sp = new URLSearchParams(req.url.split("?")[1]);
-    args = Object.fromEntries(sp.entries());
+const token = Deno.env.get("cannoli");
+
+app.use("/*", bearerAuth({ token }));
+
+app.all("/:cannoliName", async (c) => {
+  try {
+    const { cannoliName } = c.req.param();
+    const cannoliFunction = await importCannoliFunction(cannoliName);
+
+    const args = await parseArgs(c);
+    const results = await callCannoliFunction(cannoliFunction, args);
+
+    return c.json(results);
+  } catch (error) {
+    return c.text(\`Error: \${error.message}\`, 500);
   }
-  
-  // You only need to create and pass this function into the LLMProvider constructor if you need to use the default models,
-  // temperatures, or base URLs of non-default providers.
-  const getDefaultConfigByProvider = (provider) => {
-   if(provider === "groq") {
-     return {
-        model: "${SYMBOLS.defaultGroqModel}",
-        apiKey: Deno.env.get("GROQ_API_KEY"),
-        temperature: "${SYMBOLS.defaultGroqTemperature}"
-     }
-   } else if (provider === "anthropic") {
-      return {
-        model: "${SYMBOLS.defaultAnthropicModel}",
-        apiKey: Deno.env.get("ANTHROPIC_API_KEY"),
-        temperature: "${SYMBOLS.defaultAnthropicTemperature}"
-      }
-   } else if (provider === "gemini") {
-      return {
-        model: "${SYMBOLS.defaultGeminiModel}",
-        apiKey: Deno.env.get("GEMINI_API_KEY"),
-        temperature: "${SYMBOLS.defaultGeminiTemperature}"
-      }
-   } else if (provider === "openai") {
-      return {
-        model: "${SYMBOLS.defaultOpenaiModel}",
-        apiKey: Deno.env.get("OPENAI_API_KEY"),
-        temperature: "${SYMBOLS.defaultOpenaiTemperature}"
-      }
-   }
-     return {}
-  }
-
-const llm = new LLMProvider(
-    {
-      provider: "${SYMBOLS.defaultProvider}",
-      getDefaultConfigByProvider
-    }
-);
-
-const cannoliJson = ${SYMBOLS.canvasJSON}
-
-const [liveStoppagePromise, stopLiveCannoli] = runCannoli({
-    llm: llm,
-    cannoliJSON: cannoliJson,
-    args: args,
 });
 
-const stoppage = await liveStoppagePromise;
-return Response.json(stoppage.results);
+async function fetchUserProfile(): Promise<{ username: string }> {
+  const response = await fetch(\`https://api.val.town/v1/me\`, {
+    headers: {
+      Authorization: \`Bearer \${Deno.env.get("valtown")}\`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch val.town profile");
+  }
+
+  return await response.json();
 }
-`;
 
-export function cannoliValReadmeTemplate(name: string, url: string, args: Record<string, string>) {
-    const argsList = Object.keys(args).map(arg => `- \`${arg}\``).join('\n');
-    const exampleArgs = Object.keys(args).map(arg => `"${arg}": "value"`).join(',\n  ');
-    const urlWithArgs = url + "?" + Object.keys(args).map(arg => `${arg}=value`).join('&');
+async function importCannoliFunction(cannoliName: string): Promise<Function> {
+  try {
+    const profile = await fetchUserProfile();
+    const username = profile.username;
+    const importPath = \`https://esm.town/v/\${username}/\${cannoliName}\`;
+    const module = await import(\${importPath});
+    return module.default || module[\${cannoliName}];
+  } catch (error) {
+    throw new Error(\`Error importing cannoli function: \${error.message}\`);
+  }
+}
 
-    return `# ${name}
+async function parseArgs(c: any): Promise<Record<string, unknown> | string> {
+  let args: Record<string, unknown> | string = {};
+  if (c.req.method === "POST") {
+    try {
+      args = await c.req.json();
+    } catch {
+      args = await c.req.text();
+      if (!args) {
+        args = {};
+      }
+    }
+  } else if (c.req.method === "GET") {
+    const sp = new URLSearchParams(c.req.url.split("?")[1]);
+    if (sp.toString().includes("=")) {
+      args = {};
+      sp.forEach((value, key) => {
+        (args as Record<string, unknown>)[key] = value;
+      });
+    } else {
+      args = sp.toString();
+      if (!args) {
+        args = {};
+      }
+    }
+  }
+  return args;
+}
 
-This is a Val generated by the Cannoli plugin for Obsidian. It runs a Cannoli where the floating nodes are populated by the parameters in the request, and the response includes the contents of the floating nodes after the Cannoli has completed.
+async function callCannoliFunction(
+  cannoliFunction: Function,
+  args: Record<string, unknown> | string,
+): Promise<Record<string, string>> {
+  const fnStr = cannoliFunction.toString();
+  const paramsStr = fnStr.match(/(([^)]*))/)?.[1] || "";
+  const params = paramsStr.split(",").map(param => param.split("=")[0].trim()).filter(param => param !== "");
 
-## Usage
+  let coercedArgs: unknown[] = [];
 
-This Val can be used as an HTTP endpoint with either GET or POST methods.
+  if (typeof args === "string") {
+    if (params.length === 1) {
+      coercedArgs = [args];
+    } else {
+      throw new Error("Cannoli expects multiple parameters but received a single string argument.");
+    }
+  } else {
+    const missingParams = params.filter(param => !(param in args));
+    const nonStringParams = params.filter(param => typeof args[param] !== "string");
+    let errorMessages = [];
+    if (missingParams.length) errorMessages.push(\`Missing required parameters: \${missingParams.join(", ")}\`);
+    if (nonStringParams.length) errorMessages.push(\`Parameters expect string values: \${nonStringParams.join(", ")}\`);
+    if (errorMessages.length) throw new Error(errorMessages.join(". "));
+
+    coercedArgs = params.map(param => args[param]);
+  }
+
+  try {
+    const result = await cannoliFunction(...coercedArgs);
+    if (result === undefined) return {};
+    if (typeof result === "string") return { result };
+    if (typeof result === "object" && result !== null)
+      return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, String(value)]));
+    return {};
+  } catch (error) {
+    throw new Error(\`Error executing cannoli function: \${error.message}\`);
+  }
+}
+
+export default app.fetch.bind(app);
+`
+
+const cannoliServerReadmeTemplate = `# Cannoli Server Endpoint
+
+This HTTP endpoint can be used to execute baked Cannolis stored as scripts in your Val Town account. Cannolis are functions that take one or more string parameters and return one or more string results. You can specify which Cannoli to use via the URL path, and provide parameters through either the query string (GET request) or the request body (POST request).
+
+## How to use
+
+1. **Setup Authorization**:
+   - Set a \`cannoli\` Env variable in your Val Town settings to something only you know.
+   - Set up any other Env variables used by your cannolis, including LLM provider keys.
+   - LLM provider API keys look like this by default: \`PROVIDER_API_KEY\`, but you can check the specifics in the \`LLMConfig\` array for a particular cannoli
+
+2. **Endpoint URL**:
+   - \`https://{{username}}-cannoliserver.web.val.run/cannoliName\`
+   - Replace \`cannoliName\` with the name of the Cannoli you want to execute.
+
+3. **Request Methods**:
+   - **GET**: Pass parameters in the query string.
+   - **POST**: Pass parameters in the request body as JSON or plain text.
+
+## Requests
+   - The parameters expected by a cannoli are defined by their named input nodes (See the section in the Cannoli College on input and output nodes to learn how to set these up)
+   - When a cannoli is run with parameters, the content of each corresponding named input node is set to the parameter value before starting the run
 
 ### GET Request
 
-For a GET request, include the parameters in the URL query string. Each parameter will replace the corresponding floating node content.
-
-**Example:**
-\`\`\`
-GET [${urlWithArgs}](${urlWithArgs})
-\`\`\`
+curl -X GET 'https://{{username}}-cannoliserver.web.val.run/mamaMia?poppa=value1&pia=value2' \\
+     -H 'Authorization: Bearer \`cannoli\`'
 
 ### POST Request
 
-For a POST request, send a JSON object in the request body. The keys in the JSON object will identify which floating node to inject, and the values will be the content to inject.
+curl -X POST 'https://{{username}}-cannoliserver.web.val.run/mamaMia' \\
+     -H 'Authorization: Bearer \`cannoli\`' \\
+     -H 'Content-Type: application/json' \\
+     -d '{"poppa": "value1", "pia": "value2"}'
 
-**Example:**
-\`\`\`
-curl -X POST ${url} \\
-  -H "Content-Type: application/json" \\
-  -d '{
-  ${exampleArgs}
-}'
-\`\`\`
+## Responses
+   - Responses to this endpoint are objects with string properties
+   - Each property contains the contents of one of the named output nodes after the run has completed (see the Cannoli College section on input and output nodes to learn how to set these up)
 
-### Parameters
+### Example response
 
-The following parameters can be used with this Val:
-${argsList}
-
-### Response
-
-The response will be a JSON object where the keys are the floating node names and the values are the contents of the floating nodes after the Cannoli has been run. These keys will match the parameters provided in the request.
-
-**Example Response:**
-\`\`\`json
-{
-  ${exampleArgs}
+{ \\
+  "planet": "Jupiter", \\
+  "explanation": "I don't really know tbh." \\
 }
-\`\`\`
 
-## Security
+## Privacy and sharing
 
-Since this Val has access to your AI provider API keys from the environment, please do not set the privacy to "Public".
+This Val is unlisted by default, meaning only people with the link can see and use it, but any cannoli you call through this Val will use your API keys, so we secure it with the \`cannoli\` Env variable of your Val Town account.
 
-If you'd like others to be able to use this Val, create a new environment variable to act as a key, modify the Val to accept a key as an argument, and only allow the Cannoli to run after that key is checked. Then you can set the Val to "public" or "unlisted".
+When you bake a Cannoli from Obsidian, it is private by default, but it can still be imported by this val. Cannolis are just scripts that export a function, so you can make them public if you'd like, and share them so they can be imported anywhere or forked and used by others' Cannoli Server vals.
+
+All LLM provider keys and other defined Env variables are referenced through the Val environment, but check that you haven't copied an API key into the canvas itself before sharing.
 `;
-}
 
+export function generateCannoliServerReadme(username: string): string {
+  return cannoliServerReadmeTemplate.replace(/{{username}}/g, username);
+}

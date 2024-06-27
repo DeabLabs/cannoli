@@ -363,7 +363,7 @@ export default class Cannoli extends Plugin {
 		const bakeResult = await bake({
 			language: "typescript",
 			runtime: "deno",
-			cannoliName: nameWithoutExtensions,
+			displayName: nameWithoutExtensions,
 			cannoli: content,
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
@@ -371,6 +371,8 @@ export default class Cannoli extends Plugin {
 			config: this.getConfig(true),
 			envVars: this.getEnvVars(),
 			httpTemplates: this.settings.httpTemplates,
+			includeCannoliInfo: true,
+			includeTypeAnnotation: true,
 		});
 
 		if (bakeResult instanceof Error) {
@@ -405,7 +407,7 @@ export default class Cannoli extends Plugin {
 		const myVals = myValsResponse.json.data as { name: string, id: string }[];
 
 		// Check if the user has a val with the same name
-		const existingVal = myVals.find(val => val.name === bakeResult.name);
+		const existingVal = myVals.find(val => val.name === bakeResult.cannoliInfo.functionName);
 
 		let editVal = false;
 
@@ -450,7 +452,7 @@ export default class Cannoli extends Plugin {
 					"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
 				},
 				body: JSON.stringify({
-					name: bakeResult.name,
+					name: bakeResult.cannoliInfo.functionName,
 					code: bakeResult.code,
 				}),
 			});
@@ -493,7 +495,7 @@ export default class Cannoli extends Plugin {
 			language: this.settings.bakeLanguage,
 			runtime: this.settings.bakeRuntime,
 			changeIndentToFour: this.settings.bakeIndent === "4",
-			cannoliName: nameWithoutExtensions,
+			displayName: nameWithoutExtensions,
 			cannoli: content,
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),

@@ -1,19 +1,34 @@
+import { nanoid } from "nanoid";
 import { runWithControl } from "./cannoli";
 import { FileManager } from "./fileManager";
 import { VerifiedCannoliCanvasData } from "./models/graph";
 import { LLMConfig } from "./providers";
 import { Action, HttpTemplate } from "./run";
 
-export type VarInfo = {
-    displayName: string;
-    description?: string;
+export enum CannoliParamType {
+    String = "string",
+    Array = "array",
+    Object = "object",
+    Void = "void",
+}
+
+export enum CannoliReturnType {
+    String = "string",
+    Object = "object",
+    Void = "void",
 }
 
 export type CannoliInfo = {
-    argInfo: Record<string, VarInfo | null>;
-    resultInfo: Record<string, VarInfo | null>;
-    description?: string;
-    version?: string;
+    id: string;
+    functionName: string;
+    displayName: string;
+    // Values are the param's description
+    params: Record<string, string>;
+    // Values are the return's description
+    returns: Record<string, string>;
+    paramType: CannoliParamType;
+    returnType: CannoliReturnType;
+    description: string;
 }
 
 export type BakeRuntime = "node" | "deno" | "bun";
@@ -24,33 +39,39 @@ export async function bake({
     language,
     runtime,
     changeIndentToFour,
-    cannoliInfo,
     cannoli,
-    cannoliName,
+    displayName,
     llmConfigs,
     config,
     envVars,
     actions,
     httpTemplates,
     fileManager,
+    includeCannoliInfo,
+    includeTypeAnnotation,
     // replacers,
     // fetcher,
 }: {
     language: BakeLanguage,
     runtime: BakeRuntime,
-    cannoliName: string,
+    displayName: string,
     cannoli: unknown,
     llmConfigs: LLMConfig[],
-    cannoliInfo?: CannoliInfo,
     fileManager?: FileManager,
     config?: Record<string, string | number | boolean>,
     envVars?: Record<string, string>,
     changeIndentToFour?: boolean,
     actions?: Action[],
     httpTemplates?: HttpTemplate[],
+    includeCannoliInfo?: boolean,
+    includeTypeAnnotation?: boolean,
     // replacers?: Replacer[],
     // fetcher?: ResponseTextFetcher,
-}): Promise<{ name: string; fileName: string; code: string } | Error> {
+}): Promise<{
+    fileName: string;
+    code: string;
+    cannoliInfo: CannoliInfo
+} | Error> {
     // Mock run the cannoli
     const [done] = await runWithControl({
         cannoli,
@@ -70,43 +91,36 @@ export async function bake({
         return new Error("There's an error in the cannoli. Please fix it before baking.");
     }
 
-    // Get the args and results
+    // TODO: Implement getting param and result descriptions from the stoppage
     const argNames: string[] = stoppage.argNames;
     const resultNames: string[] = stoppage.resultNames;
-    const description: string | undefined = stoppage.description;
 
-    let givenArgNames: string[] = [];
-    let givenResultNames: string[] = [];
+    const paramType = argNames.length === 1
+        ? CannoliParamType.String
+        : argNames.length > 1 && argNames.length < 4
+            ? CannoliParamType.Array
+            : argNames.length >= 4
+                ? CannoliParamType.Object
+                : CannoliParamType.Void;
 
-    if (!cannoliInfo) {
-        cannoliInfo = {
-            argInfo: Object.fromEntries(argNames.map((name) => [name, null])),
-            resultInfo: Object.fromEntries(resultNames.map((name) => [name, null])),
-            description,
-        };
-    } else {
-        if (cannoliInfo.argInfo) {
-            givenArgNames = Object.keys(cannoliInfo.argInfo);
-        } else {
-            givenArgNames = argNames;
-            cannoliInfo.argInfo = Object.fromEntries(argNames.map((name) => [name, null]));
-        }
+    const returnType = resultNames.length === 1
+        ? CannoliReturnType.String
+        : resultNames.length > 1
+            ? CannoliReturnType.Object
+            : CannoliReturnType.Void;
 
-        if (cannoliInfo.resultInfo) {
-            givenResultNames = Object.keys(cannoliInfo.resultInfo);
-        } else {
-            givenResultNames = resultNames;
-            cannoliInfo.resultInfo = Object.fromEntries(resultNames.map((name) => [name, null]));
-        }
+    const functionName = toCamelCase(displayName);
 
-        // Check that they contain the same names
-        const argNamesMatch = argNames.length === givenArgNames.length && argNames.every(name => givenArgNames.includes(name));
-        const resultNamesMatch = resultNames.length === givenResultNames.length && resultNames.every(name => givenResultNames.includes(name));
-
-        if (!argNamesMatch || !resultNamesMatch) {
-            return new Error("Mismatch between arg or result names in the cannoli info and the ones in the cannoli itself.");
-        }
-    }
+    const cannoliInfo: CannoliInfo = {
+        id: nanoid(),
+        functionName: functionName,
+        displayName: displayName,
+        params: Object.fromEntries(argNames.map((name) => [name, ""])) as Record<string, string>,
+        returns: Object.fromEntries(resultNames.map((name) => [name, ""])) as Record<string, string>,
+        description: stoppage.description || "",
+        paramType: paramType,
+        returnType: returnType,
+    };
 
     // Filter out llmconfig without baseURL or apiKey
     const llmConfigsWithBaseURLorAPIKey = llmConfigs?.filter((config) => config.baseURL || config.apiKey)
@@ -172,11 +186,13 @@ export async function bake({
         cannoli: cannoli as VerifiedCannoliCanvasData,
         llmConfigs: llmConfigsWithReferencedProvider,
         cannoliInfo,
-        cannoliName,
+        functionName,
         config,
         envVars: filteredEnvVars,
         actions: referencedActions,
         httpTemplates: referencedHttpTemplates,
+        includeCannoliInfo,
+        includeTypeAnnotation,
     });
 
     if (result instanceof Error) {
@@ -222,10 +238,12 @@ export function writeCode({
     cannoliInfo,
     config,
     envVars,
-    cannoliName,
+    functionName,
     changeIndentToFour,
     actions,
     httpTemplates,
+    includeCannoliInfo,
+    includeTypeAnnotation,
     // replacers,
     // fetcher,
 }: {
@@ -233,19 +251,21 @@ export function writeCode({
     runtime: BakeRuntime;
     cannoli: VerifiedCannoliCanvasData;
     llmConfigs: LLMConfig[];
-    cannoliName: string;
+    functionName: string;
     cannoliInfo: CannoliInfo;
     config?: Record<string, string | number | boolean>;
     envVars?: Record<string, string>;
     changeIndentToFour?: boolean;
     actions?: Action[];
     httpTemplates?: HttpTemplate[];
+    includeCannoliInfo?: boolean;
+    includeTypeAnnotation?: boolean;
     // replacers?: Replacer[];
     // fetcher?: ResponseTextFetcher;
 }): {
-    name: string;
     fileName: string;
     code: string;
+    cannoliInfo: CannoliInfo;
 } | Error {
     const importTemplate = generateImportTemplates(language, runtime, actions);
     const availableArgs = ['cannoli', 'llmConfigs'];
@@ -282,71 +302,105 @@ export function writeCode({
 
     const optionalArgTemplates = `${envVarTemplate}${configTemplate}${actionsTemplate}${httpTemplatesTemplate}`.trim();
 
-    const camelCasedFunctionName = toCamelCase(cannoliName);
-
     const argDeclarations = `${optionalArgTemplates}
 
 ${llmConfigTemplate}
 const cannoli = ${JSON.stringify(cannoli, null, 2)};`;
 
-    const generatedFunction = generateFunction(camelCasedFunctionName, cannoliInfo, language, argDeclarations, availableArgs);
+    const generatedFunction = generateFunction(cannoliInfo, language, argDeclarations, availableArgs);
 
-    const code = cleanCode(`${importTemplate}
-${generatedFunction}
-`, changeIndentToFour);
+    const typeAnnotation = includeTypeAnnotation ? "// TYPE: cannoli\n\n" : "";
+
+    const cannoliInfoDeclaration = includeCannoliInfo ? `\n\nexport const cannoliInfo${language === "typescript" ? ": CannoliInfo" : ""} = ${JSON.stringify(cannoliInfo, null, 2)};` : "";
+
+    const code = `${typeAnnotation}${importTemplate}
+${generatedFunction}${cannoliInfoDeclaration}
+`;
+
+    const cleanedCode = cleanCode(code, changeIndentToFour);
 
     return {
-        name: camelCasedFunctionName,
-        fileName: `${camelCasedFunctionName}.${language === "typescript" ? "ts" : "js"}`,
-        code,
+        fileName: `${functionName}.${language === "typescript" ? "ts" : "js"}`,
+        code: cleanedCode,
+        cannoliInfo,
     };
 }
 
-function generateCommentBlock(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage, description?: string): string {
+function generateCommentBlock(cannoliInfo: CannoliInfo, language: BakeLanguage): string {
     const formatDescription = (desc?: string) => desc ? desc.split('\n').map(line => ` * ${line}`).join('\n') : '';
-    const capitalizedCannoliName = cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1);
+    const capitalizedCannoliName = cannoliInfo.functionName.charAt(0).toUpperCase() + cannoliInfo.functionName.slice(1);
 
-    let commentBlock = description ? `/**\n${formatDescription(description)}\n` : `/**\n`;
+    let commentBlock = cannoliInfo.description ? `/**\n${formatDescription(cannoliInfo.description)}\n` : `/**\n`;
 
-    const args = Object.keys(argInfo);
+    const args = Object.keys(cannoliInfo.params);
 
     if (language === "typescript") {
-        if (args.length > 3) {
-            const argNames = args.join(', ');
-            commentBlock += ` * @param {${capitalizedCannoliName}Args} args - ${argNames}\n`;
-        } else {
-            for (const [arg, info] of Object.entries(argInfo)) {
-                commentBlock += ` * @param {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
+        switch (cannoliInfo.paramType) {
+            case CannoliParamType.Object: {
+                const argNames = args.join(', ');
+                commentBlock += ` * @param {${capitalizedCannoliName}Args} args - ${argNames}\n`;
+                break;
             }
+            case CannoliParamType.Array:
+            case CannoliParamType.String:
+                for (const [arg, description] of Object.entries(cannoliInfo.params)) {
+                    commentBlock += ` * @param {string} ${arg}${description ? ` - ${description}` : ''}\n`;
+                }
+                break;
+            case CannoliParamType.Void:
+            default:
+                break;
         }
 
-        if (Object.keys(resultInfo).length > 1) {
-            const resultNames = Object.keys(resultInfo).join(', ');
-            commentBlock += ` * @returns {${capitalizedCannoliName}Results} ${resultNames}\n`;
-        } else if (Object.keys(resultInfo).length === 1) {
-            const [result, info] = Object.entries(resultInfo)[0];
-            commentBlock += ` * @returns {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
-        } else {
-            commentBlock += ` * @returns {void}\n`;
+        switch (cannoliInfo.returnType) {
+            case CannoliReturnType.Object: {
+                const resultNames = Object.keys(cannoliInfo.returns).join(', ');
+                commentBlock += ` * @returns {${capitalizedCannoliName}Results} ${resultNames}\n`;
+                break;
+            }
+            case CannoliReturnType.String: {
+                const [result, description] = Object.entries(cannoliInfo.returns)[0];
+                commentBlock += ` * @returns {string} ${result}${description ? ` - ${description}` : ''}\n`;
+                break;
+            }
+            case CannoliReturnType.Void:
+            default:
+                commentBlock += ` * @returns {void}\n`;
+                break;
         }
     } else {
-        if (args.length > 3) {
-            const argNames = args.join(', ');
-            commentBlock += ` * @param {${capitalizedCannoliName}Args} args - ${argNames}\n`;
-        } else {
-            for (const [arg, info] of Object.entries(argInfo)) {
-                commentBlock += ` * @param {string} ${arg}${info?.description ? ` - ${info.description}` : ''}\n`;
+        switch (cannoliInfo.paramType) {
+            case CannoliParamType.Object: {
+                const argNames = args.join(', ');
+                commentBlock += ` * @param {${capitalizedCannoliName}Args} args - ${argNames}\n`;
+                break;
             }
+            case CannoliParamType.Array:
+            case CannoliParamType.String:
+                for (const [arg, description] of Object.entries(cannoliInfo.params)) {
+                    commentBlock += ` * @param {string} ${arg}${description ? ` - ${description}` : ''}\n`;
+                }
+                break;
+            case CannoliParamType.Void:
+            default:
+                break;
         }
 
-        if (Object.keys(resultInfo).length > 1) {
-            const resultNames = Object.keys(resultInfo).join(', ');
-            commentBlock += ` * @returns {${capitalizedCannoliName}Results} ${resultNames}\n`;
-        } else if (Object.keys(resultInfo).length === 1) {
-            const [result, info] = Object.entries(resultInfo)[0];
-            commentBlock += ` * @returns {string} ${result}${info?.description ? ` - ${info.description}` : ''}\n`;
-        } else {
-            commentBlock += ` * @returns {void}\n`;
+        switch (cannoliInfo.returnType) {
+            case CannoliReturnType.Object: {
+                const resultNames = Object.keys(cannoliInfo.returns).join(', ');
+                commentBlock += ` * @returns {${capitalizedCannoliName}Results} ${resultNames}\n`;
+                break;
+            }
+            case CannoliReturnType.String: {
+                const [result, description] = Object.entries(cannoliInfo.returns)[0];
+                commentBlock += ` * @returns {string} ${result}${description ? ` - ${description}` : ''}\n`;
+                break;
+            }
+            case CannoliReturnType.Void:
+            default:
+                commentBlock += ` * @returns {void}\n`;
+                break;
         }
     }
 
@@ -354,95 +408,143 @@ function generateCommentBlock(cannoliName: string, argInfo: Record<string, VarIn
     return commentBlock;
 }
 
-function generateTypeDefinitions(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage): string {
-    const args = Object.keys(argInfo);
+function generateTypeDefinitions(cannoliInfo: CannoliInfo, language: BakeLanguage): string {
+    const args = Object.keys(cannoliInfo.params);
     const argsType = args.map(arg => `${arg}: string;`).join("\n  ");
-    const resultType = Object.keys(resultInfo).map(result => `${result}: string`).join(";\n  ") + ";";
+    const resultType = Object.keys(cannoliInfo.returns).map(result => `${result}: string`).join(";\n  ") + ";";
 
     let argTypeDef = '';
     let resultTypeDef = '';
 
     if (language === "typescript") {
-        if (args.length > 3) {
-            argTypeDef = `export type ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Args = {\n  ${argsType}\n};\n\n`;
+        if (cannoliInfo.paramType === "object") {
+            argTypeDef = `export type ${cannoliInfo.functionName.charAt(0).toUpperCase() + cannoliInfo.functionName.slice(1)}Args = {\n  ${argsType}\n};\n\n`;
         }
 
-        if (Object.keys(resultInfo).length > 1) {
-            resultTypeDef = `export type ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Results = {\n  ${resultType}\n};\n\n`;
+        if (cannoliInfo.returnType === "object") {
+            resultTypeDef = `export type ${cannoliInfo.functionName.charAt(0).toUpperCase() + cannoliInfo.functionName.slice(1)}Results = {\n  ${resultType}\n};\n\n`;
         }
     } else {
-        if (args.length > 3) {
-            argTypeDef = `/**\n * @typedef {Object} ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Args\n${args.map(arg => ` * @property {string} ${arg}`).join("\n")}\n */\n\n`;
+        if (cannoliInfo.paramType === "object") {
+            argTypeDef = `/**\n * @typedef {Object} ${cannoliInfo.functionName.charAt(0).toUpperCase() + cannoliInfo.functionName.slice(1)}Args\n${args.map(arg => ` * @property {string} ${arg}`).join("\n")}\n */\n\n`;
         }
 
-        if (Object.keys(resultInfo).length > 1) {
-            resultTypeDef = `/**\n * @typedef {Object} ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Results\n${Object.keys(resultInfo).map(result => ` * @property {string} ${result}`).join("\n")}\n */\n\n`;
+        if (cannoliInfo.paramType === "object") {
+            resultTypeDef = `/**\n * @typedef {Object} ${cannoliInfo.functionName.charAt(0).toUpperCase() + cannoliInfo.functionName.slice(1)}Results\n${Object.keys(cannoliInfo.returns).map(result => ` * @property {string} ${result}`).join("\n")}\n */\n\n`;
         }
     }
 
     return `${argTypeDef}${resultTypeDef}`;
 }
 
-function generateFunctionSignature(cannoliName: string, argInfo: Record<string, VarInfo | null>, resultInfo: Record<string, VarInfo | null>, language: BakeLanguage): string {
-    const args = Object.keys(argInfo);
+function generateFunctionSignature(cannoliInfo: CannoliInfo, language: BakeLanguage): string {
+    const { paramType, returnType, functionName, params } = cannoliInfo;
+    const args = Object.keys(params);
+
+    let argsString: string;
+    switch (paramType) {
+        case CannoliParamType.String:
+            argsString = args.map(arg => `${arg}: string`).join(", ");
+            break;
+        case CannoliParamType.Array:
+            argsString = `\n  ${args.map(arg => `${arg}: string`).join(",\n  ")}\n`;
+            break;
+        case CannoliParamType.Object:
+            argsString = `args: ${functionName.charAt(0).toUpperCase() + functionName.slice(1)}Args`;
+            break;
+        case CannoliParamType.Void:
+        default:
+            argsString = "";
+            break;
+    }
+
+    let returnTypeString: string;
+    switch (returnType) {
+        case CannoliReturnType.String:
+            returnTypeString = "string";
+            break;
+        case CannoliReturnType.Object:
+            returnTypeString = `${functionName.charAt(0).toUpperCase() + functionName.slice(1)}Results`;
+            break;
+        case CannoliReturnType.Void:
+        default:
+            returnTypeString = "void";
+            break;
+    }
 
     if (language === "typescript") {
-        const argsString = args.length > 3
-            ? `args: ${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Args`
-            : args.length > 1
-                ? `\n  ${args.map(arg => `${arg}: string`).join(",\n  ")}\n`
-                : args.map(arg => `${arg}: string`).join(", ");
-
-        const returnType = Object.keys(resultInfo).length === 0
-            ? 'void'
-            : Object.keys(resultInfo).length === 1
-                ? 'string'
-                : `${cannoliName.charAt(0).toUpperCase() + cannoliName.slice(1)}Results`;
-
-        return `export async function ${cannoliName}(${argsString}): Promise<${returnType}>`;
+        return `export async function ${functionName}(${argsString}): Promise<${returnTypeString}>`;
     } else {
-        if (args.length === 1) {
-            const [arg] = args;
-            return `export async function ${cannoliName}(${arg})`;
-        } else if (args.length > 1 && args.length <= 3) {
-            return `export async function ${cannoliName}(\n  ${args.join(",\n  ")}\n)`;
-        } else if (args.length > 3) {
-            return `export async function ${cannoliName}({\n  ${args.join(",\n  ")}\n})`;
-        } else {
-            return `export async function ${cannoliName}()`;
+        switch (paramType) {
+            case CannoliParamType.Object:
+                return `export async function ${functionName}({\n  ${args.join(",\n  ")}\n})`;
+            case CannoliParamType.Array:
+                return `export async function ${functionName}(\n  ${args.join(",\n  ")}\n)`;
+            case CannoliParamType.String:
+                return `export async function ${functionName}(${argsString})`;
+            case CannoliParamType.Void:
+            default:
+                return `export async function ${functionName}()`;
         }
     }
 }
 
-function generateReturnStatement(resultInfo: Record<string, VarInfo | null>): string {
-    if (Object.keys(resultInfo).length === 1) {
-        const [result] = Object.keys(resultInfo);
-        return `return runResult["${result}"];`;
-    } else if (Object.keys(resultInfo).length > 1) {
-        const returnObject = Object.keys(resultInfo)
-            .map(result => `    ${result}: runResult["${result}"]`)
-            .join(",\n");
-        return `return {\n${returnObject}\n  };`;
-    } else {
-        return `return;`;
+function generateReturnStatement(cannoliInfo: CannoliInfo): string {
+    const { returnType, returns } = cannoliInfo;
+
+    switch (returnType) {
+        case CannoliReturnType.String: {
+            const [result] = Object.keys(returns);
+            return `return runResult["${result}"];`;
+        }
+
+        case CannoliReturnType.Object: {
+            const returnObject = Object.keys(returns)
+                .map(result => `    ${result}: runResult["${result}"]`)
+                .join(",\n");
+            return `return {\n${returnObject}\n  };`;
+        }
+
+        case CannoliReturnType.Void:
+        default:
+            return `return;`;
     }
 }
 
-function generateRunFunctionCall(args: string[], availableArgs: string[], language: BakeLanguage): string {
+function generateRunFunctionCall(cannoliInfo: CannoliInfo, availableArgs: string[], language: BakeLanguage): string {
+    const { paramType, params } = cannoliInfo;
+    const args = Object.keys(params);
+
     let runArgs = '';
 
-    if (args.length < 1) {
-        runArgs = '';
-    } else if (args.length <= 3 || language === "javascript") {
-        runArgs = `  args: {
+    if (language === "typescript") {
+        switch (paramType) {
+            case CannoliParamType.String:
+            case CannoliParamType.Array:
+                runArgs = `  args: {
       ${args.join(",\n      ")}
-    }`
-    } else if (args.length > 3) {
-        runArgs = `  args`;
+    }`;
+                break;
+            case CannoliParamType.Object:
+                runArgs = `  args`;
+                break;
+            case CannoliParamType.Void:
+            default:
+                runArgs = '';
+                break;
+        }
+    } else {
+        switch (paramType) {
+            case CannoliParamType.String:
+            default:
+                runArgs = `  args: {
+      ${args.join(",\n      ")}
+    }`;
+                break;
+        }
     }
 
     const additionalArgs = availableArgs.map(arg => `  ${arg}`).join(",\n  ");
-
     const allArgs = [runArgs, additionalArgs].filter(Boolean).join(",\n  ");
 
     return `  const runResult = await run({
@@ -450,20 +552,12 @@ function generateRunFunctionCall(args: string[], availableArgs: string[], langua
   });`;
 }
 
-function generateFunction(cannoliName: string, cannoliInfo: CannoliInfo, language: BakeLanguage, argDeclarations: string, availableArgs: string[]): string | Error {
-    if (!cannoliName) {
-        return new Error("Cannoli name is empty");
-    }
-
-    const { argInfo, resultInfo, description } = cannoliInfo;
-
-    const typeDefinitions = generateTypeDefinitions(cannoliName, argInfo, resultInfo, language);
-    const commentBlock = generateCommentBlock(cannoliName, argInfo, resultInfo, language, description);
-    const functionSignature = generateFunctionSignature(cannoliName, argInfo, resultInfo, language);
-    const returnStatement = generateReturnStatement(resultInfo);
-
-    const args = Object.keys(argInfo);
-    const runFunctionCall = generateRunFunctionCall(args, availableArgs, language);
+function generateFunction(cannoliInfo: CannoliInfo, language: BakeLanguage, argDeclarations: string, availableArgs: string[]): string | Error {
+    const typeDefinitions = generateTypeDefinitions(cannoliInfo, language);
+    const commentBlock = generateCommentBlock(cannoliInfo, language);
+    const functionSignature = generateFunctionSignature(cannoliInfo, language);
+    const returnStatement = generateReturnStatement(cannoliInfo);
+    const runFunctionCall = generateRunFunctionCall(cannoliInfo, availableArgs, language);
 
     const functionBody = `
 ${typeDefinitions}${commentBlock}
@@ -485,7 +579,7 @@ function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, a
     // Add LLMConfig import if language is TypeScript
     const corePath = runtime === "node" ? "@deablabs/cannoli-core" : "npm:@deablabs/cannoli-core";
     if (language === "typescript") {
-        importMap[corePath] = ["LLMConfig", "run"];
+        importMap[corePath] = ["LLMConfig", "run", "CannoliInfo"];
     } else {
         importMap[corePath] = ["run"];
     }
