@@ -355,15 +355,13 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		const nameWithoutExtensions = activeFile.basename.replace(".canvas", "").replace(".cno", "");
-
 		// Get the content of the file
 		const content = JSON.parse(await this.app.vault.read(activeFile));
 
 		const bakeResult = await bake({
 			language: "typescript",
 			runtime: "deno",
-			displayName: nameWithoutExtensions,
+			canvasName: activeFile.name,
 			cannoli: content,
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
@@ -371,8 +369,8 @@ export default class Cannoli extends Plugin {
 			config: this.getConfig(true),
 			envVars: this.getEnvVars(),
 			httpTemplates: this.settings.httpTemplates,
-			includeCannoliInfo: true,
-			includeTypeAnnotation: true,
+			includeTypes: true,
+			includeMetadata: true,
 		});
 
 		if (bakeResult instanceof Error) {
@@ -407,7 +405,7 @@ export default class Cannoli extends Plugin {
 		const myVals = myValsResponse.json.data as { name: string, id: string }[];
 
 		// Check if the user has a val with the same name
-		const existingVal = myVals.find(val => val.name === bakeResult.cannoliInfo.functionName);
+		const existingVal = myVals.find(val => val.name === bakeResult.cannoliInfo.name);
 
 		let editVal = false;
 
@@ -452,7 +450,7 @@ export default class Cannoli extends Plugin {
 					"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
 				},
 				body: JSON.stringify({
-					name: bakeResult.cannoliInfo.functionName,
+					name: bakeResult.cannoliInfo.name,
 					code: bakeResult.code,
 				}),
 			});
@@ -486,8 +484,6 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		const nameWithoutExtensions = activeFile.basename.replace(".canvas", "").replace(".cno", "");
-
 		// Get the content of the file
 		const content = JSON.parse(await this.app.vault.read(activeFile));
 
@@ -495,7 +491,7 @@ export default class Cannoli extends Plugin {
 			language: this.settings.bakeLanguage,
 			runtime: this.settings.bakeRuntime,
 			changeIndentToFour: this.settings.bakeIndent === "4",
-			displayName: nameWithoutExtensions,
+			canvasName: activeFile.name,
 			cannoli: content,
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
@@ -503,6 +499,8 @@ export default class Cannoli extends Plugin {
 			config: this.getConfig(true),
 			envVars: this.getEnvVars(),
 			httpTemplates: this.settings.httpTemplates,
+			includeTypes: true,
+			includeMetadata: true,
 		});
 
 		if (bakeResult instanceof Error) {
