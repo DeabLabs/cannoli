@@ -369,8 +369,9 @@ export default class Cannoli extends Plugin {
 			config: this.getConfig(true),
 			envVars: this.getEnvVars(),
 			httpTemplates: this.settings.httpTemplates,
-			includeTypes: true,
+			includeTypes: false,
 			includeMetadata: true,
+			forValtown: true,
 		});
 
 		if (bakeResult instanceof Error) {

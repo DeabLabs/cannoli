@@ -45,6 +45,7 @@ export async function bake({
     dynamicParamAndReturnTypes,
     includeTypes,
     includeMetadata,
+    forValtown,
     fileManager,
     // replacers,
     // fetcher,
@@ -63,6 +64,7 @@ export async function bake({
     dynamicParamAndReturnTypes?: boolean;
     includeTypes?: boolean;
     includeMetadata?: boolean;
+    forValtown?: boolean;
     // replacers?: Replacer[],
     // fetcher?: ResponseTextFetcher,
 }): Promise<{
@@ -197,7 +199,8 @@ export async function bake({
         actions: referencedActions,
         httpTemplates: referencedHttpTemplates,
         includeTypes,
-        includeMetadata
+        includeMetadata,
+        forValtown,
     });
 
     if (result instanceof Error) {
@@ -249,6 +252,7 @@ export function writeCode({
     httpTemplates,
     includeTypes,
     includeMetadata,
+    forValtown,
     // replacers,
     // fetcher,
 }: {
@@ -265,6 +269,7 @@ export function writeCode({
     httpTemplates?: HttpTemplate[];
     includeTypes?: boolean;
     includeMetadata?: boolean;
+    forValtown?: boolean;
     // replacers?: Replacer[];
     // fetcher?: ResponseTextFetcher;
 }): {
@@ -272,6 +277,11 @@ export function writeCode({
     code: string;
     cannoliInfo: CannoliFunctionInfo;
 } | Error {
+    if (forValtown) {
+        includeMetadata = true;
+    }
+
+    const valtownHttpCode = generateValtownHttpCode(cannoliInfo);
     const metadata = generateMetadata(cannoliInfo);
     const importTemplate = generateImportTemplates(language, runtime, actions);
     const availableArgs = ['cannoli', 'llmConfigs'];
@@ -311,14 +321,12 @@ export function writeCode({
     const argDeclarations = `${optionalArgTemplates}${llmConfigTemplate}
 const cannoli = ${JSON.stringify(cannoli, null, 2)};`;
 
-    const generatedFunction = generateFunction(cannoliInfo, language, argDeclarations, availableArgs, includeTypes);
+    const generatedFunction = generateFunction(cannoliInfo, language, argDeclarations, availableArgs, includeTypes, forValtown);
 
-    const code = `${includeMetadata ? metadata : ''}${importTemplate}
+    const code = `${includeMetadata ? metadata : ''}${importTemplate}${forValtown ? valtownHttpCode : ''}
 ${generatedFunction}
 `;
     const cleanedCode = cleanCode(code, changeIndentToFour);
-
-    console.log("Parsed metadata: ", parseCannoliFunctionInfo(cleanedCode));
 
     return {
         fileName: `${functionName}.${language === "typescript" ? "ts" : "js"}`,
@@ -524,7 +532,61 @@ function generateMetadata(cannoliInfo: CannoliFunctionInfo): string {
 ${description}${params}${returns}`.trim() + `\n */\n\n`;
 }
 
-function generateCommentBlock(cannoliInfo: CannoliFunctionInfo): string {
+function generateValtownHttpCode(cannoliInfo: CannoliFunctionInfo): string {
+    const { name, paramType, params } = cannoliInfo;
+    const requiredParams = Object.keys(params);
+
+    const transformParams = (paramType: CannoliParamType, requiredParams: string[]): string => {
+        switch (paramType) {
+            case CannoliParamType.String:
+                return `
+  const params = await req.json();
+  if (typeof params !== 'object' || !params.hasOwnProperty('${requiredParams[0]}')) {
+    return new Response("Invalid parameters: expected an object with a single string property '${requiredParams[0]}'", { status: 400 });
+  }
+  const result = await ${name}(params['${requiredParams[0]}']);`;
+            case CannoliParamType.Array:
+                return `
+  const params = await req.json();
+  if (typeof params !== 'object' || !Array.isArray(params['${requiredParams[0]}'])) {
+    return new Response("Invalid parameters: expected an object with an array property '${requiredParams[0]}']", { status: 400 });
+  }
+  const result = await ${name}(params['${requiredParams[0]}']);`;
+            case CannoliParamType.Object:
+                return `
+  const params = await req.json();
+  if (typeof params !== 'object') {
+    return new Response("Invalid parameters: expected an object with the string properties: ${requiredParams.join(', ')}", { status: 400 });
+  }
+  const missingParams = ${JSON.stringify(requiredParams)}.filter(param => !(param in params));
+  if (missingParams.length > 0) {
+    return new Response(\`Missing required parameters: \${missingParams.join(', ')}.\`, { status: 400 });
+  }
+  const result = await ${name}(params);`;
+            case CannoliParamType.Void:
+            default:
+                return `
+  const result = await ${name}();`;
+        }
+    };
+
+    const paramTransformationCode = transformParams(paramType, requiredParams);
+
+    return `
+export default async function(req: Request): Promise<Response> {
+  const authHeader = req.headers.get("Authorization");
+  const token = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice(7) : authHeader;
+
+  if (token !== Deno.env.get("valtown")) {
+    return new Response("Unauthorized", { status: 401 });
+  }${paramTransformationCode}
+
+  return Response.json({ ok: true, result });
+}
+`;
+}
+
+function generateCommentBlock(cannoliInfo: CannoliFunctionInfo, includeTypes?: boolean): string {
     const formatDescription = (desc?: string) => desc ? desc.split('\n').map(line => ` * ${line}`).join('\n') : '';
     const capitalizedCannoliName = cannoliInfo.name.charAt(0).toUpperCase() + cannoliInfo.name.slice(1);
 
@@ -538,7 +600,11 @@ function generateCommentBlock(cannoliInfo: CannoliFunctionInfo): string {
     switch (cannoliInfo.paramType) {
         case CannoliParamType.Object: {
             const argNames = args.join(', ');
-            commentBlock += ` * @param {${capitalizedCannoliName}Params} params - ${argNames}\n`;
+            if (includeTypes) {
+                commentBlock += ` * @param {${capitalizedCannoliName}Params} params - ${argNames}\n`;
+            } else {
+                commentBlock += ` * @param {${argNames}}\n`;
+            }
             break;
         }
         case CannoliParamType.Array:
@@ -555,7 +621,11 @@ function generateCommentBlock(cannoliInfo: CannoliFunctionInfo): string {
     switch (cannoliInfo.returnType) {
         case CannoliReturnType.Object: {
             const resultNames = Object.keys(cannoliInfo.returns).join(', ');
-            commentBlock += ` * @returns {Promise<${capitalizedCannoliName}Return>} ${resultNames}\n`;
+            if (includeTypes) {
+                commentBlock += ` * @returns {Promise<${capitalizedCannoliName}Return>} ${resultNames}\n`;
+            } else {
+                commentBlock += ` * @returns {Promise<{${resultNames}}>}\n`;
+            }
             break;
         }
         case CannoliReturnType.String: {
@@ -603,7 +673,7 @@ function generateTypeDefinitions(cannoliInfo: CannoliFunctionInfo, language: Bak
     return `${argTypeDef}${resultTypeDef}`;
 }
 
-function generateFunctionSignature(cannoliInfo: CannoliFunctionInfo, language: BakeLanguage, includeTypes?: boolean): string {
+function generateFunctionSignature(cannoliInfo: CannoliFunctionInfo, language: BakeLanguage, includeTypes?: boolean, notDefault?: boolean): string {
     const { paramType, returnType, name, params, returns } = cannoliInfo;
     const args = Object.keys(params);
     const returnNames = Object.keys(returns);
@@ -652,18 +722,18 @@ function generateFunctionSignature(cannoliInfo: CannoliFunctionInfo, language: B
     }
 
     if (language === "typescript") {
-        return `export default async function ${name}(${argsString}): Promise<${returnTypeString}>`;
+        return `export${notDefault ? "" : "default"} async function ${name}(${argsString}): Promise<${returnTypeString}>`;
     } else {
         switch (paramType) {
             case CannoliParamType.Object:
-                return `export default async function ${name}({\n  ${args.join(",\n  ")}\n})`;
+                return `export${notDefault ? "" : "default"} async function ${name}({\n  ${args.join(",\n  ")}\n})`;
             case CannoliParamType.Array:
-                return `export default async function ${name}(\n  ${args.join(",\n  ")}\n)`;
+                return `export${notDefault ? "" : "default"} async function ${name}(\n  ${args.join(",\n  ")}\n)`;
             case CannoliParamType.String:
-                return `export default async function ${name}(${argsString})`;
+                return `export${notDefault ? "" : "default"} async function ${name}(${argsString})`;
             case CannoliParamType.Void:
             default:
-                return `export default async function ${name}()`;
+                return `export${notDefault ? "" : "default"} async function ${name}()`;
         }
     }
 }
@@ -736,10 +806,10 @@ function generateRunFunctionCall(cannoliInfo: CannoliFunctionInfo, availableArgs
   });`;
 }
 
-function generateFunction(cannoliInfo: CannoliFunctionInfo, language: BakeLanguage, argDeclarations: string, availableArgs: string[], includeTypes?: boolean): string | Error {
+function generateFunction(cannoliInfo: CannoliFunctionInfo, language: BakeLanguage, argDeclarations: string, availableArgs: string[], includeTypes?: boolean, notDefault?: boolean): string | Error {
     const typeDefinitions = generateTypeDefinitions(cannoliInfo, language);
-    const commentBlock = generateCommentBlock(cannoliInfo);
-    const functionSignature = generateFunctionSignature(cannoliInfo, language, includeTypes);
+    const commentBlock = generateCommentBlock(cannoliInfo, includeTypes);
+    const functionSignature = generateFunctionSignature(cannoliInfo, language, includeTypes, notDefault);
     const returnStatement = generateReturnStatement(cannoliInfo);
     const runFunctionCall = generateRunFunctionCall(cannoliInfo, availableArgs, language, includeTypes);
 
