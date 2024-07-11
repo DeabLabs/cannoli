@@ -27,7 +27,9 @@ import {
 	runWithControl,
 	bake,
 	BakeLanguage,
-	BakeRuntime
+	BakeRuntime,
+	CannoliFunctionInfo,
+	parseCannoliFunctionInfo
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -182,6 +184,8 @@ export default class Cannoli extends Plugin {
 
 		this.createCopyCanvasToClipboardCommand();
 
+		this.createViewValsCommand();
+
 		this.createBakeToValTownCommand();
 
 		this.createBakeCommand();
@@ -273,6 +277,15 @@ export default class Cannoli extends Plugin {
 		});
 	};
 
+	createViewValsCommand = () => {
+		this.addCommand({
+			id: "view-vals",
+			name: "View vals",
+			callback: this.openValTownModal,
+			icon: "cannoli",
+		});
+	};
+
 	createBakeToValTownCommand = () => {
 		this.addCommand({
 			id: "bake-to-val-town",
@@ -339,6 +352,11 @@ export default class Cannoli extends Plugin {
 		await navigator.clipboard.writeText(content);
 
 		new Notice("Canvas copied to clipboard");
+	};
+
+	openValTownModal = async () => {
+		const modal = new ValTownModal(this.app, await this.getAllCannoliFunctions(), this.openCanvas, this.settings.valTownAPIKey);
+		modal.open();
 	};
 
 	bakeToValTown = async () => {
@@ -440,6 +458,7 @@ export default class Cannoli extends Plugin {
 				},
 				body: JSON.stringify({
 					code: bakeResult.code,
+					type: "http"
 				}),
 			});
 		} else {
@@ -453,6 +472,7 @@ export default class Cannoli extends Plugin {
 				body: JSON.stringify({
 					name: bakeResult.cannoliInfo.name,
 					code: bakeResult.code,
+					type: "http"
 				}),
 			});
 		}
@@ -500,8 +520,7 @@ export default class Cannoli extends Plugin {
 			config: this.getConfig(true),
 			envVars: this.getEnvVars(),
 			httpTemplates: this.settings.httpTemplates,
-			includeTypes: true,
-			includeMetadata: true,
+			includeTypes: true
 		});
 
 		if (bakeResult instanceof Error) {
@@ -685,6 +704,56 @@ export default class Cannoli extends Plugin {
 			}
 		);
 	};
+
+	async fetchValtownUserProfile(): Promise<{ id: string; username: string }> {
+		const response = await requestUrl({
+			url: `https://api.val.town/v1/me`,
+			headers: {
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
+			},
+		});
+
+		if (response.status !== 200) {
+			throw new Error("Failed to fetch val.town profile");
+		}
+
+		return await response.json;
+	}
+
+	async getAllCannoliFunctions(): Promise<
+		Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo }>
+	> {
+		const profile = await this.fetchValtownUserProfile();
+		const response = await requestUrl({
+			url: `https://api.val.town/v1/users/${profile.id}/vals`,
+			headers: {
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
+			},
+		});
+
+		if (response.status !== 200) {
+			throw new Error("Failed to fetch vals");
+		}
+
+		const data = await response.json;
+		const vals = data.data;
+		const allCannoliFunctions: { link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo }[] = []; // CannoliFunctionInfo[] = [];
+
+		for (const val of vals) {
+			const cannoliInfo = parseCannoliFunctionInfo(val.code);
+
+			if (cannoliInfo !== null) {
+				allCannoliFunctions.push({
+					link: `https://www.val.town/v/${profile.username}/${val.name}`,
+					moduleUrl: `https://esm.town/v/${profile.username}/${val.name}`,
+					httpEndpointUrl: `https://${profile.username}-${val.name.toLowerCase()}.web.val.run`,
+					cannoliFunctionInfo: cannoliInfo,
+				});
+			}
+		}
+
+		return allCannoliFunctions;
+	}
 
 	async replaceAudioWithTranscript(file: TFile, audio: TFile) {
 		// Transcribe the audio
@@ -1091,6 +1160,13 @@ export default class Cannoli extends Plugin {
 		}
 
 		return canvasData;
+	}
+
+	openCanvas(canvasName: string) {
+		const file = this.app.metadataCache.getFirstLinkpathDest(canvasName, "");
+		if (file) {
+			this.app.workspace.openLinkText(file.path, "");
+		}
 	}
 
 	getNodesAndEdgesInGroup(group: CanvasGroupData, canvasData: CanvasData): { nodeIds: string[]; edgeIds: string[] } {
@@ -1575,6 +1651,78 @@ export class HttpTemplateEditorModal extends Modal {
 			// If parsing failed, return the body as-is
 			return body;
 		}
+	}
+}
+
+export class ValTownModal extends Modal {
+	cannoliFunctions: Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo }>;
+	openCanvas: (canvasName: string) => void;
+	valtownApiKey: string;
+
+	constructor(app: App, cannoliFunctions: Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo }>, openCanvas: (canvasName: string) => void, valtownApiKey: string) {
+		super(app);
+		this.cannoliFunctions = cannoliFunctions;
+		this.openCanvas = openCanvas;
+		this.valtownApiKey = valtownApiKey;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h1", { text: "Cannoli Vals" });
+
+		const table = contentEl.createEl("table", { cls: "cannoli-table" });
+		const tbody = table.createEl("tbody");
+
+		this.cannoliFunctions.forEach((func) => {
+			const { canvasName } = func.cannoliFunctionInfo;
+			const displayName = canvasName.replace(/\.canvas|\.cno/g, "");
+
+			const row = tbody.createEl("tr");
+
+			row.createEl("td", { text: displayName });
+
+			const canvasCell = row.createEl("td");
+			const openCanvasButton = canvasCell.createEl("button", { text: "Canvas" });
+			openCanvasButton.addEventListener("click", () => {
+				this.openCanvas(canvasName);
+				this.close();
+			});
+
+			const valCell = row.createEl("td");
+			const openValButton = valCell.createEl("button", { text: "Val" });
+			openValButton.addEventListener("click", () => {
+				window.open(func.link, "_blank");
+			});
+
+			const copyUrlCell = row.createEl("td");
+			const copyButton = copyUrlCell.createEl("button", { text: "📋 URL" });
+			copyButton.addEventListener("click", () => {
+				navigator.clipboard.writeText(func.httpEndpointUrl).then(() => {
+					new Notice("HTTP Endpoint URL copied to clipboard");
+				}).catch((err) => {
+					console.error("Failed to copy text: ", err);
+				});
+			});
+
+			const copyCurlCell = row.createEl("td");
+			const copyCurlButton = copyCurlCell.createEl("button", { text: "📋 cURL command" });
+			copyCurlButton.addEventListener("click", () => {
+				const curlCommand = `curl -X POST ${func.httpEndpointUrl} \\
+-H "Authorization: Bearer ${this.valtownApiKey}" \\
+-H "Content-Type: application/json" \\
+${Object.keys(func.cannoliFunctionInfo.params).length > 0 ? `-d '${JSON.stringify(Object.fromEntries(Object.keys(func.cannoliFunctionInfo.params).map(param => [param, `{{${param}}}`])), null, 2)}'` : ''}`;
+				navigator.clipboard.writeText(curlCommand).then(() => {
+					new Notice("cURL command copied to clipboard");
+				}).catch((err) => {
+					console.error("Failed to copy text: ", err);
+				});
+			});
+		});
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
 	}
 }
 
@@ -2309,21 +2457,6 @@ class CannoliSettingTab extends PluginSettingTab {
 		containerEl.createEl("h1", { text: "Integrations" });
 
 		new Setting(containerEl)
-			.setName("ValTown API key")
-			.setDesc(
-				`This key will be used to create Vals on your Val Town account when you run the "Create Val" command.`
-			)
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.valTownAPIKey)
-					.setPlaceholder("...")
-					.onChange(async (value) => {
-						this.plugin.settings.valTownAPIKey = value;
-						await this.plugin.saveSettings();
-					}).inputEl.setAttribute("type", "password")
-			);
-
-		new Setting(containerEl)
 			.setName("Exa API key")
 			.setDesc("This key will be used to make all Exa search requests.")
 			.addText((text) =>
@@ -2388,6 +2521,41 @@ class CannoliSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				});
 			});
+
+		// ValTown section
+		containerEl.createEl("h1", { text: "ValTown" });
+
+		new Setting(containerEl)
+			.setName("ValTown API key")
+			.setDesc(
+				`This key will be used to create Vals on your Val Town account when you run the "Create Val" command.`
+			)
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.valTownAPIKey)
+					.setPlaceholder("...")
+					.onChange(async (value) => {
+						this.plugin.settings.valTownAPIKey = value;
+						await this.plugin.saveSettings();
+					}).inputEl.setAttribute("type", "password")
+			);
+
+		new Setting(containerEl)
+			.setName("Manage Vals")
+			.setDesc("View information about your Cannoli Vals.")
+			.addButton((button) =>
+				button.setButtonText("Open").onClick(async () => {
+					// new Notice("Fetching all your Cannolis...");
+					try {
+						const cannoliFunctions = await this.plugin.getAllCannoliFunctions();
+						const modal = new ValTownModal(this.app, cannoliFunctions, this.plugin.openCanvas, this.plugin.settings.valTownAPIKey);
+						modal.open();
+					} catch (error) {
+						new Notice("Failed to fetch Cannoli functions.");
+						console.error(error);
+					}
+				})
+			);
 
 		containerEl.createEl("h1", { text: "Action nodes" });
 

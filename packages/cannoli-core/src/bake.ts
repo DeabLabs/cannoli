@@ -722,18 +722,18 @@ function generateFunctionSignature(cannoliInfo: CannoliFunctionInfo, language: B
     }
 
     if (language === "typescript") {
-        return `export${notDefault ? "" : "default"} async function ${name}(${argsString}): Promise<${returnTypeString}>`;
+        return `export${notDefault ? "" : " default"} async function ${name}(${argsString}): Promise<${returnTypeString}>`;
     } else {
         switch (paramType) {
             case CannoliParamType.Object:
-                return `export${notDefault ? "" : "default"} async function ${name}({\n  ${args.join(",\n  ")}\n})`;
+                return `export${notDefault ? "" : " default"} async function ${name}({\n  ${args.join(",\n  ")}\n})`;
             case CannoliParamType.Array:
-                return `export${notDefault ? "" : "default"} async function ${name}(\n  ${args.join(",\n  ")}\n)`;
+                return `export${notDefault ? "" : " default"} async function ${name}(\n  ${args.join(",\n  ")}\n)`;
             case CannoliParamType.String:
-                return `export${notDefault ? "" : "default"} async function ${name}(${argsString})`;
+                return `export${notDefault ? "" : " default"} async function ${name}(${argsString})`;
             case CannoliParamType.Void:
             default:
-                return `export${notDefault ? "" : "default"} async function ${name}()`;
+                return `export${notDefault ? "" : " default"} async function ${name}()`;
         }
     }
 }
