@@ -25,6 +25,13 @@ export type CannoliFunctionInfo = {
     description: string;
     paramType: CannoliParamType;
     returnType: CannoliReturnType;
+    cannoli: unknown;
+}
+
+export type BakeResult = {
+    fileName: string;
+    code: string;
+    cannoliInfo: CannoliFunctionInfo;
 }
 
 export type BakeRuntime = "node" | "deno" | "bun";
@@ -67,11 +74,7 @@ export async function bake({
     forValtown?: boolean;
     // replacers?: Replacer[],
     // fetcher?: ResponseTextFetcher,
-}): Promise<{
-    fileName: string;
-    code: string;
-    cannoliInfo: CannoliFunctionInfo
-} | Error> {
+}): Promise<BakeResult | Error> {
     // Mock run the cannoli
     const [done] = await runWithControl({
         cannoli,
@@ -127,6 +130,7 @@ export async function bake({
         description: stoppage.description || "",
         paramType: paramType,
         returnType: returnType,
+        cannoli: cannoli,
     };
 
     // Filter out llmconfig without baseURL or apiKey
@@ -420,6 +424,8 @@ export function parseCannoliFunctionInfo(fileContent: string): CannoliFunctionIn
         returnType = Object.keys(returns).length > 0 ? CannoliReturnType.Object : CannoliReturnType.Void;
     }
 
+    const cannoli = extractCannoliJson(fileContent);
+
     return {
         name,
         canvasName: canvasName.trim(),
@@ -428,7 +434,58 @@ export function parseCannoliFunctionInfo(fileContent: string): CannoliFunctionIn
         returns,
         paramType,
         returnType,
+        cannoli,
     };
+}
+
+function extractCannoliJson(fileContent: string): unknown {
+    const cannoliStart = fileContent.indexOf('const cannoli = {');
+    if (cannoliStart === -1) {
+        return null;
+    }
+
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+    let cannoliEnd = -1;
+
+    for (let i = cannoliStart; i < fileContent.length; i++) {
+        const char = fileContent[i];
+
+        if (inString) {
+            if (escapeNext) {
+                escapeNext = false;
+            } else if (char === '\\') {
+                escapeNext = true;
+            } else if (char === '"') {
+                inString = false;
+            }
+        } else {
+            if (char === '"') {
+                inString = true;
+            } else if (char === '{') {
+                braceCount++;
+            } else if (char === '}') {
+                braceCount--;
+                if (braceCount === 0) {
+                    cannoliEnd = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (cannoliEnd === -1) {
+        return null;
+    }
+
+    const cannoliJson = fileContent.slice(cannoliStart + 'const cannoli = '.length, cannoliEnd + 1);
+    try {
+        return JSON.parse(cannoliJson);
+    } catch (error) {
+        console.error("Failed to parse cannoli JSON:", error);
+        return null;
+    }
 }
 
 export async function callCannoliFunction(
