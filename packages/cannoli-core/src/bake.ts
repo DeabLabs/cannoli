@@ -32,6 +32,7 @@ export type BakeResult = {
     fileName: string;
     code: string;
     cannoliInfo: CannoliFunctionInfo;
+    readme: string;
 }
 
 export type BakeRuntime = "node" | "deno" | "bun";
@@ -280,6 +281,7 @@ export function writeCode({
     fileName: string;
     code: string;
     cannoliInfo: CannoliFunctionInfo;
+    readme: string;
 } | Error {
     if (forValtown) {
         includeMetadata = true;
@@ -332,10 +334,13 @@ ${generatedFunction}
 `;
     const cleanedCode = cleanCode(code, changeIndentToFour);
 
+    const readme = generateReadme(cannoliInfo);
+
     return {
         fileName: `${functionName}.${language === "typescript" ? "ts" : "js"}`,
         code: cleanedCode,
         cannoliInfo,
+        readme,
     };
 }
 
@@ -566,6 +571,98 @@ export async function callCannoliFunction(
     }
 }
 
+function generateReadme(cannoliInfo: CannoliFunctionInfo): string {
+    const { paramType, params, returns, canvasName } = cannoliInfo;
+    const requiredParams = Object.keys(params);
+    const paramDescriptions = Object.values(params);
+    const resultNames = Object.keys(returns);
+    const displayName = canvasName.replace(".canvas", "").replace(".cno", "");
+
+    const paramSection = () => {
+        switch (paramType) {
+            case CannoliParamType.String:
+                return `- \`${requiredParams[0]}\` (string)${paramDescriptions[0] ? ` - ${paramDescriptions[0]}` : ''}`;
+            case CannoliParamType.Array:
+                return `- \`${requiredParams[0]}\` (array)${paramDescriptions[0] ? ` - ${paramDescriptions[0]}` : ''}`;
+            case CannoliParamType.Object:
+                return requiredParams.map((param, index) => `- \`${param}\` (string)${paramDescriptions[index] ? ` - ${paramDescriptions[index]}` : ''}`).join('\n');
+            case CannoliParamType.Void:
+            default:
+                return '';
+        }
+    };
+
+    const exampleRequest = () => {
+        switch (paramType) {
+            case CannoliParamType.String:
+                return `curl -X POST HTTP_ENDPOINT \\
+-H "Authorization: Bearer YOUR_API_TOKEN" \\
+-H "Content-Type: application/json" \\
+-d '{
+  "${requiredParams[0]}": "value"
+}'`;
+            case CannoliParamType.Array:
+                return `curl -X POST HTTP_ENDPOINT \\
+-H "Authorization: Bearer YOUR_API_TOKEN" \\
+-H "Content-Type: application/json" \\
+-d '{
+  "${requiredParams[0]}": ["value1", "value2"]
+}'`;
+            case CannoliParamType.Object:
+                return `curl -X POST HTTP_ENDPOINT \\
+-H "Authorization: Bearer YOUR_API_TOKEN" \\
+-H "Content-Type: application/json" \\
+-d '{
+  ${requiredParams.map(param => `"${param}": "value"`).join(',\n  ')}
+}'`;
+            case CannoliParamType.Void:
+            default:
+                return `curl -X POST HTTP_ENDPOINT \\
+-H "Authorization: Bearer YOUR_API_TOKEN" \\
+-H "Content-Type: application/json"`;
+        }
+    };
+
+    let exampleResponse = `{
+  "ok": true,
+  "results": {
+    ${resultNames.map(result => `"${result}": "value"`).join(',\n    ')}
+  }
+}`;
+    if (cannoliInfo.returnType === CannoliReturnType.Void) {
+        exampleResponse = `{
+  "ok": true
+}`;
+    }
+
+    return `
+# ${displayName} (Cannoli)
+
+## Overview
+
+This val allows you to run the ${displayName} cannoli via an HTTP endpoint. It accepts POST requests with a JSON body. You can copy the URL using the "Copy HTTP endpoint" button to the right.
+
+## Authorization
+
+This endpoint requires your Val Town API key as a Bearer token for authorization. You can find your API key [here](https://www.val.town/settings/api).
+
+## Request body
+
+${paramSection() ? `
+
+The request body should be a JSON object with the following properties:
+${paramSection()}` : 'No body expected'}
+
+## Example Request
+
+${exampleRequest()}
+
+## Example Response
+
+${exampleResponse}
+`.trim();
+}
+
 function generateMetadata(cannoliInfo: CannoliFunctionInfo): string {
     const description = cannoliInfo.description
         ? ` * @description ${cannoliInfo.description.split('\n').join('\n * ')}\n`
@@ -601,14 +698,14 @@ function generateValtownHttpCode(cannoliInfo: CannoliFunctionInfo): string {
   if (typeof params !== 'object' || !params.hasOwnProperty('${requiredParams[0]}')) {
     return new Response("Invalid parameters: expected an object with a single string property '${requiredParams[0]}'", { status: 400 });
   }
-  const result = await ${name}(params['${requiredParams[0]}']);`;
+  const results = await ${name}(params['${requiredParams[0]}']);`;
             case CannoliParamType.Array:
                 return `
   const params = await req.json();
   if (typeof params !== 'object' || !Array.isArray(params['${requiredParams[0]}'])) {
     return new Response("Invalid parameters: expected an object with an array property '${requiredParams[0]}']", { status: 400 });
   }
-  const result = await ${name}(params['${requiredParams[0]}']);`;
+  const results = await ${name}(params['${requiredParams[0]}']);`;
             case CannoliParamType.Object:
                 return `
   const params = await req.json();
@@ -619,11 +716,11 @@ function generateValtownHttpCode(cannoliInfo: CannoliFunctionInfo): string {
   if (missingParams.length > 0) {
     return new Response(\`Missing required parameters: \${missingParams.join(', ')}.\`, { status: 400 });
   }
-  const result = await ${name}(params);`;
+  const results = await ${name}(params);`;
             case CannoliParamType.Void:
             default:
                 return `
-  const result = await ${name}();`;
+  const results = await ${name}();`;
         }
     };
 
@@ -638,7 +735,7 @@ export default async function(req: Request): Promise<Response> {
     return new Response("Unauthorized", { status: 401 });
   }${paramTransformationCode}
 
-  return Response.json({ ok: true, result });
+  return Response.json({ ok: true, results });
 }
 `;
 }

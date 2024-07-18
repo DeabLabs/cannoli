@@ -356,7 +356,7 @@ export default class Cannoli extends Plugin {
 	};
 
 	openValTownModal = async () => {
-		const modal = new ValTownModal(this.app, await this.getAllCannoliFunctions(), this.getAllCannoliFunctions, this.openCanvas, this.settings.valTownAPIKey, this.bakeToValTown);
+		const modal = new ValTownModal(this.app, await this.getAllCannoliFunctions(), this.getAllCannoliFunctions, this.openCanvas, this.settings.valTownAPIKey, this.bakeToValTown, this.createCanvas);
 		modal.open();
 	};
 
@@ -474,7 +474,7 @@ export default class Cannoli extends Plugin {
 	};
 
 	async updateVal(bakeResult: BakeResult, valId: string) {
-		const response = await requestUrl({
+		const newVersionResponse = await requestUrl({
 			url: `https://api.val.town/v1/vals/${valId}/versions`,
 			method: "POST",
 			headers: {
@@ -487,8 +487,25 @@ export default class Cannoli extends Plugin {
 			}),
 		});
 
-		if (typeof response.json === "string") {
-			new Notice(`Error updating Val: ${response.json}`);
+		if (typeof newVersionResponse.json === "string") {
+			new Notice(`Error updating Val: ${newVersionResponse.json}`);
+			return;
+		}
+
+		const updateResponse = await requestUrl({
+			url: `https://api.val.town/v1/vals/${valId}`,
+			method: "PUT",
+			headers: {
+				"Content-Type": "application/json",
+				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+			},
+			body: JSON.stringify({
+				readme: bakeResult.readme
+			}),
+		});
+
+		if (updateResponse.status !== 204) {
+			new Notice(`Error updating Val`);
 			return;
 		}
 
@@ -506,7 +523,9 @@ export default class Cannoli extends Plugin {
 			body: JSON.stringify({
 				name: bakeResult.cannoliInfo.name,
 				code: bakeResult.code,
-				type: "http"
+				type: "http",
+				privacy: "private",
+				readme: bakeResult.readme,
 			}),
 		});
 
@@ -761,13 +780,19 @@ export default class Cannoli extends Plugin {
 
 		const data = await valsResponse.json;
 		const vals = data.data;
-		const allCannoliFunctions: { id: string; link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean }[] = [];
+		const allCannoliFunctions: { id: string; link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean, localExists: boolean }[] = [];
 
 		for (const val of vals) {
 			const cannoliInfo = parseCannoliFunctionInfo(val.code);
 
 			if (cannoliInfo !== null) {
 				const localFile = this.app.metadataCache.getFirstLinkpathDest(cannoliInfo.canvasName, "");
+				let localExists = false;
+
+				if (localFile) {
+					localExists = true;
+				}
+
 				let identicalToLocal = false;
 				if (localFile) {
 					identicalToLocal = await this.checkCannolisIdentical(cannoliInfo.cannoli, localFile);
@@ -779,12 +804,22 @@ export default class Cannoli extends Plugin {
 					moduleUrl: `https://esm.town/v/${profile.username}/${val.name}`,
 					httpEndpointUrl: `https://${profile.username}-${val.name.toLowerCase()}.web.val.run`,
 					cannoliFunctionInfo: cannoliInfo,
-					identicalToLocal
+					identicalToLocal,
+					localExists
 				});
 			}
 		}
 
 		return allCannoliFunctions;
+	}
+
+	createCanvas = async (name: string, canvas: string) => {
+		try {
+			await this.app.vault.create(name, canvas);
+		} catch (error) {
+			new Notice(`Error creating canvas: ${error}`);
+			console.error(error);
+		}
 	}
 
 	async checkCannolisIdentical(remote: unknown, file: TFile) {
@@ -1697,19 +1732,21 @@ export class HttpTemplateEditorModal extends Modal {
 }
 
 export class ValTownModal extends Modal {
-	cannoliFunctions: Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean }>;
+	cannoliFunctions: Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean, localExists: boolean }>;
 	openCanvas: (canvasName: string) => boolean;
 	valtownApiKey: string;
 	bakeToValTown: (canvasName: string) => Promise<void>;
-	getCannoliFunctions: () => Promise<Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean }>>;
+	getCannoliFunctions: () => Promise<Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean, localExists: boolean }>>;
+	createCanvas: (name: string, canvas: string) => void;
 
-	constructor(app: App, cannoliFunctions: Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean }>, getCannoliFunctions: () => Promise<Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean }>>, openCanvas: (canvasName: string) => boolean, valtownApiKey: string, bakeToValTown: (canvasName: string) => Promise<void>) {
+	constructor(app: App, cannoliFunctions: Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean, localExists: boolean }>, getCannoliFunctions: () => Promise<Array<{ link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean, localExists: boolean }>>, openCanvas: (canvasName: string) => boolean, valtownApiKey: string, bakeToValTown: (canvasName: string) => Promise<void>, createCanvas: (name: string, canvas: string) => void) {
 		super(app);
 		this.cannoliFunctions = cannoliFunctions;
 		this.openCanvas = openCanvas;
 		this.valtownApiKey = valtownApiKey;
 		this.bakeToValTown = bakeToValTown;
 		this.getCannoliFunctions = getCannoliFunctions;
+		this.createCanvas = createCanvas;
 	}
 
 	onOpen() {
@@ -1769,12 +1806,12 @@ export class ValTownModal extends Modal {
 			});
 
 			const copyCurlCell = row.createEl("td");
-			const copyCurlButton = copyCurlCell.createEl("button", { text: "📋 cURL command" });
+			const copyCurlButton = copyCurlCell.createEl("button", { text: "📋 cURL" });
 			copyCurlButton.addEventListener("click", () => {
 				const curlCommand = `curl -X POST ${func.httpEndpointUrl} \\
 -H "Authorization: Bearer ${this.valtownApiKey}" \\
 -H "Content-Type: application/json" \\
-${Object.keys(func.cannoliFunctionInfo.params).length > 0 ? `-d '${JSON.stringify(Object.fromEntries(Object.keys(func.cannoliFunctionInfo.params).map(param => [param, `{{${param}}}`])), null, 2)}'` : ''}`;
+${Object.keys(func.cannoliFunctionInfo.params).length > 0 ? `-d '${JSON.stringify(Object.fromEntries(Object.keys(func.cannoliFunctionInfo.params).map(param => [param, "value"])), null, 2)}'` : ''}`;
 				navigator.clipboard.writeText(curlCommand).then(() => {
 					new Notice("cURL command copied to clipboard");
 				}).catch((err) => {
@@ -1783,15 +1820,25 @@ ${Object.keys(func.cannoliFunctionInfo.params).length > 0 ? `-d '${JSON.stringif
 			});
 
 			const syncStatusCell = row.createEl("td");
-			if (func.identicalToLocal) {
+
+			if (!func.localExists) {
+				const syncButton = syncStatusCell.createEl("button", { text: "Download" });
+				syncButton.addEventListener("click", async () => {
+					this.createCanvas(func.cannoliFunctionInfo.canvasName, JSON.stringify(func.cannoliFunctionInfo.cannoli));
+					new Notice(`Copied ${func.cannoliFunctionInfo.canvasName} to vault`);
+					const newCannoliFunctions = await this.getCannoliFunctions();
+					const newModal = new ValTownModal(this.app, newCannoliFunctions, this.getCannoliFunctions, this.openCanvas, this.valtownApiKey, this.bakeToValTown, this.createCanvas);
+					this.close();
+					newModal.open();
+				});
+			} else if (func.identicalToLocal) {
 				syncStatusCell.createEl("span", { text: "Synced", cls: "synced" });
 			} else {
-				const syncButton = syncStatusCell.createEl("button", { text: "Sync" });
+				const syncButton = syncStatusCell.createEl("button", { text: "Upload" });
 				syncButton.addEventListener("click", async () => {
 					await this.bakeToValTown(canvasName);
-					// await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for 1 second
 					const newCannoliFunctions = await this.getCannoliFunctions();
-					const newModal = new ValTownModal(this.app, newCannoliFunctions, this.getCannoliFunctions, this.openCanvas, this.valtownApiKey, this.bakeToValTown);
+					const newModal = new ValTownModal(this.app, newCannoliFunctions, this.getCannoliFunctions, this.openCanvas, this.valtownApiKey, this.bakeToValTown, this.createCanvas);
 					this.close();
 					newModal.open();
 				});
@@ -2626,7 +2673,7 @@ class CannoliSettingTab extends PluginSettingTab {
 				button.setButtonText("Open").onClick(async () => {
 					// new Notice("Fetching all your Cannolis...");
 					try {
-						const modal = new ValTownModal(this.app, await this.plugin.getAllCannoliFunctions(), this.plugin.getAllCannoliFunctions, this.plugin.openCanvas, this.plugin.settings.valTownAPIKey, this.plugin.bakeToValTown);
+						const modal = new ValTownModal(this.app, await this.plugin.getAllCannoliFunctions(), this.plugin.getAllCannoliFunctions, this.plugin.openCanvas, this.plugin.settings.valTownAPIKey, this.plugin.bakeToValTown, this.plugin.createCanvas);
 						modal.open();
 					} catch (error) {
 						new Notice("Failed to fetch Cannoli functions.");
