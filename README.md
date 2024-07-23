@@ -1,5 +1,7 @@
 # Cannoli
 
+[![Join our Discord](https://dcbadge.limes.pink/api/server/https://discord.gg/wzayNxpxvR)](https://discord.gg/https://discord.gg/wzayNxpxvR)
+
 Cannoli allows you to build and run no-code LLM scripts using the Obsidian Canvas editor.
 
 ## What is a Cannoli?
