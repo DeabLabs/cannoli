@@ -2667,8 +2667,8 @@ class CannoliSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Manage Vals")
-			.setDesc("View information about your Cannoli Vals.")
+			.setName("View vals")
+			.setDesc(`View information about your Cannoli Vals. This modal can also be opened using the "View vals" command.`)
 			.addButton((button) =>
 				button.setButtonText("Open").onClick(async () => {
 					// new Notice("Fetching all your Cannolis...");
