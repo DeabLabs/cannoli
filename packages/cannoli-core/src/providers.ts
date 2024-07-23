@@ -247,7 +247,15 @@ export class LLMProvider {
 					apiKey: config.apiKey,
 					model: config.model,
 					temperature: config.temperature,
-					maxRetries: 3,
+					maxRetries: 0,
+					anthropicApiUrl: url,
+					clientOptions: {
+						defaultHeaders: {
+							"Access-Control-Allow-Origin": "*",
+							"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+							"Access-Control-Allow-Headers": "*",
+						},
+					}
 				});
 			case "groq":
 				return new ChatGroq({
