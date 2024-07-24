@@ -56,6 +56,7 @@ interface CannoliSettings {
 	anthropicModel: string;
 	anthropicAPIKey: string;
 	anthropicTemperature: number;
+	anthropicBaseURL: string;
 	groqModel: string;
 	groqAPIKey: string;
 	groqTemperature: number;
@@ -101,6 +102,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	anthropicModel: "claude-3-opus-20240229",
 	anthropicAPIKey: "",
 	anthropicTemperature: 1,
+	anthropicBaseURL: "",
 	groqModel: "llama3-70b-8192",
 	groqAPIKey: "",
 	groqTemperature: 1,
@@ -813,6 +815,49 @@ export default class Cannoli extends Plugin {
 		return allCannoliFunctions;
 	}
 
+	createProxyServer = async () => {
+		// If they already have a proxy server, return
+		if (this.settings.anthropicBaseURL) {
+			new Notice("You already have an anthropic baseURL configured, delete the current value to create a proxy server");
+			return;
+		}
+
+		const code = await requestUrl({
+			url: "https://esm.town/v/cephalization/anthropicProxy",
+			method: "GET",
+		});
+
+		if (code.status !== 200) {
+			new Notice(`Error fetching proxy server code: ${code.text}`);
+			return;
+		}
+
+		const response = await requestUrl({
+			url: "https://api.val.town/v1/vals",
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+			},
+			body: JSON.stringify({
+				name: "cannoliAnthropicProxyServer",
+				code: code.text,
+				type: "http",
+				privacy: "unlisted",
+				readme: "This is a proxy server for Anthropic requests. It is used to bypass the proxy server requirement for Anthropic requests.",
+			}),
+		});
+
+		if (typeof response.json === "string") {
+			new Notice(`Error creating Val: ${response.json}`);
+			return;
+		}
+
+		this.settings.anthropicBaseURL = response.json.links.endpoint;
+
+		new Notice(`Proxy server created on Val Town. You can now make Anthropic requests.`);
+	};
+
 	createCanvas = async (name: string, canvas: string) => {
 		try {
 			await this.app.vault.create(name, canvas);
@@ -1005,6 +1050,7 @@ export default class Cannoli extends Plugin {
 						apiKey: this.settings.anthropicAPIKey,
 						model: this.settings.anthropicModel,
 						temperature: this.settings.anthropicTemperature,
+						baseURL: this.settings.anthropicBaseURL,
 					};
 				case "groq":
 					return {
@@ -2241,6 +2287,40 @@ class CannoliSettingTab extends PluginSettingTab {
 						})
 				);
 		} else if (this.plugin.settings.llmProvider === "anthropic") {
+			new Setting(containerEl)
+				.setName("Create proxy server on Val Town")
+				.setDesc("Anthropic requests currently require a proxy server. This button will use your Val Town API key to create a new HTTP val on your Val Town account which will handle all Anthropic requests.")
+				.addButton((button) =>
+					button
+						.setButtonText("Create proxy server")
+						.onClick(async () => {
+							// If they don't have a valtown API key, give a notice
+							if (!this.plugin.settings.valTownAPIKey) {
+								alert("You don't have a Val Town API key. Please enter one in the settings.");
+								return;
+							}
+
+							// call the create proxy server function
+							await this.plugin.createProxyServer();
+
+							await this.plugin.saveSettings();
+							this.display();
+						})
+				);
+
+			new Setting(containerEl)
+				.setName("Anthropic base URL")
+				.setDesc("This base URL will be used to make all Anthropic LLM calls.")
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.anthropicBaseURL)
+						.setPlaceholder("https://api.anthropic.com/v1/")
+						.onChange(async (value) => {
+							this.plugin.settings.anthropicBaseURL = value;
+							await this.plugin.saveSettings();
+						})
+				);
+
 			// anthropic api key setting
 			new Setting(containerEl)
 				.setName("Anthropic API key")
