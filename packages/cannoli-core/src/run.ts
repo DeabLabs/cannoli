@@ -181,7 +181,7 @@ export class Run {
 
 		this.fetcher = fetcher ?? defaultFetcher;
 
-		this.llm = llmConfigs ? new LLMProvider({ configs: llmConfigs }) : null;
+		this.llm = llmConfigs ? new LLMProvider({ configs: llmConfigs, valtownApiKey: envVars?.["VALTOWN_API_KEY"] }) : null;
 
 		this.envVars = envVars ?? {};
 		this.config = { ...config ?? {}, ...this.envVars };

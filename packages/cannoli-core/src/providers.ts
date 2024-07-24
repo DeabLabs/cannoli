@@ -66,6 +66,7 @@ export type LLMConfig = (Omit<GenericModelConfig, "provider"> & { provider: Supp
 
 type ConstructorArgs = {
 	configs: LLMConfig[];
+	valtownApiKey?: string;
 };
 
 export type GenericCompletionParams = {
@@ -129,6 +130,7 @@ export class LLMProvider {
 	provider: SupportedProviders;
 	getDefaultConfigByProvider?: GetDefaultsByProvider;
 	initialized = false;
+	valtownApiKey?: string;
 
 	constructor(initArgs: ConstructorArgs) {
 		this.init(initArgs);
@@ -138,6 +140,7 @@ export class LLMProvider {
 	init = (initArgs: ConstructorArgs) => {
 		this.provider = initArgs.configs[0].provider as SupportedProviders;
 		this.baseConfig = initArgs.configs[0];
+		this.valtownApiKey = initArgs.valtownApiKey;
 		this.getDefaultConfigByProvider = (provider: SupportedProviders) => {
 			return initArgs.configs.find((config) => config.provider === provider);
 		}
@@ -254,6 +257,7 @@ export class LLMProvider {
 							"Access-Control-Allow-Origin": "*",
 							"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 							"Access-Control-Allow-Headers": "*",
+							"x-authorization": `${this.valtownApiKey}`
 						},
 					}
 				});
