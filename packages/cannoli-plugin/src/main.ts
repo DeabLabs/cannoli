@@ -24,7 +24,7 @@ import {
 	exaSearch,
 	valTownEvaluate,
 	Replacer,
-	runWithControl,
+	run,
 	bake,
 	BakeLanguage,
 	BakeRuntime,
@@ -1148,7 +1148,7 @@ export default class Cannoli extends Plugin {
 		const actions = this.getActions();
 
 		// Do the validation run
-		const [validationStoppagePromise] = await runWithControl({
+		const [validationStoppagePromise] = run({
 			cannoli: canvasData,
 			llmConfigs: llmConfigs,
 			actions: actions,
@@ -1190,7 +1190,7 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Do the live run
-		const [liveStoppagePromise, stopLiveCannoli] = await runWithControl({
+		const [liveStoppagePromise, stopLiveCannoli] = run({
 			cannoli: canvasData,
 			llmConfigs: llmConfigs,
 			actions: actions,

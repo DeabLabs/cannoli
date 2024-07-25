@@ -1,6 +1,6 @@
 import { Run, RunArgs, Stoppage } from "./run";
 
-export async function runWithControl({
+export function run({
     cannoli,
     llmConfigs,
     args,
@@ -15,7 +15,7 @@ export async function runWithControl({
     isMock,
     resume,
     onFinish,
-}: RunArgs): Promise<[Promise<Stoppage>, () => void]> {
+}: RunArgs): [Promise<Stoppage>, () => void] {
     let resolver: (stoppage: Stoppage) => void;
     const done = new Promise<Stoppage>((resolve) => {
         resolver = resolve;
@@ -46,7 +46,7 @@ export async function runWithControl({
     return [done, () => run.stop()];
 }
 
-export async function run({
+export async function resultsRun({
     cannoli,
     llmConfigs,
     args,
@@ -61,7 +61,7 @@ export async function run({
     isMock,
     resume,
 }: RunArgs): Promise<Record<string, string>> {
-    const [done] = await runWithControl({
+    const [done] = run({
         cannoli,
         llmConfigs,
         args,

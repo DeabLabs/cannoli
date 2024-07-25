@@ -1,4 +1,4 @@
-import { runWithControl } from "./cannoli";
+import { run } from "./cannoli";
 import { FileManager } from "./fileManager";
 import { VerifiedCannoliCanvasData } from "./models/graph";
 import { LLMConfig } from "./providers";
@@ -77,7 +77,7 @@ export async function bake({
     // fetcher?: ResponseTextFetcher,
 }): Promise<BakeResult | Error> {
     // Mock run the cannoli
-    const [done] = await runWithControl({
+    const [done] = run({
         cannoli,
         llmConfigs,
         config,
@@ -955,7 +955,7 @@ function generateRunFunctionCall(cannoliInfo: CannoliFunctionInfo, availableArgs
     const additionalArgs = availableArgs.map(arg => `  ${arg}`).join(",\n  ");
     const allArgs = [runArgs, additionalArgs].filter(Boolean).join(",\n  ");
 
-    return `  const runResult = await run({
+    return `  const runResult = await resultsRun({
   ${allArgs}
   });`;
 }
@@ -987,9 +987,9 @@ function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, a
     // Add LLMConfig import if language is TypeScript
     const corePath = runtime === "node" ? "@deablabs/cannoli-core" : "npm:@deablabs/cannoli-core";
     if (language === "typescript") {
-        importMap[corePath] = ["LLMConfig", "run"];
+        importMap[corePath] = ["LLMConfig", "resultsRun"];
     } else {
-        importMap[corePath] = ["run"];
+        importMap[corePath] = ["resultsRun"];
     }
 
     // Add action imports
