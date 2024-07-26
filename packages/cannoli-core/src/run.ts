@@ -879,7 +879,7 @@ export class Run {
 	}
 
 	createMockFormFunctionResponse(listFunction: GenericFunctionCall) {
-		const args: { [key: string]: string }[] = [];
+		const args: { [key: string]: string } = {};
 
 		// Go through the properties of the function and enter a mock string
 		for (const property of Object.keys(
@@ -888,9 +888,7 @@ export class Run {
 				string
 			>
 		)) {
-			args.push({
-				[property]: "Mock answer",
-			});
+			args[property] = "Mock answer";
 		}
 
 		return {

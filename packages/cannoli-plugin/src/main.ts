@@ -23,6 +23,7 @@ import {
 	dalleGenerate,
 	exaSearch,
 	valTownEvaluate,
+	valTownSendEmail,
 	Replacer,
 	run,
 	bake,
@@ -1049,7 +1050,8 @@ export default class Cannoli extends Plugin {
 			...(this.settings.exaAPIKey ? [exaSearch] : []),
 			dataviewQuery,
 			smartConnectionsQuery,
-			valTownEvaluate
+			valTownEvaluate,
+			valTownSendEmail,
 		];
 	}
 
