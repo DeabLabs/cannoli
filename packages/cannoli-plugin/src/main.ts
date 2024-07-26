@@ -82,6 +82,7 @@ interface CannoliSettings {
 	bakeLanguage: BakeLanguage;
 	bakeRuntime: BakeRuntime;
 	bakeIndent: "2" | "4";
+	seenVersion2Modal: boolean;
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -127,6 +128,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	bakeLanguage: "typescript",
 	bakeRuntime: "node",
 	bakeIndent: "2",
+	seenVersion2Modal: false,
 };
 
 export default class Cannoli extends Plugin {
@@ -135,6 +137,13 @@ export default class Cannoli extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		if (!this.settings.seenVersion2Modal) {
+			this.openVersion2Modal();
+			this.settings.seenVersion2Modal = true;
+			await this.saveSettings();
+		}
+
 		// Create a command whenever a file is renamed to be a cannoli file
 		this.registerEvent(
 			this.app.vault.on("rename", (file: TFile, oldPath: string) => {
@@ -306,6 +315,38 @@ export default class Cannoli extends Plugin {
 			icon: "cannoli",
 		});
 	};
+
+	openVersion2Modal = async () => {
+		const modal = new Version2Modal(this.app, this.createVersion2UpdateParagraph());
+		modal.open();
+	};
+
+	createVersion2UpdateParagraph(): HTMLParagraphElement {
+		const paragraph = createEl("p");
+
+		paragraph.appendText("🎉 Cannoli 2.0 is here! 🎉");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("There's a ton of new stuff in this update, including:");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("🔀 Parallel groups");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("👁️ Built-in LLM vision");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("🔧 New Action node features");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("☁️ Val Town integrations");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("📦 The cannoli-core npm package");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("Check out the ");
+		paragraph.appendChild(createEl("a", { text: "release notes", href: "https://docs.cannoli.website/Obsidian+plugin/Version+2.0+Release+Notes" }));
+		paragraph.appendText(" for more details! 🍝✨");
+
+		return paragraph;
+	}
 
 	openOnWebsite = async (dev?: boolean) => {
 		const activeFile = this.app.workspace.getActiveFile();
@@ -1898,6 +1939,21 @@ ${Object.keys(func.cannoliFunctionInfo.params).length > 0 ? `-d '${JSON.stringif
 	}
 }
 
+class Version2Modal extends Modal {
+	paragraph: HTMLParagraphElement;
+
+	constructor(app: App, paragraph: HTMLParagraphElement) {
+		super(app);
+		this.paragraph = paragraph;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h1", { text: "Cannoli 2.0" });
+		contentEl.appendChild(this.paragraph);
+	}
+}
+
 class CannoliSettingTab extends PluginSettingTab {
 	plugin: Cannoli;
 
@@ -1910,6 +1966,11 @@ class CannoliSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 
 		containerEl.empty();
+
+		// Add a header
+		containerEl.createEl("h1", { text: "Cannoli Settings" });
+
+		containerEl.appendChild(this.plugin.createVersion2UpdateParagraph());
 
 		// Add button to add sample folder
 		new Setting(containerEl)
