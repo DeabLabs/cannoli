@@ -61,11 +61,11 @@ export const exaSearch: Action = {
             type: "string",
         },
         limit: {
-            category: "config",
+            category: "arg",
             type: "number",
         },
         EXA_API_KEY: {
-            category: "env",
+            category: "secret",
         },
         fetcher: {
             category: "fetcher",

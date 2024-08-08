@@ -63,7 +63,7 @@ export const valTownSendEmail: Action = {
             prompt: "Enter the HTML content of the email (optional if body is provided)"
         },
         VALTOWN_API_KEY: {
-            category: "env",
+            category: "secret",
         },
         fetcher: {
             category: "fetcher",

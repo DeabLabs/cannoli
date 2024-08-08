@@ -35,7 +35,7 @@ export interface HttpRequest {
 }
 
 export type ActionArgInfo = {
-	category: "config" | "env" | "arg" | "fileManager" | "fetcher" | "extra";
+	category: "config" | "secret" | "arg" | "fileManager" | "fetcher" | "extra";
 	type?: "string" | "number" | "boolean" | string[];
 	displayName?: string;
 	description?: string;
@@ -115,7 +115,7 @@ export interface RunArgs {
 	llmConfigs?: LLMConfig[];
 	fetcher?: ResponseTextFetcher;
 	config?: Record<string, string | number | boolean>;
-	envVars?: Record<string, string>;
+	secrets?: Record<string, string>;
 	args?: Record<string, string>;
 	onFinish?: (stoppage: Stoppage) => void;
 	isMock?: boolean;
@@ -134,8 +134,7 @@ export class Run {
 
 	args: Record<string, string> | null;
 	config: Record<string, unknown> | null;
-	envVars: Record<string, string> | null;
-
+	secrets: Record<string, string> | null;
 	fileManager: FileManager | null;
 	fetcher: ResponseTextFetcher;
 	actions: Action[];
@@ -165,7 +164,7 @@ export class Run {
 		httpTemplates,
 		replacers,
 		config,
-		envVars,
+		secrets,
 		args,
 		resume
 	}: RunArgs) {
@@ -181,10 +180,10 @@ export class Run {
 
 		this.fetcher = fetcher ?? defaultFetcher;
 
-		this.llm = llmConfigs ? new LLMProvider({ configs: llmConfigs, valtownApiKey: envVars?.["VALTOWN_API_KEY"] }) : null;
+		this.llm = llmConfigs ? new LLMProvider({ configs: llmConfigs, valtownApiKey: secrets?.["VALTOWN_API_KEY"] }) : null;
 
-		this.envVars = envVars ?? {};
-		this.config = { ...config ?? {}, ...this.envVars };
+		this.secrets = secrets ?? {};
+		this.config = { ...config ?? {}, ...this.secrets };
 
 		this.args = args ?? null;
 

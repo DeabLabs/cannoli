@@ -228,9 +228,9 @@ export class CannoliNode extends CannoliVertex {
 							} else {
 								content = `{{${reference.name}}}`;
 							}
-						} else if (this.run.envVars && this.run.envVars[reference.name]) {
-							// Check in this.run.envVars
-							content = this.run.envVars[reference.name];
+						} else if (this.run.secrets && this.run.secrets[reference.name]) {
+							// Check in this.run.secrets
+							content = this.run.secrets[reference.name];
 						} else {
 							// this.warning(`Variable "${reference.name}" not found`);
 							content = `{{${reference.name}}}`;
@@ -1782,12 +1782,15 @@ export class ContentNode extends CannoliNode {
 			}
 		}
 
-		if (content !== null && content !== undefined) {
-			this.editContentCheckName(content);
-		} else {
-			content = await this.processReferences();
-			this.editContentCheckName(content);
+		if (this.type === ContentNodeType.Output || this.type === ContentNodeType.Formatter) {
+			if (content !== null && content !== undefined) {
+				this.editContentCheckName(content);
+			} else {
+				content = await this.processReferences();
+				this.editContentCheckName(content);
+			}
 		}
+
 
 		// Load all outgoing edges
 		this.loadOutgoingEdges(this.getContentCheckName());
@@ -2636,13 +2639,35 @@ export class HttpNode extends ContentNode {
 			}
 
 			// If the argName is in the configKeys, get the value from the config
-			if (action.argInfo && action.argInfo[argName] && (action.argInfo[argName].category === "config" || action.argInfo[argName].category === "env")) {
+			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "config") {
 				// Error if the config is not set
 				if (!config[argName] && !optionalArgs[argName]) {
 					return new Error(
 						`Missing value for config parameter "${argName}" in available config. This action "${action.name}" accepts the following config keys:\n${Object.keys(action.argInfo)
-							.filter((arg) => action.argInfo?.[arg].category === "config" || action.argInfo?.[arg].category === "env")
-							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''} ${action.argInfo?.[arg].category === "env" ? '(env)' : ''}`)
+							.filter((arg) => action.argInfo?.[arg].category === "config")
+							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
+							.join('\n')}`
+					);
+				}
+
+				if (config[argName]) {
+					if (action.argInfo[argName].type === "number") {
+						args[argName] = this.coerceValue(config[argName] as string, argName, action.argInfo[argName].type);
+					} else {
+						args[argName] = config[argName] as string;
+					}
+				}
+				continue;
+			}
+
+			// If the argName is in the secretKeys, get the value from the config
+			if (action.argInfo && action.argInfo[argName] && action.argInfo[argName].category === "secret") {
+				// Error if the secret is not set
+				if (!config[argName] && !optionalArgs[argName]) {
+					return new Error(
+						`Missing value for secret parameter "${argName}" in the cannoli environment.\n\nYou can set these in the "Secrets" section of the Cannoli settings. LLM provider and Val Town keys are currently pulled from their respective settings.\n\nThis action "${action.name}" accepts the following secret keys:\n${Object.keys(action.argInfo)
+							.filter((arg) => action.argInfo?.[arg].category === "secret")
+							.map((arg) => `  - ${arg} ${optionalArgs[arg] ? '(optional)' : ''}`)
 							.join('\n')}`
 					);
 				}

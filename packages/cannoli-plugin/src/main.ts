@@ -84,6 +84,7 @@ interface CannoliSettings {
 	bakeRuntime: BakeRuntime;
 	bakeIndent: "2" | "4";
 	seenVersion2Modal: boolean;
+	secrets: { name: string; value: string; visibility: string }[];
 }
 
 const DEFAULT_SETTINGS: CannoliSettings = {
@@ -130,6 +131,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	bakeRuntime: "node",
 	bakeIndent: "2",
 	seenVersion2Modal: false,
+	secrets: [],
 };
 
 export default class Cannoli extends Plugin {
@@ -443,7 +445,7 @@ export default class Cannoli extends Plugin {
 			fileManager: new VaultInterface(this),
 			actions: this.getActions(),
 			config: this.getConfig(true),
-			envVars: this.getEnvVars(),
+			secrets: this.getSecrets(),
 			httpTemplates: this.settings.httpTemplates,
 			includeTypes: false,
 			includeMetadata: true,
@@ -610,7 +612,7 @@ export default class Cannoli extends Plugin {
 			fileManager: new VaultInterface(this),
 			actions: this.getActions(),
 			config: this.getConfig(true),
-			envVars: this.getEnvVars(),
+			secrets: this.getSecrets(),
 			httpTemplates: this.settings.httpTemplates,
 			includeTypes: true
 		});
@@ -1027,12 +1029,18 @@ export default class Cannoli extends Plugin {
 		}
 	}
 
-	getEnvVars = () => {
-		return {
+	getSecrets = () => {
+		const secrets = {
 			...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
 			...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
 			...(this.settings.valTownAPIKey ? { VALTOWN_API_KEY: this.settings.valTownAPIKey } : {}),
+			...this.settings.secrets.reduce((acc, secret) => {
+				acc[secret.name] = secret.value;
+				return acc;
+			}, {} as Record<string, string>),
 		};
+
+		return secrets;
 	}
 
 	getConfig = (forBake = false) => {
@@ -1186,7 +1194,7 @@ export default class Cannoli extends Plugin {
 
 		const config = this.getConfig();
 
-		const envVars = this.getEnvVars();
+		const secrets = this.getSecrets();
 
 		const actions = this.getActions();
 
@@ -1198,7 +1206,7 @@ export default class Cannoli extends Plugin {
 			httpTemplates: this.settings.httpTemplates,
 			replacers: replacers,
 			config: config,
-			envVars: envVars,
+			secrets: secrets,
 			fetcher: fetcher,
 			args: cannoliArgs,
 			persistor: noCanvas ? undefined : canvas,
@@ -1240,7 +1248,7 @@ export default class Cannoli extends Plugin {
 			httpTemplates: this.settings.httpTemplates,
 			replacers: replacers,
 			config: config,
-			envVars: envVars,
+			secrets: secrets,
 			fetcher: fetcher,
 			args: cannoliArgs,
 			persistor: noCanvas ? undefined : canvas,
@@ -1471,81 +1479,6 @@ export class EditValModal extends Modal {
 		contentEl.empty();
 	}
 }
-
-// export class BakeModal extends Modal {
-// 	onContinue: (options: {
-// 		language: BakeLanguage,
-// 		runtime: BakeRuntime
-// 	}) => void;
-// 	onCancel: () => void;
-
-// 	constructor(
-// 		app: App,
-// 		onContinue: (options: { language: BakeLanguage, runtime: BakeRuntime }) => void,
-// 		onCancel: () => void,
-// 	) {
-// 		super(app);
-// 		this.onContinue = onContinue;
-// 		this.onCancel = onCancel;
-// 	}
-
-// 	onOpen() {
-// 		const { contentEl } = this;
-// 		contentEl.createEl("h1", { text: "Bake Cannoli" });
-
-// 		contentEl.createEl("p", {
-// 			text: "Select the language and runtime for baking the cannoli.",
-// 		});
-
-// 		let selectedLanguage: BakeLanguage = "typescript";
-// 		let selectedRuntime: BakeRuntime = "node";
-
-// 		// Language dropdown
-// 		new Setting(contentEl)
-// 			.setName("Language")
-// 			.setDesc("Choose the language for the cannoli.")
-// 			.addDropdown((dropdown) => {
-// 				dropdown.addOption("typescript", "TypeScript");
-// 				dropdown.addOption("javascript", "JavaScript");
-// 				dropdown.setValue(selectedLanguage);
-// 				dropdown.onChange((value) => {
-// 					selectedLanguage = value as BakeLanguage;
-// 				});
-// 			});
-
-// 		// Runtime dropdown
-// 		new Setting(contentEl)
-// 			.setName("Runtime")
-// 			.setDesc("Choose the runtime for the cannoli.")
-// 			.addDropdown((dropdown) => {
-// 				dropdown.addOption("node", "Node.js");
-// 				dropdown.addOption("deno", "Deno");
-// 				dropdown.addOption("bun", "Bun");
-// 				dropdown.setValue(selectedRuntime);
-// 				dropdown.onChange((value) => {
-// 					selectedRuntime = value as BakeRuntime;
-// 				});
-// 			});
-
-// 		contentEl.createEl("p", {
-// 			text: "Reminder: To see the files, ensure the 'Detect all file extensions' setting is turned on in the 'Files and links' page of your Obsidian settings.",
-// 		});
-
-// 		const panel = new Setting(contentEl);
-// 		panel.addButton((btn) => btn.setButtonText("Cancel").onClick(() => {
-// 			this.close();
-// 			this.onCancel();
-// 		}));
-// 		panel.addButton((btn) => btn.setButtonText("Bake").setCta().onClick(() => {
-// 			this.close();
-// 			this.onContinue({ language: selectedLanguage, runtime: selectedRuntime });
-// 		}));
-// 	}
-
-// 	onClose() {
-// 		const { contentEl } = this;
-// 		contentEl.empty();
-// 	}
 // }
 
 export class RunPriceAlertModal extends Modal {
@@ -2723,21 +2656,75 @@ class CannoliSettingTab extends PluginSettingTab {
 				);
 		}
 
-		containerEl.createEl("h1", { text: "Integrations" });
+		containerEl.createEl("h1", { text: "Secrets" });
 
 		new Setting(containerEl)
-			.setName("Exa API key")
-			.setDesc("This key will be used to make all Exa search requests.")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.exaAPIKey)
-					.setPlaceholder("...")
-					.onChange(async (value) => {
-						this.plugin.settings.exaAPIKey = value;
-						await this.plugin.saveSettings();
-					})
-					.inputEl.setAttribute("type", "password")
+			.setName("Secrets")
+			.setDesc(`These secrets will be available in all of your cannolis, using "{{secret name}}". They are not stored in the canvas, and wil not be included when you bake a cannoli.`)
+			.addButton((button) =>
+				button.setButtonText("+ Secret").onClick(() => {
+					// Create a new secret object
+					const newSecret = { name: "", value: "", visibility: "password" };
+					this.plugin.settings.secrets.push(newSecret);
+					this.plugin.saveSettings();
+					// Refresh the settings pane to reflect the changes
+					this.display();
+				})
 			);
+
+		// Iterate through saved secrets and display them
+		for (const secret of this.plugin.settings.secrets) {
+			new Setting(containerEl)
+				.addText((text) =>
+					text
+						.setValue(secret.name)
+						.setPlaceholder("Secret Name")
+						.onChange(async (value) => {
+							secret.name = value;
+							await this.plugin.saveSettings();
+						})
+				)
+				.addText((text) =>
+					text
+						.setValue(secret.value)
+						.setPlaceholder("Secret Value")
+						.onChange(async (value) => {
+							secret.value = value;
+							await this.plugin.saveSettings();
+						})
+						.inputEl.setAttribute("type", secret.visibility || "password")
+				)
+				.addButton((button) =>
+					button.setButtonText("👁️").onClick(async () => {
+						secret.visibility = secret.visibility === "password" ? "text" : "password";
+						this.plugin.saveSettings();
+						this.display();
+					})
+				)
+				.addButton((button) =>
+					button
+						.setButtonText("📋")
+						.setTooltip("Copy to clipboard")
+						.onClick(async () => {
+							await navigator.clipboard.writeText(secret.value);
+							new Notice("Secret value copied to clipboard");
+						})
+				)
+				.addButton((button) =>
+					button
+						.setButtonText("Delete")
+						.setWarning()
+						.onClick(() => {
+							const index = this.plugin.settings.secrets.indexOf(secret);
+							if (index > -1) {
+								this.plugin.settings.secrets.splice(index, 1);
+								this.plugin.saveSettings();
+								// Refresh the settings pane to reflect the changes
+								this.display();
+							}
+						})
+				);
+		}
 
 		containerEl.createEl("h1", { text: "Baking" });
 

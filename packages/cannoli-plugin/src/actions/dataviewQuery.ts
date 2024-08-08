@@ -60,23 +60,23 @@ export const dataviewQuery: Action = {
             category: "arg",
         },
         limit: {
-            category: "config",
+            category: "arg",
             type: "number",
         },
         extract: {
-            category: "config",
+            category: "arg",
             type: "boolean",
         },
         includeName: {
-            category: "config",
+            category: "arg",
             type: "boolean",
         },
         includeProperties: {
-            category: "config",
+            category: "arg",
             type: "boolean",
         },
         includeLink: {
-            category: "config",
+            category: "arg",
             type: "boolean",
         },
         vaultInterface: {

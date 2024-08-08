@@ -44,13 +44,13 @@ export const dalleGenerate: Action = {
             category: "arg",
         },
         model: {
-            category: "config",
+            category: "arg",
         },
         size: {
-            category: "config",
+            category: "arg",
         },
         OPENAI_API_KEY: {
-            category: "env",
+            category: "secret",
         },
     },
     importInfo: {

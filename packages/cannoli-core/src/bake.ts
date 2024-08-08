@@ -47,7 +47,7 @@ export async function bake({
     canvasName,
     llmConfigs,
     config,
-    envVars,
+    secrets,
     actions,
     httpTemplates,
     dynamicParamAndReturnTypes,
@@ -65,7 +65,7 @@ export async function bake({
     llmConfigs: LLMConfig[],
     fileManager?: FileManager,
     config?: Record<string, string | number | boolean>,
-    envVars?: Record<string, string>,
+    secrets?: Record<string, string>,
     changeIndentToFour?: boolean,
     actions?: Action[],
     httpTemplates?: HttpTemplate[],
@@ -81,7 +81,7 @@ export async function bake({
         cannoli,
         llmConfigs,
         config,
-        envVars,
+        secrets,
         isMock: true,
         actions,
         httpTemplates,
@@ -149,46 +149,46 @@ export async function bake({
     const referencedActions = actionsWithImportInfo?.filter((action) => actionsOrHttpTemplatesReferenced.names.includes(action.name));
     const referencedHttpTemplates = httpTemplates?.filter((template) => actionsOrHttpTemplatesReferenced.names.includes(template.name));
 
-    const envVarsReferenced: string[] = [];
+    const secretsReferenced: string[] = [];
 
-    // Check each env var
+    // Check each secret
     outerLoop:
-    for (const [key] of Object.entries(envVars || {})) {
+    for (const [key] of Object.entries(secrets || {})) {
         for (const action of referencedActions || []) {
             if (action.argInfo && Object.keys(action.argInfo).includes(key)) {
-                envVarsReferenced.push(key);
+                secretsReferenced.push(key);
                 continue outerLoop;
             }
         }
 
         for (const template of referencedHttpTemplates || []) {
             if (template.url && template.url.includes(`{{${key}}}`)) {
-                envVarsReferenced.push(key);
+                secretsReferenced.push(key);
                 continue outerLoop;
             }
             if (template.headers && template.headers.includes(`{{${key}}}`)) {
-                envVarsReferenced.push(key);
+                secretsReferenced.push(key);
                 continue outerLoop;
             }
             if (template.body && template.body.includes(`{{${key}}}`)) {
-                envVarsReferenced.push(key);
+                secretsReferenced.push(key);
                 continue outerLoop;
             }
             if (template.bodyTemplate && template.bodyTemplate.includes(`{{${key}}}`)) {
-                envVarsReferenced.push(key);
+                secretsReferenced.push(key);
                 continue outerLoop;
             }
         }
 
         // Check if {{key}} is in the cannoli
         if (JSON.stringify(cannoli).includes(`{{${key}}}`)) {
-            envVarsReferenced.push(key);
+            secretsReferenced.push(key);
             continue outerLoop;
         }
     }
 
-    const filteredEnvVars = Object.fromEntries(
-        Object.entries(envVars || {}).filter(([key]) => envVarsReferenced.includes(key))
+    const filteredSecrets = Object.fromEntries(
+        Object.entries(secrets || {}).filter(([key]) => secretsReferenced.includes(key))
     );
 
     const result = writeCode({
@@ -200,7 +200,7 @@ export async function bake({
         cannoliInfo,
         functionName,
         config,
-        envVars: filteredEnvVars,
+        secrets: filteredSecrets,
         actions: referencedActions,
         httpTemplates: referencedHttpTemplates,
         includeTypes,
@@ -250,7 +250,7 @@ export function writeCode({
     llmConfigs,
     cannoliInfo,
     config,
-    envVars,
+    secrets,
     functionName,
     changeIndentToFour,
     actions,
@@ -268,7 +268,7 @@ export function writeCode({
     functionName: string;
     cannoliInfo: CannoliFunctionInfo;
     config?: Record<string, string | number | boolean>;
-    envVars?: Record<string, string>;
+    secrets?: Record<string, string>;
     changeIndentToFour?: boolean;
     actions?: Action[];
     httpTemplates?: HttpTemplate[];
@@ -297,10 +297,10 @@ export function writeCode({
         llmConfigTemplate = `const llmConfigs${language === "typescript" ? ": LLMConfig[]" : ""} = ${printLLMConfigWithEnvReference(llmConfigs, runtime)};\n`;
     }
 
-    let envVarTemplate = "";
-    if (envVars && Object.keys(envVars).length > 0) {
-        availableArgs.push('envVars');
-        envVarTemplate = generateEnvVarTemplate(runtime, envVars);
+    let secretTemplate = "";
+    if (secrets && Object.keys(secrets).length > 0) {
+        availableArgs.push('secrets');
+        secretTemplate = generateSecretTemplate(runtime, secrets);
     }
 
     let configTemplate = "";
@@ -322,7 +322,7 @@ export function writeCode({
         httpTemplatesTemplate = `\nconst httpTemplates = ${JSON.stringify(httpTemplates, null, 2)};\n`
     }
 
-    const optionalArgTemplates = `${envVarTemplate}${configTemplate}${actionsTemplate}${httpTemplatesTemplate}`.trim();
+    const optionalArgTemplates = `${secretTemplate}${configTemplate}${actionsTemplate}${httpTemplatesTemplate}`.trim();
 
     const argDeclarations = `${optionalArgTemplates}${llmConfigTemplate}
 const cannoli = ${JSON.stringify(cannoli, null, 2)};`;
@@ -1036,8 +1036,8 @@ function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, a
     return `${importStatements}${dotenvConfig}${installCommand}`;
 }
 
-function generateEnvVarTemplate(runtime: BakeRuntime, envVars: Record<string, string>): string {
-    const envVarLines = Object.keys(envVars).map(key => {
+function generateSecretTemplate(runtime: BakeRuntime, secrets: Record<string, string>): string {
+    const secretLines = Object.keys(secrets).map(key => {
         switch (runtime) {
             case "node":
                 return `${key}: process.env.${key},`;
@@ -1051,8 +1051,8 @@ function generateEnvVarTemplate(runtime: BakeRuntime, envVars: Record<string, st
     }).join("\n  ");
 
     return `
-const envVars = {
-  ${envVarLines}
+const secrets = {
+  ${secretLines}
 };
 `;
 }

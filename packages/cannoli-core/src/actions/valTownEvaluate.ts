@@ -4,15 +4,17 @@ export const valTownEvaluate: Action = {
     name: "valtown-eval",
     function: async ({
         code,
+        args,
         VALTOWN_API_KEY,
         fetcher
     }: {
         code: string;
+        args: Record<string, string>;
         VALTOWN_API_KEY: string;
         fetcher: ResponseTextFetcher;
     }) => {
         if (!VALTOWN_API_KEY) {
-            throw new Error("VALTOWN_API_KEY is required");
+            return new Error("VALTOWN_API_KEY is required");
         }
 
         // Extract code blocks if present, handling optional language tags
@@ -33,7 +35,7 @@ export const valTownEvaluate: Action = {
 
             return response;
         } catch (error) {
-            throw new Error(`Error evaluating code: ${error}`);
+            return new Error(`Error evaluating code: ${error}`);
         }
     },
     argInfo: {
@@ -41,8 +43,12 @@ export const valTownEvaluate: Action = {
             category: "arg",
             prompt: "Ensure your code is valid JavaScript or TypeScript which directly returns a result by using immediately invoked function expressions or top-level return statements."
         },
+        args: {
+            category: "extra",
+            prompt: "Provide any arguments to the code block as a JSON string."
+        },
         VALTOWN_API_KEY: {
-            category: "env",
+            category: "secret",
         },
         fetcher: {
             category: "fetcher",

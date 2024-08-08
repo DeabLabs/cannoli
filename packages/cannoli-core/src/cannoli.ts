@@ -11,7 +11,7 @@ export function run({
     replacers,
     fetcher,
     config,
-    envVars,
+    secrets,
     isMock,
     resume,
     onFinish,
@@ -37,7 +37,7 @@ export function run({
         isMock,
         fetcher,
         config,
-        envVars,
+        secrets,
         resume,
     });
 
@@ -57,7 +57,7 @@ export async function resultsRun({
     replacers,
     fetcher,
     config,
-    envVars,
+    secrets,
     isMock,
     resume,
 }: RunArgs): Promise<Record<string, string>> {
@@ -72,7 +72,7 @@ export async function resultsRun({
         replacers,
         fetcher,
         config,
-        envVars,
+        secrets,
         isMock,
         resume,
     });
