@@ -6,7 +6,7 @@ Cannoli allows you to build and run no-code LLM scripts using the Obsidian Canva
 
 ## What is a Cannoli?
 
-![Example Cannoli](/assets/exampleCannoli.png)
+![Example Cannoli](/packages/cannoli-plugin/assets/exampleCannoli.png)
 
 Cannolis are scripts that leverage LLMs to read/write to your vault, and take actions using HTTP requests. Cannolis are created in the Obsidian Canvas editor, using cards and arrows to define variables and logic. They can be run within Obsidian using the control ribbon button or the command palette.
 
@@ -18,13 +18,13 @@ Cannoli can also be used to make llm-chatbots with custom logic and abilities. C
 
 You can access a walkthrough folder of sample cannolis in the plugin settings (full docs website forthcoming).
 
-![Cannoli College](/assets/cannoliCollege.png)
+![Cannoli College](/packages/cannoli-plugin/assets/cannoliCollege.png)
 
 ## Running Cannolis
 
 Cannolis can be run in several ways:
 
-![Icon](/assets/icon.png)
+![Icon](/packages/cannoli-plugin/assets/icon.png)
 
 -   Click the Cannoli ribbon icon
 
