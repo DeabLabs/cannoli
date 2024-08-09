@@ -2315,6 +2315,7 @@ export class ReferenceNode extends ContentNode {
 				const edit = await this.run.fileManager.editNote(
 					this.reference,
 					newContent,
+					this.run.isMock,
 					append ?? false
 				);
 
