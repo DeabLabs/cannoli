@@ -206,27 +206,29 @@ export class Run {
 			this.llmLimit = pLimit(1000);
 		}
 
-		this.currentNote = this.args?.obsidianCurrentNote ?? "No current note";
+		// Remove these properties from the args object without affecting the saved values
+		if (this.args) {
+			const { obsidianCurrentNote, obsidianSelection, ...restArgs } = this.args;
+			this.args = restArgs;
 
-		this.selection = this.args?.obsidianSelection ?? "No selection";
+			// Extract currentNote and selection from args, with default values
+			this.currentNote = obsidianCurrentNote ?? "No current note";
+			this.selection = obsidianSelection ?? "No selection";
+		}
 
-		// Delete the current note and selection from the args
-		delete this.args?.obsidianCurrentNote;
-		delete this.args?.obsidianSelection;
 
 		this.fileManager = fileManager ?? null;
 
 		this.actions = actions ?? [];
 		this.httpTemplates = httpTemplates ?? [];
-
 		this.replacers = replacers ?? [];
 
 		const factory = new CannoliFactory(
 			parsedCannoliJSON,
-			this.args ?? {},
 			persistor,
 			resume,
-			this.config?.contentIsColorless as boolean
+			this.config?.contentIsColorless as boolean,
+			this.currentNote ?? "No current note",
 		);
 
 		const canvasData = factory.getCannoliData();

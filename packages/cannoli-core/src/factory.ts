@@ -106,16 +106,16 @@ export class CannoliFactory {
 
 	constructor(
 		canvas: CanvasData,
-		args?: Record<string, string>,
 		persistor?: Persistor,
 		resume: boolean = false,
-		contentIsColorless: boolean = false
+		contentIsColorless: boolean = false,
+		obsidianCurrentNote: string = "No active note",
 	) {
 		// Cast the canvas to a CannoliCanvasData
 		const cannoliCanvasData = canvas as CannoliCanvasData;
 
 		this.cannoliData = cannoliCanvasData;
-		this.currentNote = args?.obsidianCurrentNote ?? "No active note";
+		this.currentNote = obsidianCurrentNote;
 
 		this.resume = resume;
 
