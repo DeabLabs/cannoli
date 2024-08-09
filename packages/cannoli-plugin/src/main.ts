@@ -609,12 +609,6 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		// Check that the user has a val town api key
-		if (!this.settings.valTownAPIKey) {
-			new Notice("Please enter a Val Town API key in the Cannoli settings");
-			return;
-		}
-
 		// Get the content of the file
 		const content = JSON.parse(await this.app.vault.read(activeFile));
 
