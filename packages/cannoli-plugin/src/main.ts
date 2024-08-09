@@ -193,9 +193,10 @@ export default class Cannoli extends Plugin {
 
 		this.createCannoliCommands();
 
-		this.createOpenOnWebsiteCommand();
-
-		this.createOpenOnWebsiteDevCommand();
+		if (process.env.NODE_ENV !== "production") {
+			this.createOpenOnWebsiteCommand();
+			this.createOpenOnWebsiteDevCommand();
+		}
 
 		this.createCopyCanvasToClipboardCommand();
 
@@ -326,6 +327,14 @@ export default class Cannoli extends Plugin {
 
 	createVersion2UpdateParagraph(): HTMLParagraphElement {
 		const paragraph = createEl("p");
+		paragraph.style.paddingLeft = "12px";
+		paragraph.style.borderLeft = "2px solid var(--interactive-accent)";
+
+		const dateSpan = createEl("span", { text: "8-8-2024" });
+		dateSpan.style.opacity = "0.5";
+		paragraph.appendChild(dateSpan);
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendChild(createEl("br"));
 
 		paragraph.appendText("🎉 Cannoli 2.0 is here! 🎉");
 		paragraph.appendChild(createEl("br"));
@@ -342,6 +351,14 @@ export default class Cannoli extends Plugin {
 		paragraph.appendText("☁️ Val Town integrations");
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendText("📦 The cannoli-core npm package");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("We rewrote a lot of core cannoli code to support this release,");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("so if anything is broken, or you just wanna hang out with us,");
+		paragraph.appendChild(createEl("br"));
+		paragraph.appendText("let us know on the discord here: ");
+		paragraph.appendChild(createEl("a", {text: "https://discord.gg/wzayNxpxvR", href: "https://discord.gg/wzayNxpxvR"}))
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendText("Check out the ");
@@ -590,12 +607,6 @@ export default class Cannoli extends Plugin {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
 			new Notice("This file is not a canvas");
-			return;
-		}
-
-		// Check that the user has a val town api key
-		if (!this.settings.valTownAPIKey) {
-			new Notice("Please enter a Val Town API key in the Cannoli settings");
 			return;
 		}
 

@@ -289,7 +289,7 @@ export function writeCode({
 
     const valtownHttpCode = generateValtownHttpCode(cannoliInfo);
     const metadata = generateMetadata(cannoliInfo);
-    const importTemplate = generateImportTemplates(language, runtime, actions);
+    const importTemplate = generateImportTemplates(cannoliInfo, language, runtime, actions);
     const availableArgs = ['cannoli', 'llmConfigs'];
 
     let llmConfigTemplate = "";
@@ -981,7 +981,7 @@ ${runFunctionCall}
     return functionBody;
 }
 
-function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, actions?: Action[]): string {
+function generateImportTemplates(cannoliInfo: CannoliFunctionInfo, language: BakeLanguage, runtime: BakeRuntime, actions?: Action[]): string {
     const importMap: Record<string, string[]> = {};
 
     // Add LLMConfig import if language is TypeScript
@@ -1023,6 +1023,11 @@ function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, a
         }
     }).join("");
 
+    // Add CustomEvent feature detection
+    const customEventDetection = `\nif (typeof CustomEvent === "undefined") {
+  throw new Error("${cannoliInfo.name}() requires Node v20 to run, or a runtime that supports CustomEvent")
+}\n\n`
+
     // Add dotenv import and config call if runtime is node
     const dotenvConfig = runtime === "node" ? (language === "typescript" ? `import dotenv from 'dotenv';\n\ndotenv.config();\n` : `const dotenv = require('dotenv');\ndotenv.config();\n`) : '';
 
@@ -1033,7 +1038,7 @@ function generateImportTemplates(language: BakeLanguage, runtime: BakeRuntime, a
         installCommand = `\n// To install the necessary packages, run:\n// npm install ${packageList}\n// or\n// yarn add ${packageList}\n`;
     }
 
-    return `${importStatements}${dotenvConfig}${installCommand}`;
+    return `${importStatements}${dotenvConfig}${customEventDetection}${installCommand}`;
 }
 
 function generateSecretTemplate(runtime: BakeRuntime, secrets: Record<string, string>): string {
@@ -1107,12 +1112,10 @@ function toCamelCase(str: string): string {
         "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else", "export", "extends", "finally", "for", "function", "if", "import", "in", "instanceof", "new", "return", "super", "switch", "this", "throw", "try", "typeof", "var", "void", "while", "with", "yield"
     ]);
 
-    // Drop everything after periods
-    str = str.split('.')[0];
-
     let camelCased = str
-        .replace(/[^a-zA-Z0-9]+(.)/g, (match, chr) => chr.toUpperCase())
-        .replace(/[^a-zA-Z0-9]/g, '');
+        .replace(/[^a-zA-Z]+(.)/g, (match, chr) => chr.toLocaleUpperCase())
+        .replace(/[. ]/g, '_')
+        .replace(/[^a-zA-Z]/g, '');
 
     if (reservedKeywords.has(camelCased)) {
         camelCased += "Cannoli";
