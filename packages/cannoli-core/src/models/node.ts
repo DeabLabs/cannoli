@@ -2121,7 +2121,7 @@ export class ReferenceNode extends ContentNode {
 					return content;
 				} else {
 					this.error(
-						`Invalid reference. Could not find note "${this.reference.name}"`
+						`Invalid reference. Could not find note "${this.reference.name}".`
 					);
 				}
 			} else if (this.reference.type === ReferenceType.Selection) {
@@ -2140,7 +2140,7 @@ export class ReferenceNode extends ContentNode {
 					return content;
 				} else {
 					this.error(
-						`Invalid reference. Could not find floating node "${this.reference.name}"`
+						`Invalid reference. Could not find floating node "${this.reference.name}".\n\nIf you want this node to inject a variable, turn it into a formatter node by wrapping the whole node in ""two sets of double quotes"".`
 					);
 				}
 			} else if (this.reference.type === ReferenceType.Variable) {
@@ -2151,7 +2151,7 @@ export class ReferenceNode extends ContentNode {
 					return content;
 				} else {
 					this.error(
-						`Invalid reference. Could not find floating node "${this.reference.name}"`
+						`Invalid reference. Could not find floating node "${this.reference.name}".\n\nIf you want this node to inject a variable, turn it into a formatter node by wrapping the whole node in ""two sets of double quotes"".`
 					);
 				}
 			} else if (
@@ -2347,7 +2347,7 @@ export class ReferenceNode extends ContentNode {
 				}
 
 				this.error(
-					`Invalid reference. Could not find floating node ${this.reference.name}`
+					`Invalid reference. Could not find floating node ${this.reference.name}.\n\nIf you want this node to inject a variable, turn it into a formatter node by wrapping it in ""two sets of double quotes"".`
 				);
 			} else if (
 				this.reference.type === ReferenceType.Variable) {
@@ -2364,7 +2364,7 @@ export class ReferenceNode extends ContentNode {
 				}
 
 				this.error(
-					`Invalid reference. Could not find floating node ${this.reference.name}`
+					`Invalid reference. Could not find floating node ${this.reference.name}.\n\nIf you want this node to inject a variable, turn it into a formatter node by wrapping it in ""two sets of double quotes"".`
 				);
 			} else if (
 				this.reference.type === ReferenceType.CreateNote
@@ -2809,7 +2809,7 @@ export class HttpNode extends ContentNode {
 			return;
 		}
 
-		const config = { ...this.run.config, ...defaultHttpConfig, ...overrides };
+		const config = { ...this.run.config, ...this.run.secrets, ...defaultHttpConfig, ...overrides };
 
 		this.executing();
 

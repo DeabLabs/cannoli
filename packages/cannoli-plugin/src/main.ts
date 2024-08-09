@@ -35,7 +35,7 @@ import {
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
 import { VaultInterface } from "./vault_interface";
-import { ObsidianCanvas } from "./canvas";
+import { CanvasPersistor } from "./canvas";
 import { dataviewQuery, smartConnectionsQuery } from "./actions";
 import { BakeResult } from "@deablabs/cannoli-core";
 
@@ -1175,7 +1175,7 @@ export default class Cannoli extends Plugin {
 			obsidianSelection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
 		};
 
-		const canvas = new ObsidianCanvas(canvasData, file);
+		const canvas = new CanvasPersistor(canvasData, file);
 
 		const fetcher: ResponseTextFetcher = async (url: string, { body, method, headers }: RequestInit) => {
 			const headersObj = Array.isArray(headers) ? Object.fromEntries(headers) : headers instanceof Headers ? {} : headers;

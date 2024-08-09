@@ -1,6 +1,6 @@
 import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { AllVerifiedCannoliCanvasNodeData, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, EdgeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
+import { AllVerifiedCannoliCanvasNodeData, CallNodeType, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, EdgeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -562,13 +562,18 @@ export class Run {
 
 		this.updateOriginalParallelGroupLabel(object, "reset");
 
-		// if (this.canvas && object instanceof CallNode) {
-		// 	if (this.settings?.contentIsColorless) {
-		// 		this.canvas.enqueueChangeNodeColor(object.id, "6");
-		// 	} else {
-		// 		this.canvas.enqueueChangeNodeColor(object.id);
-		// 	}
-		// } else if (
+		if (this.persistor && (object.type === CallNodeType.Choose || object.type === CallNodeType.Form || object.type === CallNodeType.StandardCall)) {
+			const editedNode = JSON.parse(JSON.stringify(this.canvasData?.nodes.find((node) => node.id === object.id)));
+
+			if (!editedNode) {
+				return;
+			}
+
+			editedNode.color = this.config?.contentIsColorless ? "6" : "0";
+
+			this.persistor.editNode(editedNode);
+		}
+		// else if (
 		// 	this.canvas &&
 		// 	object instanceof ContentNode &&
 		// 	object.text === ""

@@ -365,7 +365,7 @@ export class CannoliGroup extends CannoliVertex {
 				(edge) => this.graph[edge].type === EdgeType.Item || this.graph[edge].type === EdgeType.List
 			);
 			if (itemOrListEdges.length < 1) {
-				this.error(`Parallel groups must have at least one incoming list arrow.`);
+				this.error(`Parallel groups must have at least one incoming list arrow (cyan, labeled).`);
 				return;
 			} else if (itemOrListEdges.length > 1) {
 				// Check if one of the edges crosses a fromForEach group

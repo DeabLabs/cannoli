@@ -2,10 +2,11 @@ import { TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
 import { Persistor, CannoliCanvasData, CanvasData, AllCanvasNodeData, CanvasEdgeData, AllCannoliCanvasNodeData, CannoliCanvasEdgeData, CannoliCanvasGroupData } from "@deablabs/cannoli-core";
 
-export class ObsidianCanvas implements Persistor {
+export class CanvasPersistor implements Persistor {
 	canvasFile: TFile;
 	editQueue: Promise<unknown>;
 	allowCannoliData: boolean;
+	config: Record<string, unknown>;
 
 	constructor(canvasData: CanvasData, persistor?: TFile, allowCannoliData: boolean = false) {
 		this.allowCannoliData = allowCannoliData;
@@ -17,6 +18,10 @@ export class ObsidianCanvas implements Persistor {
 		this.canvasFile = persistor;
 
 		this.editQueue = Promise.resolve();
+	}
+
+	setConfig(config: Record<string, unknown>) {
+		this.config = config;
 	}
 
 	async start(newCanvasData: CannoliCanvasData) {

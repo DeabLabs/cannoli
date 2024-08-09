@@ -103,6 +103,7 @@ export interface Persistor {
 	addError(nodeId: string, message: string): Promise<void>;
 	addWarning(nodeId: string, message: string): Promise<void>;
 	editOriginalParallelGroupLabel(originalGroupId: string, label: string): Promise<void>;
+	setConfig(config: Record<string, unknown>): void;
 }
 
 
