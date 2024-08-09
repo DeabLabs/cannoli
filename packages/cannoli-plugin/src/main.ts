@@ -193,9 +193,10 @@ export default class Cannoli extends Plugin {
 
 		this.createCannoliCommands();
 
-		this.createOpenOnWebsiteCommand();
-
-		this.createOpenOnWebsiteDevCommand();
+		if (process.env.NODE_ENV !== "production") {
+			this.createOpenOnWebsiteCommand();
+			this.createOpenOnWebsiteDevCommand();
+		}
 
 		this.createCopyCanvasToClipboardCommand();
 
