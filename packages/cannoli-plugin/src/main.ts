@@ -112,7 +112,7 @@ const DEFAULT_SETTINGS: CannoliSettings = {
 	openaiAPIKey: "",
 	openaiBaseURL: "",
 	requestThreshold: 20,
-	defaultModel: "gpt-3.5-turbo",
+	defaultModel: "gpt-4o",
 	defaultTemperature: 1,
 	httpTemplates: [],
 	includeFilenameAsHeader: false,
