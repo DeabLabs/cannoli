@@ -2,30 +2,21 @@
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
     "cannoli-plugin": {
-      "outputs": [
-        "../../main.js"
-      ]
+      "outputs": ["../../main.js"]
     },
     "build": {
-      "outputs": [
-        "dist"
-      ],
-      "dependsOn": [
-        "^build"
-      ]
+      "outputs": ["dist"],
+      "dependsOn": ["^build"]
     },
     "dev": {
       "cache": false,
       "persistent": true,
-	  "dependsOn": [
-        "^build"
-      ]
+      "dependsOn": ["^build"]
     },
     "typecheck": {},
-    "release-plugin": {
-      "dependsOn": [
-        "^build"
-      ]
+    "release": {
+      "cache": false,
+      "dependsOn": ["^build"]
     },
     "build-college": {
       "cache": false
