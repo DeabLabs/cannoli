@@ -34,11 +34,11 @@ if (!isWorkingTreeClean) {
 
 // Read manifest.json
 try {
-	const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf-8"));
+	const manifest = JSON.parse(fs.readFileSync("../../../../manifest.json", "utf-8"));
 
 	// Update version
 	manifest.version = versionArg;
-	fs.writeFileSync("manifest.json", JSON.stringify(manifest, null, 2));
+	fs.writeFileSync("../../../../manifest.json", JSON.stringify(manifest, null, 2));
 } catch (error) {
 	console.error("Failed to read or write manifest.json", error);
 	process.exit(1);
