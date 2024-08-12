@@ -1,6 +1,8 @@
 import fs from "fs";
 import { execSync } from "child_process";
 
+const __dirname = new URL(".", import.meta.url).pathname;
+
 // Function to execute shell command and return the output
 function execCommand(command) {
 	try {
@@ -24,28 +26,30 @@ const currentBranch = execCommand("git branch --show-current");
 console.log(`Current branch is ${currentBranch}`);
 
 // Check if there are any uncommitted changes
-const isWorkingTreeClean = execCommand("git status --porcelain") === "";
-if (!isWorkingTreeClean) {
-	console.error(
-		"Your git working tree is not clean. Please commit or stash your changes first."
-	);
-	process.exit(1);
-}
+// const isWorkingTreeClean = execCommand("git status --porcelain") === "";
+// if (!isWorkingTreeClean) {
+// 	console.error(
+// 		"Your git working tree is not clean. Please commit or stash your changes first."
+// 	);
+// 	process.exit(1);
+// }
 
 // Read manifest.json
+const manifestPath = __dirname + "../../../manifest.json";
+
 try {
-	const manifest = JSON.parse(fs.readFileSync("../../../../manifest.json", "utf-8"));
+	const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
 
 	// Update version
 	manifest.version = versionArg;
-	fs.writeFileSync("../../../../manifest.json", JSON.stringify(manifest, null, 2));
+	fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 } catch (error) {
 	console.error("Failed to read or write manifest.json", error);
 	process.exit(1);
 }
 
 // Git commit, tag, and push
-execCommand(`git add manifest.json`);
+execCommand(`git add ${manifestPath}`);
 execCommand(`git commit -m "Bump to version ${versionArg}"`);
 execCommand(`git tag ${versionArg}`);
 execCommand(`git push origin ${currentBranch}`);
