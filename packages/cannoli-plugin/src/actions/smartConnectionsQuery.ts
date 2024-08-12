@@ -43,6 +43,7 @@ export const smartConnectionsQuery: Action = {
                 includeName,
                 includeProperties,
                 includeLink,
+                false,
                 false
             );
 

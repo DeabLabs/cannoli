@@ -625,11 +625,16 @@ export class VaultInterface implements FileManager {
 		includeName: boolean,
 		includeProperties: boolean,
 		includeLink: boolean,
-		isMock: boolean
+		isMock: boolean,
+		allowSubpaths: boolean = true
 	): Promise<string[]> {
 		const resultContents = [];
 		for (const noteLink of noteLinks) {
-			const [noteName, subpath] = noteLink.split("#");
+			// Get rid of the double brackets
+			const cleanedLink = noteLink.replace("[[", "").replace("]]", "");
+
+			const [noteName, subpath] = cleanedLink.split("#");
+
 			const reference: Reference = {
 				name: noteName,
 				type: ReferenceType.Note,
@@ -637,7 +642,7 @@ export class VaultInterface implements FileManager {
 				includeName,
 				includeProperties,
 				includeLink,
-				subpath: subpath ?? undefined
+				subpath: allowSubpaths ? subpath ?? undefined : undefined
 			};
 
 			const noteContent = await this.getNote(reference, isMock);

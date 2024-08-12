@@ -5,7 +5,7 @@ export const dataviewQuery: Action = {
     name: "dataview",
     function: async ({
         query,
-        limit = 50,
+        limit = 10,
         extract = true,
         includeName = true,
         includeProperties = true,

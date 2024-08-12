@@ -1,0 +1,12 @@
+{
+	"nodes":[
+		{"id":"7be62958bc86b912","x":-213,"y":-452,"width":529,"height":680,"type":"group","label":"Embedding images"},
+		{"id":"b258a15559b32956","type":"text","text":"What is this?\n\n![nice](https://thisitaliankitchen.com/wp-content/uploads/2023/06/ricotta-cannolis.jpg)","x":-91,"y":-432,"width":285,"height":403},
+		{"id":"885ecd1433cb7016","type":"text","text":"","x":-193,"y":19,"width":489,"height":189,"color":"6"},
+		{"id":"ef5e7ce3002cecdc","x":-608,"y":-267,"width":371,"height":129,"type":"text","text":"If there's a markdown image embed anywhere in the chat history being sent in an AI node, it will be included as an image to be seen by multi-modal LLMs"},
+		{"id":"9b331c6bba11b723","x":-583,"y":-97,"width":344,"height":243,"type":"text","text":"Embedding urls from the web:\n```\n![description](link)\n```\n\nEmbedding images from your vault:\n```\n![[image.jpg]]\n```"}
+	],
+	"edges":[
+		{"id":"f6a6fc6a3202bc06","fromNode":"b258a15559b32956","fromSide":"bottom","toNode":"885ecd1433cb7016","toSide":"top"}
+	]
+}

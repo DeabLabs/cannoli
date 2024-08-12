@@ -1,0 +1,24 @@
+{
+	"nodes":[
+		{"id":"381c8163bec12c57","type":"group","x":-304,"y":-664,"width":588,"height":691,"label":"Standard use"},
+		{"id":"337c91c6b1038d20","type":"group","x":-318,"y":90,"width":593,"height":575,"label":"Template query"},
+		{"id":"eebc9eee68ff25b2","type":"text","text":"The built-in Smart-connections action can be referenced by the name \"smart-connections\"\n\nArguments:\n- query (required)\n- limit (number of results)\n\t- 10 (default)\n\n- extract (include note content)\n\t- true (default)\n\t- false\n\n- includeName (include note name)\n\t- true (default)\n\t- false\n\n- includeProperties (include note properties)\n\t- true (default)\n\t- false\n\n- includeLink (include note link)\n\t- true (default)\n\t- false","x":-728,"y":-658,"width":401,"height":550},
+		{"id":"a60fd5c5154313d4","type":"text","text":"","x":-268,"y":-338,"width":491,"height":333,"color":"6"},
+		{"id":"4f26794b185fb5db","type":"text","text":"[smart-connections]\nMeeting where {{person}} was present","x":-42,"y":348,"width":283,"height":164,"color":"2"},
+		{"id":"77a40e58452bd8b1","type":"text","text":"Bob","x":-302,"y":254,"width":175,"height":60,"color":"6"},
+		{"id":"0f0046972783b7ae","type":"text","text":"1","x":145,"y":128,"width":65,"height":60,"color":"6"},
+		{"id":"56da36d986c561ce","type":"text","text":"The template-able argument of the smart-connections action is the query","x":-590,"y":163,"width":255,"height":123},
+		{"id":"4a6faca7ddcffbfe","type":"text","text":"false","x":-72,"y":128,"width":90,"height":60,"color":"6"},
+		{"id":"8c604bda53107ee1","type":"text","text":"","x":-18,"y":565,"width":234,"height":76,"color":"6"},
+		{"id":"52b0052571a6eb61","type":"text","text":"Apples and stuff","x":-148,"y":-642,"width":250,"height":60,"color":"6"},
+		{"id":"062536681a6f3d7c","type":"text","text":"smart-connections","x":-121,"y":-481,"width":197,"height":60,"color":"2"}
+	],
+	"edges":[
+		{"id":"4b3d5fabd9a12016","fromNode":"062536681a6f3d7c","fromSide":"bottom","toNode":"a60fd5c5154313d4","toSide":"top"},
+		{"id":"b63496bcc3abd047","fromNode":"52b0052571a6eb61","fromSide":"bottom","toNode":"062536681a6f3d7c","toSide":"top","label":"query"},
+		{"id":"8486791d9c376c0b","fromNode":"4f26794b185fb5db","fromSide":"bottom","toNode":"8c604bda53107ee1","toSide":"top"},
+		{"id":"9fef641e0bceee50","fromNode":"0f0046972783b7ae","fromSide":"bottom","toNode":"4f26794b185fb5db","toSide":"top","label":"limit"},
+		{"id":"b4439e67ea4fbde8","fromNode":"4a6faca7ddcffbfe","fromSide":"bottom","toNode":"4f26794b185fb5db","toSide":"top","label":"extract"},
+		{"id":"e0726e65d794c7f3","fromNode":"77a40e58452bd8b1","fromSide":"bottom","toNode":"4f26794b185fb5db","toSide":"left","label":"person"}
+	]
+}

@@ -7,7 +7,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "release-plugin": "turbo run release --filter cannoli-plugin",
-    "build-college": "turbo run run build-college --filter cannoli-plugin",
+    "build-college": "turbo run build-college --filter cannoli-plugin",
     "clean": "rimraf main.js packages/**/node_modules packages/**/dist packages/**/.turbo .turbo node_modules",
     "release-core": "pnpm run build && pnpm --filter cannoli-core publish --no-git-check --access public"
   },

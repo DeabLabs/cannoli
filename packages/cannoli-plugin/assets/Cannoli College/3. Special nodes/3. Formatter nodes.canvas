@@ -5,8 +5,8 @@
 		{"type":"text","text":"","id":"b9b423ce99fb31c9","x":-217,"y":360,"width":284,"height":155,"color":"6"},
 		{"type":"text","text":"A content node wrapped in double double quotes (\"\") is a formatter node. They will not be overwritten.","id":"0be55ec8c78cd264","x":-500,"y":201,"width":250,"height":119},
 		{"type":"text","text":"\"\"Name: {{name}}\nLines:\n{{lines}}\"\"","id":"4f1b8e3bd87e5bd8","x":-222,"y":160,"width":294,"height":140,"color":"6"},
-		{"type":"text","text":"Formatter nodes allow you to work with variables the same way you do with call nodes, but without making an LLM call.","id":"b6560aee19ea758c","x":-180,"y":-260,"width":394,"height":113},
-		{"type":"text","text":"You can use the output of formatter nodes the same way you use call nodes.","id":"897ca9e72f35add4","x":-500,"y":385,"width":250,"height":105},
+		{"type":"text","text":"Formatter nodes allow you to work with variables the same way you do with AI nodes, but without making an LLM call.","id":"b6560aee19ea758c","x":-180,"y":-260,"width":394,"height":113},
+		{"type":"text","text":"You can use the output of formatter nodes the same way you use AI nodes.","id":"897ca9e72f35add4","x":-500,"y":385,"width":250,"height":105},
 		{"type":"text","text":"Now write a list of 5 lines they might say.","id":"7a909145058b7691","x":0,"y":40,"width":250,"height":60}
 	],
 	"edges":[

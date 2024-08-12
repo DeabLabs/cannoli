@@ -4,7 +4,7 @@
 		{"id":"8d414d7be725ce11","type":"group","x":-420,"y":880,"width":610,"height":259,"label":"Getting properties"},
 		{"id":"8fd4e3f6e22304ba","type":"group","x":-420,"y":560,"width":290,"height":259,"label":"Getting note name"},
 		{"id":"8c0fb44530075f7d","type":"group","x":-420,"y":1200,"width":290,"height":259,"label":"Getting note path"},
-		{"type":"text","text":"{{[Current state]}}","id":"079588e3f7e0afa0","x":-393,"y":203,"width":250,"height":60,"color":"6"},
+		{"type":"text","text":"{{Current state}}","id":"079588e3f7e0afa0","x":-393,"y":203,"width":250,"height":60,"color":"6"},
 		{"type":"text","text":"Reference nodes can reference floating nodes or notes from your vault.","id":"a8346a9d96a737bb","x":-692,"y":238,"width":262,"height":114},
 		{"type":"text","text":"Reference nodes are content nodes surrounded by double curly braces.","id":"a9ea85b101bc8776","x":-686,"y":-149,"width":250,"height":129},
 		{"type":"text","text":"You can write or read from them the same way you use normal content nodes.","id":"be5c114d263a0107","x":-686,"y":66,"width":250,"height":137},

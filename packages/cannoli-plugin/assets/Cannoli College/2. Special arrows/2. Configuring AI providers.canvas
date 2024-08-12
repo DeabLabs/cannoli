@@ -1,1 +1,16 @@
-{"nodes":[{"id":"b51e8860282e437b","type":"group","x":-643,"y":-220,"width":1040,"height":448,"label":"Configuring AI providers"},{"type":"text","text":"Which AI company is best?","id":"b8a20b0a3f4583a7","x":-277,"y":-12,"width":257,"height":60},{"type":"text","text":"","id":"ad935f27d0760630","x":60,"y":-207,"width":317,"height":415,"color":"6"},{"id":"acca6afbde7b5906","type":"text","text":"gemini","x":-480,"y":-120,"width":107,"height":60,"color":"6"},{"id":"320b6f5ddfd0549d","type":"text","text":"probablyDontUseThisFeature","x":-623,"y":80,"width":263,"height":60,"color":"6"},{"id":"86e7502a8598bee9","type":"text","text":"You can also use config arrows to define which AI provider you'd like to use at the node-level.\n\nJust add a config arrow labeled \"provider\", and load it with one of our currently supported providers in lower case: openai, groq, anthropic, gemini, and ollama.","x":-320,"y":-440,"width":482,"height":185},{"id":"01f2c254b06b9f3e","type":"text","text":"You can also edit the API key at the node level in this way, but this isn't reccomended, as it would be easier to accidentally share it.","x":-660,"y":280,"width":409,"height":104}],"edges":[{"id":"387af49c4e0bf24e","fromNode":"b8a20b0a3f4583a7","fromSide":"right","toNode":"ad935f27d0760630","toSide":"left","color":"2"},{"id":"ac0063c71becd7de","fromNode":"acca6afbde7b5906","fromSide":"right","toNode":"b8a20b0a3f4583a7","toSide":"left","color":"2","label":"provider"},{"id":"74cf2aa488454e8e","fromNode":"320b6f5ddfd0549d","fromSide":"right","toNode":"b8a20b0a3f4583a7","toSide":"left","color":"2","label":"apiKey"}]}
+{
+	"nodes":[
+		{"id":"b51e8860282e437b","type":"group","x":-643,"y":-220,"width":1040,"height":448,"label":"Configuring AI providers"},
+		{"type":"text","text":"Which AI company is best?","id":"b8a20b0a3f4583a7","x":-277,"y":-12,"width":257,"height":60},
+		{"type":"text","text":"","id":"ad935f27d0760630","x":60,"y":-207,"width":317,"height":415,"color":"6"},
+		{"id":"acca6afbde7b5906","type":"text","text":"gemini","x":-480,"y":-120,"width":107,"height":60,"color":"6"},
+		{"id":"320b6f5ddfd0549d","type":"text","text":"probablyDontUseThisFeature","x":-623,"y":80,"width":263,"height":60,"color":"6"},
+		{"id":"86e7502a8598bee9","type":"text","text":"You can also use config arrows to define which AI provider you'd like to use at the node-level.\n\nJust add a config arrow labeled \"provider\", and load it with one of our currently supported providers in lower case: openai, groq, anthropic, gemini, and ollama.","x":-320,"y":-440,"width":482,"height":185},
+		{"id":"01f2c254b06b9f3e","type":"text","text":"You can also edit the API key at the node level in this way, but this isn't reccomended, as it would be easier to accidentally share it.","x":-660,"y":280,"width":409,"height":104}
+	],
+	"edges":[
+		{"id":"387af49c4e0bf24e","fromNode":"b8a20b0a3f4583a7","fromSide":"right","toNode":"ad935f27d0760630","toSide":"left","color":"2"},
+		{"id":"ac0063c71becd7de","fromNode":"acca6afbde7b5906","fromSide":"right","toNode":"b8a20b0a3f4583a7","toSide":"left","color":"2","label":"provider"},
+		{"id":"74cf2aa488454e8e","fromNode":"320b6f5ddfd0549d","fromSide":"right","toNode":"b8a20b0a3f4583a7","toSide":"left","color":"2","label":"apiKey"}
+	]
+}

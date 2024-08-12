@@ -1,0 +1,41 @@
+{
+	"nodes":[
+		{"id":"e0f003ced217a6f7","type":"group","x":-539,"y":1345,"width":1014,"height":1030,"label":"Nested parallel groups"},
+		{"id":"a582b0f31eb5b273","type":"group","x":-305,"y":-524,"width":933,"height":777,"label":"Static list input"},
+		{"id":"65c66e6f113726aa","type":"group","x":-333,"y":338,"width":555,"height":926,"label":"Dynamic list input"},
+		{"id":"0d7740a882d40f92","type":"group","x":-272,"y":1532,"width":454,"height":426,"color":"5","label":"2"},
+		{"id":"6c63c8db5daf8225","type":"group","x":-243,"y":561,"width":383,"height":272,"color":"5","label":"2"},
+		{"id":"83456d09f082fe8a","type":"group","x":-246,"y":1741,"width":399,"height":191,"color":"5","label":"2"},
+		{"id":"bf04efea7cb87629","type":"group","x":-259,"y":-301,"width":383,"height":160,"color":"5","label":"2"},
+		{"id":"c0e7756d10aed69f","type":"text","text":"","x":-260,"y":-114,"width":385,"height":346,"color":"6"},
+		{"id":"9bc6d0bb497eb44c","type":"text","text":"Parallel groups are Cyan groups with a number in their label\n\nThey will copy all of their member nodes and arrows based on the number in their label, and each will run in parallel","x":-657,"y":-510,"width":330,"height":208},
+		{"id":"3668418bbe12ccd5","type":"text","text":"List arrows can also come from AI nodes. They will try to parse a list from either markdown list format or from a JSON array.","x":-696,"y":423,"width":342,"height":129},
+		{"id":"1e0f6e1a8645a214","type":"text","text":"The \"season\" arrow in this group is a list arrow (cyan color). When a parallel group has a list arrow pointing to it, each copy of the group will get a different item from the list\n\nThe number of the group doesn't always have to match the number of items, it just serves as a limit. Only that many copies will be made.","x":-751,"y":-270,"width":427,"height":230},
+		{"id":"0dc3d3584861444b","type":"text","text":"By default, the arrow leaving the group will simply combine all of the content from each version of the node with no formatting.\n\nThere are several pre-made formats you can use (read below), but you can also define your own output formats using a formatter node. This could be used to write CSVs, for example.","x":-840,"y":14,"width":513,"height":208},
+		{"id":"f28b98b566aff8a3","type":"text","text":"Write a list of 5 obscure colors (markdown format)","x":-175,"y":358,"width":250,"height":94},
+		{"id":"e92c8263c3cbedd9","type":"text","text":"In a sentence, describe {{color}}.","x":-199,"y":594,"width":294,"height":89},
+		{"id":"03f168ccb5370bb2","type":"text","text":"Give an even more obscure term for it.","x":-195,"y":713,"width":288,"height":87},
+		{"id":"7b28e3a04655a650","type":"text","text":"","x":-300,"y":896,"width":501,"height":346,"color":"6"},
+		{"id":"ac89af9188e32032","type":"text","text":"The arrow leaving this group has a \"`_`\" prefix. This means we will render the results as a markdown table.\n\nThe current merge arrow prefixes are:\n\n`#`: Headers\n`-`: List\n`_`: Table\n","x":-733,"y":797,"width":383,"height":255},
+		{"id":"b04d27fecfd47af4","type":"text","text":"Parallel groups can be nested! Just be wary of how many AI nodes will be executed at the most nested levels.\n\nIn this example we merge the result using the \"-\" prefix, which formats it as a nested list.\n\nArbitrary nesting works for the headers (`#`) and list (`-`) prefixes, but the table (`_`)  prefix works best with 2 levels parallel groups (2 dimensions of the table)","x":-967,"y":1505,"width":405,"height":301},
+		{"id":"22d9b1ea6f478316","type":"text","text":"","x":-490,"y":1990,"width":886,"height":346,"color":"6"},
+		{"id":"b3938cc38770d918","type":"text","text":"List the 3 steps to make a PBJ sandwich (markdown format)","x":-172,"y":1362,"width":250,"height":94},
+		{"id":"8b3843db8e3a0626","type":"text","text":"- summer\n- winter","x":-191,"y":-504,"width":250,"height":94,"color":"6"},
+		{"id":"beb438d1c026fe71","type":"text","text":"Just list the most popular events in the {{season}} olympics","x":-215,"y":-268,"width":294,"height":89},
+		{"id":"ad1b9b99f7179469","type":"text","text":"Break this step in making a PBJ sandwich down into 2 sub-steps (markdown list):\n{{step}}","x":-228,"y":1566,"width":372,"height":103},
+		{"id":"60a2a625e8300dc9","type":"text","text":"Break this substep in making a PBJ sandwich into 2 sub-sub-steps (markdown list):\n{{substep}}","x":-202,"y":1774,"width":311,"height":123},
+		{"id":"0305c934c9aace83","type":"text","text":"","x":153,"y":-115,"width":433,"height":339,"color":"6"},
+		{"id":"071083739c5edbf9","type":"text","text":"Logging edges exiting parallel groups will give information about each copy.","x":213,"y":-336,"width":341,"height":84}
+	],
+	"edges":[
+		{"id":"5bd1086a494d6e32","fromNode":"8b3843db8e3a0626","fromSide":"bottom","toNode":"bf04efea7cb87629","toSide":"top","color":"5","label":"season"},
+		{"id":"ae4c863a53cd9348","fromNode":"beb438d1c026fe71","fromSide":"bottom","toNode":"c0e7756d10aed69f","toSide":"top"},
+		{"id":"425c2f28bb3e0b99","fromNode":"f28b98b566aff8a3","fromSide":"bottom","toNode":"6c63c8db5daf8225","toSide":"top","color":"5","label":"color"},
+		{"id":"73233b93df26e03e","fromNode":"e92c8263c3cbedd9","fromSide":"bottom","toNode":"03f168ccb5370bb2","toSide":"top"},
+		{"id":"0caf1bba05c8aa27","fromNode":"03f168ccb5370bb2","fromSide":"bottom","toNode":"7b28e3a04655a650","toSide":"top","label":"_"},
+		{"id":"607232d635891e37","fromNode":"b3938cc38770d918","fromSide":"bottom","toNode":"0d7740a882d40f92","toSide":"top","color":"5","label":"step"},
+		{"id":"432d78d795c6f4ec","fromNode":"ad1b9b99f7179469","fromSide":"bottom","toNode":"83456d09f082fe8a","toSide":"top","color":"5","label":"substep"},
+		{"id":"7565755b265a1759","fromNode":"60a2a625e8300dc9","fromSide":"bottom","toNode":"22d9b1ea6f478316","toSide":"top","label":"-"},
+		{"id":"48ca5d2dc4865bce","fromNode":"beb438d1c026fe71","fromSide":"right","toNode":"0305c934c9aace83","toSide":"top","color":"2"}
+	]
+}

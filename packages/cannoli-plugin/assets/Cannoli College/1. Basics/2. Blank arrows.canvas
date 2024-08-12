@@ -1,1 +1,18 @@
-{"nodes":[{"type":"group","id":"e77c462deb61200c","x":-200,"y":-240,"width":360,"height":600,"label":"Blank Arrows"},{"type":"text","text":"This first arrow is going from a call node to another call node, so it will pass the chat history along.","id":"ab7c414710f7f130","x":-478,"y":-160,"width":268,"height":135},{"type":"text","text":"The third arrow is going from a content node to a content node, so it will just copy its content.","id":"ccd789ee75f32cfa","x":-513,"y":191,"width":303,"height":102},{"type":"text","text":"This is the second user message, after an LLM response","id":"78cc7edc0acf7754","x":-145,"y":-39,"width":250,"height":110},{"type":"text","text":"This is the first user message","id":"f20327851c3175bd","x":-145,"y":-190,"width":250,"height":60},{"type":"text","text":"","id":"ffdc926f780c7c6f","x":-145,"y":131,"width":250,"height":60,"color":"6"},{"type":"text","text":"","id":"2a451cf329dad9eb","x":-145,"y":260,"width":250,"height":60,"color":"6"},{"type":"text","text":"The second arrow is going to a content node, so it will just pass the content of the LLM's response along.","id":"69c75646befb238b","x":170,"y":49,"width":344,"height":112},{"type":"text","text":"Arrows behave differently depending on their color, their label, and the type of their source and target (the node they are coming from and the node they point to).","id":"7f3c629307341974","x":-210,"y":-440,"width":380,"height":130}],"edges":[{"id":"3e2d98fc5ddeb168","fromNode":"78cc7edc0acf7754","fromSide":"bottom","toNode":"ffdc926f780c7c6f","toSide":"top"},{"id":"321db5e7d72b0151","fromNode":"ffdc926f780c7c6f","fromSide":"bottom","toNode":"2a451cf329dad9eb","toSide":"top"},{"id":"d08c98406e290f66","fromNode":"f20327851c3175bd","fromSide":"bottom","toNode":"78cc7edc0acf7754","toSide":"top"}]}
+{
+	"nodes":[
+		{"type":"group","id":"e77c462deb61200c","x":-200,"y":-240,"width":360,"height":600,"label":"Blank Arrows"},
+		{"type":"text","text":"This first arrow is going from an AI node to another AI node, so it will pass the chat history along.","id":"ab7c414710f7f130","x":-478,"y":-160,"width":268,"height":135},
+		{"type":"text","text":"The third arrow is going from a content node to a content node, so it will just copy its content.","id":"ccd789ee75f32cfa","x":-513,"y":191,"width":303,"height":102},
+		{"type":"text","text":"This is the second user message, after an LLM response","id":"78cc7edc0acf7754","x":-145,"y":-39,"width":250,"height":110},
+		{"type":"text","text":"This is the first user message","id":"f20327851c3175bd","x":-145,"y":-190,"width":250,"height":60},
+		{"type":"text","text":"","id":"ffdc926f780c7c6f","x":-145,"y":131,"width":250,"height":60,"color":"6"},
+		{"type":"text","text":"","id":"2a451cf329dad9eb","x":-145,"y":260,"width":250,"height":60,"color":"6"},
+		{"type":"text","text":"The second arrow is going to a content node, so it will just pass the content of the LLM's response along.","id":"69c75646befb238b","x":170,"y":49,"width":344,"height":112},
+		{"type":"text","text":"Arrows behave differently depending on their color, their label, and the type of their source and target (the node they are coming from and the node they point to).","id":"7f3c629307341974","x":-210,"y":-440,"width":380,"height":130}
+	],
+	"edges":[
+		{"id":"3e2d98fc5ddeb168","fromNode":"78cc7edc0acf7754","fromSide":"bottom","toNode":"ffdc926f780c7c6f","toSide":"top"},
+		{"id":"321db5e7d72b0151","fromNode":"ffdc926f780c7c6f","fromSide":"bottom","toNode":"2a451cf329dad9eb","toSide":"top"},
+		{"id":"d08c98406e290f66","fromNode":"f20327851c3175bd","fromSide":"bottom","toNode":"78cc7edc0acf7754","toSide":"top"}
+	]
+}
