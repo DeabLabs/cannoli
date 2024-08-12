@@ -330,7 +330,7 @@ export default class Cannoli extends Plugin {
 		paragraph.style.paddingLeft = "12px";
 		paragraph.style.borderLeft = "2px solid var(--interactive-accent)";
 
-		const dateSpan = createEl("span", { text: "8-8-2024" });
+		const dateSpan = createEl("span", { text: "8-11-2024" });
 		dateSpan.style.opacity = "0.5";
 		paragraph.appendChild(dateSpan);
 		paragraph.appendChild(createEl("br"));
