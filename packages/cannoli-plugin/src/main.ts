@@ -358,11 +358,11 @@ export default class Cannoli extends Plugin {
 		paragraph.appendText("so if anything is broken, or you just wanna hang out with us,");
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendText("let us know on the discord here: ");
-		paragraph.appendChild(createEl("a", {text: "https://discord.gg/wzayNxpxvR", href: "https://discord.gg/wzayNxpxvR"}))
+		paragraph.appendChild(createEl("a", { text: "https://discord.gg/wzayNxpxvR", href: "https://discord.gg/wzayNxpxvR" }))
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendText("Check out the ");
-		paragraph.appendChild(createEl("a", { text: "release notes", href: "https://docs.cannoli.website/Obsidian+plugin/Version+2.0+Release+Notes" }));
+		paragraph.appendChild(createEl("a", { text: "release notes", href: "https://docs.cannoli.website/Blog/Release+Notes+8-11-2024" }));
 		paragraph.appendText(" for more details! 🍝✨");
 
 		return paragraph;
