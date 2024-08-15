@@ -1768,6 +1768,15 @@ export class ContentNode extends CannoliNode {
 		}
 	}
 
+	filterName(content: string): string {
+		const name = this.getName(content);
+		if (name !== null) {
+			const firstLine = content.split("\n")[0];
+			return content.substring(firstLine.length + 1).trim();
+		}
+		return content;
+	}
+
 	async execute(): Promise<void> {
 		this.executing();
 
@@ -1782,18 +1791,18 @@ export class ContentNode extends CannoliNode {
 			}
 		}
 
-		if (this.type === ContentNodeType.Output || this.type === ContentNodeType.Formatter) {
-			if (content !== null && content !== undefined) {
-				this.editContentCheckName(content);
-			} else {
-				content = await this.processReferences();
-				this.editContentCheckName(content);
-			}
+		if (content === null || content === undefined) {
+			content = await this.processReferences();
 		}
 
+		content = this.filterName(content);
 
-		// Load all outgoing edges
-		this.loadOutgoingEdges(this.getContentCheckName());
+		if (this.type === ContentNodeType.Output || this.type === ContentNodeType.Formatter || this.type === ContentNodeType.StandardContent) {
+			this.editContentCheckName(content);
+			this.loadOutgoingEdges(content);
+		} else {
+			this.loadOutgoingEdges(content);
+		}
 
 		this.completed();
 	}
