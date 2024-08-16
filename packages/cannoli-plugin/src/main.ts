@@ -36,7 +36,7 @@ import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
 import { VaultInterface } from "./vault_interface";
 import { CanvasPersistor } from "./canvas";
-import { dataviewQuery, smartConnectionsQuery } from "./actions";
+import { dataviewQuery, smartConnectionsQuery, modalMaker } from "./actions";
 import { BakeResult } from "@deablabs/cannoli-core";
 
 interface CannoliSettings {
@@ -1069,6 +1069,7 @@ export default class Cannoli extends Plugin {
 			...(this.settings.exaAPIKey ? [exaSearch] : []),
 			dataviewQuery,
 			smartConnectionsQuery,
+			modalMaker,
 			valTownEvaluate,
 			valTownSendEmail,
 		];
