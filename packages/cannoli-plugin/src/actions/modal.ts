@@ -1,4 +1,5 @@
-import { App, Modal } from "obsidian";
+import { App, Modal, TextAreaComponent, DropdownComponent, TextComponent, ToggleComponent } from "obsidian";
+import moment from 'moment';
 import { Action } from "@deablabs/cannoli-core";
 
 export const modalMaker: Action = {
@@ -51,6 +52,7 @@ class CustomModal extends Modal {
     title: string;
     paragraphs: ModalParagraph[];
     isSubmitted: boolean;
+    values: Record<string, string>;
 
     constructor(app: App, format: string, callback: (result: Record<string, string> | Error) => void, title: string) {
         super(app);
@@ -59,16 +61,25 @@ class CustomModal extends Modal {
         this.title = title;
         this.paragraphs = this.parseFormat();
         this.isSubmitted = false;
+        this.values = {};
     }
 
     parseFormat(): ModalParagraph[] {
-        const regex = /\[([^\]]+)\]|([^[]+)/g;
+        const regex = /(\s*)\[([^\]]+)\]|([^[]+)/g;
         const paragraphs: ModalParagraph[] = [{ components: [] }];
         let match;
 
         while ((match = regex.exec(this.format)) !== null) {
-            if (match[1]) { // Input component
-                const [fieldName, fieldType, options] = this.parseField(match[1]);
+            if (match[2]) { // Input component
+                const [fieldName, fieldType, options] = this.parseField(match[2]);
+                if (match[1]) { // Preserve leading whitespace
+                    paragraphs[paragraphs.length - 1].components.push({
+                        type: 'text',
+                        content: match[1],
+                        name: "",
+                        fieldType: "text"
+                    });
+                }
                 paragraphs[paragraphs.length - 1].components.push({
                     type: 'input',
                     content: fieldName,
@@ -76,20 +87,18 @@ class CustomModal extends Modal {
                     fieldType: fieldType,
                     options: options
                 });
-            } else if (match[2]) { // Text component
-                const textParts = match[2].split('\n');
+            } else if (match[3]) { // Text component
+                const textParts = match[3].split('\n');
                 textParts.forEach((part, index) => {
                     if (index > 0) {
                         paragraphs.push({ components: [] });
                     }
-                    if (part.trim()) {
-                        paragraphs[paragraphs.length - 1].components.push({
-                            type: 'text',
-                            content: part,
-                            name: "",
-                            fieldType: "text"
-                        });
-                    }
+                    paragraphs[paragraphs.length - 1].components.push({
+                        type: 'text',
+                        content: part,
+                        name: "",
+                        fieldType: "text"
+                    });
                 });
             }
         }
@@ -153,79 +162,93 @@ class CustomModal extends Modal {
         });
 
         form.createEl("button", { text: "Submit", type: "submit" });
+        this.addStyle();
+    }
+
+    addStyle() {
+        const style = document.createElement('style');
+        style.textContent = `
+            .modal-content p {
+                white-space: pre-wrap;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     createInputComponent(paragraph: HTMLParagraphElement, component: ModalComponent) {
+        let settingComponent;
+
+        const updateValue = (value: string) => {
+            this.values[component.name] = value;
+        };
+
         switch (component.fieldType) {
             case 'textarea':
-                paragraph.createEl("textarea", {
-                    attr: {
-                        name: component.name,
-                        placeholder: component.content,
-                        'aria-label': component.content
-                    },
-                });
+                settingComponent = new TextAreaComponent(paragraph)
+                    .setPlaceholder(component.content)
+                    .onChange(updateValue);
+                updateValue('');
                 break;
-            case 'checkbox': {
-                const checkboxLabel = paragraph.createEl("label");
-                checkboxLabel.createEl("input", {
-                    type: "checkbox",
-                    attr: { name: component.name }
-                });
-                checkboxLabel.appendText(component.content);
+            case 'toggle': {
+                const toggleWrapper = paragraph.createDiv({ cls: 'toggle-wrapper' });
+                settingComponent = new ToggleComponent(toggleWrapper)
+                    .setValue(false)
+                    .onChange(value => updateValue(value ? "true" : "false"));
+                updateValue("false");
                 break;
             }
-            case 'radio':
-                if (component.options) {
-                    component.options.forEach((option, index) => {
-                        const radioLabel = paragraph.createEl("label");
-                        radioLabel.createEl("input", {
-                            type: "radio",
-                            attr: {
-                                name: component.name,
-                                value: option,
-                                id: `${component.name}-${index}`
-                            }
-                        });
-                        radioLabel.appendText(option);
-                    });
+            case 'dropdown':
+                if (component.options && component.options.length > 0) {
+                    settingComponent = new DropdownComponent(paragraph)
+                        .addOptions(Object.fromEntries(component.options.map(opt => [opt, opt])))
+                        .onChange(updateValue);
+                    updateValue(component.options[0]);
                 }
                 break;
-            case 'select':
-                if (component.options) {
-                    const select = paragraph.createEl("select", {
-                        attr: { name: component.name }
-                    });
-                    component.options.forEach(option => {
-                        select.createEl("option", {
-                            text: option,
-                            value: option
-                        });
-                    });
-                }
+            case 'date': {
+                settingComponent = new TextComponent(paragraph)
+                    .setPlaceholder(component.content)
+                    .onChange(updateValue);
+                settingComponent.inputEl.type = 'date';
+                const defaultDate = moment().format('YYYY-MM-DD');
+                settingComponent.inputEl.value = defaultDate;
+                updateValue(defaultDate);
                 break;
+            }
+            case 'time': {
+                settingComponent = new TextComponent(paragraph)
+                    .setPlaceholder(component.content)
+                    .onChange(updateValue);
+                settingComponent.inputEl.type = 'datetime-local';
+                const defaultTime = moment().format('YYYY-MM-DDTHH:mm');
+                settingComponent.inputEl.value = defaultTime;
+                updateValue(defaultTime);
+                break;
+            }
             case 'text':
             case '':
             case undefined:
-                paragraph.createEl("input", {
-                    type: "text",
-                    attr: {
-                        name: component.name,
-                        placeholder: component.content,
-                        'aria-label': component.content
-                    },
-                });
-                break;
             default:
-                paragraph.createEl("input", {
-                    type: component.fieldType,
-                    attr: {
-                        name: component.name,
-                        placeholder: component.content,
-                        'aria-label': component.content
-                    },
-                });
+                settingComponent = new TextComponent(paragraph)
+                    .setPlaceholder(component.content)
+                    .onChange(updateValue);
+                updateValue('');
                 break;
+
+        }
+
+        if (settingComponent) {
+            if (settingComponent instanceof ToggleComponent) {
+                settingComponent.toggleEl.setAttribute('data-name', component.name);
+                settingComponent.toggleEl.setAttribute('aria-label', component.content);
+            } else if ('inputEl' in settingComponent) {
+                settingComponent.inputEl.name = component.name;
+                settingComponent.inputEl.setAttribute('aria-label', component.content);
+            }
+        }
+
+        if (component.fieldType === 'toggle') {
+            paragraph.addClass('toggle-paragraph');
         }
     }
 
@@ -236,19 +259,17 @@ class CustomModal extends Modal {
     }
 
     handleSubmit() {
-        const inputs = this.contentEl.querySelectorAll("input, textarea, select");
-        const result: Record<string, string> = {};
+        const result = { ...this.values };
 
-        inputs.forEach((input: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) => {
-            if (input.name) {
-                if (input instanceof HTMLInputElement && input.type === 'checkbox') {
-                    result[input.name] = input.checked ? "true" : "false";
-                } else if (input instanceof HTMLSelectElement) {
-                    result[input.name] = input.value;
-                } else {
-                    result[input.name] = input.value.trim() || "No input";
+        this.paragraphs.forEach(paragraph => {
+            paragraph.components.forEach(component => {
+                if (component.type === 'input') {
+                    if (!(component.name in result) ||
+                        (component.fieldType === 'text' || component.fieldType === 'textarea') && result[component.name].trim() === '') {
+                        result[component.name] = "No input";
+                    }
                 }
-            }
+            });
         });
 
         this.isSubmitted = true;
