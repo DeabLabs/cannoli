@@ -5,15 +5,15 @@ import { Action } from "@deablabs/cannoli-core";
 export const modalMaker: Action = {
     name: "modal",
     function: async ({
-        format,
-        title = "Cannoli Modal"
+        layout,
+        title = "Cannoli modal"
     }: {
-        format: string;
+        layout: string;
         title?: string;
     }): Promise<string | Error> => {
         return new Promise((resolve) => {
             try {
-                new CustomModal(app, format, (result) => {
+                new CustomModal(app, layout, (result) => {
                     if (result instanceof Error) {
                         resolve(result);
                     } else {
@@ -26,10 +26,10 @@ export const modalMaker: Action = {
         });
     },
     argInfo: {
-        format: {
+        layout: {
             category: "arg",
             type: "string",
-            description: "The format of the modal",
+            description: "The layout of the modal",
         }
     }
 }
@@ -40,6 +40,7 @@ interface ModalComponent {
     name: string;
     fieldType: string;
     options?: string[];
+    format: string;
 }
 
 interface ModalParagraph {
@@ -47,29 +48,29 @@ interface ModalParagraph {
 }
 
 class CustomModal extends Modal {
-    format: string;
+    layout: string;
     callback: (result: Record<string, string> | Error) => void;
     title: string;
     paragraphs: ModalParagraph[];
     isSubmitted: boolean;
     values: Record<string, string>;
 
-    constructor(app: App, format: string, callback: (result: Record<string, string> | Error) => void, title: string) {
+    constructor(app: App, layout: string, callback: (result: Record<string, string> | Error) => void, title: string) {
         super(app);
-        this.format = format;
+        this.layout = layout;
         this.callback = callback;
         this.title = title;
-        this.paragraphs = this.parseFormat();
+        this.paragraphs = this.parseLayout();
         this.isSubmitted = false;
         this.values = {};
     }
 
-    parseFormat(): ModalParagraph[] {
+    parseLayout(): ModalParagraph[] {
         const regex = /(\s*)==([\s\S]+?)==|([^=]+)/g;
         const paragraphs: ModalParagraph[] = [{ components: [] }];
         let match;
 
-        while ((match = regex.exec(this.format)) !== null) {
+        while ((match = regex.exec(this.layout)) !== null) {
             if (match[2]) { // Input component
                 const trimmedContent = match[2].trim();
                 let fieldContent: string | string[];
@@ -102,12 +103,17 @@ class CustomModal extends Modal {
                     [fieldName, fieldType, options] = this.parseField(fieldContent);
                 }
 
+                const format = this.parseField(Array.isArray(fieldContent) ? fieldContent[0] : fieldContent)[3] ||
+                    (fieldType === 'date' ? 'YYYY-MM-DD' :
+                        fieldType === 'time' ? 'YYYY-MM-DDTHH:mm' : '');
+
                 if (match[1]) { // Preserve leading whitespace
                     paragraphs[paragraphs.length - 1].components.push({
                         type: 'text',
                         content: match[1],
                         name: "",
-                        fieldType: "text"
+                        fieldType: "text",
+                        format: format
                     });
                 }
                 paragraphs[paragraphs.length - 1].components.push({
@@ -115,7 +121,8 @@ class CustomModal extends Modal {
                     content: fieldName,
                     name: fieldName,
                     fieldType: fieldType,
-                    options: options
+                    options: options,
+                    format: format
                 });
             } else if (match[3]) { // Text component
                 const textParts = match[3].split('\n');
@@ -127,7 +134,8 @@ class CustomModal extends Modal {
                         type: 'text',
                         content: part,
                         name: "",
-                        fieldType: "text"
+                        fieldType: "text",
+                        format: ""
                     });
                 });
             }
@@ -136,7 +144,7 @@ class CustomModal extends Modal {
         return paragraphs;
     }
 
-    parseField(field: string): [string, string, string[] | undefined] {
+    parseField(field: string): [string, string, string[] | undefined, string | undefined] {
         // Remove double equals signs
         const content = field.trim();
 
@@ -146,6 +154,7 @@ class CustomModal extends Modal {
         let name: string;
         let type: string = 'text';  // Default type
         let optionsString: string = '';
+        let format: string | undefined;
 
         if (openParenIndex === -1) {
             // No parentheses found, everything is the name
@@ -159,7 +168,16 @@ class CustomModal extends Modal {
             } else {
                 name = content.slice(0, openParenIndex).trim();
                 type = content.slice(openParenIndex + 1, closeParenIndex).trim();
-                optionsString = content.slice(closeParenIndex + 1).trim();
+                const remainingContent = content.slice(closeParenIndex + 1).trim();
+
+                // Check if there's content after the type declaration
+                if (remainingContent) {
+                    if (type === 'date' || type === 'time') {
+                        format = remainingContent;
+                    } else {
+                        optionsString = remainingContent;
+                    }
+                }
             }
         }
 
@@ -170,7 +188,6 @@ class CustomModal extends Modal {
                 // Attempt to parse as JSON, handling potential escaping issues
                 options = JSON.parse(optionsString.replace(/\\n/g, '\n').replace(/\\"/g, '"'));
             } catch (e) {
-                console.error('Failed to parse JSON options:', e);
                 // If parsing fails, treat it as a comma-separated list
                 options = optionsString.slice(1, -1).split(',').map(item =>
                     item.trim().replace(/^["']|["']$/g, '') // Remove surrounding quotes if present
@@ -187,7 +204,7 @@ class CustomModal extends Modal {
             options = optionsString ? optionsString.split(',').map(o => o.trim()).filter(o => o !== '') : undefined;
         }
 
-        return [name, type, options];
+        return [name, type, options, format];
     }
 
     parseNameAndType(content: string): [string, string] {
@@ -259,7 +276,12 @@ class CustomModal extends Modal {
         let settingComponent;
 
         const updateValue = (value: string) => {
-            this.values[component.name] = value;
+            if (component.fieldType === 'date' || component.fieldType === 'time') {
+                const formattedValue = moment(value, component.fieldType === 'date' ? 'YYYY-MM-DD' : 'YYYY-MM-DDTHH:mm').format(component.format);
+                this.values[component.name] = formattedValue;
+            } else {
+                this.values[component.name] = value;
+            }
         };
 
         switch (component.fieldType) {
@@ -288,21 +310,25 @@ class CustomModal extends Modal {
             case 'date': {
                 settingComponent = new TextComponent(paragraph)
                     .setPlaceholder(component.content)
-                    .onChange(updateValue);
+                    .onChange((value) => {
+                        updateValue(value);
+                    });
                 settingComponent.inputEl.type = 'date';
-                const defaultDate = moment().format('YYYY-MM-DD');
-                settingComponent.inputEl.value = defaultDate;
-                updateValue(defaultDate);
+                const defaultDate = moment().format(component.format);
+                settingComponent.inputEl.value = moment(defaultDate, component.format).format('YYYY-MM-DD');
+                updateValue(settingComponent.inputEl.value);
                 break;
             }
             case 'time': {
                 settingComponent = new TextComponent(paragraph)
                     .setPlaceholder(component.content)
-                    .onChange(updateValue);
+                    .onChange((value) => {
+                        updateValue(value);
+                    });
                 settingComponent.inputEl.type = 'datetime-local';
-                const defaultTime = moment().format('YYYY-MM-DDTHH:mm');
-                settingComponent.inputEl.value = defaultTime;
-                updateValue(defaultTime);
+                const defaultTime = moment().format(component.format);
+                settingComponent.inputEl.value = moment(defaultTime, component.format).format('YYYY-MM-DDTHH:mm');
+                updateValue(settingComponent.inputEl.value);
                 break;
             }
             case 'text':
@@ -345,7 +371,7 @@ class CustomModal extends Modal {
             paragraph.components.forEach(component => {
                 if (component.type === 'input') {
                     if (!(component.name in result) ||
-                        (component.fieldType === 'text' || component.fieldType === 'textarea') && result[component.name].trim() === '') {
+                        ((component.fieldType === 'text' || component.fieldType === 'textarea') && result[component.name].trim() === '')) {
                         result[component.name] = "No input";
                     }
                 }
