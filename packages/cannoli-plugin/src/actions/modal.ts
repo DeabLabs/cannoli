@@ -15,9 +15,8 @@ export const modalMaker: Action = {
                 let title = "Cannoli modal";
                 let actualLayout = layout;
 
-                // Check if the first line doesn't contain an input (==)
                 if (lines.length > 0 && !lines[0].includes('==')) {
-                    title = lines[0].trim();
+                    title = lines[0].trim().replace(/^#+\s*/, '');
                     actualLayout = lines.slice(1).join('\n');
                 }
 
@@ -39,47 +38,51 @@ export const modalMaker: Action = {
             type: "string",
             description: "The layout of the modal",
             prompt:
-                `# Modal Layout System
+                `# Modal Layout Syntax
 
 ## Title
-- The first line of the layout will be used as the modal title if it doesn't contain an input field.
-- If the first line contains an input field, the default title "Cannoli modal" will be used.
-- Do not use markdown formatting in the title, it will be rendered as-is.
+- First line: modal title (if not an input field)
+- Default: "Cannoli modal"
 
-## Basic Structure
+## Structure
 - Plain text: Rendered as-is
-- Input fields: Enclosed in ==
+- Input fields: ==Field Name(field_type) options==
+- Layout follows input string formatting
+- Newlines create new paragraphs/lines in modal
 
-## Input Field Syntax
-==Field Name(field_type) options==
-
-- Field Name: Required
+## Input Fields
+- Field Name: Required, used as placeholder text
 - (field_type): Optional (default: text)
-- [options]: For dropdowns or date/time formats
+- options: For dropdowns/date formats
 
 ## Field Types
 1. text: Single-line input
 2. textarea: Multi-line input
-3. toggle: Boolean switch
-4. dropdown: Option selection
-5. date: Date picker
-6. time: Date and time picker
+3. toggle: Boolean switch (default: false)
+4. dropdown: Option selection (first is default)
+5. date: Date picker (default: today)
+6. time: Time picker (default: now)
+7. datetime: Date and time picker (default: now)
 
 ## Examples
-- Text: ==Simple Text==
-- Textarea: ==Long Text(textarea)==
-- Toggle: ==Enable Feature(toggle)==
-- Dropdown: ==Select Option(dropdown) Option1, Option2, Option3==
-  or ==Select Option(dropdown) ["Option 1", "Option 2", "Option 3"]==
-- Date: ==Select Date(date) YYYY-MM-DD==
-- Time: ==Select DateTime(time) YYYY-MM-DDTHH:mm==
+Text input: ==User Name==
+Textarea: ==Comments(textarea)==
+Toggle: ==Enable Feature(toggle)==
+Dropdown: ==Select Option(dropdown) Option1, Option2==
+Date: ==Select Date(date) YYYY-MM-DD==
 
-## Notes
-- Whitespace before == is preserved
+## Important Notes
+- Field names not auto-displayed; add explicit labels
+- Example:
+  Enter your name: ==User Name==
+  Select a color: ==Color(dropdown) Red, Green, Blue==
+- Whitespace before == preserved in layout
+- Modal layout mirrors input string formatting
+- Inputs on same line as text appear inline
 - Empty text inputs default to "No input"
-- Date/time formats are customizable
-- Dropdown options: Use comma-separated list or JSON array
-- Markdown formatting not enabled`
+- Date/time formats customizable (e.g., YYYY-MM-DD, HH:mm)
+- Dropdown options: Comma-separated list or JSON array
+- Markdown formatting not supported in modal`
         }
     }
 }
@@ -155,7 +158,8 @@ class CustomModal extends Modal {
 
                 const format = this.parseField(Array.isArray(fieldContent) ? fieldContent[0] : fieldContent)[3] ||
                     (fieldType === 'date' ? 'YYYY-MM-DD' :
-                        fieldType === 'time' ? 'YYYY-MM-DDTHH:mm' : '');
+                        fieldType === 'time' ? 'HH:mm' :
+                            fieldType === 'datetime' ? 'YYYY-MM-DDTHH:mm' : '');
 
                 if (match[1]) { // Preserve leading whitespace
                     paragraphs[paragraphs.length - 1].components.push({
@@ -222,7 +226,7 @@ class CustomModal extends Modal {
 
                 // Check if there's content after the type declaration
                 if (remainingContent) {
-                    if (type === 'date' || type === 'time') {
+                    if (type === 'date' || type === 'time' || type === 'datetime') {
                         format = remainingContent;
                     } else {
                         optionsString = remainingContent;
@@ -310,13 +314,33 @@ class CustomModal extends Modal {
 
         form.createEl("button", { text: "Submit", type: "submit" });
         this.addStyle();
+        this.modalEl.addClass('cannoli-modal');
     }
 
     addStyle() {
         const style = document.createElement('style');
         style.textContent = `
-            .modal-content p {
+            .cannoli-modal .modal-content p {
                 white-space: pre-wrap;
+            }
+            .cannoli-modal .obsidian-style-time-input {
+                background-color: var(--background-modifier-form-field);
+                border: 1px solid var(--background-modifier-border);
+                color: var(--text-normal);
+                padding: var(--size-4-1) var(--size-4-2);
+                border-radius: var(--radius-s);
+                font-size: var(--font-ui-small);
+                line-height: var(--line-height-tight);
+                width: auto;
+                font-family: var(--font-interface);
+                position: relative;
+            }
+            .cannoli-modal .obsidian-style-time-input:focus {
+                outline: none;
+                box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
+            }
+            .cannoli-modal .obsidian-style-time-input:hover {
+                background-color: var(--background-modifier-form-field-hover);
             }
         `;
         document.head.appendChild(style);
@@ -326,8 +350,14 @@ class CustomModal extends Modal {
         let settingComponent;
 
         const updateValue = (value: string) => {
-            if (component.fieldType === 'date' || component.fieldType === 'time') {
-                const formattedValue = moment(value, component.fieldType === 'date' ? 'YYYY-MM-DD' : 'YYYY-MM-DDTHH:mm').format(component.format);
+            if (component.fieldType === 'date') {
+                const formattedValue = moment(value, 'YYYY-MM-DD').format(component.format);
+                this.values[component.name] = formattedValue;
+            } else if (component.fieldType === 'time') {
+                const formattedValue = moment(value, 'HH:mm').format(component.format || 'HH:mm');
+                this.values[component.name] = formattedValue;
+            } else if (component.fieldType === 'datetime') {
+                const formattedValue = moment(value, 'YYYY-MM-DDTHH:mm').format(component.format || 'YYYY-MM-DDTHH:mm');
                 this.values[component.name] = formattedValue;
             } else {
                 this.values[component.name] = value;
@@ -375,9 +405,24 @@ class CustomModal extends Modal {
                     .onChange((value) => {
                         updateValue(value);
                     });
+                settingComponent.inputEl.type = 'time';
+                const defaultTime = moment().format('HH:mm');
+                settingComponent.inputEl.value = defaultTime;
+                updateValue(settingComponent.inputEl.value);
+
+                // Add custom styling to the time input
+                settingComponent.inputEl.addClass('obsidian-style-time-input');
+                break;
+            }
+            case 'datetime': {
+                settingComponent = new TextComponent(paragraph)
+                    .setPlaceholder(component.content)
+                    .onChange((value) => {
+                        updateValue(value);
+                    });
                 settingComponent.inputEl.type = 'datetime-local';
-                const defaultTime = moment().format(component.format);
-                settingComponent.inputEl.value = moment(defaultTime, component.format).format('YYYY-MM-DDTHH:mm');
+                const defaultDateTime = moment().format(component.format);
+                settingComponent.inputEl.value = defaultDateTime;
                 updateValue(settingComponent.inputEl.value);
                 break;
             }
