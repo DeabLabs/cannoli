@@ -6,14 +6,22 @@ export const modalMaker: Action = {
     name: "modal",
     function: async ({
         layout,
-        title = "Cannoli modal"
     }: {
         layout: string;
-        title?: string;
     }): Promise<string | Error> => {
         return new Promise((resolve) => {
             try {
-                new CustomModal(app, layout, (result) => {
+                const lines = layout.split('\n');
+                let title = "Cannoli modal";
+                let actualLayout = layout;
+
+                // Check if the first line doesn't contain an input (==)
+                if (lines.length > 0 && !lines[0].includes('==')) {
+                    title = lines[0].trim();
+                    actualLayout = lines.slice(1).join('\n');
+                }
+
+                new CustomModal(app, actualLayout, (result) => {
                     if (result instanceof Error) {
                         resolve(result);
                     } else {
@@ -30,6 +38,48 @@ export const modalMaker: Action = {
             category: "arg",
             type: "string",
             description: "The layout of the modal",
+            prompt:
+                `# Modal Layout System
+
+## Title
+- The first line of the layout will be used as the modal title if it doesn't contain an input field.
+- If the first line contains an input field, the default title "Cannoli modal" will be used.
+- Do not use markdown formatting in the title, it will be rendered as-is.
+
+## Basic Structure
+- Plain text: Rendered as-is
+- Input fields: Enclosed in ==
+
+## Input Field Syntax
+==Field Name(field_type) options==
+
+- Field Name: Required
+- (field_type): Optional (default: text)
+- [options]: For dropdowns or date/time formats
+
+## Field Types
+1. text: Single-line input
+2. textarea: Multi-line input
+3. toggle: Boolean switch
+4. dropdown: Option selection
+5. date: Date picker
+6. time: Date and time picker
+
+## Examples
+- Text: ==Simple Text==
+- Textarea: ==Long Text(textarea)==
+- Toggle: ==Enable Feature(toggle)==
+- Dropdown: ==Select Option(dropdown) Option1, Option2, Option3==
+  or ==Select Option(dropdown) ["Option 1", "Option 2", "Option 3"]==
+- Date: ==Select Date(date) YYYY-MM-DD==
+- Time: ==Select DateTime(time) YYYY-MM-DDTHH:mm==
+
+## Notes
+- Whitespace before == is preserved
+- Empty text inputs default to "No input"
+- Date/time formats are customizable
+- Dropdown options: Use comma-separated list or JSON array
+- Markdown formatting not enabled`
         }
     }
 }
@@ -292,8 +342,8 @@ class CustomModal extends Modal {
                 updateValue('');
                 break;
             case 'toggle': {
-                const toggleWrapper = paragraph.createDiv({ cls: 'toggle-wrapper' });
-                settingComponent = new ToggleComponent(toggleWrapper)
+                const toggleContainer = paragraph.createSpan({ cls: 'toggle-container' });
+                settingComponent = new ToggleComponent(toggleContainer)
                     .setValue(false)
                     .onChange(value => updateValue(value ? "true" : "false"));
                 updateValue("false");
@@ -353,9 +403,20 @@ class CustomModal extends Modal {
             }
         }
 
-        if (component.fieldType === 'toggle') {
-            paragraph.addClass('toggle-paragraph');
-        }
+        // Add custom CSS to align the toggle
+        const style = document.createElement('style');
+        style.textContent = `
+            .toggle-container {
+                display: inline-flex;
+                align-items: center;
+                vertical-align: middle;
+                margin-left: 4px;
+            }
+            .toggle-container .checkbox-container {
+                margin: 0;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     onClose() {
