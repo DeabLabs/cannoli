@@ -1,0 +1,28 @@
+{
+	"nodes":[
+		{"id":"c44e5acaab6c078d","type":"group","x":-1118,"y":580,"width":1334,"height":1598,"label":"Non-templated"},
+		{"id":"4dbad7a5011269a5","type":"group","x":-780,"y":-602,"width":729,"height":1119,"label":"Templated "},
+		{"id":"1c9c52c115176b48","type":"text","text":"Here's an example of a modal action usage where we send the syntax description in as a system message, and have an AI node write the modal layout.","x":-1509,"y":773,"width":368,"height":156},
+		{"id":"bfef661a2f487714","type":"text","text":"The output of a modal action node is the results in json object format\n\nIndividual responses can be accessed using arrow labels","x":-1133,"y":270,"width":327,"height":170},
+		{"id":"219ce8cb0d584413","type":"text","text":"Inputs are wrapped in double equals signs (which is why they are showing up highlighted)\n\nThe full syntax is described in the system prompt below.","x":-1288,"y":-116,"width":485,"height":145},
+		{"id":"00f40af99c1962cf","type":"text","text":"The first line of the modal layout is rendered as the title","x":-1111,"y":-340,"width":314,"height":90},
+		{"id":"b2af08970bb10b59","type":"text","text":"The built-in Modal action can be referenced by the name \"modal\"\n\nArguments:\n- layout (required) (templatable)","x":-1203,"y":-593,"width":401,"height":189},
+		{"id":"da8d006d9c506316","type":"text","text":"","x":-746,"y":263,"width":269,"height":158,"color":"6"},
+		{"id":"63a29488761470bd","type":"text","text":"[modal]\nA modal!\n{{intro}}\n\nHere's a text box: ==heya==\n\nhere's a toggle: ==yo (toggle)==\n\na textarea (for multiline text):\n==longText (textarea)==\n\nHere's a dropdown:\n==color (dropdown) red, blue, green==\n\nA time, default formatting: ==a time (time)==\n\nA datetime, weird custom formatting:\n==moment (datetime) YYYY-[Day]DDD [at] HH:mm:ss.SSS [in the] A==\n\nA date, custom formatting: ==someDay (date) MM/DD/YY==","x":-696,"y":-384,"width":478,"height":517,"color":"2"},
+		{"id":"83801bea07140e30","type":"text","text":"Write three sentences begging the user to fill out this modal.","x":-605,"y":-568,"width":291,"height":101},
+		{"id":"978ff46d7aede680","type":"text","text":"","x":-360,"y":207,"width":289,"height":294,"color":"6"},
+		{"id":"44d26a1390cef81a","type":"text","text":"# Modal Layout Syntax\n\n  \n\n## Title\n\n- First line: modal title (if not an input field)\n\n- Default: \"Cannoli modal\"\n\n  \n\n## Structure\n\n- Plain text: Rendered as-is\n\n- Input fields: ==Field Name(field_type) options==\n\n- Newlines create paragraphs\n\n  \n\n## Input Fields\n\n- Field Name: Required, used as placeholder text\n\n- (field_type): Optional (default: text)\n\n- options: For dropdowns/date formats\n\n  \n\n## Field Types\n\n1. text: Single-line input\n\n2. textarea: Multi-line input\n\n3. toggle: Boolean switch (default: false)\n\n4. dropdown: Option selection (first is default)\n\n5. date: Date picker (default: today)\n\n6. time: Time picker (default: now)\n\n7. datetime: Date and time picker (default: now)\n\n  \n\n## Examples\n\nText input: ==User Name==\n\nTextarea: ==Comments(textarea)==\n\nToggle: ==Enable Feature(toggle)==\n\nDropdown: ==Select Option(dropdown) Option1, Option2==\n\nDate: ==Select Date(date) YYYY-MM-DD==\n\n  \n\n## Important Notes\n\n- Field names are not automatically displayed in the modal\n\n- Add explicit field labels/descriptions as plain text before each input\n\n- Example:\n\nEnter your name: ==User Name==\n\nSelect a color: ==Color(dropdown) Red, Green, Blue==\n\n- Whitespace before == is preserved in layout\n\n- Empty text inputs default to \"No input\"\n\n- Date/time formats are customizable (e.g., YYYY-MM-DD, HH:mm)\n\n- Dropdown options: Use comma-separated list or JSON array\n\n- Markdown formatting is not supported in the modal","x":-1069,"y":623,"width":607,"height":1491,"color":"6"},
+		{"id":"6a75473410518f98","type":"text","text":"Respond with the layout of a modal that asks for a user's pizza order, including when they'd like it delivered.","x":-183,"y":771,"width":291,"height":148},
+		{"id":"75c101099767d0ab","type":"text","text":"modal","x":-92,"y":1033,"width":109,"height":53,"color":"2"},
+		{"id":"1ff553b1f86e103f","type":"text","text":"","x":-234,"y":1199,"width":393,"height":508,"color":"6"},
+		{"id":"30aa8a195cc87135","type":"text","text":"The modal action can be used to get user input during a cannoli run\n\nVariables can be referenced as normal, and they will be injected before we parse the modal layout","x":-645,"y":-831,"width":427,"height":168}
+	],
+	"edges":[
+		{"id":"62433987bedc07fd","fromNode":"63a29488761470bd","fromSide":"bottom","toNode":"da8d006d9c506316","toSide":"top","label":"heya"},
+		{"id":"03c59e6894a798a9","fromNode":"63a29488761470bd","fromSide":"bottom","toNode":"978ff46d7aede680","toSide":"top"},
+		{"id":"8b1ff6c7a0fc0d69","fromNode":"83801bea07140e30","fromSide":"bottom","toNode":"63a29488761470bd","toSide":"top","label":"intro"},
+		{"id":"8faee503bb993fc0","fromNode":"75c101099767d0ab","fromSide":"bottom","toNode":"1ff553b1f86e103f","toSide":"top"},
+		{"id":"fe8aa0d0d919f994","fromNode":"6a75473410518f98","fromSide":"bottom","toNode":"75c101099767d0ab","toSide":"top","label":"layout"},
+		{"id":"7b43add0e05eb2da","fromNode":"44d26a1390cef81a","fromSide":"right","toNode":"6a75473410518f98","toSide":"left"}
+	]
+}

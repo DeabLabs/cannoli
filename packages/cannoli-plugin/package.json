@@ -1,6 +1,6 @@
 {
 	"name": "cannoli-plugin",
-	"version": "2.0.1",
+	"version": "2.1.0",
 	"description": "Create LLM Chat flows using the Obsidian Canvas.",
 	"private": true,
 	"scripts": {
