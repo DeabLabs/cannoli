@@ -65,13 +65,43 @@ class CustomModal extends Modal {
     }
 
     parseFormat(): ModalParagraph[] {
-        const regex = /(\s*)\[([^\]]+)\]|([^[]+)/g;
+        const regex = /(\s*)==([\s\S]+?)==|([^=]+)/g;
         const paragraphs: ModalParagraph[] = [{ components: [] }];
         let match;
 
         while ((match = regex.exec(this.format)) !== null) {
             if (match[2]) { // Input component
-                const [fieldName, fieldType, options] = this.parseField(match[2]);
+                const trimmedContent = match[2].trim();
+                let fieldContent: string | string[];
+
+                // Check if content is a JSON array
+                if (trimmedContent.startsWith('[') && trimmedContent.endsWith(']')) {
+                    try {
+                        // Attempt to parse as JSON, handling potential escaping issues
+                        fieldContent = JSON.parse(trimmedContent.replace(/\\n/g, '\n').replace(/\\"/g, '"'));
+                    } catch (e) {
+                        console.error('Failed to parse JSON options:', e);
+                        // If parsing fails, treat it as a comma-separated list
+                        fieldContent = trimmedContent.slice(1, -1).split(',').map(item =>
+                            item.trim().replace(/^["']|["']$/g, '') // Remove surrounding quotes if present
+                        );
+                    }
+                } else {
+                    fieldContent = trimmedContent;
+                }
+
+                let fieldName: string, fieldType: string, options: string[] | undefined;
+
+                if (Array.isArray(fieldContent)) {
+                    // If fieldContent is an array, assume the first element is the field name and type
+                    const [nameAndType, ...rest] = fieldContent;
+                    [fieldName, fieldType] = this.parseNameAndType(nameAndType as string);
+                    options = rest.map(String);
+                } else {
+                    // If fieldContent is a string, use parseField as before
+                    [fieldName, fieldType, options] = this.parseField(fieldContent);
+                }
+
                 if (match[1]) { // Preserve leading whitespace
                     paragraphs[paragraphs.length - 1].components.push({
                         type: 'text',
@@ -107,7 +137,7 @@ class CustomModal extends Modal {
     }
 
     parseField(field: string): [string, string, string[] | undefined] {
-        // Remove square brackets
+        // Remove double equals signs
         const content = field.trim();
 
         // Find the index of the first opening parenthesis
@@ -134,9 +164,59 @@ class CustomModal extends Modal {
         }
 
         // Parse options if present
-        const options = optionsString ? optionsString.split(',').map(o => o.trim()).filter(o => o !== '') : undefined;
+        let options: string[] | undefined;
+        if (optionsString.startsWith('[') && optionsString.endsWith(']')) {
+            try {
+                // Attempt to parse as JSON, handling potential escaping issues
+                options = JSON.parse(optionsString.replace(/\\n/g, '\n').replace(/\\"/g, '"'));
+            } catch (e) {
+                console.error('Failed to parse JSON options:', e);
+                // If parsing fails, treat it as a comma-separated list
+                options = optionsString.slice(1, -1).split(',').map(item =>
+                    item.trim().replace(/^["']|["']$/g, '') // Remove surrounding quotes if present
+                );
+            }
+
+            // Ensure options is an array of strings
+            if (Array.isArray(options)) {
+                options = options.flat().map(String);
+            } else {
+                options = [String(options)];
+            }
+        } else {
+            options = optionsString ? optionsString.split(',').map(o => o.trim()).filter(o => o !== '') : undefined;
+        }
 
         return [name, type, options];
+    }
+
+    parseNameAndType(content: string): [string, string] {
+        // Remove any leading or trailing whitespace
+        content = content.trim();
+
+        // Find the index of the last opening parenthesis
+        const openParenIndex = content.lastIndexOf('(');
+
+        if (openParenIndex === -1) {
+            // If there's no parenthesis, assume it's all name and type is default
+            return [content, 'text'];
+        }
+
+        // Find the matching closing parenthesis
+        const closeParenIndex = content.indexOf(')', openParenIndex);
+
+        if (closeParenIndex === -1) {
+            // If there's no closing parenthesis, assume it's all name
+            return [content, 'text'];
+        }
+
+        // Extract the name (everything before the last opening parenthesis)
+        const name = content.slice(0, openParenIndex).trim();
+
+        // Extract the type (everything between the parentheses)
+        const type = content.slice(openParenIndex + 1, closeParenIndex).trim();
+
+        return [name, type || 'text'];
     }
 
     onOpen() {
