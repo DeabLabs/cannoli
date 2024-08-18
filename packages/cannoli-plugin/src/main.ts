@@ -23,14 +23,14 @@ import {
 	run,
 	bake,
 	CannoliFunctionInfo,
-	parseCannoliFunctionInfo
+	parseCannoliFunctionInfo,
+	BakeResult
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
 import { VaultInterface } from "./vault_interface";
 import { CanvasPersistor } from "./canvas";
 import { dataviewQuery, smartConnectionsQuery, modalMaker } from "./actions";
-import { BakeResult } from "@deablabs/cannoli-core";
 import { Version2Modal } from "./modals/versionTwoModal";
 import { ValTownModal } from "./modals/viewVals";
 import { EditValModal } from "./modals/editVal";

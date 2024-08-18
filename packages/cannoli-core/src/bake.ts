@@ -1,6 +1,6 @@
 import { run } from "./cannoli";
 import { FileManager } from "./fileManager";
-import { VerifiedCannoliCanvasData } from "./models/graph";
+import { VerifiedCannoliCanvasData } from "./graph";
 import { LLMConfig } from "./providers";
 import { Action, HttpTemplate } from "./run";
 

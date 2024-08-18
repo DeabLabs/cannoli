@@ -5,31 +5,28 @@ import {
 	CanvasGroupData,
 	CanvasLinkData,
 	CanvasTextData,
-} from "../persistor";
+} from "./persistor";
 
-import { CannoliObject } from "./object";
-import { CannoliGroup, RepeatGroup } from "./group";
-import {
-	CallNode,
-	CannoliNode,
-	ChooseNode,
-	ContentNode,
-	FormNode,
-	FloatingNode,
-	FormatterNode,
-	HttpNode,
-	ReferenceNode,
-	SearchNode,
-} from "./node";
-import {
-	CannoliEdge,
-	ChatConverterEdge,
-	ChatResponseEdge,
-	LoggingEdge,
-	SystemMessageEdge,
-} from "./edge";
-import { GenericCompletionResponse } from "../providers";
-import { ReceiveInfo } from "../run";
+import { GenericCompletionResponse } from "./providers";
+import { ReceiveInfo } from "./run";
+import { CannoliObject } from "./graph/CannoliObject";
+import { CannoliEdge } from "./graph/objects/CannoliEdge";
+import { ChatConverterEdge } from "./graph/objects/edges/ChatConverterEdge";
+import { ChatResponseEdge } from "./graph/objects/edges/ChatResponseEdge";
+import { LoggingEdge } from "./graph/objects/edges/LoggingEdge";
+import { SystemMessageEdge } from "./graph/objects/edges/SystemMessageEdge";
+import { CannoliGroup } from "./graph/objects/vertices/CannoliGroup";
+import { CannoliNode } from "./graph/objects/vertices/CannoliNode";
+import { RepeatGroup } from "./graph/objects/vertices/groups/RepeatGroup";
+import { ChooseNode } from "./graph/objects/vertices/nodes/call/ChooseNode";
+import { FormNode } from "./graph/objects/vertices/nodes/call/FormNode";
+import { CallNode } from "./graph/objects/vertices/nodes/CallNode";
+import { FormatterNode } from "./graph/objects/vertices/nodes/content/FormatterNode";
+import { HttpNode } from "./graph/objects/vertices/nodes/content/HttpNode";
+import { ReferenceNode } from "./graph/objects/vertices/nodes/content/ReferenceNode";
+import { SearchNode } from "./graph/objects/vertices/nodes/content/SearchNode";
+import { ContentNode } from "./graph/objects/vertices/nodes/ContentNode";
+import { FloatingNode } from "./graph/objects/FloatingNode";
 
 export enum CannoliObjectKind {
 	Node = "node",

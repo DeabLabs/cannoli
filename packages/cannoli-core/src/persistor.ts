@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
-import { AllVerifiedCannoliCanvasNodeData, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
+import { AllVerifiedCannoliCanvasNodeData, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./graph";
 
 export const hexColorSchema = z.custom<`#${string}`>(v => {
 	return /^#[0-9a-fA-F]{6}$/.test(v);

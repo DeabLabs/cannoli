@@ -25,7 +25,7 @@ import {
 	VerifiedCannoliCanvasGroupData,
 	AllVerifiedCannoliCanvasNodeData,
 	VerifiedCannoliCanvasEdgeData,
-} from "./models/graph";
+} from "./graph";
 
 export enum IndicatedNodeType {
 	Call = "call",
@@ -293,7 +293,7 @@ export class CannoliFactory {
 			node.type === "text" || node.type === "file"
 				? this.parseNodeReferences(node)
 				: [];
-		const groups = this.getGroupsForVertex(node);
+		let groups = this.getGroupsForVertex(node);
 		const dependencies = [] as string[];
 		const originalObject = null;
 		const status =
@@ -303,6 +303,10 @@ export class CannoliFactory {
 
 		if (!type) {
 			return null;
+		}
+
+		if (type === FloatingNodeType.Variable) {
+			groups = [];
 		}
 
 		return {

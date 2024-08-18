@@ -1,4 +1,4 @@
-import { Reference } from "./models/graph";
+import { Reference } from "./graph";
 
 export interface FileManager {
     editNote(
