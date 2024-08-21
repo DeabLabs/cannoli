@@ -1,6 +1,5 @@
-import { CannoliObject, CannoliVertex } from "./models/object";
 import pLimit from "p-limit";
-import { AllVerifiedCannoliCanvasNodeData, CallNodeType, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, EdgeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./models/graph";
+import { AllVerifiedCannoliCanvasNodeData, CallNodeType, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, EdgeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -14,8 +13,10 @@ import invariant from "tiny-invariant";
 import { CannoliFactory } from "./factory";
 import { FileManager } from "./fileManager";
 import { CanvasData, Persistor, canvasDataSchema } from "./persistor";
-import { CannoliGroup } from "./models/group";
-import { CannoliNode } from "./models/node";
+import { CannoliObject } from "./graph/CannoliObject";
+import { CannoliVertex } from "./graph/objects/CannoliVertex";
+import { CannoliGroup } from "./graph/objects/vertices/CannoliGroup";
+import { CannoliNode } from "./graph/objects/vertices/CannoliNode";
 
 export interface HttpTemplate {
 	id: string;
