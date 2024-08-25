@@ -15,6 +15,7 @@ export interface BaseSimVertex {
     height: number;
     anchored: boolean;
     noGravity: boolean;
+    verticallyAnchored: boolean; // New property
 }
 
 export interface SimNode extends BaseSimVertex {
@@ -44,6 +45,11 @@ export interface SimEdge {
 export type SimCanvas = {
     vertices: SimVertex[];
     edges: SimEdge[];
+}
+
+interface ConnectedComponent {
+    nodes: SimNode[];
+    rootNode: SimNode;
 }
 
 export class Vector2D {
@@ -119,10 +125,16 @@ export class LayoutSimulator {
     groupPadding = 20;
 
     // Time steps before allowing another anchor change, to prevent bistable edge flipping
-    anchorChangeCooldown = 200;
+    anchorChangeCooldown = 300;
 
-    // New property for tuning the initialization area
-    initializationAreaFactor = 10;
+    // Affects how large the size of the initial square for a connected component is, higher values mean larger squares
+    initializationAreaFactor = 7;
+
+    // Strength of sideways gravity for non-origin root nodes. Higher values pull nodes towards the center more strongly.
+    sidewaysGravityStrength = 0.003;
+
+    private rootNodes: Set<string> = new Set();
+    private originRootNode: SimNode | null = null;
 
     constructor(canvas: SimCanvas, writeCallback?: (jsonCanvas: JsonCanvas) => Promise<void>) {
         this.canvas = canvas;
@@ -154,6 +166,75 @@ export class LayoutSimulator {
         return !this.canvas.edges.some(edge => edge.target.id === vertex.id);
     }
 
+    private findConnectedComponents(): ConnectedComponent[] {
+        const components: ConnectedComponent[] = [];
+        const visited = new Set<string>();
+
+        for (const vertex of this.canvas.vertices) {
+            if (vertex.type === 'node' && !visited.has(vertex.id)) {
+                const component = this.exploreComponent(vertex as SimNode, visited);
+                const rootNode = this.findComponentRootNode(component);
+                components.push({ nodes: component, rootNode });
+            }
+        }
+
+        return components;
+    }
+
+    private exploreComponent(startNode: SimNode, visited: Set<string>): SimNode[] {
+        const component: SimNode[] = [];
+        const stack = [startNode];
+
+        while (stack.length > 0) {
+            const node = stack.pop()!;
+            if (!visited.has(node.id)) {
+                visited.add(node.id);
+                component.push(node);
+
+                // Add both incoming and outgoing connections
+                this.canvas.edges.forEach(edge => {
+                    if (edge.source.id === node.id && edge.target.type === 'node') {
+                        stack.push(edge.target as SimNode);
+                    }
+                    if (edge.target.id === node.id && edge.source.type === 'node') {
+                        stack.push(edge.source as SimNode);
+                    }
+                });
+            }
+        }
+
+        return component;
+    }
+
+    private findComponentRootNode(component: SimNode[]): SimNode {
+        return component.reduce((maxNode, currentNode) => {
+            const maxDescendants = this.countDescendants(maxNode.id);
+            const currentDescendants = this.countDescendants(currentNode.id);
+            return currentDescendants > maxDescendants ? currentNode : maxNode;
+        });
+    }
+
+    private arrangeRootNodes(components: ConnectedComponent[]): Map<string, Vector2D> {
+        const rootPositions = new Map<string, Vector2D>();
+        const sortedComponents = components.sort((a, b) => b.nodes.length - a.nodes.length);
+
+        let xOffset = 0;
+        const yPosition = 0;
+        const spacing = Math.sqrt(this.calculateTotalNodeArea() * this.initializationAreaFactor);
+
+        sortedComponents.forEach((component, index) => {
+            if (index === 0) {
+                rootPositions.set(component.rootNode.id, new Vector2D(0, yPosition));
+            } else {
+                xOffset += spacing;
+                const xPosition = index % 2 === 0 ? xOffset : -xOffset;
+                rootPositions.set(component.rootNode.id, new Vector2D(xPosition, yPosition));
+            }
+        });
+
+        return rootPositions;
+    }
+
     initializeVertices() {
         this.initializeNodes();
         this.initializeGroups();
@@ -179,44 +260,51 @@ export class LayoutSimulator {
         return count - 1; // Subtract 1 to exclude the node itself
     }
 
-    private findRootNode(): SimNode | null {
-        const sourceNodes = this.canvas.vertices.filter(v => v.type === 'node' && this.isSourceNode(v)) as SimNode[];
+    private initializeNodes() {
+        const components = this.findConnectedComponents();
+        const rootPositions = this.arrangeRootNodes(components);
 
-        if (sourceNodes.length === 0) return null;
+        components.forEach((component, index) => {
+            const rootPosition = rootPositions.get(component.rootNode.id)!;
+            const componentArea = this.calculateComponentArea(component.nodes);
+            const componentRadius = Math.sqrt(componentArea * this.initializationAreaFactor);
 
-        return sourceNodes.reduce((maxNode, currentNode) => {
-            const maxDescendants = this.countDescendants(maxNode.id);
-            const currentDescendants = this.countDescendants(currentNode.id);
-            return currentDescendants > maxDescendants ? currentNode : maxNode;
+            this.rootNodes.add(component.rootNode.id);
+            if (index === 0) {
+                this.originRootNode = component.rootNode;
+            }
+
+            component.nodes.forEach(node => {
+                node.velocity = new Vector2D(0, 0);
+
+                if (node === component.rootNode) {
+                    node.position = rootPosition;
+                    if (node === this.originRootNode) {
+                        node.anchored = true; // Fully anchor the origin root node
+                    } else {
+                        node.verticallyAnchored = true; // Other root nodes are vertically anchored
+                        node.anchored = false;
+                    }
+                } else if (this.isSourceNode(node)) {
+                    node.position = new Vector2D(
+                        rootPosition.x + (Math.random() - 0.5) * componentRadius,
+                        rootPosition.y
+                    );
+                    node.noGravity = true;
+                } else {
+                    node.position = new Vector2D(
+                        rootPosition.x + (Math.random() - 0.5) * componentRadius,
+                        rootPosition.y + Math.random() * componentRadius
+                    );
+                    node.anchored = false;
+                    node.noGravity = false;
+                }
+            });
         });
     }
 
-    private initializeNodes() {
-        const rootNode = this.findRootNode();
-        const totalNodeArea = this.calculateTotalNodeArea();
-        const sideLength = Math.sqrt(totalNodeArea * this.initializationAreaFactor);
-        console.log("initial square side length:", sideLength);
-
-        for (const vertex of this.canvas.vertices) {
-            if (vertex.type === 'node') {
-                vertex.velocity = new Vector2D(0, 0);
-
-                if (vertex === rootNode) {
-                    vertex.position = new Vector2D(0, 0);
-                    vertex.anchored = true;
-                } else if (this.isSourceNode(vertex)) {
-                    vertex.position = new Vector2D(Math.random() * sideLength - sideLength / 2, 0);
-                    vertex.noGravity = true;
-                } else {
-                    vertex.position = new Vector2D(
-                        Math.random() * sideLength - sideLength / 2,
-                        Math.random() * sideLength
-                    );
-                    vertex.anchored = false;
-                    vertex.noGravity = false;
-                }
-            }
-        }
+    private calculateComponentArea(nodes: SimNode[]): number {
+        return nodes.reduce((total, node) => total + node.width * node.height, 0);
     }
 
     private calculateTotalNodeArea(): number {
@@ -421,12 +509,21 @@ export class LayoutSimulator {
 
     applyGravity(vertex: SimVertex) {
         if (!vertex.noGravity && !vertex.anchored) {
+            // Apply normal downward gravity
             vertex.velocity = vertex.velocity.add(this.gravity);
+        }
+
+        // Apply sideways gravity for non-origin root nodes
+        if (this.rootNodes.has(vertex.id) && vertex !== this.originRootNode) {
+            const sidewaysGravity = new Vector2D(-vertex.position.x * this.sidewaysGravityStrength, 0);
+            vertex.velocity = vertex.velocity.add(sidewaysGravity);
         }
     }
 
     updatePositions() {
         for (const vertex of this.canvas.vertices) {
+            if (vertex.anchored) continue; // Skip fully anchored vertices
+
             // Apply existing damping to velocity
             vertex.velocity = vertex.velocity.multiply(this.damping);
 
@@ -435,7 +532,12 @@ export class LayoutSimulator {
                 vertex.velocity = vertex.velocity.normalize().multiply(this.maxVelocity);
             }
 
-            const newPosition = vertex.position.add(vertex.velocity);
+            let newPosition = vertex.position.add(vertex.velocity);
+
+            // If vertically anchored, only allow horizontal movement
+            if (vertex.verticallyAnchored) {
+                newPosition = new Vector2D(newPosition.x, vertex.position.y);
+            }
 
             // Check for collisions with other vertices
             let collision = false;
@@ -455,7 +557,11 @@ export class LayoutSimulator {
             } else {
                 // If collision occurs, reduce velocity and try a smaller move
                 vertex.velocity = vertex.velocity.multiply(0.5);
-                vertex.position = vertex.position.add(vertex.velocity);
+                let adjustedPosition = vertex.position.add(vertex.velocity);
+                if (vertex.verticallyAnchored) {
+                    adjustedPosition = new Vector2D(adjustedPosition.x, vertex.position.y);
+                }
+                vertex.position = adjustedPosition;
             }
         }
     }

@@ -136,8 +136,8 @@ class RecipeToNoGeometryCanvasConverter {
         const nodeId = generateId();
 
         const dimensionOptions: DimensionOptions = {
-            charWidth: 8.8,
-            lineHeight: 33,
+            charWidth: 9,
+            lineHeight: 35,
             minWidth: 150,
             maxWidth: 400,
             minHeight: 60,
@@ -158,6 +158,7 @@ class RecipeToNoGeometryCanvasConverter {
             height,
             anchored: false,
             noGravity: false,
+            verticallyAnchored: false,
         };
 
         node.outgoingArrows.forEach((arrow) => {
@@ -200,6 +201,7 @@ class RecipeToNoGeometryCanvasConverter {
             height: 100,
             anchored: false,
             noGravity: false,
+            verticallyAnchored: false,
         };
 
         group.outgoingArrows.forEach((arrow) => {
