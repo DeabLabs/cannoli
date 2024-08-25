@@ -24,7 +24,8 @@ import {
 	bake,
 	CannoliFunctionInfo,
 	parseCannoliFunctionInfo,
-	BakeResult
+	BakeResult,
+	generateCannoliAndSimulateLayout
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -37,6 +38,7 @@ import { EditValModal } from "./modals/editVal";
 import { RunPriceAlertModal } from "./modals/runPriceAlert";
 import { CannoliSettings, DEFAULT_SETTINGS } from "./settings/settings";
 import { CannoliSettingTab } from "./settings/settingsTab";
+import { GenerateCannoliModal } from "./modals/generateCannoliModal";
 
 export default class Cannoli extends Plugin {
 	settings: CannoliSettings;
@@ -109,6 +111,8 @@ export default class Cannoli extends Plugin {
 		this.createBakeToValTownCommand();
 
 		this.createBakeCommand();
+
+		this.createGenerateCannoliCommand();
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon(
@@ -222,6 +226,43 @@ export default class Cannoli extends Plugin {
 			callback: this.bake,
 			icon: "cannoli",
 		});
+	};
+
+	createGenerateCannoliCommand = () => {
+		this.addCommand({
+			id: "generate-cannoli",
+			name: "Generate cannoli",
+			callback: this.generateCannoli,
+			icon: "cannoli",
+		});
+	};
+
+	generateCannoli = async () => {
+		// Open a modal to ask the user for a prompt
+		const prompt = await new Promise<string>((resolve) => {
+			const modal = new GenerateCannoliModal(this.app, (prompt: string) => {
+				resolve(prompt);
+			});
+			modal.open();
+		});
+
+		// Get the active file and check if it's a canvas
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
+			new Notice("This file is not a canvas");
+			return;
+		}
+
+		const writeCallback = async (jsonCanvas: unknown) => {
+			const stringifiedJsonCanvas = JSON.stringify(jsonCanvas, null, 2);
+
+			await this.app.vault.process(activeFile, (content: string) => {
+				return stringifiedJsonCanvas;
+			});
+		}
+
+		// Write the cannoli to the file
+		await generateCannoliAndSimulateLayout(prompt, this.settings.anthropicAPIKey, writeCallback);
 	};
 
 	openVersion2Modal = async () => {

@@ -17,6 +17,9 @@ importers:
 
   packages/cannoli-core:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 0.27.0
+        version: 0.27.0
       '@langchain/anthropic':
         specifier: 0.2.1
         version: 0.2.1(langchain@0.2.5(fast-xml-parser@4.4.0)(ignore@5.3.1)(openai@4.52.0)(ws@8.17.0))(openai@4.52.0)
@@ -165,6 +168,9 @@ packages:
 
   '@anthropic-ai/sdk@0.21.1':
     resolution: {integrity: sha512-fqdt74RTdplnaFOYhwNjjK/Ec09Dqv9ekYr7PuC6GdhV1RWkziqbpJBewn42CYYqCr92JeX6g+IXVgXmq9l7XQ==}
+
+  '@anthropic-ai/sdk@0.27.0':
+    resolution: {integrity: sha512-DuksaCaCb0ENDAc1UHef341SRK6LQmPvey10+Q662Eo4rc8H2i/MKK/n6q/dJagqVkqJBoEEirrlMBLqIIhupw==}
 
   '@codemirror/language@https://codeload.github.com/lishid/cm-language/tar.gz/2644bfc27afda707a7e1f3aedaf3ca7120f63cd9':
     resolution: {tarball: https://codeload.github.com/lishid/cm-language/tar.gz/2644bfc27afda707a7e1f3aedaf3ca7120f63cd9}
@@ -2253,8 +2259,8 @@ packages:
       '@codemirror/state': ^6.0.0
       '@codemirror/view': ^6.0.0
 
-  obsidian@https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/8be9ff1e1b708b9451f35ce2df33e3983e88565b:
-    resolution: {tarball: https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/8be9ff1e1b708b9451f35ce2df33e3983e88565b}
+  obsidian@https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/df9434bec6883bd32727f61b1ed1336f7663d0e4:
+    resolution: {tarball: https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/df9434bec6883bd32727f61b1ed1336f7663d0e4}
     version: 1.6.6
     peerDependencies:
       '@codemirror/state': ^6.0.0
@@ -2752,6 +2758,18 @@ snapshots:
       formdata-node: 4.4.1
       node-fetch: 2.7.0
       web-streams-polyfill: 3.3.3
+    transitivePeerDependencies:
+      - encoding
+
+  '@anthropic-ai/sdk@0.27.0':
+    dependencies:
+      '@types/node': 18.19.33
+      '@types/node-fetch': 2.6.11
+      abort-controller: 3.0.0
+      agentkeepalive: 4.5.0
+      form-data-encoder: 1.7.2
+      formdata-node: 4.4.1
+      node-fetch: 2.7.0
     transitivePeerDependencies:
       - encoding
 
@@ -4310,7 +4328,7 @@ snapshots:
 
   obsidian-daily-notes-interface@0.8.4(@codemirror/state@6.4.1)(@codemirror/view@6.26.3):
     dependencies:
-      obsidian: https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/8be9ff1e1b708b9451f35ce2df33e3983e88565b(@codemirror/state@6.4.1)(@codemirror/view@6.26.3)
+      obsidian: https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/df9434bec6883bd32727f61b1ed1336f7663d0e4(@codemirror/state@6.4.1)(@codemirror/view@6.26.3)
       tslib: 2.1.0
     transitivePeerDependencies:
       - '@codemirror/state'
@@ -4336,7 +4354,7 @@ snapshots:
       '@types/codemirror': 5.60.8
       moment: 2.29.4
 
-  obsidian@https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/8be9ff1e1b708b9451f35ce2df33e3983e88565b(@codemirror/state@6.4.1)(@codemirror/view@6.26.3):
+  obsidian@https://codeload.github.com/obsidianmd/obsidian-api/tar.gz/df9434bec6883bd32727f61b1ed1336f7663d0e4(@codemirror/state@6.4.1)(@codemirror/view@6.26.3):
     dependencies:
       '@codemirror/state': 6.4.1
       '@codemirror/view': 6.26.3
