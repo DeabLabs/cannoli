@@ -63,7 +63,7 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
     geminiModel: "gemini-1.0-pro-latest",
     geminiAPIKey: "",
     geminiTemperature: 1,
-    anthropicModel: "claude-3-opus-20240229",
+    anthropicModel: "claude-3-5-sonnet-20240620",
     anthropicAPIKey: "",
     anthropicTemperature: 1,
     anthropicBaseURL: "",

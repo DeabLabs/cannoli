@@ -254,10 +254,7 @@ export class LLMProvider {
 					anthropicApiUrl: url,
 					clientOptions: {
 						defaultHeaders: {
-							"Access-Control-Allow-Origin": "*",
-							"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-							"Access-Control-Allow-Headers": "*",
-							"x-authorization": `${this.valtownApiKey}`
+							"anthropic-dangerous-direct-browser-access": "true",
 						},
 					}
 				});
