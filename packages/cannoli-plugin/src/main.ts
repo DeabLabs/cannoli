@@ -1086,6 +1086,11 @@ export default class Cannoli extends Plugin {
 		// Parse the file into a CanvasData object
 		const canvasData = await this.fetchData(file);
 
+		if (!canvasData) {
+			new Notice(`Cannoli run canceled.`);
+			return;
+		}
+
 		const cannoliArgs = {
 			obsidianCurrentNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
 				"No active note",
@@ -1215,27 +1220,31 @@ export default class Cannoli extends Plugin {
 		}
 	};
 
-	async fetchData(file: TFile): Promise<CanvasData> {
+	async fetchData(file: TFile): Promise<CanvasData | null> {
 		const fileContent = await this.app.vault.cachedRead(file);
 		const parsedContent = JSON.parse(fileContent) as CanvasData;
 
-		let subCanvasGroupId: string | undefined;
+		const subCanvasGroupIds: string[] = [];
 
 		for (const node of parsedContent.nodes) {
 			if (node.type === "group" && (node.text === "cannoli" || node.text === "Cannoli")) {
-				subCanvasGroupId = node.id;
-				break;
+				subCanvasGroupIds.push(node.id);
 			}
+		}
+
+		if (this.settings.onlyRunCannoliGroups && subCanvasGroupIds.length === 0) {
+			new Notice("No cannoli groups found. You have the 'Only run Cannoli groups' setting enabled, but no cannoli groups are present in the canvas.");
+			return null;
 		}
 
 		let canvasData = parsedContent;
 
-		if (subCanvasGroupId) {
+		if (subCanvasGroupIds.length > 0) {
 			const subCanvasGroup = parsedContent.nodes.find(
-				(node) => node.id === subCanvasGroupId
+				(node) => subCanvasGroupIds.includes(node.id)
 			) as CanvasGroupData;
 			if (!subCanvasGroup) {
-				throw new Error(`Group with id ${subCanvasGroupId} not found.`);
+				throw new Error(`Group with id ${subCanvasGroupIds.join(", ")} not found.`);
 			}
 
 			const { nodeIds, edgeIds } = this.getNodesAndEdgesInGroup(subCanvasGroup, parsedContent);

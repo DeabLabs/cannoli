@@ -22,4 +22,21 @@ export function createCanvasSettings(containerEl: HTMLElement, plugin: Cannoli):
                     await plugin.saveSettings();
                 })
         );
+
+    new Setting(containerEl)
+        .setName("Only run canvases with a 'cannoli' group")
+        .setDesc(
+            "Toggle this if you'd like to only run canvases that have a 'cannoli' labeled group. Use this if you want to ensure you never run a canvas as a cannoli unless you've explicitly defined the part of the canvas you want to be interpreted as a cannoli."
+        )
+        .addToggle((toggle) =>
+            toggle
+                .setValue(
+                    plugin.settings.onlyRunCannoliGroups ??
+                    DEFAULT_SETTINGS.onlyRunCannoliGroups
+                )
+                .onChange(async (value) => {
+                    plugin.settings.onlyRunCannoliGroups = value;
+                    await plugin.saveSettings();
+                })
+        );
 }

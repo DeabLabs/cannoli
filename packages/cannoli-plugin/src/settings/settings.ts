@@ -47,6 +47,7 @@ export interface CannoliSettings {
     seenVersion2Modal: boolean;
     enableVision: boolean;
     secrets: { name: string; value: string; visibility: string }[];
+    onlyRunCannoliGroups: boolean;
 }
 
 export const DEFAULT_SETTINGS: CannoliSettings = {
@@ -95,4 +96,5 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
     seenVersion2Modal: false,
     secrets: [],
     enableVision: true,
+    onlyRunCannoliGroups: false,
 };
