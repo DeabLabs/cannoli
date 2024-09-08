@@ -15,7 +15,7 @@ export interface BaseSimVertex {
     height: number;
     anchored: boolean;
     noGravity: boolean;
-    verticallyAnchored: boolean; // New property
+    verticallyAnchored: boolean;
 }
 
 export interface SimNode extends BaseSimVertex {
@@ -26,7 +26,7 @@ export interface SimNode extends BaseSimVertex {
 export interface SimGroup extends BaseSimVertex {
     type: "group";
     label?: string;
-    children: SimVertex[]; // New property
+    children: SimVertex[];
 }
 
 export type SimVertex = SimNode | SimGroup;

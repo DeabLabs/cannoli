@@ -1,5 +1,5 @@
+import { CannoliRecipe, RecipeNode, RecipeGroup, RecipeArrow } from "./Generator";
 import { CanvasColor, SimCanvas, SimEdge, SimGroup, SimNode, SimVertex, Vector2D } from "./layoutSim";
-import { CannoliRecipe, RecipeArrow, RecipeGroup, RecipeNode } from "./recipeSchema";
 
 interface UnlinkedSimEdge {
     id: string;

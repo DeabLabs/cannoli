@@ -25,7 +25,7 @@ import {
 	CannoliFunctionInfo,
 	parseCannoliFunctionInfo,
 	BakeResult,
-	generateCannoliAndSimulateLayout
+	generateCannoli,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -246,23 +246,25 @@ export default class Cannoli extends Plugin {
 			modal.open();
 		});
 
-		// Get the active file and check if it's a canvas
-		const activeFile = this.app.workspace.getActiveFile();
-		if (!activeFile || !activeFile.path.endsWith(".canvas")) {
-			new Notice("This file is not a canvas");
-			return;
-		}
+		const recipe = await generateCannoli(prompt, this.settings.anthropicAPIKey);
 
-		const writeCallback = async (jsonCanvas: unknown) => {
-			const stringifiedJsonCanvas = JSON.stringify(jsonCanvas, null, 2);
+		// // Get the active file and check if it's a canvas
+		// const activeFile = this.app.workspace.getActiveFile();
+		// if (!activeFile || !activeFile.path.endsWith(".canvas")) {
+		// 	new Notice("This file is not a canvas");
+		// 	return;
+		// }
 
-			await this.app.vault.process(activeFile, (content: string) => {
-				return stringifiedJsonCanvas;
-			});
-		}
+		// const writeCallback = async (jsonCanvas: unknown) => {
+		// 	const stringifiedJsonCanvas = JSON.stringify(jsonCanvas, null, 2);
 
-		// Write the cannoli to the file
-		await generateCannoliAndSimulateLayout(prompt, this.settings.anthropicAPIKey, writeCallback);
+		// 	await this.app.vault.process(activeFile, (content: string) => {
+		// 		return stringifiedJsonCanvas;
+		// 	});
+		// }
+
+		// // Write the cannoli to the file
+		// await generateCannoliAndSimulateLayout(prompt, this.settings.anthropicAPIKey, writeCallback);
 	};
 
 	openVersion2Modal = async () => {

@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { cannoliRecipeInstructionsPrompt, cannoliRecipeJsonPrompt, cannoliRecipeSchemaPrompt } from "./prompt";
+import { cannoliRecipeInstructionsPrompt, cannoliRecipeJsonPrompt, cannoliSchemaPrompt } from "./prompt";
 import { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 
 export async function generateCannoliRecipe(prompt: string, apiKey: string): Promise<string> {
@@ -31,7 +31,7 @@ export async function generateCannoliRecipe(prompt: string, apiKey: string): Pro
     const planResponse = await anthropic.messages.create({
         model: "claude-3-5-sonnet-20240620",
         max_tokens: 8192,
-        system: cannoliRecipeSchemaPrompt,
+        system: cannoliSchemaPrompt,
         messages: [firstMessage]
     });
 
@@ -43,7 +43,7 @@ export async function generateCannoliRecipe(prompt: string, apiKey: string): Pro
     const jsonResponse = await anthropic.messages.create({
         model: "claude-3-5-sonnet-20240620",
         max_tokens: 8192,
-        system: cannoliRecipeSchemaPrompt,
+        system: cannoliSchemaPrompt,
         messages: [firstMessage, planResponseMessage, secondMessage]
     });
 

@@ -44,28 +44,6 @@ export interface JsonCanvas {
     edges: Edge[];
 }
 
-// function calculateNodeCenter(node: Node): { x: number; y: number } {
-//     return {
-//         x: node.x + node.width / 2,
-//         y: node.y + node.height / 2
-//     };
-// }
-
-// function calculateAngle(source: { x: number; y: number }, target: { x: number; y: number }): number {
-//     const deltaY = target.y - source.y;
-//     const deltaX = target.x - source.x;
-//     let angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
-//     if (angle < 0) angle += 360; // Normalize to 0-360
-//     return angle;
-// }
-
-// function determineSides(angle: number): { fromSide: Side, toSide: Side } {
-//     if (angle <= 45 || angle > 315) return { fromSide: "right", toSide: "left" };
-//     if (angle <= 135) return { fromSide: "bottom", toSide: "top" };
-//     if (angle <= 225) return { fromSide: "left", toSide: "right" };
-//     return { fromSide: "top", toSide: "bottom" };
-// }
-
 export function convertSimCanvasToJsonCanvas(simCanvas: SimCanvas): JsonCanvas {
     const nodes: Node[] = [];
     const edges: Edge[] = [];
