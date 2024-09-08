@@ -114,9 +114,9 @@ export class VaultInterface implements FileManager {
 			return `# ${reference.name}\nMock note content`;
 		}
 
-		// If the note is formatted with the path, get rid of the path and just use the note name
+		// If the note is formatted with the path, get rid of the display name and just use the path
 		if (reference.name.includes("|")) {
-			reference.name = reference.name.split("|")[1];
+			reference.name = reference.name.split("|")[0];
 		}
 
 		// Get the file
