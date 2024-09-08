@@ -26,6 +26,7 @@ import {
 	AllVerifiedCannoliCanvasNodeData,
 	VerifiedCannoliCanvasEdgeData,
 } from "./graph";
+import { parseNamedNode } from "./utility";
 
 export enum IndicatedNodeType {
 	Call = "call",
@@ -1369,13 +1370,11 @@ export class CannoliFactory {
 
 	isFloatingNode(id: string): boolean {
 		const node = this.getNode(id);
-		// Check if the first line starts with [ and ends with ]
-		const firstLine = node?.text?.split("\n")[0];
-		if (firstLine?.startsWith("[") && firstLine?.endsWith("]")) {
-			return true;
-		} else {
+		if (!node?.text) {
 			return false;
 		}
+		const { name } = parseNamedNode(node.text);
+		return name !== null;
 	}
 
 	createRectangle(x: number, y: number, width: number, height: number) {

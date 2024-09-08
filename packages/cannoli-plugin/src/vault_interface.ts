@@ -159,7 +159,7 @@ export class VaultInterface implements FileManager {
 
 			// If includeLink is true, add the markdown link
 			if (reference.includeLink) {
-				const link = `[[${file.path}#${reference.subpath}]]`;
+				const link = `[[${file.path}#${reference.subpath}|${file.basename}]]`;
 				content = link + "\n\n" + content;
 			}
 
@@ -187,7 +187,7 @@ export class VaultInterface implements FileManager {
 
 			// If includeLink is true, add the markdown link
 			if (reference.includeLink) {
-				const link = `[[${file.path}]]`;
+				const link = `[[${file.path}|${file.basename}]]`;
 				content = link + "\n\n" + content;
 			}
 

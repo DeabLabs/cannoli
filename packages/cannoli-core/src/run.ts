@@ -17,6 +17,7 @@ import { CannoliObject } from "./graph/CannoliObject";
 import { CannoliVertex } from "./graph/objects/CannoliVertex";
 import { CannoliGroup } from "./graph/objects/vertices/CannoliGroup";
 import { CannoliNode } from "./graph/objects/vertices/CannoliNode";
+import { parseNamedNode } from "./utility";
 
 export interface HttpTemplate {
 	id: string;
@@ -237,14 +238,18 @@ export class Run {
 		// Find all nodes of type "input"
 		const argNodes = canvasData.nodes.filter((node) => node.cannoliData.type === "input");
 
-		// For each arg, check if the key matches the first line of the text in the input node
-		for (const arg of Object.entries(this.args ?? {})) {
-			const [key, value] = arg;
-			const matchingArgNodes = argNodes.filter((node) => node.cannoliData.text.split("\n")[0] === `[${key}]`);
+		// For each arg, check if the key matches the name of the input node
+		for (const [key, value] of Object.entries(this.args ?? {})) {
+			const matchingArgNodes = argNodes.filter((node) => {
+				const { name } = parseNamedNode(node.cannoliData.text);
+				return name === key;
+			});
+
 			if (matchingArgNodes.length > 0) {
-				// If so, set the text of each matching input node after the first line to the value
+				// If matching nodes are found, update their content
 				matchingArgNodes.forEach((argNode) => {
-					argNode.cannoliData.text = argNode.cannoliData.text.split("\n")[0] + "\n" + value;
+					const { name } = parseNamedNode(argNode.cannoliData.text);
+					argNode.cannoliData.text = `[${name}]\n${value}`;
 				});
 			} else {
 				throw new Error(`Argument key "${key}" not found in input nodes.`);
@@ -306,9 +311,9 @@ export class Run {
 		}
 
 		for (const node of argNodes) {
-			// Check if the first line of the text contains only a bracketed name
-			if (/^\[.*?\]$/.test(node.cannoliData.text.split("\n")[0])) {
-				argNames.add(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+			const { name } = parseNamedNode(node.cannoliData.text);
+			if (name !== null) {
+				argNames.add(name);
 			}
 		}
 
@@ -325,9 +330,9 @@ export class Run {
 		}
 
 		for (const node of resultNodes) {
-			// Check if the first line of the text contains only a bracketed name
-			if (/^\[.*?\]$/.test(node.cannoliData.text.split("\n")[0])) {
-				resultNames.add(node.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+			const { name } = parseNamedNode(node.cannoliData.text);
+			if (name !== null) {
+				resultNames.add(name);
 			}
 		}
 
@@ -345,25 +350,19 @@ export class Run {
 			return { names, includesDynamicReference };
 		}
 
-		// For each action node, check if it's a single line
 		for (const node of actionNodes) {
-			const trimmedText = node.cannoliData.text.trim();
+			const { name, content } = parseNamedNode(node.cannoliData.text);
 
-			if (trimmedText.split("\n").length === 1) {
-				names.push(trimmedText);
-
-				if (trimmedText.includes("{{") && trimmedText.includes("}}")) {
-					includesDynamicReference = true;
-				}
-				continue;
+			if (name !== null) {
+				names.push(name);
+			} else if (content.trim().split("\n").length === 1) {
+				// If it's a single line without a name, treat the whole content as the name
+				names.push(content.trim());
 			}
 
-			// If it's not a single line, check if the first line is a bracketed name
-			const firstLine = trimmedText.split("\n")[0];
-			const match = firstLine.match(/^\[(.*?)\]$/);
-			if (match) {
-				names.push(match[1]); // Push the content inside the brackets
-				continue;
+			// Check for dynamic references
+			if (node.cannoliData.text.includes("{{") && node.cannoliData.text.includes("}}")) {
+				includesDynamicReference = true;
 			}
 		}
 
@@ -381,13 +380,13 @@ export class Run {
 		for (const edge of incomingConfigProviderEdges || []) {
 			const sourceNode = this.canvasData?.nodes.find((node) => node.id === edge.fromNode);
 			if (sourceNode && (sourceNode.cannoliData.type === ContentNodeType.StandardContent || sourceNode.cannoliData.type === ContentNodeType.Input)) {
-				// Check if the source node has a bracketed first line
-				if (/^\[.*?\]$/.test(sourceNode.cannoliData.text.split("\n")[0])) {
-					providersReferenced.push(sourceNode.cannoliData.text.split("\n")[0].replace("[", "").replace("]", ""));
+				const { name, content } = parseNamedNode(sourceNode.cannoliData.text);
+
+				if (name !== null) {
+					providersReferenced.push(name);
 					includesDynamicReference = true;
 				} else {
-					providersReferenced.push(sourceNode.cannoliData.text.trim());
-
+					providersReferenced.push(content.trim());
 				}
 			} else if (sourceNode) {
 				includesDynamicReference = true;
@@ -663,12 +662,15 @@ export class Run {
 	getResults(): { [key: string]: string } {
 		const variableNodes = Object.values(this.graph).filter((object) => object.type === "output" && object.kind === "node");
 		const results: { [key: string]: string } = {};
+
 		for (const node of variableNodes) {
-			// The key should be the first line without the square brackets
-			const firstLine = node.text.split("\n")[0];
-			const key = firstLine.substring(1, firstLine.length - 1);
-			results[key] = node.text.split("\n").slice(1).join("\n");
+			const { name, content } = parseNamedNode(node.text);
+
+			if (name !== null) {
+				results[name] = content.trim();
+			}
 		}
+
 		return results;
 	}
 
@@ -996,40 +998,6 @@ export class Run {
 				required: ["note"],
 			},
 		};
-	}
-
-	createHttpTemplate(inputString: string): HttpTemplate {
-		// Split the input string by newline to separate the name from the JSON
-		const lines = inputString.split("\n");
-		const nameLine = lines[0];
-		let jsonString = lines.slice(1).join("\n");
-
-		// If the json string is in a text block, remove the leading and trailing quotes, as well as the language identifier
-		if (jsonString.startsWith("```")) {
-			jsonString = jsonString.substring(3, jsonString.length - 3);
-		}
-
-		if (jsonString.startsWith("json")) {
-			jsonString = jsonString.substring(4, jsonString.length);
-		}
-
-		// Extract the name from the first line
-		const name = nameLine.substring(1, nameLine.length - 1).trim();
-
-		// Parse the JSON string
-		const json = JSON.parse(jsonString);
-
-		// Construct the httpTemplate object
-		const httpTemplate: HttpTemplate = {
-			id: "", // Using an empty string for the ID as specified
-			name: name,
-			url: json.url,
-			method: json.method,
-			headers: json.headers,
-			bodyTemplate: JSON.stringify(json.bodyTemplate),
-		};
-
-		return httpTemplate;
 	}
 
 	logGraph() {

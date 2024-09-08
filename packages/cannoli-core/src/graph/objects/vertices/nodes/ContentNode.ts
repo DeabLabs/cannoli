@@ -5,6 +5,7 @@ import { ChatResponseEdge } from "../../edges/ChatResponseEdge";
 import { LoggingEdge } from "../../edges/LoggingEdge";
 import { CannoliGroup } from "../CannoliGroup";
 import { CannoliNode, VersionedContent } from "../CannoliNode";
+import { parseNamedNode } from "src/utility";
 
 export class ContentNode extends CannoliNode {
     reset(): void {
@@ -24,44 +25,25 @@ export class ContentNode extends CannoliNode {
     }
 
     getName(content?: string): string | null {
-        let contentToCheck = content;
+        const contentToCheck = content || this.text;
 
-        if (!contentToCheck) {
-            contentToCheck = this.text;
+        if (this.type === ContentNodeType.StandardContent) {
+            return null;
         }
 
-        const firstLine = contentToCheck.split("\n")[0].trim();
-        if (
-            firstLine.startsWith("[") &&
-            firstLine.endsWith("]") &&
-            this.type !== ContentNodeType.StandardContent
-        ) {
-            try {
-                // Check if the first line is a valid JSON array
-                JSON.parse(firstLine);
-                return null; // If it's a valid JSON array, return null
-            } catch (e) {
-                // If it's not a valid JSON array, proceed to extract the name
-                return firstLine.substring(1, firstLine.length - 1);
-            }
-        }
-        return null;
+        const { name } = parseNamedNode(contentToCheck);
+        return name;
     }
 
     // Content is everything after the first line
     getContentCheckName(content?: string): string {
-        let contentToCheck = content;
+        const contentToCheck = content || this.text;
+        const { name, content: parsedContent } = parseNamedNode(contentToCheck);
 
-        if (!contentToCheck) {
-            contentToCheck = this.text;
-        }
-
-        const name = this.getName(contentToCheck);
         if (name !== null) {
-            const firstLine = contentToCheck.split("\n")[0];
-            return contentToCheck.substring(firstLine.length + 1);
+            return parsedContent;
         }
-        return this.text;
+        return contentToCheck;
     }
 
     editContentCheckName(newContent: string): void {

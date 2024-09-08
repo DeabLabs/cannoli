@@ -572,35 +572,6 @@ export default class Cannoli extends Plugin {
 		}
 	};
 
-	getArgsFromCanvas = (canvas: string) => {
-		// Parse into JSON
-		const json = JSON.parse(canvas);
-
-		// Find all nodes with no attatched edges
-		// Build array of all node IDs referenced in the edges by "toNode" or "fromNode"
-		const edges = json.edges;
-		const nodeIds = edges.map((edge: { toNode: string, fromNode: string }) => {
-			return [edge.toNode, edge.fromNode];
-		}).flat();
-
-		// Look for nodes that are not in the nodeIds array
-		const nodes = json.nodes;
-		const noEdgeNodes = nodes.filter((node: { id: string }) => {
-			return !nodeIds.includes(node.id);
-		});
-
-		// Look in the floating nodes for ones whose text has a first line like this "[name]\n", and grab the name
-		const floatingNodeNames = noEdgeNodes.filter((node: { text?: string }) => {
-			const firstLine = node.text?.split("\n")?.[0];
-			return firstLine?.trim().startsWith("[") && firstLine?.trim().endsWith("]");
-		}).map((node: { text: string }) => {
-			return node.text.trim().slice(1, -1);
-		});
-
-		// Return the array
-		return floatingNodeNames;
-	}
-
 	startActiveCannoliCommand = () => {
 		this.startCannoliCommand(false);
 	};
@@ -1291,6 +1262,7 @@ export default class Cannoli extends Plugin {
 			if (this.encloses(groupRectangle, nodeRectangle)) {
 				nodeIds.push(node.id);
 			} else if (this.overlaps(groupRectangle, nodeRectangle)) {
+				new Notice(`Invalid layout: Node with id ${node.id} overlaps with the group but is not fully enclosed. Nodes should be fully inside or outside of each group.`);
 				throw new Error(
 					`Invalid layout: Node with id ${node.id} overlaps with the group but is not fully enclosed. Nodes should be fully inside or outside of each group.`
 				);
