@@ -165,8 +165,18 @@ export class CallNode extends CannoliNode {
         let match;
 
         while ((match = markdownImageRegex.exec(message.content)) !== null) {
+            let url = match[1];
+
+            // Fetch the image at the url if it's http
+            if (url.startsWith("http")) {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const base64 = Buffer.from(await blob.arrayBuffer()).toString('base64');
+                url = `data:image/jpeg;base64,${base64}`;
+            }
+
             imageReferences.push({
-                url: match[1],
+                url: url,
                 messageIndex: index,
             });
         }
@@ -202,6 +212,7 @@ export class CallNode extends CannoliNode {
 
     async createLLMRequest(): Promise<GenericCompletionParams> {
         const overrides = this.getConfig(GenericModelConfigSchema) as GenericModelConfig;
+
         const config = this.run.llm?.getMergedConfig({
             configOverrides: overrides,
             provider: (overrides.provider as SupportedProviders) ?? undefined
@@ -219,9 +230,13 @@ export class CallNode extends CannoliNode {
             messages.push(newMessage);
         }
 
-        const imageReferences = await Promise.all(messages.map(async (message, index) => {
-            return await this.extractImages(message, index);
-        })).then(ir => ir.flat());
+        let imageReferences: ImageReference[] | undefined;
+
+        if (config.enableVision) {
+            imageReferences = await Promise.all(messages.map(async (message, index) => {
+                return await this.extractImages(message, index);
+            })).then(ir => ir.flat());
+        }
 
         const functions = this.getFunctions(messages);
 

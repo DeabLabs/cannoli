@@ -45,6 +45,7 @@ export interface CannoliSettings {
     bakeRuntime: BakeRuntime;
     bakeIndent: "2" | "4";
     seenVersion2Modal: boolean;
+    enableVision: boolean;
     secrets: { name: string; value: string; visibility: string }[];
 }
 
@@ -93,4 +94,5 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
     bakeIndent: "2",
     seenVersion2Modal: false,
     secrets: [],
+    enableVision: true,
 };

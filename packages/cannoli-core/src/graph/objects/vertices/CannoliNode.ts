@@ -1073,7 +1073,9 @@ export class CannoliNode extends CannoliVertex {
     }
 
     getConfig(schema: ZodSchema): Record<string, unknown> {
-        const runConfig = {};
+        const runConfig = {
+            enableVision: this.run.config?.enableVision ?? true
+        };
 
         this.processGroups(runConfig, schema);
         this.processNodes(runConfig, schema);

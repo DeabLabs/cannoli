@@ -31,6 +31,7 @@ export type GenericFunctionCall = z.infer<typeof GenericFunctionCallSchema>;
 
 export const GenericModelConfigSchema = z.object({
 	provider: z.string().optional(),
+	enableVision: z.coerce.string().transform((val) => val === "true").optional(),
 	apiKey: z.string().optional(),
 	baseURL: z.string().optional(),
 	model: z.string().optional(),

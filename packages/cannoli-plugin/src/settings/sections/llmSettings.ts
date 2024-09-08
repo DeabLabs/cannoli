@@ -34,22 +34,6 @@ export function createLLMSettings(containerEl: HTMLElement, plugin: Cannoli, dis
             });
         });
 
-    containerEl.createEl("h1", { text: "LLM" });
-
-    if (plugin.settings.llmProvider === "openai") {
-        createOpenAISettings(containerEl, plugin);
-    } else if (plugin.settings.llmProvider === "azure_openai") {
-        createAzureOpenAISettings(containerEl, plugin);
-    } else if (plugin.settings.llmProvider === "ollama") {
-        createOllamaSettings(containerEl, plugin);
-    } else if (plugin.settings.llmProvider === "gemini") {
-        createGeminiSettings(containerEl, plugin);
-    } else if (plugin.settings.llmProvider === "anthropic") {
-        createAnthropicSettings(containerEl, plugin, display);
-    } else if (plugin.settings.llmProvider === "groq") {
-        createGroqSettings(containerEl, plugin);
-    }
-
     new Setting(containerEl)
         .setName("LLM call concurrency limit (pLimit)")
         .setDesc(
@@ -75,4 +59,34 @@ export function createLLMSettings(containerEl: HTMLElement, plugin: Cannoli, dis
                     }
                 })
         );
+
+    new Setting(containerEl)
+        .setName("Enable Vision")
+        .setDesc(
+            "Enable vision for LLM calls. This will allow the LLM to see images embedded with markdown embedding syntax (e.g. ![[image.png]] or ![description](image-link.com)). This setting can be overridden at the node level using a 'enableVision' config arrow with the value 'true' or 'false'."
+        )
+        .addToggle((toggle) => {
+            toggle.setValue(plugin.settings.enableVision);
+            toggle.onChange(async (value) => {
+                plugin.settings.enableVision = value;
+                await plugin.saveSettings();
+                display();
+            });
+        });
+
+    containerEl.createEl("h1", { text: "LLM" });
+
+    if (plugin.settings.llmProvider === "openai") {
+        createOpenAISettings(containerEl, plugin);
+    } else if (plugin.settings.llmProvider === "azure_openai") {
+        createAzureOpenAISettings(containerEl, plugin);
+    } else if (plugin.settings.llmProvider === "ollama") {
+        createOllamaSettings(containerEl, plugin);
+    } else if (plugin.settings.llmProvider === "gemini") {
+        createGeminiSettings(containerEl, plugin);
+    } else if (plugin.settings.llmProvider === "anthropic") {
+        createAnthropicSettings(containerEl, plugin, display);
+    } else if (plugin.settings.llmProvider === "groq") {
+        createGroqSettings(containerEl, plugin);
+    }
 }
