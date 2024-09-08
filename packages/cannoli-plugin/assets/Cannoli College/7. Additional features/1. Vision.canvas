@@ -1,1 +1,20 @@
-{"nodes":[{"id":"7be62958bc86b912","x":-213,"y":-452,"width":529,"height":680,"type":"group","label":"Embedding images"},{"id":"b258a15559b32956","type":"text","text":"What is this?\n\n![nice](https://thisitaliankitchen.com/wp-content/uploads/2023/06/ricotta-cannolis.jpg)","x":-91,"y":-432,"width":285,"height":403},{"id":"885ecd1433cb7016","type":"text","text":"","x":-193,"y":19,"width":489,"height":189,"color":"6"},{"id":"ef5e7ce3002cecdc","x":-608,"y":-267,"width":371,"height":129,"type":"text","text":"If there's a markdown image embed anywhere in the chat history being sent in an AI node, it will be included as an image to be seen by multi-modal LLMs"},{"id":"9b331c6bba11b723","x":-583,"y":-97,"width":344,"height":243,"type":"text","text":"Embedding urls from the web:\n```\n![description](link)\n```\n\nEmbedding images from your vault:\n```\n![[image.jpg]]\n```"}],"edges":[{"id":"f6a6fc6a3202bc06","fromNode":"b258a15559b32956","fromSide":"bottom","toNode":"885ecd1433cb7016","toSide":"top"}]}
+{
+	"nodes":[
+		{"id":"a2a3d07c8e04b7fb","type":"group","x":-264,"y":321,"width":614,"height":658,"label":"Disabling vision"},
+		{"id":"7be62958bc86b912","type":"group","x":-213,"y":-452,"width":529,"height":680,"label":"Embedding images"},
+		{"id":"b258a15559b32956","type":"text","text":"What is this?\n\n![nice](https://thisitaliankitchen.com/wp-content/uploads/2023/06/ricotta-cannolis.jpg)","x":-91,"y":-432,"width":285,"height":403},
+		{"id":"885ecd1433cb7016","type":"text","text":"","x":-193,"y":19,"width":489,"height":189,"color":"6"},
+		{"id":"ef5e7ce3002cecdc","type":"text","text":"If there's a markdown image embed anywhere in the chat history being sent in an AI node, it will be included as an image to be seen by multi-modal LLMs","x":-608,"y":-267,"width":371,"height":129},
+		{"id":"9b331c6bba11b723","type":"text","text":"Embedding urls from the web:\n```\n![description](link)\n```\n\nEmbedding images from your vault:\n```\n![[image.jpg]]\n```","x":-583,"y":-97,"width":344,"height":243},
+		{"id":"f853930eb8a28a12","type":"text","text":"What is this?\n\n![nice](https://static.scientificamerican.com/sciam/cache/file/41DF7DA0-EE58-4259-AA815A390FB37C55_source.jpg?w=900)","x":-26,"y":348,"width":340,"height":290},
+		{"id":"4cc364fe8b26d5fe","type":"text","text":"false","x":-233,"y":358,"width":110,"height":60,"color":"6"},
+		{"id":"689e145cde7ec714","type":"text","text":"","x":-183,"y":741,"width":489,"height":189,"color":"6"},
+		{"id":"f8ff937e38d8cd72","type":"text","text":"Vision is enabled by default, but you can disable it at the top of the settings tab, and override that setting at the node level using a config arrow labeled \"enableVision\"","x":-654,"y":418,"width":375,"height":150},
+		{"id":"b7d929b4a01df064","x":-640,"y":781,"width":355,"height":96,"type":"text","text":"The LLM will still see the link, but we won't pass it the content of the image."}
+	],
+	"edges":[
+		{"id":"f6a6fc6a3202bc06","fromNode":"b258a15559b32956","fromSide":"bottom","toNode":"885ecd1433cb7016","toSide":"top"},
+		{"id":"b44dfaaff63347b5","fromNode":"f853930eb8a28a12","fromSide":"bottom","toNode":"689e145cde7ec714","toSide":"top"},
+		{"id":"d5deb032b93596f3","fromNode":"4cc364fe8b26d5fe","fromSide":"bottom","toNode":"f853930eb8a28a12","toSide":"left","color":"2","label":"enableVision"}
+	]
+}

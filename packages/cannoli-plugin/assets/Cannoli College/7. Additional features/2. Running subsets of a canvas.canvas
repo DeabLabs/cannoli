@@ -1,0 +1,30 @@
+{
+	"nodes":[
+		{"id":"cefc78df00b335d0","type":"group","x":-139,"y":-15,"width":1050,"height":446,"label":"Multiple \"cannoli\" groups"},
+		{"id":"d8e91535899d2710","type":"group","x":-151,"y":-537,"width":693,"height":446,"label":"\"cannoli\" groups"},
+		{"id":"fcb4324889bc2035","type":"group","x":-107,"y":-482,"width":290,"height":362,"label":"cannoli"},
+		{"id":"b59d6c3fdb77444b","type":"group","x":-95,"y":40,"width":290,"height":362,"label":"cannoli"},
+		{"id":"0e3927260d444185","type":"group","x":566,"y":39,"width":290,"height":362,"label":"cannoli"},
+		{"id":"5e872db1381df5e5","type":"text","text":"hello!","x":329,"y":-463,"width":112,"height":60},
+		{"id":"4817b55892e44954","type":"text","text":"","x":261,"y":-290,"width":250,"height":149,"color":"6"},
+		{"id":"2c62a49f4d7d07f9","type":"text","text":"If you'd only like a specific part of a canvas to be run as a cannoli, you can wrap it in a group labeled \"cannoli\".\n\nIf a group with that label is present on a canvas, when we run it, only the nodes within \"cannoli\" groups will be run.","x":-607,"y":-411,"width":433,"height":205},
+		{"id":"92889b47100a022a","type":"text","text":"hello!","x":-19,"y":-462,"width":112,"height":60},
+		{"id":"7d4766ac0a8356f2","type":"text","text":"","x":-87,"y":-289,"width":250,"height":149,"color":"6"},
+		{"id":"791a20c14bc962c7","type":"text","text":"hello!","x":-7,"y":60,"width":112,"height":60},
+		{"id":"76a7b1f7be41b27a","type":"text","text":"","x":-75,"y":233,"width":250,"height":149,"color":"6"},
+		{"id":"b2d4aec8efc72155","type":"text","text":"If you'd only like a specific part of a canvas to be run as a cannoli, you can wrap it in a group labeled \"cannoli\".\n\nIf a group with that label is present on a canvas, when we run it, only the nodes within \"cannoli\" groups will be run.","x":-595,"y":111,"width":433,"height":205},
+		{"id":"e0064917d60d3a1e","type":"text","text":"","x":259,"y":229,"width":250,"height":149,"color":"6"},
+		{"id":"63c6531a4f4afe03","type":"text","text":"hello!","x":328,"y":62,"width":112,"height":60},
+		{"id":"e9af95fbd2cc5541","type":"text","text":"hello!","x":653,"y":62,"width":112,"height":60},
+		{"id":"5ec3f63efea0a200","type":"text","text":"","x":584,"y":234,"width":250,"height":149,"color":"6"},
+		{"id":"e3b07a284fbf614e","x":-584,"y":-128,"width":395,"height":164,"type":"text","text":"It's important to note that arrows entering \"cannoli\" groups from outside it will not be run as part of the cannoli, so they will not pass content to nodes inside the group."},
+		{"id":"6701e0a23ee498e3","x":587,"y":-454,"width":446,"height":245,"type":"text","text":"If you'd like to ensure that you only run parts of any canvas which you've specified with \"cannoli\" groups, you can enable the \"Only run canvases with a 'cannoli' group\" setting, in the \"Canvas preferences\" section of the settings tab.\n\nThis will mean that canvases without any \"cannoli\" groups will not be run at all."}
+	],
+	"edges":[
+		{"id":"8494f89ecf0405e8","fromNode":"92889b47100a022a","fromSide":"bottom","toNode":"7d4766ac0a8356f2","toSide":"top"},
+		{"id":"7bae9bee7dc75c20","fromNode":"5e872db1381df5e5","fromSide":"bottom","toNode":"4817b55892e44954","toSide":"top"},
+		{"id":"4a0ba2bef1aa5c20","fromNode":"e9af95fbd2cc5541","fromSide":"bottom","toNode":"5ec3f63efea0a200","toSide":"top"},
+		{"id":"7dd99e00e4b9a462","fromNode":"791a20c14bc962c7","fromSide":"bottom","toNode":"76a7b1f7be41b27a","toSide":"top"},
+		{"id":"bb7daccfc6f53f57","fromNode":"63c6531a4f4afe03","fromSide":"bottom","toNode":"e0064917d60d3a1e","toSide":"top"}
+	]
+}

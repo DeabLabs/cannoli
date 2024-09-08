@@ -1261,11 +1261,6 @@ export default class Cannoli extends Plugin {
 
 			if (this.encloses(groupRectangle, nodeRectangle)) {
 				nodeIds.push(node.id);
-			} else if (this.overlaps(groupRectangle, nodeRectangle)) {
-				new Notice(`Invalid layout: Node with id ${node.id} overlaps with the group but is not fully enclosed. Nodes should be fully inside or outside of each group.`);
-				throw new Error(
-					`Invalid layout: Node with id ${node.id} overlaps with the group but is not fully enclosed. Nodes should be fully inside or outside of each group.`
-				);
 			}
 		}
 
