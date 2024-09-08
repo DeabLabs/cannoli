@@ -1227,7 +1227,7 @@ export default class Cannoli extends Plugin {
 		const subCanvasGroupIds: string[] = [];
 
 		for (const node of parsedContent.nodes) {
-			if (node.type === "group" && (node.text === "cannoli" || node.text === "Cannoli")) {
+			if (node.type === "group" && (node.label === "cannoli" || node.label === "Cannoli")) {
 				subCanvasGroupIds.push(node.id);
 			}
 		}
@@ -1237,25 +1237,32 @@ export default class Cannoli extends Plugin {
 			return null;
 		}
 
-		let canvasData = parsedContent;
-
 		if (subCanvasGroupIds.length > 0) {
-			const subCanvasGroup = parsedContent.nodes.find(
-				(node) => subCanvasGroupIds.includes(node.id)
-			) as CanvasGroupData;
-			if (!subCanvasGroup) {
-				throw new Error(`Group with id ${subCanvasGroupIds.join(", ")} not found.`);
+			let allNodes: typeof parsedContent.nodes = [];
+			let allEdges: typeof parsedContent.edges = [];
+
+			for (const subCanvasGroupId of subCanvasGroupIds) {
+				const subCanvasGroup = parsedContent.nodes.find(
+					(node) => node.id === subCanvasGroupId
+				) as CanvasGroupData;
+				if (!subCanvasGroup) {
+					throw new Error(`Group with id ${subCanvasGroupId} not found.`);
+				}
+
+				const { nodeIds, edgeIds } = this.getNodesAndEdgesInGroup(subCanvasGroup, parsedContent);
+
+				allNodes = allNodes.concat(parsedContent.nodes.filter((node) => nodeIds.includes(node.id)));
+				allEdges = allEdges.concat(parsedContent.edges.filter((edge) => edgeIds.includes(edge.id)));
 			}
 
-			const { nodeIds, edgeIds } = this.getNodesAndEdgesInGroup(subCanvasGroup, parsedContent);
-
-			parsedContent.nodes = parsedContent.nodes.filter((node) => nodeIds.includes(node.id));
-			parsedContent.edges = parsedContent.edges.filter((edge) => edgeIds.includes(edge.id));
-
-			canvasData = parsedContent;
+			return {
+				...parsedContent,
+				nodes: allNodes,
+				edges: allEdges
+			};
 		}
 
-		return canvasData;
+		return parsedContent;
 	}
 
 	openCanvas(canvasName: string): boolean {

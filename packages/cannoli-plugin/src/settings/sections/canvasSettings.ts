@@ -26,7 +26,7 @@ export function createCanvasSettings(containerEl: HTMLElement, plugin: Cannoli):
     new Setting(containerEl)
         .setName("Only run canvases with a 'cannoli' group")
         .setDesc(
-            "Toggle this if you'd like to only run canvases that have a 'cannoli' labeled group. Use this if you want to ensure you never run a canvas as a cannoli unless you've explicitly defined the part of the canvas you want to be interpreted as a cannoli."
+            "Toggle this if you'd like to only run canvases that have one or more 'cannoli' labeled groups. Use this if you want to ensure you never run a canvas as a cannoli unless you've explicitly defined the parts of the canvas you want to be interpreted as a cannoli."
         )
         .addToggle((toggle) =>
             toggle
