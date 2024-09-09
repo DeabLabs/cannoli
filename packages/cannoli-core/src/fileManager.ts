@@ -52,7 +52,7 @@ export interface FileManager {
         path: string,
         content?: string,
         verbose?: boolean
-    ): Promise<boolean>;
+    ): Promise<string>;
 
     getNotePath(noteName: string): Promise<string | null>;
 

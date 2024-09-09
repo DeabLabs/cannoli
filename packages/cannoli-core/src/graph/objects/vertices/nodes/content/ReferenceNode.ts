@@ -123,7 +123,7 @@ export class ReferenceNode extends ContentNode {
                 (this.reference.type === ReferenceType.Variable &&
                     this.reference.shouldExtract)
             ) {
-                await this.processDynamicReference("");
+                await this.processDynamicReference(null);
 
                 const fetchedContent = await this.getContent();
                 await this.loadOutgoingEdges(fetchedContent);
@@ -208,12 +208,12 @@ export class ReferenceNode extends ContentNode {
         return `Could not find reference.`;
     }
 
-    async processDynamicReference(content: string) {
+    async processDynamicReference(content: string | null) {
         if (this.run.isMock) {
             return;
         }
 
-        const incomingEdges = this.getIncomingEdges();
+        const incomingEdges = this.getAllAvailableProvideEdges();
 
         // Find the incoming edge with the same name as the reference name
         const referenceNameEdge = incomingEdges.find(
@@ -303,7 +303,7 @@ export class ReferenceNode extends ContentNode {
                 noteName = await this.run.fileManager.createNoteAtExistingPath(
                     referenceNameEdge.content,
                     path,
-                    content
+                    content ?? ""
                 );
             } catch (e) {
                 this.error(`Could not create note: ${e.message}`);
@@ -520,6 +520,12 @@ export class ReferenceNode extends ContentNode {
                 }
             } else if (edgeObject.edgeModifier === EdgeModifier.Note) {
                 // Load the edge with the name of the note
+
+                // Add double brackets if the reference name is not already in double brackets
+                if (!this.reference.name.startsWith("[[") && !this.reference.name.endsWith("]]")) {
+                    this.reference.name = `[[${this.reference.name}]]`;
+                }
+
                 edgeObject.load({
                     content: `${this.reference.name}`,
                     request: request,

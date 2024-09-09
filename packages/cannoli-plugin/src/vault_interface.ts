@@ -15,6 +15,16 @@ export class VaultInterface implements FileManager {
 		this.replaceSmartConnections = this.replaceSmartConnections.bind(this);
 	}
 
+	getPathFromName(name: string): string {
+		let path = name;
+
+		if (path.includes("|")) {
+			path = path.split("|")[0];
+		}
+
+		return path.replace("[[", "").replace("]]", "");
+	}
+
 	async editNote(
 		reference: Reference,
 		newContent: string,
@@ -26,10 +36,10 @@ export class VaultInterface implements FileManager {
 			return;
 		}
 
-		// Get the file
-		const filename = reference.name.replace("[[", "").replace("]]", "");
+		const path = this.getPathFromName(reference.name);
+
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			filename,
+			path,
 			""
 		);
 
@@ -114,15 +124,10 @@ export class VaultInterface implements FileManager {
 			return `# ${reference.name}\nMock note content`;
 		}
 
-		// If the note is formatted with the path, get rid of the display name and just use the path
-		if (reference.name.includes("|")) {
-			reference.name = reference.name.split("|")[0];
-		}
+		const path = this.getPathFromName(reference.name);
 
-		// Get the file
-		const filename = reference.name.replace("[[", "").replace("]]", "");
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			filename,
+			path,
 			""
 		);
 
@@ -631,10 +636,9 @@ export class VaultInterface implements FileManager {
 	): Promise<string[]> {
 		const resultContents = [];
 		for (const noteLink of noteLinks) {
-			// Get rid of the double brackets
-			const cleanedLink = noteLink.replace("[[", "").replace("]]", "");
+			const path = this.getPathFromName(noteLink);
 
-			const [noteName, subpath] = cleanedLink.split("#");
+			const [noteName, subpath] = path.split("#");
 
 			const reference: Reference = {
 				name: noteName,
@@ -702,10 +706,10 @@ export class VaultInterface implements FileManager {
 		propertyName: string,
 		yamlFormat = false
 	): Promise<string | null> {
-		// Get the file
-		const filename = noteName.replace("[[", "").replace("]]", "");
+		const path = this.getPathFromName(noteName);
+
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			filename,
+			path,
 			""
 		);
 
@@ -753,10 +757,10 @@ export class VaultInterface implements FileManager {
 		noteName: string,
 		yamlFormat = false
 	): Promise<string | null> {
-		// Get the file
-		const filename = noteName.replace("[[", "").replace("]]", "");
+		const path = this.getPathFromName(noteName);
+
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			filename,
+			path,
 			""
 		);
 
@@ -799,10 +803,10 @@ export class VaultInterface implements FileManager {
 		propertyName: string,
 		newValue: string
 	): Promise<void> {
-		// Get the file
-		const filename = noteName.replace("[[", "").replace("]]", "");
+		const path = this.getPathFromName(noteName);
+
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			filename,
+			path,
 			""
 		);
 
@@ -856,7 +860,7 @@ export class VaultInterface implements FileManager {
 		verbose = false
 	): Promise<string | null> {
 		// If there are double brackets, remove them
-		noteName = noteName.replace("[[", "").replace("]]", "");
+		noteName = this.getPathFromName(noteName);
 
 		// Attempt to create the note, adding or incrementing a number at the end of the note name if it already exists
 		let i = 1;
@@ -879,11 +883,7 @@ export class VaultInterface implements FileManager {
 		// Create the note
 		await this.cannoli.app.vault.create(fullPath, content ?? "");
 
-		if (verbose) {
-			console.log(`Note "${noteName}" created at path "${fullPath}"`);
-		}
-
-		return noteName;
+		return `[[${fullPath}|${noteName}]]`;
 	}
 
 	async createNoteAtNewPath(
@@ -891,24 +891,21 @@ export class VaultInterface implements FileManager {
 		path: string,
 		content?: string,
 		verbose = false
-	): Promise<boolean> {
+	): Promise<string> {
 		// Create the path by appending the note name to the path with .md
 		const fullPath = `${path}/${noteName}.md`;
 
 		// Create the note
 		await this.cannoli.app.vault.create(fullPath, content ?? "");
 
-		if (verbose) {
-			console.log(`Note "${noteName}" created at path "${fullPath}"`);
-		}
-
-		return true;
+		return `[[${fullPath}|${noteName}]]`;
 	}
 
 	async getNotePath(noteName: string): Promise<string | null> {
-		const filename = noteName.replace("[[", "").replace("]]", "");
+		const path = this.getPathFromName(noteName);
+
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			filename,
+			path,
 			""
 		);
 
@@ -930,10 +927,6 @@ export class VaultInterface implements FileManager {
 		// Create the folder
 		this.cannoli.app.vault.createFolder(path);
 
-		if (verbose) {
-			console.log(`Folder created at path "${path}"`);
-		}
-
 		return true;
 	}
 
@@ -945,14 +938,11 @@ export class VaultInterface implements FileManager {
 		// Create the path by appending the note name to the paths with .md
 		const newFullPath = `${newPath}/${noteName}.md`;
 
-		const filename = noteName.replace("[[", "").replace("]]", "");
+		const path = this.getPathFromName(noteName);
 		const note = this.cannoli.app.metadataCache.getFirstLinkpathDest(
-			filename,
+			path,
 			""
 		);
-
-		// Get the old path
-		const oldFullPath = note?.path;
 
 		if (!note) {
 			return false;
@@ -960,12 +950,6 @@ export class VaultInterface implements FileManager {
 
 		// Move the note
 		await this.cannoli.app.vault.rename(note, newFullPath);
-
-		if (verbose) {
-			console.log(
-				`Note "${noteName}" moved from path "${oldFullPath}" to path "${newFullPath}"`
-			);
-		}
 
 		return true;
 	}
