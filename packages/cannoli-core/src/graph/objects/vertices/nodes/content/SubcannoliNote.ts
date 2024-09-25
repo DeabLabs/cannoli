@@ -51,7 +51,12 @@ export class SubcannoliNode extends ContentNode {
             return;
         }
 
-        const resultsString = JSON.stringify(results, null, 2);
+        let resultsString = "";
+
+        // If results is empty, set results string to empty string
+        if (Object.keys(results).length > 0) {
+            resultsString = JSON.stringify(results, null, 2);
+        }
 
         const outgoingEdges = this.getOutgoingEdges();
 

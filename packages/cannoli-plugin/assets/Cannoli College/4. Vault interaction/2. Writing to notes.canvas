@@ -20,7 +20,7 @@
 		{"type":"text","text":"Field arrows can help get good formatting for notes. Use \"content\" and \"title\" field names to keep the LLM from writing the title of the note into the content.","id":"5943bd16d1a71072","x":440,"y":506,"width":357,"height":119},
 		{"type":"text","text":"Ok, now respond with just the article\n\nThere should be nothing in your response other than the article","id":"94567e5a2b31c42b","x":-315,"y":475,"width":255,"height":180},
 		{"id":"9fa03f1308317478","type":"text","text":"To allow the edit to overwrite the properties (YAML frontmatter) in the note, reference it like this:\n{{[[Note]]^}}\n\nIf your default setting is to include (overwrite) the properties, you can remove them like this:\n{{[[Note]]!^}}","x":48,"y":-122,"width":420,"height":229},
-		{"type":"text","text":"{{[[Lemons for Cleaning]]!^}}","id":"6c3aaf24c1410da5","x":-309,"y":77,"width":274,"height":60,"color":"6"},
+		{"type":"text","text":"{{[[Meeting Notes]]!^}}","id":"6c3aaf24c1410da5","x":-309,"y":77,"width":274,"height":60,"color":"6"},
 		{"type":"file","file":"Cannoli College/Example notes/Walking Poem.md","text":"{{[[Apple Trees]]}}","id":"5e54d6df61248d37","x":8,"y":715,"width":255,"height":189},
 		{"id":"fe4f45ec55ab88f8","type":"text","text":"You can use arrows that start with \":\" to edit the property in the arrow label.\n\nThis also works for list format properties.","x":-678,"y":1020,"width":318,"height":189},
 		{"id":"ae32c84e56f650cb","type":"text","text":"{{[[Meeting Notes]]}}","x":-310,"y":1179,"width":250,"height":60,"color":"6"},

@@ -1,0 +1,19 @@
+{
+	"nodes":[
+		{"id":"6bee83c618f78ec5","type":"group","x":-150,"y":-306,"width":409,"height":556,"label":"Input and output nodes"},
+		{"id":"6bb11822c098ccb1","type":"text","text":"Write a sentence using these two words:\n{{a}}\n{{b}}","x":-80,"y":-96,"width":250,"height":142,"color":"0"},
+		{"id":"f067631823623c56","type":"text","text":"[anotherInput]\nIcosahedron","x":60,"y":-286,"width":179,"height":90,"color":"6"},
+		{"id":"a8a224d1d5f64c1a","type":"text","text":"[anInput]\nPajamas","x":-130,"y":-283,"width":161,"height":92,"color":"6"},
+		{"id":"8ba395f1998b606d","type":"text","text":"[anOutput]\n","x":-80,"y":105,"width":250,"height":125,"color":"6"},
+		{"id":"83e5ea326aa3a1f9","type":"text","text":"Because these names can be used as variables when baking a cannoli to code, they must be valid javascript variable names:\n\nVariable names must start with a letter, underscore, or dollar sign, and can only contain letters, numbers, underscores, or dollar signs.","x":275,"y":-295,"width":489,"height":221},
+		{"id":"2b8d9df0da25a55c","type":"text","text":"Input nodes are named content nodes with no incoming arrows\n\nOutput nodes are named content nodes with no outgoing arrows","x":274,"y":82,"width":383,"height":165},
+		{"id":"b31e6235e7f3d953","type":"text","text":"Input and output nodes are used to define inputs and outputs for baked cannolis and subcannolis.","x":-468,"y":-225,"width":303,"height":120},
+		{"id":"5951d7529cd75816","type":"text","text":"Input/output nodes are simply named content nodes. They are named the same way floating nodes are named, using single square brackets on the first line.","x":-526,"y":-16,"width":365,"height":142},
+		{"id":"96a04622c1426d0c","x":-261,"y":-542,"width":628,"height":181,"type":"text","text":"Input and output nodes allow you to explicitly define inputs an outputs of a cannoli. \n\nThis enables a cannoli to be used with arguments as a sub-cannoli or baked to code (using the \"Bake\" or \"Bake to Val Town\" commands) with explicitly defined parameters and returns."}
+	],
+	"edges":[
+		{"id":"c9de0bf84a78600f","fromNode":"a8a224d1d5f64c1a","fromSide":"bottom","toNode":"6bb11822c098ccb1","toSide":"top","label":"a"},
+		{"id":"ca384210d5b575f9","fromNode":"f067631823623c56","fromSide":"bottom","toNode":"6bb11822c098ccb1","toSide":"top","label":"b"},
+		{"id":"efeeacc5c3428321","fromNode":"6bb11822c098ccb1","fromSide":"bottom","toNode":"8ba395f1998b606d","toSide":"top"}
+	]
+}

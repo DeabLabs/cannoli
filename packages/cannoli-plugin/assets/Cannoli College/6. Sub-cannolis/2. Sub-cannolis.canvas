@@ -1,0 +1,22 @@
+{
+	"nodes":[
+		{"id":"c0a71176b04a13c6","type":"group","x":-289,"y":-325,"width":720,"height":1011,"label":"Sub-cannolis"},
+		{"id":"2dcf15ce79b828d8","type":"file","file":"Cannoli College/6. Sub-cannolis/1. Input and output nodes.canvas","x":-139,"y":-108,"width":400,"height":400,"color":"2"},
+		{"id":"c18fc5b1f7bb37e5","type":"text","text":"frog","x":-215,"y":-301,"width":250,"height":60,"color":"6"},
+		{"id":"6c52ad5b31b27f43","type":"text","text":"rubiks cube","x":79,"y":-305,"width":250,"height":60,"color":"6"},
+		{"id":"5264695914078a98","type":"text","text":"","x":-269,"y":385,"width":306,"height":281,"color":"6"},
+		{"id":"0c96fa7eee85ae17","type":"text","text":"","x":99,"y":380,"width":312,"height":281,"color":"6"},
+		{"id":"992c754b9fbeb13a","type":"text","text":"A sub-cannoli is an orange file node which references another canvas in your vault.\n\nYou can create a file node by dragging a file from the obsidian side-bar onto the canvas, or right clicking on the canvas and selecting \"add note from vault\"","x":-701,"y":-292,"width":383,"height":217},
+		{"id":"dcd181bb6d0417ae","type":"text","text":"The arrows pointing to a sub-cannoli must be named based on the input nodes in that cannoli.\n\nIn this example these are \"anInput\" and \"anotherInput\".\n\nInputs are not required for sub-cannolis. If no input is given, the cannoli will run as normal. This could be useful when the sub-cannoli gets its context from a note in your vault or an action node.","x":-741,"y":39,"width":426,"height":291},
+		{"id":"eacd89f861e65d30","type":"text","text":"Outgoing arrows from sub-cannolis can reference specific output nodes of the cannoli. If they do not, all of the output nodes results will be given as a JSON object.","x":-697,"y":434,"width":391,"height":150},
+		{"id":"33853a4dc679c6f2","type":"text","text":"Sub-cannolis are cannolis which can be included within other cannolis as nodes.\n\nThey can be useful for reusing common prompt patterns without cluttering up your canvas.","x":-238,"y":-534,"width":602,"height":158},
+		{"id":"dc25151c0c905405","type":"text","text":"Currently, when a sub-cannoli is run, it will not make changes to the canvas it references.\n\nFor this reason, it's best to test the sub-cannoli on its own canvas for debugging purposes. Another strategy would be to add output nodes that contain useful debug information where needed.","x":449,"y":-152,"width":435,"height":216},
+		{"id":"30426566f403a181","type":"text","text":"Sub-cannolis can be nested.\n\nErrors that occur in a sub-cannoli will bubble up to the top level.","x":450,"y":261,"width":343,"height":122}
+	],
+	"edges":[
+		{"id":"0bd5ed15122bff0a","fromNode":"c18fc5b1f7bb37e5","fromSide":"bottom","toNode":"2dcf15ce79b828d8","toSide":"top","label":"anInput"},
+		{"id":"710ae77b6549b368","fromNode":"6c52ad5b31b27f43","fromSide":"bottom","toNode":"2dcf15ce79b828d8","toSide":"top","label":"anotherInput"},
+		{"id":"7704e3a36e0d076c","fromNode":"2dcf15ce79b828d8","fromSide":"bottom","toNode":"5264695914078a98","toSide":"top"},
+		{"id":"36d3df7134384f1c","fromNode":"2dcf15ce79b828d8","fromSide":"bottom","toNode":"0c96fa7eee85ae17","toSide":"top","label":"anOutput"}
+	]
+}
