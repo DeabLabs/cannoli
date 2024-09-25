@@ -156,6 +156,22 @@ export class CannoliNode extends CannoliVertex {
         return note;
     }
 
+    async getContentFromCanvas(reference: Reference): Promise<unknown | null> {
+        if (!this.run.fileManager) {
+            throw new Error("No fileManager found");
+        }
+
+        const canvas = await this.run.fileManager.getCanvas(reference.name, this.run.isMock);
+
+        if (canvas === null) {
+            return null;
+        }
+
+        const canvasObject = JSON.parse(canvas);
+
+        return canvasObject;
+    }
+
     getContentFromFloatingNode(name: string): string | null {
         for (const object of Object.values(this.graph)) {
             if (object instanceof FloatingNode && object.getName() === name) {

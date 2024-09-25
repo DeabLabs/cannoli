@@ -27,6 +27,7 @@ import { ReferenceNode } from "./graph/objects/vertices/nodes/content/ReferenceN
 import { SearchNode } from "./graph/objects/vertices/nodes/content/SearchNode";
 import { ContentNode } from "./graph/objects/vertices/nodes/ContentNode";
 import { FloatingNode } from "./graph/objects/FloatingNode";
+import { SubcannoliNode } from "./graph/objects/vertices/nodes/content/SubcannoliNote";
 
 export enum CannoliObjectKind {
 	Node = "node",
@@ -82,6 +83,7 @@ export enum ContentNodeType {
 	Formatter = "formatter",
 	Http = "http",
 	Search = "search",
+	Subcannoli = "subcannoli",
 }
 
 export enum FloatingNodeType {
@@ -300,6 +302,15 @@ export class CannoliGraph {
 						node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new HttpNode(
 						httpNode,
+						this.cannoliCanvasData
+					);
+					break;
+				}
+				case ContentNodeType.Subcannoli: {
+					const subcannoliNode =
+						node as VerifiedCannoliCanvasFileData;
+					this.graph[node.id] = new SubcannoliNode(
+						subcannoliNode,
 						this.cannoliCanvasData
 					);
 					break;

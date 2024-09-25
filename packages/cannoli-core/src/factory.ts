@@ -271,9 +271,10 @@ export class CannoliFactory {
 
 		if (node.type === "file") {
 			node = node as CannoliCanvasFileData;
-			// If the node is a file, the "file" property is a path. Get the text after the final "/" and remove the extension
-			const fileName = node.file.split("/").pop();
-			universalText = fileName?.split(".").shift();
+			// // If the node is a file, the "file" property is a path. Get the text after the final "/" and remove the extension
+			// const fileName = node.file.split("/").pop();
+			// universalText = fileName?.split(".").shift();
+			universalText = node.file;
 
 			// Then, prepend "{{[[" and append "]]}}" to the text to match the file reference format
 			universalText = `{{[[${universalText}]]}}`;
@@ -865,6 +866,10 @@ export class CannoliFactory {
 	): ContentNodeType | null {
 		// If its a file node, return reference
 		if (node.type === "file") {
+			node = node as CannoliCanvasFileData;
+			if (node.file && node.file.endsWith(".canvas") && node.color && node.color === "2") {
+				return ContentNodeType.Subcannoli;
+			}
 			return ContentNodeType.Reference;
 		}
 

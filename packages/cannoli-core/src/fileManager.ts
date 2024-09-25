@@ -19,6 +19,11 @@ export interface FileManager {
         isMock: boolean,
     ): Promise<ArrayBuffer | null>;
 
+    getCanvas(
+        fileName: string,
+        isMock: boolean,
+    ): Promise<string | null>;
+
     editSelection(newContent: string, isMock: boolean): void;
 
     getPropertyOfNote(

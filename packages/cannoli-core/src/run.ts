@@ -18,6 +18,7 @@ import { CannoliVertex } from "./graph/objects/CannoliVertex";
 import { CannoliGroup } from "./graph/objects/vertices/CannoliGroup";
 import { CannoliNode } from "./graph/objects/vertices/CannoliNode";
 import { parseNamedNode } from "./utility";
+import { resultsRun } from "./cannoli";
 
 export interface HttpTemplate {
 	id: string;
@@ -150,6 +151,8 @@ export class Run {
 	currentNote: string | null = null;
 	selection: string | null = null;
 
+	subcannoliCallback: (cannoli: unknown, inputVariables: Record<string, string>, scIsMock: boolean) => Promise<Record<string, string>>;
+
 	usage: Record<string, ModelUsage>;
 
 	forEachTracker: Map<string, number> = new Map();
@@ -251,7 +254,8 @@ export class Run {
 					const { name } = parseNamedNode(argNode.cannoliData.text);
 					argNode.cannoliData.text = `[${name}]\n${value}`;
 				});
-			} else {
+			}
+			else {
 				throw new Error(`Argument key "${key}" not found in input nodes.`);
 			}
 		}
@@ -267,6 +271,22 @@ export class Run {
 		for (const object of Object.values(this.graph)) {
 			object.setRun(this);
 		}
+
+		this.subcannoliCallback = (cannoli: unknown, inputVariables: Record<string, string>, scIsMock: boolean) => {
+			return resultsRun({
+				cannoli,
+				llmConfigs,
+				args: { ...inputVariables, obsidianCurrentNote: this.currentNote ?? "", obsidianSelection: this.selection ?? "" },
+				fileManager,
+				actions,
+				httpTemplates,
+				isMock: scIsMock,
+				config,
+				secrets,
+				fetcher,
+				replacers
+			});
+		};
 	}
 
 	async start() {

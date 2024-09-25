@@ -114,6 +114,21 @@ export class VaultInterface implements FileManager {
 		return await this.cannoli.app.vault.readBinary(file);
 	}
 
+	async getCanvas(fileName: string, isMock: boolean): Promise<string | null> {
+		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
+			fileName,
+			""
+		);
+
+		if (!file) {
+			return null;
+		}
+
+		const content = await this.cannoli.app.vault.read(file);
+
+		return content;
+	}
+
 	async getNote(
 		reference: Reference,
 		isMock: boolean,
