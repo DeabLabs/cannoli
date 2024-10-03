@@ -26,23 +26,24 @@ Cannolis can be run in several ways:
 
 ![Icon](/packages/cannoli-plugin/assets/icon.png)
 
--   Click the Cannoli ribbon icon
+- Click the Cannoli ribbon icon
 
-    -   If you're on a canvas file, it will be run as a cannoli
-    -   If you're on a note with a "cannoli" property, the canvas file in that property will be run as a cannoli
+  - If you're on a canvas file, it will be run as a cannoli
+  - If you're on a note with a "cannoli" property, the canvas file in that property will be run as a cannoli
 
--   Run the "Start/Stop cannoli" command in the command palette (functions the same as the ribbon icon)
--   If a canvas file name ends with ".cno", it will have its own run command in the command palette
--   Make an audio recording on a note with a "cannoli" property
-    -   That recording will be (1) transcribed using Whisper, (2) replace the reference, and (3) trigger the cannoli defined in the property.
+- Run the "Start/Stop cannoli" command in the command palette (functions the same as the ribbon icon)
+- If a canvas file name ends with ".cno", it will have its own run command in the command palette
+- Make an audio recording on a note with a "cannoli" property
+  - That recording will be (1) transcribed using Whisper, (2) replace the reference, and (3) trigger the cannoli defined in the property.
 
 ## AI providers
 
 Cannoli currently supports the following LLM providers:
--   OpenAI
--   Groq
--   Anthropic
--   Gemini
+
+- OpenAI
+- Groq
+- Anthropic
+- Gemini
 
 You can select a default provider, edit its settings individually, and override that default wherever you like.
 
@@ -56,7 +57,11 @@ You can change the default model in the settings, and define the model per-node 
 
 ## Network use
 
--   Cannoli makes requests to LLM provider APIs based on the setup of the cannoli being run.
--   Cannoli can send HTTP requests that you define up front.
+- Cannoli makes requests to LLM provider APIs based on the setup of the cannoli being run.
+- Cannoli can send HTTP requests that you define up front.
+
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for development instructions.
 
 <a href='https://ko-fi.com/Z8Z1OHPFX' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi2.png?v=3' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
