@@ -19,6 +19,8 @@ import { CannoliGroup } from "./graph/objects/vertices/CannoliGroup";
 import { CannoliNode } from "./graph/objects/vertices/CannoliNode";
 import { parseNamedNode } from "./utility";
 import { resultsRun } from "./cannoli";
+import { z } from "zod";
+import { createPhoenixWebTracerProvider } from "src/instrumentation";
 
 export interface HttpTemplate {
 	id: string;
@@ -100,6 +102,17 @@ export interface ModelUsage {
 
 export type ChatRole = "user" | "assistant" | "system";
 
+const tracingConfigSchema = z.object({
+	phoenix: z.object({
+		enabled: z.boolean().default(false),
+		apiKey: z.string().optional(),
+		baseUrl: z.string(),
+		projectName: z.string().default("cannoli"),
+	}).nullish(),
+});
+
+export type TracingConfig = z.infer<typeof tracingConfigSchema>;
+
 enum DagCheckState {
 	UNVISITED,
 	VISITING,
@@ -117,7 +130,7 @@ export interface RunArgs {
 	cannoli: unknown;
 	llmConfigs?: LLMConfig[];
 	fetcher?: ResponseTextFetcher;
-	config?: Record<string, string | number | boolean>;
+	config?: Record<string, unknown>;
 	secrets?: Record<string, string>;
 	args?: Record<string, string>;
 	onFinish?: (stoppage: Stoppage) => void;
@@ -150,6 +163,7 @@ export class Run {
 	stopTime: number | null = null;
 	currentNote: string | null = null;
 	selection: string | null = null;
+	tracingConfig: TracingConfig | null = null;
 
 	subcannoliCallback: (cannoli: unknown, inputVariables: Record<string, string>, scIsMock: boolean) => Promise<Record<string, string>>;
 
@@ -191,6 +205,16 @@ export class Run {
 		this.config = { ...config ?? {}, ...this.secrets };
 
 		this.args = args ?? null;
+
+		const tracingConfig = tracingConfigSchema.safeParse(config?.tracingConfig);
+
+		if (tracingConfig.success) {
+			this.tracingConfig = tracingConfig.data;
+		}
+
+		if (this.tracingConfig) {
+			createPhoenixWebTracerProvider({ tracingConfig: this.tracingConfig })
+		}
 
 		let parsedCannoliJSON: CanvasData;
 

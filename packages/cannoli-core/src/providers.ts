@@ -20,6 +20,7 @@ export type SupportedProviders = "openai" | "ollama" | "gemini" | "anthropic" | 
 
 import { z } from "zod";
 import invariant from "tiny-invariant";
+import { TracingConfig } from "src/run";
 
 export const GenericFunctionCallSchema = z.object({
 	name: z.string(),
@@ -69,6 +70,7 @@ export type LLMConfig = (Omit<GenericModelConfig, "provider"> & { provider: Supp
 
 type ConstructorArgs = {
 	configs: LLMConfig[];
+	tracingConfig?: TracingConfig | null;
 	valtownApiKey?: string;
 };
 
@@ -105,6 +107,7 @@ export class LLMProvider {
 	getDefaultConfigByProvider?: GetDefaultsByProvider;
 	initialized = false;
 	valtownApiKey?: string;
+	tracingConfig?: TracingConfig | null;
 
 	constructor(initArgs: ConstructorArgs) {
 		this.init(initArgs);
@@ -115,6 +118,7 @@ export class LLMProvider {
 		this.provider = initArgs.configs[0].provider as SupportedProviders;
 		this.baseConfig = initArgs.configs[0];
 		this.valtownApiKey = initArgs.valtownApiKey;
+		this.tracingConfig = initArgs.tracingConfig;
 		this.getDefaultConfigByProvider = (provider: SupportedProviders) => {
 			return initArgs.configs.find((config) => config.provider === provider);
 		}

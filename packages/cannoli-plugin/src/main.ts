@@ -936,6 +936,7 @@ export default class Cannoli extends Plugin {
 			...(this.settings.contentIsColorless ? { contentIsColorless: this.settings.contentIsColorless } : {}),
 			...(!chatFormatStringIsDefault ? { chatFormatString: this.settings.chatFormatString } : {}),
 			...(this.settings.enableVision !== undefined ? { enableVision: this.settings.enableVision } : {}),
+			tracingConfig: this.settings.tracingConfig,
 		};
 	}
 
