@@ -10,7 +10,9 @@
     - It is recommended to create a new vault for development, that does not already have cannoli installed
   - Install hot-reload plugin
     - <https://github.com/pjeby/hot-reload?tab=readme-ov-file#installation>
-          `cd <my_obsidian_vault>/.obsidian/plugins && git clone git@github.com:pjeby/hot-reload.git`
+
+    - `cd <my_obsidian_vault>/.obsidian/plugins && git clone git@github.com:pjeby/hot-reload.git`
+
     - Make sure to enable it in obsidian once installed
 - VSCode (optional)
   - Any VSCode (or descendant) editor will pick up common configuration from the cannoli repo
