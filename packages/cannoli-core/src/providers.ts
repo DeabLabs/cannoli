@@ -72,6 +72,9 @@ type ConstructorArgs = {
 	configs: LLMConfig[];
 	tracingConfig?: TracingConfig | null;
 	valtownApiKey?: string;
+	runId?: string;
+	runName?: string;
+	runDateEpochMs?: number;
 };
 
 export type GenericCompletionParams = {
@@ -108,6 +111,9 @@ export class LLMProvider {
 	initialized = false;
 	valtownApiKey?: string;
 	tracingConfig?: TracingConfig | null;
+	runId?: string;
+	runName?: string;
+	runDateEpochMs?: number;
 
 	constructor(initArgs: ConstructorArgs) {
 		this.init(initArgs);
@@ -119,6 +125,9 @@ export class LLMProvider {
 		this.baseConfig = initArgs.configs[0];
 		this.valtownApiKey = initArgs.valtownApiKey;
 		this.tracingConfig = initArgs.tracingConfig;
+		this.runId = initArgs.runId;
+		this.runDateEpochMs = initArgs.runDateEpochMs;
+		this.runName = initArgs.runName;
 		this.getDefaultConfigByProvider = (provider: SupportedProviders) => {
 			return initArgs.configs.find((config) => config.provider === provider);
 		}
@@ -170,9 +179,10 @@ export class LLMProvider {
 		const url = urlString || undefined;
 		const query = queryString ? Object.fromEntries(new URLSearchParams(queryString).entries()) : undefined
 
+		let client: BaseChatModel;
 		switch (provider) {
 			case "openai":
-				return new ChatOpenAI({
+				client = new ChatOpenAI({
 					apiKey: config.apiKey,
 					model: config.model,
 					temperature: config.temperature,
@@ -191,8 +201,9 @@ export class LLMProvider {
 						defaultQuery: query
 					}
 				});
+				break;
 			case "azure_openai":
-				return new AzureChatOpenAI({
+				client = new AzureChatOpenAI({
 					temperature: config.temperature,
 					model: config.model,
 					apiKey: config.apiKey,
@@ -216,9 +227,10 @@ export class LLMProvider {
 						defaultQuery: query,
 					}
 				});
+				break;
 			case "ollama":
 				if (args?.hasFunctionCall) {
-					return new OllamaFunctions({
+					client = new OllamaFunctions({
 						baseUrl: url,
 						model: config.model,
 						temperature: config.temperature,
@@ -227,9 +239,10 @@ export class LLMProvider {
 						presencePenalty: config.presence_penalty,
 						stop: config.stop?.split(","),
 					});
+					break;
 				}
 
-				return new ChatOllama({
+				client = new ChatOllama({
 					baseUrl: url,
 					model: config.model,
 					temperature: config.temperature,
@@ -238,8 +251,9 @@ export class LLMProvider {
 					presencePenalty: config.presence_penalty,
 					stop: config.stop?.split(","),
 				});
+				break;
 			case "gemini":
-				return new ChatGoogleGenerativeAI({
+				client = new ChatGoogleGenerativeAI({
 					maxRetries: 3,
 					model: config.model,
 					apiKey: config.apiKey,
@@ -248,8 +262,9 @@ export class LLMProvider {
 					topP: config.top_p,
 					stopSequences: config.stop?.split(","),
 				});
+				break;
 			case "anthropic":
-				return new ChatAnthropic({
+				client = new ChatAnthropic({
 					apiKey: config.apiKey,
 					model: config.model,
 					temperature: config.temperature,
@@ -265,17 +280,21 @@ export class LLMProvider {
 						},
 					}
 				});
+				break;
 			case "groq":
-				return new ChatGroq({
+				client = new ChatGroq({
 					apiKey: config.apiKey,
 					model: config.model,
 					temperature: config.temperature,
 					stopSequences: config.stop?.split(","),
 					maxRetries: 3,
 				});
+				break;
 			default:
 				throw new Error("Unsupported provider");
 		}
+
+		return client.withConfig({ metadata: { runId: this.runId, runName: this.runName, runDateEpochMs: this.runDateEpochMs } }) as unknown as BaseChatModel;
 	};
 
 	static convertMessages = (

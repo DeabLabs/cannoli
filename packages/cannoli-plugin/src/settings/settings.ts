@@ -102,7 +102,7 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
 		phoenix: {
 			enabled: false,
 			projectName: "cannoli",
-			baseUrl: "http://localhost:6006/v1/traces",
+			baseUrl: "http://localhost:6006/",
 			apiKey: "",
 		}
 	}

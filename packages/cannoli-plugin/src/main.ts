@@ -357,6 +357,9 @@ export default class Cannoli extends Plugin {
 		// Get the content of the file
 		const content = JSON.parse(await this.app.vault.read(file));
 
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		const { tracingConfig, ...config } = this.getConfig(true);
+
 		const bakeResult = await bake({
 			language: "typescript",
 			runtime: "deno",
@@ -365,7 +368,7 @@ export default class Cannoli extends Plugin {
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
 			actions: this.getActions(),
-			config: this.getConfig(true),
+			config,
 			secrets: this.getSecrets(),
 			httpTemplates: this.settings.httpTemplates,
 			includeTypes: false,
@@ -516,6 +519,8 @@ export default class Cannoli extends Plugin {
 
 		// Get the content of the file
 		const content = JSON.parse(await this.app.vault.read(activeFile));
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		const { tracingConfig, ...config } = this.getConfig(true);
 
 		const bakeResult = await bake({
 			language: this.settings.bakeLanguage,
@@ -526,7 +531,7 @@ export default class Cannoli extends Plugin {
 			llmConfigs: this.getLLMConfigs(),
 			fileManager: new VaultInterface(this),
 			actions: this.getActions(),
-			config: this.getConfig(true),
+			config,
 			secrets: this.getSecrets(),
 			httpTemplates: this.settings.httpTemplates,
 			includeTypes: true
@@ -929,14 +934,14 @@ export default class Cannoli extends Plugin {
 		return secrets;
 	}
 
-	getConfig = (forBake = false) => {
+	getConfig = (forBake?: boolean) => {
 		const chatFormatStringIsDefault = this.settings.chatFormatString === DEFAULT_SETTINGS.chatFormatString || forBake;
 
 		return {
 			...(this.settings.contentIsColorless ? { contentIsColorless: this.settings.contentIsColorless } : {}),
 			...(!chatFormatStringIsDefault ? { chatFormatString: this.settings.chatFormatString } : {}),
 			...(this.settings.enableVision !== undefined ? { enableVision: this.settings.enableVision } : {}),
-			tracingConfig: this.settings.tracingConfig,
+			tracingConfig: forBake ? undefined : this.settings.tracingConfig,
 		};
 	}
 
@@ -1105,7 +1110,8 @@ export default class Cannoli extends Plugin {
 			args: cannoliArgs,
 			persistor: noCanvas ? undefined : canvas,
 			fileManager: vaultInterface,
-			isMock: true
+			isMock: true,
+			runName: name,
 		});
 
 		const validationStoppage = await validationStoppagePromise;
@@ -1148,6 +1154,7 @@ export default class Cannoli extends Plugin {
 			persistor: noCanvas ? undefined : canvas,
 			fileManager: vaultInterface,
 			isMock: false,
+			runName: name,
 		});
 
 		// add to running cannolis

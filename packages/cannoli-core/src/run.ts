@@ -142,6 +142,7 @@ export interface RunArgs {
 	httpTemplates?: HttpTemplate[];
 	replacers?: Replacer[];
 	resume?: boolean;
+	runName?: string;
 }
 
 export class Run {
@@ -164,8 +165,17 @@ export class Run {
 	stopTime: number | null = null;
 	currentNote: string | null = null;
 	selection: string | null = null;
+	// tracing fields
+	/** The tracing configuration for this run */
 	tracingConfig: TracingConfig | null = null;
+	/** The run ID for this run. Used to identify the run in your telemetry backend. */
 	runId: string;
+	/** The run name for this run. Used to identify all runs from all executions of the same canvas. */
+	runName: string;
+	/** The run date for this run. The date in which this run was started, in epoch milliseconds. */
+	runDateEpochMs: number;
+	/** The filter to apply to the spans produced by this run. */
+	postTraceFilter: string | undefined;
 
 	subcannoliCallback: (cannoli: unknown, inputVariables: Record<string, string>, scIsMock: boolean) => Promise<Record<string, string>>;
 
@@ -187,6 +197,7 @@ export class Run {
 		config,
 		secrets,
 		args,
+		runName,
 		resume
 	}: RunArgs) {
 		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
@@ -194,7 +205,9 @@ export class Run {
 		this.persistor = persistor ?? null;
 		this.usage = {};
 		this.runId = `${nanoid(16)}${isMock ? "-mock" : ""}`;
-
+		this.runDateEpochMs = Date.now();
+		this.postTraceFilter = undefined;
+		this.runName = runName || "Unnamed Cannoli Run";
 
 		const defaultFetcher: ResponseTextFetcher = async (url, options) => {
 			const res = await fetch(url, options);
@@ -203,7 +216,13 @@ export class Run {
 
 		this.fetcher = fetcher ?? defaultFetcher;
 
-		this.llm = llmConfigs ? new LLMProvider({ configs: llmConfigs, valtownApiKey: secrets?.["VALTOWN_API_KEY"] }) : null;
+		this.llm = llmConfigs ? new LLMProvider({
+			configs: llmConfigs,
+			valtownApiKey: secrets?.["VALTOWN_API_KEY"],
+			runId: this.runId,
+			runDateEpochMs: this.runDateEpochMs,
+			runName: this.runName
+		}) : null;
 
 		this.secrets = secrets ?? {};
 		this.config = { ...config ?? {}, ...this.secrets };
@@ -218,6 +237,7 @@ export class Run {
 
 		if (this.tracingConfig && !this.isMock) {
 			createPhoenixWebTracerProvider({ tracingConfig: this.tracingConfig })
+			this.postTraceFilter = `metadata['runId'] == '${this.runId}'\nmetadata['runName'] == '${this.runName}'\nmetadata['runDateEpochMs'] == '${this.runDateEpochMs}'`
 		}
 
 		let parsedCannoliJSON: CanvasData;
@@ -455,6 +475,11 @@ export class Run {
 
 	private handleFinish(reason: StoppageReason, message?: string) {
 		this.stopTime = Date.now();
+
+		if (this.tracingConfig && !this.isMock && this.postTraceFilter) {
+			console.log(`To view spans for this run in Arize Phoenix, filter your spans with:\n\n${this.postTraceFilter}`)
+		}
+
 		this.onFinish({
 			reason,
 			message,

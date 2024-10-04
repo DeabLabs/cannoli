@@ -1,4 +1,4 @@
-import { ConsoleSpanExporter, WebTracerProvider, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-web"
+import { WebTracerProvider, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-web"
 import { SEMRESATTRS_PROJECT_NAME } from "@arizeai/openinference-semantic-conventions";
 import { Resource } from "@opentelemetry/resources"
 import * as lcCallbackManager from "@langchain/core/callbacks/manager";
@@ -27,9 +27,10 @@ export const createPhoenixWebTracerProvider = ({ tracingConfig }: { tracingConfi
 			}),
 		})
 
-		provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()))
+		const traceUrl = `${tracingConfig.phoenix.baseUrl.endsWith("/") ? tracingConfig.phoenix.baseUrl : `${tracingConfig.phoenix.baseUrl}/`}v1/traces`
+		// provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()))
 		provider.addSpanProcessor(new SimpleSpanProcessor(new OTLPTraceExporter({
-			url: tracingConfig.phoenix.baseUrl,
+			url: traceUrl,
 			headers: {
 				// allow cross-origin requests
 				"Access-Control-Allow-Origin": "*",
