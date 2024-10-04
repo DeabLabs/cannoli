@@ -21,6 +21,7 @@ import { parseNamedNode } from "./utility";
 import { resultsRun } from "./cannoli";
 import { z } from "zod";
 import { createPhoenixWebTracerProvider } from "src/instrumentation";
+import { nanoid } from "nanoid";
 
 export interface HttpTemplate {
 	id: string;
@@ -164,6 +165,7 @@ export class Run {
 	currentNote: string | null = null;
 	selection: string | null = null;
 	tracingConfig: TracingConfig | null = null;
+	runId: string;
 
 	subcannoliCallback: (cannoli: unknown, inputVariables: Record<string, string>, scIsMock: boolean) => Promise<Record<string, string>>;
 
@@ -191,6 +193,8 @@ export class Run {
 		this.isMock = isMock ?? false;
 		this.persistor = persistor ?? null;
 		this.usage = {};
+		this.runId = `${nanoid(16)}${isMock ? "-mock" : ""}`;
+
 
 		const defaultFetcher: ResponseTextFetcher = async (url, options) => {
 			const res = await fetch(url, options);
@@ -212,7 +216,7 @@ export class Run {
 			this.tracingConfig = tracingConfig.data;
 		}
 
-		if (this.tracingConfig) {
+		if (this.tracingConfig && !this.isMock) {
 			createPhoenixWebTracerProvider({ tracingConfig: this.tracingConfig })
 		}
 

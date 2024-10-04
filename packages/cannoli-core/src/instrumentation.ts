@@ -24,7 +24,6 @@ export const createPhoenixWebTracerProvider = ({ tracingConfig }: { tracingConfi
 		const provider = new WebTracerProvider({
 			resource: new Resource({
 				[SEMRESATTRS_PROJECT_NAME]: tracingConfig.phoenix.projectName,
-
 			}),
 		})
 
