@@ -1,4 +1,4 @@
-import { WebTracerProvider, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-web"
+import { WebTracerProvider, BatchSpanProcessor } from "@opentelemetry/sdk-trace-web"
 import { SEMRESATTRS_PROJECT_NAME } from "@arizeai/openinference-semantic-conventions";
 import { Resource } from "@opentelemetry/resources"
 import * as lcCallbackManager from "@langchain/core/callbacks/manager";
@@ -29,7 +29,7 @@ export const createPhoenixWebTracerProvider = ({ tracingConfig }: { tracingConfi
 
 		const traceUrl = `${tracingConfig.phoenix.baseUrl.endsWith("/") ? tracingConfig.phoenix.baseUrl : `${tracingConfig.phoenix.baseUrl}/`}v1/traces`
 		// provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()))
-		provider.addSpanProcessor(new SimpleSpanProcessor(new OTLPTraceExporter({
+		provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter({
 			url: traceUrl,
 			headers: {
 				...(tracingConfig.phoenix.apiKey
