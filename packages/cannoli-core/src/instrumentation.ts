@@ -32,11 +32,11 @@ export const createPhoenixWebTracerProvider = ({ tracingConfig }: { tracingConfi
 		provider.addSpanProcessor(new SimpleSpanProcessor(new OTLPTraceExporter({
 			url: traceUrl,
 			headers: {
-				// allow cross-origin requests
-				"Access-Control-Allow-Origin": "*",
-				"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-				"Access-Control-Allow-Headers": "Content-Type, Authorization, Content-Length, X-Requested-With, Accept, Origin",
-				"Access-Control-Allow-Credentials": "true",
+				...(tracingConfig.phoenix.apiKey
+					? tracingConfig.phoenix.baseUrl.includes("app.phoenix.arize.com")
+						? { "api_key": `${tracingConfig.phoenix.apiKey}` }
+						: { "Authorization": `Bearer ${tracingConfig.phoenix.apiKey}` }
+					: {}),
 			}
 		})))
 
