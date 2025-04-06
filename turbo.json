@@ -1,25 +1,25 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
-    "cannoli-plugin": {
-      "outputs": ["../../main.js"]
-    },
-    "build": {
-      "outputs": ["dist"],
-      "dependsOn": ["^build"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true,
-      "dependsOn": ["^build"]
-    },
-    "typecheck": {},
-    "release": {
-      "cache": false,
-      "dependsOn": ["^build"]
-    },
-    "build-college": {
-      "cache": false
-    }
-  }
+	"$schema": "https://turbo.build/schema.json",
+	"pipeline": {
+		"cannoli-plugin": {
+			"outputs": ["../../main.js"]
+		},
+		"build": {
+			"outputs": ["dist"],
+			"dependsOn": ["^build"]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true,
+			"dependsOn": ["^build"]
+		},
+		"typecheck": {},
+		"release": {
+			"cache": false,
+			"dependsOn": ["^build"]
+		},
+		"build-college": {
+			"cache": false
+		}
+	}
 }

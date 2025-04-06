@@ -1,21 +1,29 @@
-import { HumanMessage } from "@langchain/core/messages"
-import { GenericFunctionCall, LangchainMessages } from "./providers"
+import { HumanMessage } from "@langchain/core/messages";
+import { GenericFunctionCall, LangchainMessages } from "./providers";
 
-export const messagesWithFnCallPrompts = ({ convertedMessages, fn, function_call }: {
-	convertedMessages: LangchainMessages,
-	fn: GenericFunctionCall,
-	function_call: { name: string }
+export const messagesWithFnCallPrompts = ({
+	convertedMessages,
+	fn,
+	function_call,
+}: {
+	convertedMessages: LangchainMessages;
+	fn: GenericFunctionCall;
+	function_call: { name: string };
 }) => {
-	if (!(typeof fn.parameters.properties === "object") || !fn.parameters.properties) {
-		console.warn("Function definition is malformed. Skipping")
-		return convertedMessages
+	if (
+		!(typeof fn.parameters.properties === "object") ||
+		!fn.parameters.properties
+	) {
+		console.warn("Function definition is malformed. Skipping");
+		return convertedMessages;
 	}
 
 	switch (fn.name) {
 		case "choice": {
-			return [...convertedMessages, new HumanMessage({
-				content:
-					`
+			return [
+				...convertedMessages,
+				new HumanMessage({
+					content: `
 Respond with the choice you would like to make.
 Your output format should strictly adhere to JSON formatting. Here is a type definition of the expected JSON format:
 ---
@@ -32,17 +40,22 @@ example output:
 
 input:
 ${
-						// TODO: actually validate fns
-						// @ts-expect-error
-						fn.parameters.properties.choice.enum.map((choice: string) => `- ${choice}`).join("\n")
-						}
+	// TODO: actually validate fns
+	// @ts-expect-error
+	fn.parameters.properties.choice.enum
+		.map((choice: string) => `- ${choice}`)
+		.join("\n")
+}
 output:
-`.trimStart()
-			})]
+`.trimStart(),
+				}),
+			];
 		}
 		case "form": {
-			return [...convertedMessages, new HumanMessage({
-				content: `
+			return [
+				...convertedMessages,
+				new HumanMessage({
+					content: `
 Your task is to generate a value(s) given one or more variable names.
 The format of variables is as follows:
 - variable_name_1
@@ -64,19 +77,23 @@ The necessary information to complete the objective is between ---.
 ---
 Objective: "Provide the requested information for each key."
 Variables:
-${Object.keys(fn.parameters.properties).map(p => `- ${p}`).join("\n")}
+${Object.keys(fn.parameters.properties)
+	.map((p) => `- ${p}`)
+	.join("\n")}
 ---
 
 Below, return your JSON output.
 
 """
-`.trim()
-			})]
+`.trim(),
+				}),
+			];
 		}
 		case "note_select": {
-			return [...convertedMessages, new HumanMessage({
-				content:
-					`
+			return [
+				...convertedMessages,
+				new HumanMessage({
+					content: `
 Respond with the note you would like to select.
 Your output format should strictly adhere to JSON formatting. Here is a type definition of the expected JSON format:
 ---
@@ -93,18 +110,23 @@ example output:
 
 input:
 ${
-						// TODO: actually validate fns
-						// @ts-expect-error
-						fn.parameters.properties.note.enum.map((note_name: string) => `- ${note_name}`).join("\n")
-						}
+	// TODO: actually validate fns
+	// @ts-expect-error
+	fn.parameters.properties.note.enum
+		.map((note_name: string) => `- ${note_name}`)
+		.join("\n")
+}
 output:
-`.trimStart()
-			})]
+`.trimStart(),
+				}),
+			];
 		}
 		default: {
-			console.warn("Function call prompt not implemented for function: ", fn.name)
-			return convertedMessages
+			console.warn(
+				"Function call prompt not implemented for function: ",
+				fn.name,
+			);
+			return convertedMessages;
 		}
 	}
-}
-
+};

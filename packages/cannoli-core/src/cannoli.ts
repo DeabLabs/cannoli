@@ -1,6 +1,9 @@
 import { Run, RunArgs, Stoppage } from "./run";
 
-export function run({ onFinish, ...args }: RunArgs): [Promise<Stoppage>, () => void] {
+export function run({
+	onFinish,
+	...args
+}: RunArgs): [Promise<Stoppage>, () => void] {
 	let resolver: (stoppage: Stoppage) => void;
 	const done = new Promise<Stoppage>((resolve) => {
 		resolver = resolve;
@@ -19,7 +22,9 @@ export function run({ onFinish, ...args }: RunArgs): [Promise<Stoppage>, () => v
 	return [done, () => run.stop()];
 }
 
-export async function resultsRun(args: RunArgs): Promise<Record<string, string>> {
+export async function resultsRun(
+	args: RunArgs,
+): Promise<Record<string, string>> {
 	const [done] = run({ ...args });
 
 	const stoppage = await done;

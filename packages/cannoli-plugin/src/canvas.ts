@@ -1,6 +1,15 @@
 import { TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
-import { Persistor, CannoliCanvasData, CanvasData, AllCanvasNodeData, CanvasEdgeData, AllCannoliCanvasNodeData, CannoliCanvasEdgeData, CannoliCanvasGroupData } from "@deablabs/cannoli-core";
+import {
+	Persistor,
+	CannoliCanvasData,
+	CanvasData,
+	AllCanvasNodeData,
+	CanvasEdgeData,
+	AllCannoliCanvasNodeData,
+	CannoliCanvasEdgeData,
+	CannoliCanvasGroupData,
+} from "@deablabs/cannoli-core";
 
 export class CanvasPersistor implements Persistor {
 	canvasFile: TFile;
@@ -8,7 +17,11 @@ export class CanvasPersistor implements Persistor {
 	allowCannoliData: boolean;
 	config: Record<string, unknown>;
 
-	constructor(canvasData: CanvasData, persistor?: TFile, allowCannoliData: boolean = false) {
+	constructor(
+		canvasData: CanvasData,
+		persistor?: TFile,
+		allowCannoliData: boolean = false,
+	) {
 		this.allowCannoliData = allowCannoliData;
 
 		if (!persistor) {
@@ -71,7 +84,9 @@ export class CanvasPersistor implements Persistor {
 	async editNode(newNode: AllCannoliCanvasNodeData): Promise<void> {
 		this.editQueue = this.editQueue.then(async () => {
 			const canvasData = await this.readCanvasData();
-			const existingNode = canvasData.nodes.find((n) => n.id === newNode.id);
+			const existingNode = canvasData.nodes.find(
+				(n) => n.id === newNode.id,
+			);
 			if (existingNode) {
 				// keep the old x, y, height, and width
 				newNode.x = existingNode.x;
@@ -96,7 +111,9 @@ export class CanvasPersistor implements Persistor {
 	async editEdge(newEdge: CannoliCanvasEdgeData): Promise<void> {
 		this.editQueue = this.editQueue.then(async () => {
 			const canvasData = await this.readCanvasData();
-			const existingEdge = canvasData.edges.find((e) => e.id === newEdge.id);
+			const existingEdge = canvasData.edges.find(
+				(e) => e.id === newEdge.id,
+			);
 			if (existingEdge) {
 				if (!this.allowCannoliData) {
 					if (newEdge.cannoliData?.originalObject) {
@@ -132,7 +149,7 @@ export class CanvasPersistor implements Persistor {
 	private addErrorNode(
 		data: CanvasData,
 		nodeId: string,
-		error: string
+		error: string,
 	): CanvasData {
 		const node = data.nodes.find((node) => node.id === nodeId);
 
@@ -170,7 +187,7 @@ export class CanvasPersistor implements Persistor {
 	private addWarningNode(
 		data: CanvasData,
 		nodeId: string,
-		error: string
+		error: string,
 	): CanvasData | null {
 		const node = data.nodes.find((node) => node.id === nodeId);
 
@@ -207,7 +224,7 @@ export class CanvasPersistor implements Persistor {
 					node.y === errorNode.y &&
 					node.width === errorNode.width &&
 					node.height === errorNode.height &&
-					node.text === errorNode.text
+					node.text === errorNode.text,
 			);
 
 			if (existingWarningNode) {
@@ -226,7 +243,7 @@ export class CanvasPersistor implements Persistor {
 			(node) =>
 				node.color === "1" &&
 				(node.text?.startsWith("<u>Error:</u>\n") ||
-					node.text?.startsWith("<u>Warning:</u>\n"))
+					node.text?.startsWith("<u>Warning:</u>\n")),
 		);
 
 		// Collect all the IDs of the edges connected to error nodes
@@ -276,7 +293,10 @@ export class CanvasPersistor implements Persistor {
 		});
 	}
 
-	async editOriginalParallelGroupLabel(originalGroupId: string, label: string) {
+	async editOriginalParallelGroupLabel(
+		originalGroupId: string,
+		label: string,
+	) {
 		this.editQueue = this.editQueue.then(async () => {
 			const data = await this.readCanvasData();
 

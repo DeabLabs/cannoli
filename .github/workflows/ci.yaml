@@ -1,33 +1,41 @@
 name: Build
 
 on:
-    push:
-        branches: ["main"]
-    pull_request:
-        types: [opened, synchronize]
+  push:
+    branches: ["main"]
+  pull_request:
+    types: [opened, synchronize]
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-        steps:
-            - uses: actions/checkout@v4
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Install pnpm
-              uses: pnpm/action-setup@v3
-              with:
-                  version: 9
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
 
-            - name: Use Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: "20.x"
-                  cache: "pnpm"
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20.x"
+          cache: "pnpm"
 
-            - name: Install deps
-              run: |
-                  pnpm install
+      - name: Install deps
+        run: |
+          pnpm install
 
-            - name: Build
-              run: |
-                  pnpm build
+      - name: Lint
+        run: |
+          pnpm run check
+
+      - name: Typecheck
+        run: |
+          pnpm run typecheck
+
+      - name: Build
+        run: |
+          pnpm build

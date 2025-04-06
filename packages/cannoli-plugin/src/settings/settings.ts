@@ -1,4 +1,10 @@
-import { BakeLanguage, BakeRuntime, HttpTemplate, SupportedProviders, TracingConfig } from "@deablabs/cannoli-core";
+import {
+	BakeLanguage,
+	BakeRuntime,
+	HttpTemplate,
+	SupportedProviders,
+	TracingConfig,
+} from "@deablabs/cannoli-core";
 
 export interface CannoliSettings {
 	llmProvider: SupportedProviders;
@@ -104,6 +110,6 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
 			projectName: "cannoli",
 			baseUrl: "http://localhost:6006/",
 			apiKey: "",
-		}
-	}
+		},
+	},
 };

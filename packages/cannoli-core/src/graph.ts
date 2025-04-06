@@ -142,8 +142,8 @@ export interface CannoliEdgeData extends CannoliData {
 	name?: string;
 	edgeModifier?: EdgeModifier;
 	versions?: {
-		header: string | null,
-		subHeader: string | null,
+		header: string | null;
+		subHeader: string | null;
 	}[];
 }
 
@@ -235,20 +235,18 @@ export class CannoliGraph {
 		for (const node of this.cannoliCanvasData.nodes) {
 			switch (node.cannoliData?.type) {
 				case GroupType.Repeat: {
-					const repeatGroup =
-						node as VerifiedCannoliCanvasGroupData;
+					const repeatGroup = node as VerifiedCannoliCanvasGroupData;
 					this.graph[node.id] = new RepeatGroup(
 						repeatGroup,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case GroupType.Basic: {
-					const basicGroup =
-						node as VerifiedCannoliCanvasGroupData;
+					const basicGroup = node as VerifiedCannoliCanvasGroupData;
 					this.graph[node.id] = new CannoliGroup(
 						basicGroup,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
@@ -257,52 +255,47 @@ export class CannoliGraph {
 						node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new ContentNode(
 						standardContentNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case ContentNodeType.Input: {
-					const inputNode =
-						node as VerifiedCannoliCanvasTextData;
+					const inputNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new ContentNode(
 						inputNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case ContentNodeType.Output: {
-					const outputNode =
-						node as VerifiedCannoliCanvasTextData;
+					const outputNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new ContentNode(
 						outputNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case ContentNodeType.Reference: {
-					const referenceNode =
-						node as VerifiedCannoliCanvasTextData;
+					const referenceNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new ReferenceNode(
 						referenceNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case ContentNodeType.Formatter: {
-					const formatterNode =
-						node as VerifiedCannoliCanvasTextData;
+					const formatterNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new FormatterNode(
 						formatterNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case ContentNodeType.Http: {
-					const httpNode =
-						node as VerifiedCannoliCanvasTextData;
+					const httpNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new HttpNode(
 						httpNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
@@ -311,16 +304,15 @@ export class CannoliGraph {
 						node as VerifiedCannoliCanvasFileData;
 					this.graph[node.id] = new SubcannoliNode(
 						subcannoliNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case ContentNodeType.Search: {
-					const searchNode =
-						node as VerifiedCannoliCanvasTextData;
+					const searchNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new SearchNode(
 						searchNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
@@ -329,41 +321,38 @@ export class CannoliGraph {
 						node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new CallNode(
 						standardCallNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case CallNodeType.Choose: {
-					const chooseNode =
-						node as VerifiedCannoliCanvasTextData;
+					const chooseNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new ChooseNode(
 						chooseNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case CallNodeType.Form: {
-					const formNode =
-						node as VerifiedCannoliCanvasTextData;
+					const formNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new FormNode(
 						formNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 				case FloatingNodeType.Variable: {
-					const variableNode =
-						node as VerifiedCannoliCanvasTextData;
+					const variableNode = node as VerifiedCannoliCanvasTextData;
 					this.graph[node.id] = new FloatingNode(
 						variableNode,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 
 				default: {
 					throw new Error(
-						`Unknown node type: ${node.cannoliData?.type}`
+						`Unknown node type: ${node.cannoliData?.type}`,
 					);
 				}
 			}
@@ -375,7 +364,7 @@ export class CannoliGraph {
 					const loggingEdge = edge as VerifiedCannoliCanvasEdgeData;
 					this.graph[edge.id] = new LoggingEdge(
 						loggingEdge,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
@@ -384,7 +373,7 @@ export class CannoliGraph {
 						edge as VerifiedCannoliCanvasEdgeData;
 					this.graph[edge.id] = new SystemMessageEdge(
 						systemMessageEdge,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
@@ -393,7 +382,7 @@ export class CannoliGraph {
 						edge as VerifiedCannoliCanvasEdgeData;
 					this.graph[edge.id] = new ChatConverterEdge(
 						chatConverterEdge,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
@@ -402,17 +391,16 @@ export class CannoliGraph {
 						edge as VerifiedCannoliCanvasEdgeData;
 					this.graph[edge.id] = new ChatResponseEdge(
 						chatResponseEdge,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}
 
 				default: {
-					const genericEdge =
-						edge as VerifiedCannoliCanvasEdgeData;
+					const genericEdge = edge as VerifiedCannoliCanvasEdgeData;
 					this.graph[edge.id] = new CannoliEdge(
 						genericEdge,
-						this.cannoliCanvasData
+						this.cannoliCanvasData,
 					);
 					break;
 				}

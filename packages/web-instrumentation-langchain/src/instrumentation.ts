@@ -2,7 +2,7 @@ import * as CallbackManagerModule from "@langchain/core/callbacks/manager";
 import {
 	InstrumentationBase,
 	InstrumentationConfig,
-	isWrapped
+	isWrapped,
 } from "@opentelemetry/instrumentation";
 import { diag } from "@opentelemetry/api";
 import { addTracerToHandlers } from "./instrumentationUtils";
@@ -22,7 +22,9 @@ export function isPatched() {
 	return _isOpenInferencePatched;
 }
 
-export class LangChainInstrumentation extends InstrumentationBase<typeof CallbackManagerModule> {
+export class LangChainInstrumentation extends InstrumentationBase<
+	typeof CallbackManagerModule
+> {
 	constructor(config?: InstrumentationConfig) {
 		super(
 			"@arizeai/openinference-instrumentation-langchain",
@@ -36,8 +38,7 @@ export class LangChainInstrumentation extends InstrumentationBase<typeof Callbac
 		this.patch(module);
 	}
 
-	protected init(): void {
-	}
+	protected init(): void {}
 
 	enable() {
 		// this.manuallyInstrument(CallbackManagerModule);
@@ -54,7 +55,8 @@ export class LangChainInstrumentation extends InstrumentationBase<typeof Callbac
 		moduleVersion?: string,
 	) {
 		diag.debug(
-			`Applying patch for ${MODULE_NAME}${moduleVersion != null ? `@${moduleVersion}` : ""
+			`Applying patch for ${MODULE_NAME}${
+				moduleVersion != null ? `@${moduleVersion}` : ""
 			}`,
 		);
 		if (module?.openInferencePatched || _isOpenInferencePatched) {
@@ -85,7 +87,10 @@ export class LangChainInstrumentation extends InstrumentationBase<typeof Callbac
 			// This can fail if the module is made immutable via the runtime or bundler
 			module.openInferencePatched = true;
 		} catch (e) {
-			diag.warn(`Failed to set ${MODULE_NAME} patched flag on the module`, e);
+			diag.warn(
+				`Failed to set ${MODULE_NAME} patched flag on the module`,
+				e,
+			);
 		}
 
 		return module;
@@ -101,7 +106,8 @@ export class LangChainInstrumentation extends InstrumentationBase<typeof Callbac
 			return;
 		}
 		diag.debug(
-			`Removing patch for ${MODULE_NAME}${moduleVersion != null ? `@${moduleVersion}` : ""
+			`Removing patch for ${MODULE_NAME}${
+				moduleVersion != null ? `@${moduleVersion}` : ""
 			}`,
 		);
 		if (isWrapped(module.CallbackManager.configure)) {
