@@ -28,7 +28,6 @@ export const createPhoenixWebTracerProvider = ({ tracingConfig }: { tracingConfi
 		})
 
 		const traceUrl = `${tracingConfig.phoenix.baseUrl.endsWith("/") ? tracingConfig.phoenix.baseUrl : `${tracingConfig.phoenix.baseUrl}/`}v1/traces`
-		// provider.addSpanProcessor(new SimpleSpanProcessor(new ConsoleSpanExporter()))
 		provider.addSpanProcessor(new BatchSpanProcessor(new OTLPTraceExporter({
 			url: traceUrl,
 			headers: {
