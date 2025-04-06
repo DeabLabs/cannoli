@@ -7,6 +7,8 @@ import { LangChainInstrumentation } from "web-instrumentation-langchain";
 import { TracingConfig } from "src/run"
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 
+let globalProvider: WebTracerProvider | undefined;
+
 const instrumentPhoenixLangchain = () => {
 	const lcInstrumentation = new LangChainInstrumentation();
 	lcInstrumentation.manuallyInstrument(lcCallbackManager);
@@ -15,6 +17,10 @@ const instrumentPhoenixLangchain = () => {
 }
 
 export const createPhoenixWebTracerProvider = ({ tracingConfig }: { tracingConfig: TracingConfig }) => {
+	if (globalProvider) {
+		return globalProvider;
+	}
+	
 	if (!tracingConfig.phoenix?.enabled) {
 		return
 	}
@@ -44,6 +50,8 @@ export const createPhoenixWebTracerProvider = ({ tracingConfig }: { tracingConfi
 		console.log("🔎 Phoenix tracing enabled 🔎")
 
 		instrumentPhoenixLangchain()
+		
+		globalProvider = provider;
 
 		return provider
 	} catch (error) {
