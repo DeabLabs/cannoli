@@ -32,10 +32,12 @@ jobs:
         run: |
           pnpm run check
 
-      - name: Typecheck
-        run: |
-          pnpm run typecheck
-
       - name: Build
         run: |
           pnpm build
+
+      # somewhat atypical, but typecheck must occur after build because the packages
+      # depend on the build output of each other
+      - name: Typecheck
+        run: |
+          pnpm run typecheck
