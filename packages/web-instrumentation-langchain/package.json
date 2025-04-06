@@ -1,10 +1,11 @@
 {
 	"name": "web-instrumentation-langchain",
 	"version": "0.1.0",
-	"description": "Opentelemetry Web instrumentation for Langchain",
+	"description": "Forked Opentelemetry Web instrumentation for Langchain. Uses web instrumentation instead of node instrumentation.",
 	"main": "dist/index.js",
 	"type": "module",
 	"types": "dist/index.d.ts",
+	"private": true,
 	"files": [
 		"dist/**/*",
 		"package.json"
@@ -23,7 +24,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"keywords": [],
-	"author": "",
+	"author": "powell.anthonyd@proton.me",
 	"license": "MIT",
 	"devDependencies": {
 		"@typescript-eslint/eslint-plugin": "^7.7.1",
