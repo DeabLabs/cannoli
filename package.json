@@ -10,8 +10,8 @@
     "build-college": "turbo run build-college --filter cannoli-plugin",
     "clean": "rimraf main.js packages/**/node_modules packages/**/dist packages/**/.turbo .turbo node_modules",
     "release-core": "pnpm run build && pnpm --filter cannoli-core publish --no-git-check --access public",
-    "format": "prettier --write '**/*.{js,ts,md}'",
-    "check": "prettier --check '**/*.{js,ts,md}'"
+    "format": "prettier --write '**/*.{js,ts}'",
+    "check": "prettier --check '**/*.{js,ts}'"
   },
   "engines": {
     "node": ">=18",

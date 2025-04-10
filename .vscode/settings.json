@@ -14,4 +14,7 @@
 	},
 	// Ensure VSCode uses pnpm instead of npm
 	"npm.packageManager": "pnpm",
+	"[markdown]": {
+		"editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
+	},
 }
