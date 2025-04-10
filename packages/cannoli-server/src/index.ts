@@ -8,6 +8,8 @@ import * as path from "node:path";
 import { getConfigDir } from "./utils";
 import { ServerInfo } from "./types";
 import { AppVariables } from "./types/context";
+import { openAPISpecs } from "hono-openapi";
+import { Scalar } from "@scalar/hono-api-reference";
 
 // Import routers
 import statusRouter from "./routes/status";
@@ -36,6 +38,32 @@ app.route("/status", statusRouter);
 app.route("/mcp-servers", mcpServersRouter);
 app.route("/settings", settingsRouter);
 
+// Add OpenAPI documentation
+app.get(
+	"/openapi",
+	openAPISpecs(app, {
+		documentation: {
+			info: {
+				title: "Cannoli Server API",
+				version: "1.0.0",
+				description: "API for Cannoli Server providing MCP and other AI features"
+			},
+			servers: [
+				{ url: `http://${HOST}:${PORT}`, description: "Cannoli Server" }
+			]
+		}
+	})
+);
+
+// Add API reference UI
+app.get(
+	"/docs",
+	Scalar({
+		theme: "saturn",
+		spec: { url: "/openapi" }
+	})
+);
+
 // Start server
 serve(
 	{
@@ -46,6 +74,7 @@ serve(
 	(info: ServerInfo) => {
 		console.log(`Cannoli server listening on http://${HOST}:${info.port}`);
 		console.log(`Using config file: ${SETTINGS_FILE}`);
+		console.log(`API documentation available at http://${HOST}:${info.port}/docs`);
 	},
 );
 

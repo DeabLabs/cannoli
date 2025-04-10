@@ -1,30 +1,95 @@
 import { Context, Hono } from "hono";
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import { SettingsSchema } from "../schemas";
+import { ErrorResponseSchema, SettingsSchema, SuccessResponseSchema } from "../schemas";
 import { loadSettings, saveSettings } from "../settings";
 import { AppVariables } from "../types/context";
+import { describeRoute } from "hono-openapi";
+import { resolver } from "hono-openapi/zod"
+import { zValidator } from "@hono/zod-validator";
+
+const SettingsSuccessResponseSchema = SuccessResponseSchema.extend({
+	settings: SettingsSchema,
+});
 
 // Create a router for settings endpoints
 const router = new Hono<{ Variables: AppVariables }>();
 
 // General settings update
-router.patch("/", async (c) => {
-	const configDir = c.get("configDir");
-	return updateSettings(c, configDir);
-});
+router.patch(
+	"/",
+	describeRoute({
+		description: "Update server settings",
+		tags: ["Settings"],
+		responses: {
+			200: {
+				description: "Settings updated successfully",
+				content: {
+					"application/json": {
+						schema: resolver(SettingsSuccessResponseSchema),
+					},
+				},
+			},
+			400: {
+				description: "Invalid settings provided",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("json", SettingsSchema.partial()),
+	async (c) => {
+		const configDir = c.get("configDir");
+		return updateSettings(c, configDir);
+	}
+);
 
 // Get raw settings JSON file
-router.get("/raw", async (c) => {
-	const configDir = c.get("configDir");
-	return getRawSettings(c, configDir);
-});
+router.get(
+	"/raw",
+	describeRoute({
+		description: "Get raw settings JSON file",
+		tags: ["Settings"],
+		responses: {
+			200: {
+				description: "Raw settings JSON",
+				content: {
+					"application/json": {
+						schema: resolver(SettingsSchema),
+					},
+				},
+			},
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+
+					},
+				},
+			},
+		},
+	}),
+	async (c) => {
+		const configDir = c.get("configDir");
+		return getRawSettings(c, configDir);
+	}
+);
 
 // General settings update
 export async function updateSettings(
 	c: Context,
 	configDir: string,
-): Promise<Response> {
+) {
 	try {
 		const currentSettings = await loadSettings(configDir);
 		const updates = await c.req.json();
@@ -69,35 +134,10 @@ export async function updateSettings(
 export async function getRawSettings(
 	c: Context,
 	configDir: string,
-): Promise<Response> {
+) {
 	try {
-		const settingsFile = path.join(configDir, "settings.json");
-
-		try {
-			// Check if the file exists and read it
-			const data = await fs.readFile(settingsFile, "utf-8");
-
-			// Parse to validate it's proper JSON and pretty print it
-			const jsonData = JSON.parse(data);
-
-			// Set content type to application/json
-			c.header("Content-Type", "application/json");
-			return c.body(JSON.stringify(jsonData, null, 2));
-		} catch (error: unknown) {
-			if (
-				typeof error === "object" &&
-				error !== null &&
-				"code" in error &&
-				error.code === "ENOENT"
-			) {
-				// If file doesn't exist, create it with default settings
-				const defaultSettings = await loadSettings(configDir);
-				c.header("Content-Type", "application/json");
-				return c.body(JSON.stringify(defaultSettings, null, 2));
-			}
-
-			throw error;
-		}
+		const settings = await loadSettings(configDir);
+		return c.json(settings);
 	} catch (error: unknown) {
 		return c.json(
 			{

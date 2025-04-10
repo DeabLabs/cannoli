@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+// Define response schemas for documentation
+export const SuccessResponseSchema = z.object({
+	status: z.literal("ok"),
+});
+
+export const ErrorResponseSchema = z.object({
+	status: z.literal("error"),
+	message: z.string(),
+	errors: z.record(z.unknown()).optional(),
+});
+
 // Zod schemas for server configurations
 export const ServerBaseSchema = z.object({
 	id: z.string(),

@@ -2,49 +2,68 @@ import { Context, Hono } from "hono";
 import * as path from "node:path";
 import { loadSettings } from "../settings";
 import { AppVariables } from "../types/context";
+import { describeRoute } from "hono-openapi";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
+import { ErrorResponseSchema, SettingsSchema, SuccessResponseSchema } from "src/schemas";
+import { resolver } from "hono-openapi/zod";
+
+// Define schemas for the status endpoint
+const StatusResponseSuccessSchema = SuccessResponseSchema.extend({
+	version: z.string(),
+	settings: SettingsSchema,
+	configPath: z.string().optional(),
+});
 
 // Create a router for status endpoints
 const router = new Hono<{ Variables: AppVariables }>();
 
 // Get status endpoint
-router.get("/", async (c) => {
-	const configDir = c.get("configDir");
-	try {
-		const settings = await loadSettings(configDir);
-		const settingsFile = path.join(configDir, "settings.json");
-
-		return c.json({
-			status: "ok",
-			version: "1.0.0",
-			settings,
-			configPath: settingsFile,
-		});
-	} catch (error: unknown) {
-		return c.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : String(error),
+router.get(
+	"/",
+	describeRoute({
+		description: "Get server status and configuration information",
+		tags: ["Status"],
+		responses: {
+			200: {
+				description: "Successful response with server status",
+				content: {
+					"application/json": {
+						schema: resolver(StatusResponseSuccessSchema),
+					},
+				},
 			},
-			500,
-		);
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	async (c) => {
+		return getStatus(c);
 	}
-});
+);
 
 // For backward compatibility
 export async function getStatus(
 	c: Context,
-	configDir: string,
-): Promise<Response> {
+) {
 	try {
+		const configDir = c.get("configDir");
 		const settings = await loadSettings(configDir);
 		const settingsFile = path.join(configDir, "settings.json");
-
-		return c.json({
+		const response = StatusResponseSuccessSchema.parse({
 			status: "ok",
 			version: "1.0.0",
 			settings,
 			configPath: settingsFile,
 		});
+
+		return c.json(response);
 	} catch (error: unknown) {
 		return c.json(
 			{
