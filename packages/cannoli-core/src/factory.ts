@@ -46,7 +46,7 @@ export class CannoliFactory {
 		":": EdgeModifier.Property,
 		"-": EdgeModifier.List,
 		"#": EdgeModifier.Headers,
-		"_": EdgeModifier.Table,
+		_: EdgeModifier.Table,
 	};
 
 	nodeColorMap: Record<string, IndicatedNodeType> = {
@@ -139,8 +139,12 @@ export class CannoliFactory {
 
 	getCannoliData(): VerifiedCannoliCanvasData {
 		// Check if there are any groups with the label "cannoli"
-		const allGroups = this.cannoliData.nodes.filter((node) => node.type === "group") as CannoliCanvasGroupData[];
-		const cannoliGroups = allGroups.filter((group) => group.label === "cannoli");
+		const allGroups = this.cannoliData.nodes.filter(
+			(node) => node.type === "group",
+		) as CannoliCanvasGroupData[];
+		const cannoliGroups = allGroups.filter(
+			(group) => group.label === "cannoli",
+		);
 
 		if (cannoliGroups.length > 0) {
 			// Collect IDs of nodes in "cannoli" groups
@@ -151,18 +155,22 @@ export class CannoliFactory {
 			});
 
 			// Filter nodes to keep only those in "cannoli" groups
-			this.cannoliData.nodes = this.cannoliData.nodes.filter((node) => cannoliNodeIds.has(node.id));
+			this.cannoliData.nodes = this.cannoliData.nodes.filter((node) =>
+				cannoliNodeIds.has(node.id),
+			);
 
 			// Filter edges to keep only those with both source and target in "cannoli" groups
-			this.cannoliData.edges = this.cannoliData.edges.filter((edge) =>
-				cannoliNodeIds.has(edge.fromNode) && cannoliNodeIds.has(edge.toNode)
+			this.cannoliData.edges = this.cannoliData.edges.filter(
+				(edge) =>
+					cannoliNodeIds.has(edge.fromNode) &&
+					cannoliNodeIds.has(edge.toNode),
 			);
 		}
 
 		const addedEdges: CannoliCanvasEdgeData[] = [];
 
 		// Look for multi-edges
-		this.cannoliData.edges = this.cannoliData.edges.filter(edge => {
+		this.cannoliData.edges = this.cannoliData.edges.filter((edge) => {
 			// Ignore red ("1") objects
 			if (edge.color === "1") {
 				return true;
@@ -172,7 +180,11 @@ export class CannoliFactory {
 			if (edge.label && edge.label.includes("\n")) {
 				const lines = edge.label.split("\n");
 				lines.forEach((line) => {
-					const newEdge = this.duplicateObject(edge, `${edge.id}-${line}`, false) as CannoliCanvasEdgeData;
+					const newEdge = this.duplicateObject(
+						edge,
+						`${edge.id}-${line}`,
+						false,
+					) as CannoliCanvasEdgeData;
 					newEdge.label = line;
 					addedEdges.push(newEdge);
 				});
@@ -235,7 +247,7 @@ export class CannoliFactory {
 
 		// Create forEach duplicates
 		verifiedCannoliData = this.createForEachDuplicates(
-			verifiedCannoliData as VerifiedCannoliCanvasData
+			verifiedCannoliData as VerifiedCannoliCanvasData,
 		);
 
 		// Set all dependencies
@@ -243,7 +255,7 @@ export class CannoliFactory {
 			if (node.cannoliData) {
 				node.cannoliData.dependencies = this.getVertexDependencies(
 					node,
-					verifiedCannoliData as VerifiedCannoliCanvasData
+					verifiedCannoliData as VerifiedCannoliCanvasData,
 				);
 			}
 		}
@@ -261,7 +273,7 @@ export class CannoliFactory {
 		node:
 			| CannoliCanvasFileData
 			| CannoliCanvasLinkData
-			| CannoliCanvasTextData
+			| CannoliCanvasTextData,
 	): CannoliNodeData | null {
 		if (node.cannoliData && this.resume) {
 			return node.cannoliData;
@@ -395,7 +407,7 @@ export class CannoliFactory {
 
 		addMessages =
 			labelInfo?.addMessages !== undefined &&
-				labelInfo?.addMessages !== null
+			labelInfo?.addMessages !== null
 				? labelInfo.addMessages
 				: addMessages;
 		const dependencies = [] as string[];
@@ -423,12 +435,15 @@ export class CannoliFactory {
 	}
 
 	createForEachDuplicates(
-		data: VerifiedCannoliCanvasData
+		data: VerifiedCannoliCanvasData,
 	): VerifiedCannoliCanvasData {
 		// Sort groups by depth (deepest first)
 		const groups = data.nodes
 			.filter((node) => node.cannoliData.kind === CannoliObjectKind.Group)
-			.sort((a, b) => b.cannoliData.groups.length - a.cannoliData.groups.length);
+			.sort(
+				(a, b) =>
+					b.cannoliData.groups.length - a.cannoliData.groups.length,
+			);
 
 		// For each group of type "signified-for-each", create a duplicate group
 		for (const group of groups) {
@@ -443,33 +458,34 @@ export class CannoliFactory {
 					if (!castGroup || !castGroup.cannoliData.maxLoops) {
 						this.persistor?.addError(
 							group.id,
-							"Parallel groups must have a valid limit number in their label. Please ensure the label is a positive integer."
+							"Parallel groups must have a valid limit number in their label. Please ensure the label is a positive integer.",
 						);
 						throw new Error(
-							"createForEachDuplicates: castGroup is undefined or castGroup.cannoliData.maxLoops is undefined"
+							"createForEachDuplicates: castGroup is undefined or castGroup.cannoliData.maxLoops is undefined",
 						);
 					}
 
 					// Get group incoming and outgoing edges from the canvas
 					const incomingEdges = data.edges.filter(
-						(edge) => edge.toNode === castGroup.id
+						(edge) => edge.toNode === castGroup.id,
 					);
 
 					const outgoingEdges = data.edges.filter(
-						(edge) => edge.fromNode === castGroup.id
+						(edge) => edge.fromNode === castGroup.id,
 					);
 
 					// Get group crossingInEdges, crossingOutEdges, and internalEdges
 					const { crossingInEdges, crossingOutEdges, internalEdges } =
 						this.getCrossingAndInternalEdges(castGroup, data);
 
-
 					const subGroups = data.nodes.filter(
-						(node) => node.cannoliData.groups.includes(group.id) && node.cannoliData.kind === CannoliObjectKind.Group
+						(node) =>
+							node.cannoliData.groups.includes(group.id) &&
+							node.cannoliData.kind === CannoliObjectKind.Group,
 					) as VerifiedCannoliCanvasGroupData[];
 
-					const members = data.nodes.filter(
-						(node) => node.cannoliData.groups.includes(group.id)
+					const members = data.nodes.filter((node) =>
+						node.cannoliData.groups.includes(group.id),
 					) as AllVerifiedCannoliCanvasNodeData[];
 
 					// Create the number of duplicates called for in the maxLoops property
@@ -485,7 +501,7 @@ export class CannoliFactory {
 							internalEdges,
 							subGroups,
 							members,
-							data
+							data,
 						);
 					}
 
@@ -495,7 +511,7 @@ export class CannoliFactory {
 							// If the node is not the original group
 							node.id !== originalId &&
 							// If the node is not in the members array
-							!members.some((member) => member.id === node.id)
+							!members.some((member) => member.id === node.id),
 					);
 
 					data.edges = data.edges.filter(
@@ -504,7 +520,7 @@ export class CannoliFactory {
 							!outgoingEdges.includes(edge) &&
 							!crossingInEdges.includes(edge) &&
 							!crossingOutEdges.includes(edge) &&
-							!internalEdges.includes(edge)
+							!internalEdges.includes(edge),
 					);
 				}
 			}
@@ -523,14 +539,23 @@ export class CannoliFactory {
 		internalEdges: VerifiedCannoliCanvasEdgeData[],
 		subGroups: VerifiedCannoliCanvasGroupData[],
 		members: AllVerifiedCannoliCanvasNodeData[],
-		data: VerifiedCannoliCanvasData
+		data: VerifiedCannoliCanvasData,
 	): void {
-		const duplicateGroup = this.duplicateObject(originalGroup, `${originalGroup.id}-${index}`) as VerifiedCannoliCanvasGroupData;
+		const duplicateGroup = this.duplicateObject(
+			originalGroup,
+			`${originalGroup.id}-${index}`,
+		) as VerifiedCannoliCanvasGroupData;
 		duplicateGroup.cannoliData.currentLoop = index;
 		duplicateGroup.cannoliData.type = GroupType.Basic;
 		duplicateGroup.cannoliData.fromForEach = true;
 
-		const duplicateIncomingEdges = incomingEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
+		const duplicateIncomingEdges = incomingEdges.map(
+			(edge) =>
+				this.duplicateObject(
+					edge,
+					`${edge.id}-${index}`,
+				) as VerifiedCannoliCanvasEdgeData,
+		);
 		duplicateIncomingEdges.forEach((edge) => {
 			edge.toNode = duplicateGroup.id;
 			// If its a list node, change the type of the edge to item
@@ -539,19 +564,37 @@ export class CannoliFactory {
 			}
 		});
 
-		const duplicateOutgoingEdges = outgoingEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
+		const duplicateOutgoingEdges = outgoingEdges.map(
+			(edge) =>
+				this.duplicateObject(
+					edge,
+					`${edge.id}-${index}`,
+				) as VerifiedCannoliCanvasEdgeData,
+		);
 		duplicateOutgoingEdges.forEach((edge) => {
 			edge.fromNode = duplicateGroup.id;
 		});
 
-		const duplicateCrossingInEdges = crossingInEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
+		const duplicateCrossingInEdges = crossingInEdges.map(
+			(edge) =>
+				this.duplicateObject(
+					edge,
+					`${edge.id}-${index}`,
+				) as VerifiedCannoliCanvasEdgeData,
+		);
 
 		// Add the index to the toNode of the duplicate crossingInEdges
 		duplicateCrossingInEdges.forEach((edge) => {
 			edge.toNode = `${edge.toNode}-${index}`;
 		});
 
-		const duplicateCrossingOutEdges = crossingOutEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
+		const duplicateCrossingOutEdges = crossingOutEdges.map(
+			(edge) =>
+				this.duplicateObject(
+					edge,
+					`${edge.id}-${index}`,
+				) as VerifiedCannoliCanvasEdgeData,
+		);
 
 		// Push the index onto the versions array of each crossing out edge
 		duplicateCrossingOutEdges.forEach((edge) => {
@@ -569,50 +612,97 @@ export class CannoliFactory {
 			edge.fromNode = `${edge.fromNode}-${index}`;
 		});
 
-		const duplicateInternalEdges = internalEdges.map((edge) => this.duplicateObject(edge, `${edge.id}-${index}`) as VerifiedCannoliCanvasEdgeData);
-
+		const duplicateInternalEdges = internalEdges.map(
+			(edge) =>
+				this.duplicateObject(
+					edge,
+					`${edge.id}-${index}`,
+				) as VerifiedCannoliCanvasEdgeData,
+		);
 
 		// Add the index to both ends, and all of the crossing in and out groups
 		duplicateInternalEdges.forEach((edge) => {
 			edge.fromNode = `${edge.fromNode}-${index}`;
 			edge.toNode = `${edge.toNode}-${index}`;
-			edge.cannoliData.crossingInGroups = edge.cannoliData.crossingInGroups.map((groupId) => `${groupId}-${index}`);
-			edge.cannoliData.crossingOutGroups = edge.cannoliData.crossingOutGroups.map((groupId) => `${groupId}-${index}`);
+			edge.cannoliData.crossingInGroups =
+				edge.cannoliData.crossingInGroups.map(
+					(groupId) => `${groupId}-${index}`,
+				);
+			edge.cannoliData.crossingOutGroups =
+				edge.cannoliData.crossingOutGroups.map(
+					(groupId) => `${groupId}-${index}`,
+				);
 		});
 
-		const duplicateMembers = members.map((member) => this.duplicateObject(member, `${member.id}-${index}`) as AllVerifiedCannoliCanvasNodeData);
+		const duplicateMembers = members.map(
+			(member) =>
+				this.duplicateObject(
+					member,
+					`${member.id}-${index}`,
+				) as AllVerifiedCannoliCanvasNodeData,
+		);
 
 		duplicateMembers.forEach((member) => {
 			// For each subgroup, check each member's groups array. If the subgroup is present, replace it with the duplicate group id
 			for (const subGroup of subGroups) {
 				if (member.cannoliData.groups.includes(subGroup.id)) {
-					member.cannoliData.groups = member.cannoliData.groups.map((groupId) => groupId === subGroup.id ? `${groupId}-${index}` : groupId);
+					member.cannoliData.groups = member.cannoliData.groups.map(
+						(groupId) =>
+							groupId === subGroup.id
+								? `${groupId}-${index}`
+								: groupId,
+					);
 				}
 			}
 			// replace the original group id with the duplicate group id
-			member.cannoliData.groups = member.cannoliData.groups.map((groupId) => groupId === originalGroup.id ? `${groupId}-${index}` : groupId);
+			member.cannoliData.groups = member.cannoliData.groups.map(
+				(groupId) =>
+					groupId === originalGroup.id
+						? `${groupId}-${index}`
+						: groupId,
+			);
 		});
 
 		duplicateCrossingInEdges.forEach((edge) => {
 			// For each subgroup, check each member's groups array. If the subgroup is present, replace it with the duplicate group id
 			for (const subGroup of subGroups) {
 				if (edge.cannoliData.crossingInGroups.includes(subGroup.id)) {
-					edge.cannoliData.crossingInGroups = edge.cannoliData.crossingInGroups.map((groupId) => groupId === subGroup.id ? `${groupId}-${index}` : groupId);
+					edge.cannoliData.crossingInGroups =
+						edge.cannoliData.crossingInGroups.map((groupId) =>
+							groupId === subGroup.id
+								? `${groupId}-${index}`
+								: groupId,
+						);
 				}
 			}
 			// replace the original group id with the duplicate group id
-			edge.cannoliData.crossingInGroups = edge.cannoliData.crossingInGroups.map((groupId) => groupId === originalGroup.id ? `${groupId}-${index}` : groupId);
+			edge.cannoliData.crossingInGroups =
+				edge.cannoliData.crossingInGroups.map((groupId) =>
+					groupId === originalGroup.id
+						? `${groupId}-${index}`
+						: groupId,
+				);
 		});
 
 		duplicateCrossingOutEdges.forEach((edge) => {
 			// For each subgroup, check each member's groups array. If the subgroup is present, replace it with the duplicate group id
 			for (const subGroup of subGroups) {
 				if (edge.cannoliData.crossingOutGroups.includes(subGroup.id)) {
-					edge.cannoliData.crossingOutGroups = edge.cannoliData.crossingOutGroups.map((groupId) => groupId === subGroup.id ? `${groupId}-${index}` : groupId);
+					edge.cannoliData.crossingOutGroups =
+						edge.cannoliData.crossingOutGroups.map((groupId) =>
+							groupId === subGroup.id
+								? `${groupId}-${index}`
+								: groupId,
+						);
 				}
 			}
 			// replace the original group id with the duplicate group id
-			edge.cannoliData.crossingOutGroups = edge.cannoliData.crossingOutGroups.map((groupId) => groupId === originalGroup.id ? `${groupId}-${index}` : groupId);
+			edge.cannoliData.crossingOutGroups =
+				edge.cannoliData.crossingOutGroups.map((groupId) =>
+					groupId === originalGroup.id
+						? `${groupId}-${index}`
+						: groupId,
+				);
 		});
 
 		data.nodes.push(duplicateGroup);
@@ -624,7 +714,11 @@ export class CannoliFactory {
 		data.nodes.push(...duplicateMembers);
 	}
 
-	duplicateObject(data: AllCannoliCanvasNodeData | CannoliCanvasEdgeData, newId: string, setOriginalObject: boolean = true) {
+	duplicateObject(
+		data: AllCannoliCanvasNodeData | CannoliCanvasEdgeData,
+		newId: string,
+		setOriginalObject: boolean = true,
+	) {
 		const duplicate = JSON.parse(JSON.stringify(data));
 		duplicate.id = newId;
 		if (setOriginalObject) {
@@ -635,7 +729,7 @@ export class CannoliFactory {
 
 	getCrossingAndInternalEdges(
 		group: VerifiedCannoliCanvasGroupData,
-		canvas: VerifiedCannoliCanvasData
+		canvas: VerifiedCannoliCanvasData,
 	): {
 		crossingInEdges: VerifiedCannoliCanvasEdgeData[];
 		crossingOutEdges: VerifiedCannoliCanvasEdgeData[];
@@ -656,7 +750,7 @@ export class CannoliFactory {
 				processedEdges.add(edgeId);
 
 				const edgeData = canvas.edges.find(
-					(edge) => edge.id === edgeId
+					(edge) => edge.id === edgeId,
 				) as VerifiedCannoliCanvasEdgeData;
 
 				// If it's crossing in
@@ -675,7 +769,7 @@ export class CannoliFactory {
 				processedEdges.add(edgeId);
 
 				const edgeData = canvas.edges.find(
-					(edge) => edge.id === edgeId
+					(edge) => edge.id === edgeId,
 				) as VerifiedCannoliCanvasEdgeData;
 
 				// If it's crossing out
@@ -698,7 +792,7 @@ export class CannoliFactory {
 
 	getVertexDependencies(
 		vertex: AllCannoliCanvasNodeData,
-		data: VerifiedCannoliCanvasData
+		data: VerifiedCannoliCanvasData,
 	): string[] {
 		// Initialize the dependencies array
 		const dependencies = [] as string[];
@@ -708,13 +802,13 @@ export class CannoliFactory {
 
 		if (!incomingEdges) {
 			throw new Error(
-				"setVertexDependencies: vertex.cannoliData.incomingEdges is undefined"
+				"setVertexDependencies: vertex.cannoliData.incomingEdges is undefined",
 			);
 		}
 
 		incomingEdges.forEach((edge) => {
 			const edgeData = data.edges.find(
-				(edgeData) => edgeData.id === edge
+				(edgeData) => edgeData.id === edge,
 			) as VerifiedCannoliCanvasEdgeData;
 
 			if (!edgeData) {
@@ -736,11 +830,11 @@ export class CannoliFactory {
 		const groups = vertex.cannoliData?.groups;
 		groups?.forEach((group) => {
 			const groupData = data.nodes.find(
-				(groupData) => groupData.id === group
+				(groupData) => groupData.id === group,
 			) as VerifiedCannoliCanvasGroupData;
 			if (!groupData) {
 				throw new Error(
-					`setVertexDependencies: groupData for ${vertex.id} is undefined in:\n${JSON.stringify(data, null, 2)}`
+					`setVertexDependencies: groupData for ${vertex.id} is undefined in:\n${JSON.stringify(data, null, 2)}`,
 				);
 			}
 
@@ -748,17 +842,17 @@ export class CannoliFactory {
 
 			if (!incomingEdges) {
 				throw new Error(
-					"setVertexDependencies: group.cannoliData.incomingEdges is undefined"
+					"setVertexDependencies: group.cannoliData.incomingEdges is undefined",
 				);
 			}
 
 			incomingEdges.forEach((edge) => {
 				const edgeData = data.edges.find(
-					(edgeData) => edgeData.id === edge
+					(edgeData) => edgeData.id === edge,
 				) as VerifiedCannoliCanvasEdgeData;
 				if (!edgeData) {
 					throw new Error(
-						"setVertexDependencies: edgeData is undefined"
+						"setVertexDependencies: edgeData is undefined",
 					);
 				}
 
@@ -780,7 +874,7 @@ export class CannoliFactory {
 			const members = getGroupMembersFromData(group.id, data);
 			// Filter for members that exist in the data
 			const existingMembers = members?.filter((member) =>
-				data.nodes.some((node) => node.id === member)
+				data.nodes.some((node) => node.id === member),
 			);
 
 			if (existingMembers) {
@@ -814,7 +908,7 @@ export class CannoliFactory {
 		node:
 			| CannoliCanvasFileData
 			| CannoliCanvasLinkData
-			| CannoliCanvasTextData
+			| CannoliCanvasTextData,
 	): CallNodeType | ContentNodeType | FloatingNodeType | null {
 		const indicatedType = this.getNodeIndicatedType(node);
 
@@ -838,8 +932,7 @@ export class CannoliFactory {
 		// If it has any outgoing field or list edges, it's a form node
 		if (
 			outgoingEdges.some(
-				(edge) =>
-					this.getEdgeType(edge) === EdgeType.Field
+				(edge) => this.getEdgeType(edge) === EdgeType.Field,
 			)
 		) {
 			return CallNodeType.Form;
@@ -847,27 +940,30 @@ export class CannoliFactory {
 		// If it has any outgoing choice edges, it's a choose node
 		else if (
 			outgoingEdges.some(
-				(edge) => this.getEdgeType(edge) === EdgeType.Choice
+				(edge) => this.getEdgeType(edge) === EdgeType.Choice,
 			)
 		) {
 			return CallNodeType.Choose;
-		}
-		else {
+		} else {
 			return CallNodeType.StandardCall;
 		}
-
 	}
 
 	getContentNodeType(
 		node:
 			| CannoliCanvasFileData
 			| CannoliCanvasLinkData
-			| CannoliCanvasTextData
+			| CannoliCanvasTextData,
 	): ContentNodeType | null {
 		// If its a file node, return reference
 		if (node.type === "file") {
 			node = node as CannoliCanvasFileData;
-			if (node.file && node.file.endsWith(".canvas") && node.color && node.color === "2") {
+			if (
+				node.file &&
+				node.file.endsWith(".canvas") &&
+				node.color &&
+				node.color === "2"
+			) {
 				return ContentNodeType.Subcannoli;
 			}
 			return ContentNodeType.Reference;
@@ -938,7 +1034,7 @@ export class CannoliFactory {
 		vertex:
 			| CannoliCanvasFileData
 			| CannoliCanvasLinkData
-			| CannoliCanvasTextData
+			| CannoliCanvasTextData,
 	): IndicatedNodeType | null {
 		if (!this.hasEdges(vertex.id)) {
 			if (this.isFloatingNode(vertex.id)) {
@@ -992,10 +1088,10 @@ export class CannoliFactory {
 					if (
 						sourceNode &&
 						this.getNodeIndicatedType(sourceNode) ===
-						IndicatedNodeType.Call &&
+							IndicatedNodeType.Call &&
 						targetNode &&
 						this.getNodeIndicatedType(targetNode) ===
-						IndicatedNodeType.Content
+							IndicatedNodeType.Content
 					) {
 						return EdgeType.ChatResponse;
 					} else {
@@ -1051,7 +1147,7 @@ export class CannoliFactory {
 
 			if (!sourceNode || !targetNode) {
 				throw new Error(
-					`Edge: ${edge.label} source or target not found`
+					`Edge: ${edge.label} source or target not found`,
 				);
 			}
 
@@ -1066,15 +1162,15 @@ export class CannoliFactory {
 
 			const sourceIndicatedType = this.getNodeIndicatedType(
 				sourceNode as
-				| CannoliCanvasFileData
-				| CannoliCanvasLinkData
-				| CannoliCanvasTextData
+					| CannoliCanvasFileData
+					| CannoliCanvasLinkData
+					| CannoliCanvasTextData,
 			);
 			const targetIndicatedType = this.getNodeIndicatedType(
 				targetNode as
-				| CannoliCanvasFileData
-				| CannoliCanvasLinkData
-				| CannoliCanvasTextData
+					| CannoliCanvasFileData
+					| CannoliCanvasLinkData
+					| CannoliCanvasTextData,
 			);
 
 			// If the source is a content node
@@ -1142,7 +1238,7 @@ export class CannoliFactory {
 	}
 
 	getNode(
-		id: string
+		id: string,
 	):
 		| CannoliCanvasFileData
 		| CannoliCanvasLinkData
@@ -1254,7 +1350,7 @@ export class CannoliFactory {
 	}
 
 	parseNodeReferences(
-		node: CannoliCanvasTextData | CannoliCanvasFileData
+		node: CannoliCanvasTextData | CannoliCanvasFileData,
 	): Reference[] {
 		// Unified regex to capture any type of reference within double curly braces
 		const unifiedPattern = /{{(.*?)}}/g;
@@ -1340,14 +1436,14 @@ export class CannoliFactory {
 
 	getIncomingEdges(id: string): CannoliCanvasEdgeData[] {
 		return this.cannoliData.edges.filter(
-			(edge) => edge.toNode === id && this.isValidEdge(edge)
+			(edge) => edge.toNode === id && this.isValidEdge(edge),
 		);
 	}
 
 	getOutgoingEdges(id: string): CannoliCanvasEdgeData[] {
 		// Filter out non-logic edges
 		return this.cannoliData.edges.filter(
-			(edge) => edge.fromNode === id && this.isValidEdge(edge)
+			(edge) => edge.fromNode === id && this.isValidEdge(edge),
 		);
 	}
 
@@ -1395,7 +1491,7 @@ export class CannoliFactory {
 
 	encloses(
 		a: ReturnType<typeof this.createRectangle>,
-		b: ReturnType<typeof this.createRectangle>
+		b: ReturnType<typeof this.createRectangle>,
 	): boolean {
 		return (
 			a.x <= b.x &&
@@ -1407,7 +1503,7 @@ export class CannoliFactory {
 
 	overlaps(
 		a: ReturnType<typeof this.createRectangle>,
-		b: ReturnType<typeof this.createRectangle>
+		b: ReturnType<typeof this.createRectangle>,
 	): boolean {
 		const horizontalOverlap = a.x < b.x_right && a.x_right > b.x;
 		const verticalOverlap = a.y < b.y_bottom && a.y_bottom > b.y;
@@ -1421,14 +1517,14 @@ export class CannoliFactory {
 			vertex.x,
 			vertex.y,
 			vertex.width,
-			vertex.height
+			vertex.height,
 		);
 
 		// Get all groups
 		const allGroups = this.cannoliData.nodes.filter(
 			(node) =>
 				this.getVertexKind(node) === CannoliObjectKind.Group &&
-				node.id !== vertex.id
+				node.id !== vertex.id,
 		);
 
 		// Iterate through all vertices
@@ -1437,7 +1533,7 @@ export class CannoliFactory {
 				group.x,
 				group.y,
 				group.width,
-				group.height
+				group.height,
 			);
 
 			// If the group encloses the current vertex, add it to the groups
@@ -1463,7 +1559,7 @@ export class CannoliFactory {
 			group.x,
 			group.y,
 			group.width,
-			group.height
+			group.height,
 		);
 
 		// Iterate through all vertices except the group itself
@@ -1476,7 +1572,7 @@ export class CannoliFactory {
 				vertex.x,
 				vertex.y,
 				vertex.width,
-				vertex.height
+				vertex.height,
 			);
 
 			// If the vertex is enclosed by the current group, add it to the members
@@ -1514,16 +1610,16 @@ export class CannoliFactory {
 		// Initialize sourceGroups and targetGroups by mapping the group ids to the group data
 		const sourceGroups: CannoliCanvasGroupData[] =
 			source.cannoliData.groups.map(
-				(groupId) => this.getVertex(groupId) as CannoliCanvasGroupData
+				(groupId) => this.getVertex(groupId) as CannoliCanvasGroupData,
 			);
 		const targetGroups: CannoliCanvasGroupData[] =
 			target.cannoliData.groups.map(
-				(groupId) => this.getVertex(groupId) as CannoliCanvasGroupData
+				(groupId) => this.getVertex(groupId) as CannoliCanvasGroupData,
 			);
 
 		// Find the first shared group
 		const sharedGroup = sourceGroups.find((group: CannoliCanvasGroupData) =>
-			targetGroups.includes(group)
+			targetGroups.includes(group),
 		);
 
 		// Handle case where no shared group is found
@@ -1592,19 +1688,30 @@ export class CannoliFactory {
 	}
 }
 
-export function getIncomingEdgesFromData(nodeId: string, data: VerifiedCannoliCanvasData): string[] {
-	return data.edges.filter(
-		(edge) => edge.toNode === nodeId
-	).map((edge) => edge.id);
+export function getIncomingEdgesFromData(
+	nodeId: string,
+	data: VerifiedCannoliCanvasData,
+): string[] {
+	return data.edges
+		.filter((edge) => edge.toNode === nodeId)
+		.map((edge) => edge.id);
 }
 
-export function getOutgoingEdgesFromData(nodeId: string, data: VerifiedCannoliCanvasData): string[] {
-	return data.edges.filter(
-		(edge) => edge.fromNode === nodeId
-	).map((edge) => edge.id);
+export function getOutgoingEdgesFromData(
+	nodeId: string,
+	data: VerifiedCannoliCanvasData,
+): string[] {
+	return data.edges
+		.filter((edge) => edge.fromNode === nodeId)
+		.map((edge) => edge.id);
 }
 
-export function getGroupMembersFromData(groupId: string, data: VerifiedCannoliCanvasData): string[] {
+export function getGroupMembersFromData(
+	groupId: string,
+	data: VerifiedCannoliCanvasData,
+): string[] {
 	// Find all nodes with the groupId in their groups array
-	return data.nodes.filter((node) => node.cannoliData.groups.includes(groupId)).map((node) => node.id);
+	return data.nodes
+		.filter((node) => node.cannoliData.groups.includes(groupId))
+		.map((node) => node.id);
 }

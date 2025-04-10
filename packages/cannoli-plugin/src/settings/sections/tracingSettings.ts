@@ -17,7 +17,7 @@ export function createTracingSettings(
 	containerEl.createEl("p", {
 		text: "A restart is required for changes in this section to take effect.",
 		attr: {
-			style: "color: var(--code-important);"
+			style: "color: var(--code-important);",
 		},
 	});
 

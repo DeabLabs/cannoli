@@ -3,20 +3,23 @@
 ## Pre-requisites
 
 - nvm
-  - Manage node versions
-  - <https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating>
+    - Manage node versions
+    - <https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating>
 - obsidian
-  - Choose a vault you'd like to do development in
-    - It is recommended to create a new vault for development, that does not already have cannoli installed
-  - Install hot-reload plugin
-    - <https://github.com/pjeby/hot-reload?tab=readme-ov-file#installation>
 
-    - `cd <my_obsidian_vault>/.obsidian/plugins && git clone git@github.com:pjeby/hot-reload.git`
+    - Choose a vault you'd like to do development in
+        - It is recommended to create a new vault for development, that does not already have cannoli installed
+    - Install hot-reload plugin
 
-    - Make sure to enable it in obsidian once installed
+        - <https://github.com/pjeby/hot-reload?tab=readme-ov-file#installation>
+
+        - `cd <my_obsidian_vault>/.obsidian/plugins && git clone git@github.com:pjeby/hot-reload.git`
+
+        - Make sure to enable it in obsidian once installed
+
 - VSCode (optional)
-  - Any VSCode (or descendant) editor will pick up common configuration from the cannoli repo
-  - Code formatting settings and recommended extensions for cannoli development will appear when opening cannoli inside of one of these editors
+    - Any VSCode (or descendant) editor will pick up common configuration from the cannoli repo
+    - Code formatting settings and recommended extensions for cannoli development will appear when opening cannoli inside of one of these editors
 
 ## Building your dev environment
 

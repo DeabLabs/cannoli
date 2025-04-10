@@ -24,7 +24,7 @@ import {
 	bake,
 	CannoliFunctionInfo,
 	parseCannoliFunctionInfo,
-	BakeResult
+	BakeResult,
 } from "@deablabs/cannoli-core";
 import { cannoliCollege } from "../assets/cannoliCollege";
 import { cannoliIcon } from "../assets/cannoliIcon";
@@ -57,7 +57,7 @@ export default class Cannoli extends Plugin {
 				if (file.name.includes(".cno.canvas")) {
 					this.createCannoliCommandForFile(file);
 				}
-			})
+			}),
 		);
 
 		// Create a command whenever a file is created and is a cannoli file
@@ -66,7 +66,7 @@ export default class Cannoli extends Plugin {
 				if (file.name.includes(".cno.canvas")) {
 					this.createCannoliCommandForFile(file);
 				}
-			})
+			}),
 		);
 
 		// Call "newAudioFile" whenever a new audio file is created
@@ -87,7 +87,7 @@ export default class Cannoli extends Plugin {
 				) {
 					this.newAudioFile(file);
 				}
-			})
+			}),
 		);
 
 		addIcon("cannoli", cannoliIcon);
@@ -114,20 +114,20 @@ export default class Cannoli extends Plugin {
 		this.addRibbonIcon(
 			"cannoli",
 			"Start/stop cannoli",
-			this.startActiveCannoliCommand
+			this.startActiveCannoliCommand,
 		);
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new CannoliSettingTab(this.app, this));
 	}
 
-	onunload() { }
+	onunload() {}
 
 	async loadSettings() {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			await this.loadData()
+			await this.loadData(),
 		);
 	}
 
@@ -186,7 +186,7 @@ export default class Cannoli extends Plugin {
 			callback: () => this.openOnWebsite(true),
 			icon: "cannoli",
 		});
-	}
+	};
 
 	createCopyCanvasToClipboardCommand = () => {
 		this.addCommand({
@@ -225,7 +225,10 @@ export default class Cannoli extends Plugin {
 	};
 
 	openVersion2Modal = async () => {
-		const modal = new Version2Modal(this.app, this.createVersion2UpdateParagraph());
+		const modal = new Version2Modal(
+			this.app,
+			this.createVersion2UpdateParagraph(),
+		);
 		modal.open();
 	};
 
@@ -243,7 +246,9 @@ export default class Cannoli extends Plugin {
 		paragraph.appendText("🎉 Cannoli 2.0 is here! 🎉");
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendChild(createEl("br"));
-		paragraph.appendText("There's a ton of new stuff in this update, including:");
+		paragraph.appendText(
+			"There's a ton of new stuff in this update, including:",
+		);
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendText("🔀 Parallel groups");
@@ -257,16 +262,30 @@ export default class Cannoli extends Plugin {
 		paragraph.appendText("📦 The cannoli-core npm package");
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendChild(createEl("br"));
-		paragraph.appendText("We rewrote a lot of core cannoli code to support this release,");
+		paragraph.appendText(
+			"We rewrote a lot of core cannoli code to support this release,",
+		);
 		paragraph.appendChild(createEl("br"));
-		paragraph.appendText("so if anything is broken, or you just wanna hang out with us,");
+		paragraph.appendText(
+			"so if anything is broken, or you just wanna hang out with us,",
+		);
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendText("let us know on the discord here: ");
-		paragraph.appendChild(createEl("a", { text: "https://discord.gg/wzayNxpxvR", href: "https://discord.gg/wzayNxpxvR" }))
+		paragraph.appendChild(
+			createEl("a", {
+				text: "https://discord.gg/wzayNxpxvR",
+				href: "https://discord.gg/wzayNxpxvR",
+			}),
+		);
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendChild(createEl("br"));
 		paragraph.appendText("Check out the ");
-		paragraph.appendChild(createEl("a", { text: "release notes", href: "https://docs.cannoli.website/Blog/Release+Notes+8-11-2024" }));
+		paragraph.appendChild(
+			createEl("a", {
+				text: "release notes",
+				href: "https://docs.cannoli.website/Blog/Release+Notes+8-11-2024",
+			}),
+		);
 		paragraph.appendText(" for more details! 🍝✨");
 
 		return paragraph;
@@ -275,7 +294,9 @@ export default class Cannoli extends Plugin {
 	openOnWebsite = async (dev?: boolean) => {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) return;
-		const url = dev ? "http://localhost:5173/canvas/open" : "https://cannoli.website/canvas/open";
+		const url = dev
+			? "http://localhost:5173/canvas/open"
+			: "https://cannoli.website/canvas/open";
 
 		// get the content of the file
 		const content = await this.app.vault.read(activeFile);
@@ -323,7 +344,15 @@ export default class Cannoli extends Plugin {
 	};
 
 	openValTownModal = async () => {
-		const modal = new ValTownModal(this.app, await this.getAllCannoliFunctions(), this.getAllCannoliFunctions, this.openCanvas, this.settings.valTownAPIKey, this.bakeToValTown, this.createCanvas);
+		const modal = new ValTownModal(
+			this.app,
+			await this.getAllCannoliFunctions(),
+			this.getAllCannoliFunctions,
+			this.openCanvas,
+			this.settings.valTownAPIKey,
+			this.bakeToValTown,
+			this.createCanvas,
+		);
 		modal.open();
 	};
 
@@ -338,7 +367,6 @@ export default class Cannoli extends Plugin {
 			}
 		} else {
 			file = this.app.workspace.getActiveFile();
-
 		}
 
 		if (!file || !file.path.endsWith(".canvas")) {
@@ -348,7 +376,9 @@ export default class Cannoli extends Plugin {
 
 		// Check that the user has a val town api key
 		if (!this.settings.valTownAPIKey) {
-			new Notice("Please enter a Val Town API key in the Cannoli settings");
+			new Notice(
+				"Please enter a Val Town API key in the Cannoli settings",
+			);
 			return;
 		}
 
@@ -381,14 +411,17 @@ export default class Cannoli extends Plugin {
 			return;
 		}
 
-		bakeResult.code = bakeResult.code.replace(/Deno\.env\.get\("VALTOWN_API_KEY"\)/g, 'Deno.env.get("valtown")');
+		bakeResult.code = bakeResult.code.replace(
+			/Deno\.env\.get\("VALTOWN_API_KEY"\)/g,
+			'Deno.env.get("valtown")',
+		);
 
 		const userProfileResponse = await requestUrl({
 			url: "https://api.val.town/v1/me",
 			method: "GET",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
 			},
 		});
 
@@ -400,7 +433,10 @@ export default class Cannoli extends Plugin {
 		//const cannoliFunctionNames = cannoliFunctions.map(func => func.cannoliFunctionInfo.name);
 
 		// Check if the val is a known cannoli val
-		const existingCannoliFunction = cannoliFunctions.find(func => func.cannoliFunctionInfo.name === bakeResult.cannoliInfo.name);
+		const existingCannoliFunction = cannoliFunctions.find(
+			(func) =>
+				func.cannoliFunctionInfo.name === bakeResult.cannoliInfo.name,
+		);
 		if (existingCannoliFunction) {
 			// Update the existing cannoli val without asking
 			await this.updateVal(bakeResult, existingCannoliFunction.id);
@@ -413,23 +449,32 @@ export default class Cannoli extends Plugin {
 			method: "GET",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
 			},
 		});
 
-		const myVals = myValsResponse.json.data as { name: string, id: string }[];
+		const myVals = myValsResponse.json.data as {
+			name: string;
+			id: string;
+		}[];
 
 		// Check if the user has a val with the same name
-		const existingVal = myVals.find(val => val.name === bakeResult.cannoliInfo.name);
+		const existingVal = myVals.find(
+			(val) => val.name === bakeResult.cannoliInfo.name,
+		);
 
 		if (existingVal) {
 			// Make a modal to ask if they want to edit the existing val
 			const userResponse = await new Promise<boolean>((resolve) => {
-				const modal = new EditValModal(this.app, () => {
-					resolve(true);
-				}, () => {
-					resolve(false);
-				});
+				const modal = new EditValModal(
+					this.app,
+					() => {
+						resolve(true);
+					},
+					() => {
+						resolve(false);
+					},
+				);
 				modal.open();
 			});
 
@@ -449,11 +494,11 @@ export default class Cannoli extends Plugin {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
 			},
 			body: JSON.stringify({
 				code: bakeResult.code,
-				type: "http"
+				type: "http",
 			}),
 		});
 
@@ -467,10 +512,10 @@ export default class Cannoli extends Plugin {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
 			},
 			body: JSON.stringify({
-				readme: bakeResult.readme
+				readme: bakeResult.readme,
 			}),
 		});
 
@@ -488,7 +533,7 @@ export default class Cannoli extends Plugin {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
 			},
 			body: JSON.stringify({
 				name: bakeResult.cannoliInfo.name,
@@ -534,7 +579,7 @@ export default class Cannoli extends Plugin {
 			config,
 			secrets: this.getSecrets(),
 			httpTemplates: this.settings.httpTemplates,
-			includeTypes: true
+			includeTypes: true,
 		});
 
 		if (bakeResult instanceof Error) {
@@ -543,14 +588,21 @@ export default class Cannoli extends Plugin {
 		}
 
 		// Check that the baked cannoli folder exists
-		let bakedCannoliFolder = this.app.vault.getFolderByPath(this.settings.bakedCannoliFolder);
+		let bakedCannoliFolder = this.app.vault.getFolderByPath(
+			this.settings.bakedCannoliFolder,
+		);
 		if (!bakedCannoliFolder) {
 			await this.app.vault.createFolder(this.settings.bakedCannoliFolder);
-			bakedCannoliFolder = this.app.vault.getFolderByPath(this.settings.bakedCannoliFolder);
+			bakedCannoliFolder = this.app.vault.getFolderByPath(
+				this.settings.bakedCannoliFolder,
+			);
 		}
 
 		// Function to find the file recursively
-		const findFileRecursively = async (folder: TFolder, fileName: string): Promise<TFile | null> => {
+		const findFileRecursively = async (
+			folder: TFolder,
+			fileName: string,
+		): Promise<TFile | null> => {
 			for (const child of folder.children) {
 				if (child instanceof TFile && child.name === fileName) {
 					return child;
@@ -564,14 +616,20 @@ export default class Cannoli extends Plugin {
 
 		// Check if the file already exists
 		if (bakedCannoliFolder) {
-			const existingFile = await findFileRecursively(bakedCannoliFolder, bakeResult.fileName);
+			const existingFile = await findFileRecursively(
+				bakedCannoliFolder,
+				bakeResult.fileName,
+			);
 			if (existingFile) {
 				// Overwrite the existing file
 				await this.app.vault.modify(existingFile, bakeResult.code);
 				new Notice(`Baked cannoli to ${existingFile.path}`);
 			} else {
 				// Create a new file in the vault in the "Baked Cannoli" folder
-				const newFile = await this.app.vault.create(`${this.settings.bakedCannoliFolder}/${bakeResult.fileName}`, bakeResult.code);
+				const newFile = await this.app.vault.create(
+					`${this.settings.bakedCannoliFolder}/${bakeResult.fileName}`,
+					bakeResult.code,
+				);
 				new Notice(`Baked cannoli to ${newFile.path}`);
 			}
 		}
@@ -607,7 +665,7 @@ export default class Cannoli extends Plugin {
 						const file =
 							this.app.metadataCache.getFirstLinkpathDest(
 								filename,
-								""
+								"",
 							);
 
 						if (!file) {
@@ -616,7 +674,7 @@ export default class Cannoli extends Plugin {
 
 						this.startOrStopCannoli(file);
 					}
-				}
+				},
 			);
 		} else if (isCanvasFile) {
 			if (checking) return true;
@@ -673,7 +731,7 @@ export default class Cannoli extends Plugin {
 					const cannoliFile =
 						this.app.metadataCache.getFirstLinkpathDest(
 							cannoliFilename,
-							""
+							"",
 						);
 
 					if (!cannoliFile) {
@@ -686,7 +744,7 @@ export default class Cannoli extends Plugin {
 				} else {
 					return null;
 				}
-			}
+			},
 		);
 	};
 
@@ -717,13 +775,24 @@ export default class Cannoli extends Plugin {
 
 		const data = await valsResponse.json;
 		const vals = data.data;
-		const allCannoliFunctions: { id: string; link: string; moduleUrl: string; httpEndpointUrl: string; cannoliFunctionInfo: CannoliFunctionInfo, identicalToLocal: boolean, localExists: boolean }[] = [];
+		const allCannoliFunctions: {
+			id: string;
+			link: string;
+			moduleUrl: string;
+			httpEndpointUrl: string;
+			cannoliFunctionInfo: CannoliFunctionInfo;
+			identicalToLocal: boolean;
+			localExists: boolean;
+		}[] = [];
 
 		for (const val of vals) {
 			const cannoliInfo = parseCannoliFunctionInfo(val.code);
 
 			if (cannoliInfo !== null) {
-				const localFile = this.app.metadataCache.getFirstLinkpathDest(cannoliInfo.canvasName, "");
+				const localFile = this.app.metadataCache.getFirstLinkpathDest(
+					cannoliInfo.canvasName,
+					"",
+				);
 				let localExists = false;
 
 				if (localFile) {
@@ -732,7 +801,10 @@ export default class Cannoli extends Plugin {
 
 				let identicalToLocal = false;
 				if (localFile) {
-					identicalToLocal = await this.checkCannolisIdentical(cannoliInfo.cannoli, localFile);
+					identicalToLocal = await this.checkCannolisIdentical(
+						cannoliInfo.cannoli,
+						localFile,
+					);
 				}
 
 				allCannoliFunctions.push({
@@ -742,18 +814,20 @@ export default class Cannoli extends Plugin {
 					httpEndpointUrl: `https://${profile.username}-${val.name.toLowerCase()}.web.val.run`,
 					cannoliFunctionInfo: cannoliInfo,
 					identicalToLocal,
-					localExists
+					localExists,
 				});
 			}
 		}
 
 		return allCannoliFunctions;
-	}
+	};
 
 	createProxyServer = async () => {
 		// If they already have a proxy server, return
 		if (this.settings.anthropicBaseURL) {
-			new Notice("You already have an anthropic baseURL configured, delete the current value to create a proxy server");
+			new Notice(
+				"You already have an anthropic baseURL configured, delete the current value to create a proxy server",
+			);
 			return;
 		}
 
@@ -772,7 +846,7 @@ export default class Cannoli extends Plugin {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				"Authorization": `Bearer ${this.settings.valTownAPIKey}`,
+				Authorization: `Bearer ${this.settings.valTownAPIKey}`,
 			},
 			body: JSON.stringify({
 				name: "cannoliAnthropicProxyServer",
@@ -790,7 +864,9 @@ export default class Cannoli extends Plugin {
 
 		this.settings.anthropicBaseURL = response.json.links.endpoint;
 
-		new Notice(`Proxy server created on Val Town. You can now make Anthropic requests.`);
+		new Notice(
+			`Proxy server created on Val Town. You can now make Anthropic requests.`,
+		);
 	};
 
 	createCanvas = async (name: string, canvas: string) => {
@@ -800,12 +876,14 @@ export default class Cannoli extends Plugin {
 			new Notice(`Error creating canvas: ${error}`);
 			console.error(error);
 		}
-	}
+	};
 
 	async checkCannolisIdentical(remote: unknown, file: TFile) {
 		const fileContent = await this.app.vault.read(file);
 
-		return JSON.stringify(remote) === JSON.stringify(JSON.parse(fileContent));
+		return (
+			JSON.stringify(remote) === JSON.stringify(JSON.parse(fileContent))
+		);
 	}
 
 	async replaceAudioWithTranscript(file: TFile, audio: TFile) {
@@ -850,7 +928,7 @@ export default class Cannoli extends Plugin {
 		await this.app.vault.process(file, (content) => {
 			const newContent = content.replace(
 				`\n![[${audio.name}]]\n`,
-				transcript
+				transcript,
 			);
 			return newContent;
 		});
@@ -878,8 +956,8 @@ export default class Cannoli extends Plugin {
 				.join(
 					(Math.random().toString(36) + "00000000000000000").slice(
 						2,
-						18
-					)
+						18,
+					),
 				)
 				.slice(0, N);
 
@@ -922,28 +1000,45 @@ export default class Cannoli extends Plugin {
 
 	getSecrets = () => {
 		const secrets = {
-			...(this.settings.openaiAPIKey ? { OPENAI_API_KEY: this.settings.openaiAPIKey } : {}),
-			...(this.settings.exaAPIKey ? { EXA_API_KEY: this.settings.exaAPIKey } : {}),
-			...(this.settings.valTownAPIKey ? { VALTOWN_API_KEY: this.settings.valTownAPIKey } : {}),
-			...this.settings.secrets.reduce((acc, secret) => {
-				acc[secret.name] = secret.value;
-				return acc;
-			}, {} as Record<string, string>),
+			...(this.settings.openaiAPIKey
+				? { OPENAI_API_KEY: this.settings.openaiAPIKey }
+				: {}),
+			...(this.settings.exaAPIKey
+				? { EXA_API_KEY: this.settings.exaAPIKey }
+				: {}),
+			...(this.settings.valTownAPIKey
+				? { VALTOWN_API_KEY: this.settings.valTownAPIKey }
+				: {}),
+			...this.settings.secrets.reduce(
+				(acc, secret) => {
+					acc[secret.name] = secret.value;
+					return acc;
+				},
+				{} as Record<string, string>,
+			),
 		};
 
 		return secrets;
-	}
+	};
 
 	getConfig = (forBake?: boolean) => {
-		const chatFormatStringIsDefault = this.settings.chatFormatString === DEFAULT_SETTINGS.chatFormatString || forBake;
+		const chatFormatStringIsDefault =
+			this.settings.chatFormatString ===
+				DEFAULT_SETTINGS.chatFormatString || forBake;
 
 		return {
-			...(this.settings.contentIsColorless ? { contentIsColorless: this.settings.contentIsColorless } : {}),
-			...(!chatFormatStringIsDefault ? { chatFormatString: this.settings.chatFormatString } : {}),
-			...(this.settings.enableVision !== undefined ? { enableVision: this.settings.enableVision } : {}),
+			...(this.settings.contentIsColorless
+				? { contentIsColorless: this.settings.contentIsColorless }
+				: {}),
+			...(!chatFormatStringIsDefault
+				? { chatFormatString: this.settings.chatFormatString }
+				: {}),
+			...(this.settings.enableVision !== undefined
+				? { enableVision: this.settings.enableVision }
+				: {}),
 			tracingConfig: forBake ? undefined : this.settings.tracingConfig,
 		};
-	}
+	};
 
 	getActions = () => {
 		return [
@@ -955,11 +1050,13 @@ export default class Cannoli extends Plugin {
 			valTownEvaluate,
 			valTownSendEmail,
 		];
-	}
+	};
 
 	getLLMConfigs = () => {
 		// map cannoli settings to provider config
-		const getConfigByProvider = (p: SupportedProviders): GenericModelConfig => {
+		const getConfigByProvider = (
+			p: SupportedProviders,
+		): GenericModelConfig => {
 			switch (p) {
 				case "openai":
 					return {
@@ -973,9 +1070,12 @@ export default class Cannoli extends Plugin {
 						apiKey: this.settings.azureAPIKey,
 						model: this.settings.azureModel,
 						temperature: this.settings.azureTemperature,
-						azureOpenAIApiDeploymentName: this.settings.azureOpenAIApiDeploymentName,
-						azureOpenAIApiInstanceName: this.settings.azureOpenAIApiInstanceName,
-						azureOpenAIApiVersion: this.settings.azureOpenAIApiVersion,
+						azureOpenAIApiDeploymentName:
+							this.settings.azureOpenAIApiDeploymentName,
+						azureOpenAIApiInstanceName:
+							this.settings.azureOpenAIApiInstanceName,
+						azureOpenAIApiVersion:
+							this.settings.azureOpenAIApiVersion,
 						baseURL: this.settings.azureBaseURL,
 					};
 				case "ollama":
@@ -1004,17 +1104,25 @@ export default class Cannoli extends Plugin {
 						temperature: this.settings.groqTemperature,
 					};
 			}
-		}
+		};
 
-		const providers: SupportedProviders[] = ["openai", "azure_openai", "ollama", "gemini", "anthropic", "groq"];
-		const llmConfigs: LLMConfig[] = providers
-			.map((provider) => ({
-				...getConfigByProvider(provider),
-				provider,
-			}))
+		const providers: SupportedProviders[] = [
+			"openai",
+			"azure_openai",
+			"ollama",
+			"gemini",
+			"anthropic",
+			"groq",
+		];
+		const llmConfigs: LLMConfig[] = providers.map((provider) => ({
+			...getConfigByProvider(provider),
+			provider,
+		}));
 
 		// Ensure the default provider is first
-		const defaultProviderIndex = llmConfigs.findIndex((config) => config.provider === this.settings.llmProvider);
+		const defaultProviderIndex = llmConfigs.findIndex(
+			(config) => config.provider === this.settings.llmProvider,
+		);
 		const defaultProvider = llmConfigs[defaultProviderIndex];
 		if (defaultProviderIndex !== 0) {
 			llmConfigs.splice(defaultProviderIndex, 1);
@@ -1022,7 +1130,7 @@ export default class Cannoli extends Plugin {
 		}
 
 		return llmConfigs;
-	}
+	};
 
 	startCannoli = async (file: TFile, noCanvas = false) => {
 		// If the api key is the default, send a notice telling the user to add their key
@@ -1037,7 +1145,7 @@ export default class Cannoli extends Plugin {
 			this.settings?.[keyName] === DEFAULT_SETTINGS?.[keyName]
 		) {
 			new Notice(
-				`Please enter your ${this.settings.llmProvider} API key in the Cannoli settings`
+				`Please enter your ${this.settings.llmProvider} API key in the Cannoli settings`,
 			);
 			return;
 		}
@@ -1069,17 +1177,38 @@ export default class Cannoli extends Plugin {
 		}
 
 		const cannoliArgs = {
-			obsidianCurrentNote: `[[${this.app.workspace.getActiveFile()?.basename}]]` ??
+			obsidianCurrentNote:
+				`[[${this.app.workspace.getActiveFile()?.basename}]]` ??
 				"No active note",
-			obsidianSelection: this.app.workspace.activeEditor?.editor?.getSelection() ? this.app.workspace.activeEditor?.editor?.getSelection() : "No selection"
+			obsidianSelection:
+				this.app.workspace.activeEditor?.editor?.getSelection()
+					? this.app.workspace.activeEditor?.editor?.getSelection()
+					: "No selection",
 		};
 
 		const canvas = new CanvasPersistor(canvasData, file);
 
-		const fetcher: ResponseTextFetcher = async (url: string, { body, method, headers }: RequestInit) => {
-			const headersObj = Array.isArray(headers) ? Object.fromEntries(headers) : headers instanceof Headers ? {} : headers;
-			const constrainedBody = typeof body === "string" ? body : body instanceof ArrayBuffer ? body : undefined;
-			return requestUrl({ body: constrainedBody || undefined, method, headers: headersObj, url }).then(response => {
+		const fetcher: ResponseTextFetcher = async (
+			url: string,
+			{ body, method, headers }: RequestInit,
+		) => {
+			const headersObj = Array.isArray(headers)
+				? Object.fromEntries(headers)
+				: headers instanceof Headers
+					? {}
+					: headers;
+			const constrainedBody =
+				typeof body === "string"
+					? body
+					: body instanceof ArrayBuffer
+						? body
+						: undefined;
+			return requestUrl({
+				body: constrainedBody || undefined,
+				method,
+				headers: headersObj,
+				url,
+			}).then((response) => {
 				return response.text;
 			});
 		};
@@ -1088,7 +1217,7 @@ export default class Cannoli extends Plugin {
 
 		const replacers: Replacer[] = [
 			vaultInterface.replaceDataviewQueries,
-			vaultInterface.replaceSmartConnections
+			vaultInterface.replaceSmartConnections,
 		];
 
 		const config = this.getConfig();
@@ -1117,7 +1246,9 @@ export default class Cannoli extends Plugin {
 		const validationStoppage = await validationStoppagePromise;
 
 		if (validationStoppage.reason === "error") {
-			new Notice(`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`);
+			new Notice(
+				`Cannoli ${name} failed with the error:\n\n${validationStoppage.message}`,
+			);
 			return;
 		}
 
@@ -1132,7 +1263,9 @@ export default class Cannoli extends Plugin {
 
 		// If the total number of requests is greater than the threshold, ask the user if they want to continue
 		if (totalCalls > this.settings.requestThreshold) {
-			shouldContinue = await this.showRunUsageAlertModal(validationStoppage.usage);
+			shouldContinue = await this.showRunUsageAlertModal(
+				validationStoppage.usage,
+			);
 		}
 
 		if (!shouldContinue) {
@@ -1164,7 +1297,6 @@ export default class Cannoli extends Plugin {
 
 		delete this.runningCannolis[file.basename];
 
-
 		let usageString = "";
 
 		if (liveStoppage.usage) {
@@ -1174,8 +1306,10 @@ export default class Cannoli extends Plugin {
 
 			for (const model in liveStoppage.usage) {
 				totalCalls += liveStoppage.usage[model].numberOfCalls;
-				totalPromptTokens += liveStoppage.usage[model].promptTokens ?? 0;
-				totalCompletionTokens += liveStoppage.usage[model].completionTokens ?? 0;
+				totalPromptTokens +=
+					liveStoppage.usage[model].promptTokens ?? 0;
+				totalCompletionTokens +=
+					liveStoppage.usage[model].completionTokens ?? 0;
 			}
 
 			if (totalCalls > 0) {
@@ -1191,7 +1325,9 @@ export default class Cannoli extends Plugin {
 		}
 
 		if (liveStoppage.reason === "error") {
-			new Notice(`Cannoli ${name} failed with the error:\n\n${liveStoppage.message}${usageString}`);
+			new Notice(
+				`Cannoli ${name} failed with the error:\n\n${liveStoppage.message}${usageString}`,
+			);
 		} else if (liveStoppage.reason === "complete") {
 			new Notice(`Cannoli complete: ${name}${usageString}`);
 		} else {
@@ -1206,13 +1342,21 @@ export default class Cannoli extends Plugin {
 		const subCanvasGroupIds: string[] = [];
 
 		for (const node of parsedContent.nodes) {
-			if (node.type === "group" && (node.label === "cannoli" || node.label === "Cannoli")) {
+			if (
+				node.type === "group" &&
+				(node.label === "cannoli" || node.label === "Cannoli")
+			) {
 				subCanvasGroupIds.push(node.id);
 			}
 		}
 
-		if (this.settings.onlyRunCannoliGroups && subCanvasGroupIds.length === 0) {
-			new Notice("No cannoli groups found. You have the 'Only run Cannoli groups' setting enabled, but no cannoli groups are present in the canvas.");
+		if (
+			this.settings.onlyRunCannoliGroups &&
+			subCanvasGroupIds.length === 0
+		) {
+			new Notice(
+				"No cannoli groups found. You have the 'Only run Cannoli groups' setting enabled, but no cannoli groups are present in the canvas.",
+			);
 			return null;
 		}
 
@@ -1222,22 +1366,35 @@ export default class Cannoli extends Plugin {
 
 			for (const subCanvasGroupId of subCanvasGroupIds) {
 				const subCanvasGroup = parsedContent.nodes.find(
-					(node) => node.id === subCanvasGroupId
+					(node) => node.id === subCanvasGroupId,
 				) as CanvasGroupData;
 				if (!subCanvasGroup) {
-					throw new Error(`Group with id ${subCanvasGroupId} not found.`);
+					throw new Error(
+						`Group with id ${subCanvasGroupId} not found.`,
+					);
 				}
 
-				const { nodeIds, edgeIds } = this.getNodesAndEdgesInGroup(subCanvasGroup, parsedContent);
+				const { nodeIds, edgeIds } = this.getNodesAndEdgesInGroup(
+					subCanvasGroup,
+					parsedContent,
+				);
 
-				allNodes = allNodes.concat(parsedContent.nodes.filter((node) => nodeIds.includes(node.id)));
-				allEdges = allEdges.concat(parsedContent.edges.filter((edge) => edgeIds.includes(edge.id)));
+				allNodes = allNodes.concat(
+					parsedContent.nodes.filter((node) =>
+						nodeIds.includes(node.id),
+					),
+				);
+				allEdges = allEdges.concat(
+					parsedContent.edges.filter((edge) =>
+						edgeIds.includes(edge.id),
+					),
+				);
 			}
 
 			return {
 				...parsedContent,
 				nodes: allNodes,
-				edges: allEdges
+				edges: allEdges,
 			};
 		}
 
@@ -1245,18 +1402,31 @@ export default class Cannoli extends Plugin {
 	}
 
 	openCanvas(canvasName: string): boolean {
-		const file = this.app.metadataCache.getFirstLinkpathDest(canvasName, "");
+		const file = this.app.metadataCache.getFirstLinkpathDest(
+			canvasName,
+			"",
+		);
 		if (file) {
 			this.app.workspace.openLinkText(file.path, "");
 			return true;
 		} else {
-			new Notice(`Cannoli: "${canvasName.replace(/\.canvas/g, "")}" not found`);
+			new Notice(
+				`Cannoli: "${canvasName.replace(/\.canvas/g, "")}" not found`,
+			);
 			return false;
 		}
 	}
 
-	getNodesAndEdgesInGroup(group: CanvasGroupData, canvasData: CanvasData): { nodeIds: string[]; edgeIds: string[] } {
-		const groupRectangle = this.createRectangle(group.x, group.y, group.width, group.height);
+	getNodesAndEdgesInGroup(
+		group: CanvasGroupData,
+		canvasData: CanvasData,
+	): { nodeIds: string[]; edgeIds: string[] } {
+		const groupRectangle = this.createRectangle(
+			group.x,
+			group.y,
+			group.width,
+			group.height,
+		);
 
 		const nodeIds: string[] = [];
 		const edgeIds: string[] = [];
@@ -1265,7 +1435,12 @@ export default class Cannoli extends Plugin {
 			if (node.id === group.id) continue;
 			if (node.color === "1") continue;
 
-			const nodeRectangle = this.createRectangle(node.x, node.y, node.width, node.height);
+			const nodeRectangle = this.createRectangle(
+				node.x,
+				node.y,
+				node.width,
+				node.height,
+			);
 
 			if (this.encloses(groupRectangle, nodeRectangle)) {
 				nodeIds.push(node.id);
@@ -1273,7 +1448,10 @@ export default class Cannoli extends Plugin {
 		}
 
 		for (const edge of canvasData.edges) {
-			if (nodeIds.includes(edge.fromNode) && nodeIds.includes(edge.toNode)) {
+			if (
+				nodeIds.includes(edge.fromNode) &&
+				nodeIds.includes(edge.toNode)
+			) {
 				edgeIds.push(edge.id);
 			}
 		}
@@ -1292,17 +1470,30 @@ export default class Cannoli extends Plugin {
 		};
 	}
 
-	encloses(a: ReturnType<typeof this.createRectangle>, b: ReturnType<typeof this.createRectangle>): boolean {
-		return a.x <= b.x && a.y <= b.y && a.x_right >= b.x_right && a.y_bottom >= b.y_bottom;
+	encloses(
+		a: ReturnType<typeof this.createRectangle>,
+		b: ReturnType<typeof this.createRectangle>,
+	): boolean {
+		return (
+			a.x <= b.x &&
+			a.y <= b.y &&
+			a.x_right >= b.x_right &&
+			a.y_bottom >= b.y_bottom
+		);
 	}
 
-	overlaps(a: ReturnType<typeof this.createRectangle>, b: ReturnType<typeof this.createRectangle>): boolean {
+	overlaps(
+		a: ReturnType<typeof this.createRectangle>,
+		b: ReturnType<typeof this.createRectangle>,
+	): boolean {
 		const horizontalOverlap = a.x < b.x_right && a.x_right > b.x;
 		const verticalOverlap = a.y < b.y_bottom && a.y_bottom > b.y;
 		return horizontalOverlap && verticalOverlap;
 	}
 
-	showRunUsageAlertModal = (usage: Record<string, ModelUsage>): Promise<boolean> => {
+	showRunUsageAlertModal = (
+		usage: Record<string, ModelUsage>,
+	): Promise<boolean> => {
 		return new Promise((resolve) => {
 			const onContinueCallback = () => resolve(true);
 			const onCancelCallback = () => resolve(false);
@@ -1312,11 +1503,10 @@ export default class Cannoli extends Plugin {
 				usage,
 				this.settings.requestThreshold,
 				onContinueCallback,
-				onCancelCallback
+				onCancelCallback,
 			).open();
 		});
 	};
-
 
 	addSampleFolder = async () => {
 		try {
@@ -1337,7 +1527,7 @@ export default class Cannoli extends Plugin {
 
 				await this.app.vault.create(
 					"Cannoli College/" + key + "/" + name,
-					content
+					content,
 				);
 			}
 		}
@@ -1346,4 +1536,3 @@ export default class Cannoli extends Plugin {
 		new Notice("Cannoli College folder added");
 	};
 }
-

@@ -1,5 +1,11 @@
 import Cannoli from "./main";
-import { Reference, ReferenceType, FileManager, CannoliNode, ContentNodeType } from "@deablabs/cannoli-core";
+import {
+	Reference,
+	ReferenceType,
+	FileManager,
+	CannoliNode,
+	ContentNodeType,
+} from "@deablabs/cannoli-core";
 import { resolveSubpath } from "obsidian";
 import { getAPI } from "obsidian-dataview";
 import * as yaml from "js-yaml";
@@ -40,7 +46,7 @@ export class VaultInterface implements FileManager {
 
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			path,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -72,8 +78,8 @@ export class VaultInterface implements FileManager {
 					// Set the cursor to the end of the file
 					this.cannoli.app.workspace.activeEditor?.editor?.setCursor(
 						this.cannoli.app.workspace.activeEditor?.editor?.lineCount() ||
+							0,
 						0,
-						0
 					);
 				}
 			}
@@ -84,7 +90,7 @@ export class VaultInterface implements FileManager {
 				await this.cannoli.app.vault.process(file, (content) => {
 					// If includeProperties is false, the edit shouldn't change the yaml frontmatter
 					const yamlFrontmatter = content.match(
-						/^---\n[\s\S]*?\n---\n/
+						/^---\n[\s\S]*?\n---\n/,
 					)?.[0];
 
 					if (yamlFrontmatter) {
@@ -99,12 +105,10 @@ export class VaultInterface implements FileManager {
 		return;
 	}
 
-	async getFile(
-		fileName: string,
-	): Promise<ArrayBuffer | null> {
+	async getFile(fileName: string): Promise<ArrayBuffer | null> {
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			fileName,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -117,7 +121,7 @@ export class VaultInterface implements FileManager {
 	async getCanvas(fileName: string, isMock: boolean): Promise<string | null> {
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			fileName,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -132,7 +136,7 @@ export class VaultInterface implements FileManager {
 	async getNote(
 		reference: Reference,
 		isMock: boolean,
-		recursionCount = 0
+		recursionCount = 0,
 	): Promise<string | null> {
 		// If we're mocking, return a mock response
 		if (isMock) {
@@ -143,7 +147,7 @@ export class VaultInterface implements FileManager {
 
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			path,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -197,7 +201,7 @@ export class VaultInterface implements FileManager {
 				// Empty
 			} else {
 				const yamlFrontmatter = content.match(
-					/^---\n[\s\S]*?\n---\n/
+					/^---\n[\s\S]*?\n---\n/,
 				)?.[0];
 
 				if (yamlFrontmatter) {
@@ -232,8 +236,20 @@ export class VaultInterface implements FileManager {
 				let subpath;
 
 				// Image extensions
-				const imageExtensions = [".jpg", ".png", ".jpeg", ".gif", ".bmp", ".tiff", ".webp", ".svg", ".ico", ".jfif", ".avif"];
-				if (imageExtensions.some(ext => noteName.endsWith(ext))) {
+				const imageExtensions = [
+					".jpg",
+					".png",
+					".jpeg",
+					".gif",
+					".bmp",
+					".tiff",
+					".webp",
+					".svg",
+					".ico",
+					".jfif",
+					".avif",
+				];
+				if (imageExtensions.some((ext) => noteName.endsWith(ext))) {
 					continue;
 				}
 
@@ -257,7 +273,7 @@ export class VaultInterface implements FileManager {
 				// Check for recursion limit (hardcoded to 10 for now)
 				if (recursionCount > 10) {
 					console.error(
-						`Recursion limit reached while extracting note "${noteName}".`
+						`Recursion limit reached while extracting note "${noteName}".`,
 					);
 					continue;
 				}
@@ -272,7 +288,6 @@ export class VaultInterface implements FileManager {
 					},
 					isMock,
 					recursionCount + 1,
-
 				);
 
 				if (noteContent) {
@@ -280,7 +295,7 @@ export class VaultInterface implements FileManager {
 						"> " + noteContent.replace(/\n/g, "\n> ");
 					content = content.replace(
 						embeddedNote,
-						blockquotedNoteContent
+						blockquotedNoteContent,
 					);
 				}
 			}
@@ -295,7 +310,11 @@ export class VaultInterface implements FileManager {
 		return content;
 	}
 
-	async replaceDataviewQueries(content: string, isMock: boolean, node?: CannoliNode): Promise<string> {
+	async replaceDataviewQueries(
+		content: string,
+		isMock: boolean,
+		node?: CannoliNode,
+	): Promise<string> {
 		if (node && node.type === ContentNodeType.Http) {
 			return content;
 		}
@@ -308,12 +327,10 @@ export class VaultInterface implements FileManager {
 			return content;
 		}
 
-
 		const dvApi = getAPI(this.cannoli.app);
 		if (!dvApi) {
 			return content;
 		}
-
 
 		// Handle embedded dataview queries
 
@@ -325,7 +342,7 @@ export class VaultInterface implements FileManager {
 				fullMatch: embedMatch[0],
 				query: embedMatch[1],
 				modifiers: embedMatch[2],
-				index: embedMatch.index
+				index: embedMatch.index,
 			});
 		}
 
@@ -338,25 +355,26 @@ export class VaultInterface implements FileManager {
 			let includeProperties = false;
 			let includeLink = false;
 
-			if (match.modifiers.includes('!#')) {
+			if (match.modifiers.includes("!#")) {
 				includeName = false;
-			} else if (match.modifiers.includes('#')) {
+			} else if (match.modifiers.includes("#")) {
 				includeName = true;
 			} else {
 				includeName = this.cannoli.settings.includeFilenameAsHeader;
 			}
 
-			if (match.modifiers.includes('!^')) {
+			if (match.modifiers.includes("!^")) {
 				includeProperties = false;
-			} else if (match.modifiers.includes('^')) {
+			} else if (match.modifiers.includes("^")) {
 				includeProperties = true;
 			} else {
-				includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
+				includeProperties =
+					this.cannoli.settings.includePropertiesInExtractedNotes;
 			}
 
-			if (match.modifiers.includes('!@')) {
+			if (match.modifiers.includes("!@")) {
 				includeLink = false;
-			} else if (match.modifiers.includes('@')) {
+			} else if (match.modifiers.includes("@")) {
 				includeLink = true;
 			} else {
 				includeLink = this.cannoli.settings.includeLinkInExtractedNotes;
@@ -368,12 +386,23 @@ export class VaultInterface implements FileManager {
 			}
 
 			const queryResult = await dvApi.queryMarkdown(match.query);
-			const result = queryResult.successful ? queryResult.value : "Invalid dataview query";
+			const result = queryResult.successful
+				? queryResult.value
+				: "Invalid dataview query";
 
-			const resultLinksReplaced = await this.replaceLinks(result, includeName, includeProperties, includeLink, isMock);
+			const resultLinksReplaced = await this.replaceLinks(
+				result,
+				includeName,
+				includeProperties,
+				includeLink,
+				isMock,
+			);
 
 			// Replace the original text with the result
-			content = content.substring(0, match.index) + resultLinksReplaced + content.substring(match.index + match.fullMatch.length);
+			content =
+				content.substring(0, match.index) +
+				resultLinksReplaced +
+				content.substring(match.index + match.fullMatch.length);
 		}
 
 		// Handle normal dataview queries
@@ -384,7 +413,7 @@ export class VaultInterface implements FileManager {
 			nonEmbedMatches.push({
 				fullMatch: nonEmbedMatch[0],
 				query: nonEmbedMatch[1],
-				index: nonEmbedMatch.index
+				index: nonEmbedMatch.index,
 			});
 		}
 
@@ -394,7 +423,9 @@ export class VaultInterface implements FileManager {
 		// Process each match asynchronously
 		for (const match of nonEmbedMatches) {
 			const queryResult = await dvApi.queryMarkdown(match.query);
-			let result = queryResult.successful ? queryResult.value : "Invalid Dataview query";
+			let result = queryResult.successful
+				? queryResult.value
+				: "Invalid Dataview query";
 
 			// Check if the result is a single line list, and if so, remove the bullet point
 			if (result.startsWith("- ") && result.split("\n").length === 2) {
@@ -402,7 +433,10 @@ export class VaultInterface implements FileManager {
 			}
 
 			// Replace the original text with the result
-			content = content.substring(0, match.index) + result + content.substring(match.index + match.fullMatch.length);
+			content =
+				content.substring(0, match.index) +
+				result +
+				content.substring(match.index + match.fullMatch.length);
 		}
 
 		return content;
@@ -424,10 +458,13 @@ export class VaultInterface implements FileManager {
 
 		const result = await dvApi.queryMarkdown(query);
 
-		const markdownList = result.successful ? result.value : "Invalid Dataview query";
+		const markdownList = result.successful
+			? result.value
+			: "Invalid Dataview query";
 
 		// Turn the markdown list into an array of strings and clean up the list items
-		const list = markdownList.split("\n")
+		const list = markdownList
+			.split("\n")
 			.map((line) => line.trim())
 			.filter((line) => line.length > 0) // Remove empty lines
 			.map((line) => line.replace(/^- /, "")); // Remove the leading "- "
@@ -435,7 +472,13 @@ export class VaultInterface implements FileManager {
 		return list;
 	}
 
-	async replaceLinks(resultContent: string, includeName: boolean, includeProperties: boolean, includeLink: boolean, isMock: boolean): Promise<string> {
+	async replaceLinks(
+		resultContent: string,
+		includeName: boolean,
+		includeProperties: boolean,
+		includeLink: boolean,
+		isMock: boolean,
+	): Promise<string> {
 		const linkRegex = /\[\[([^\]]+)\]\]/g;
 		let processedContent = "";
 		let lastIndex = 0;
@@ -449,14 +492,17 @@ export class VaultInterface implements FileManager {
 				shouldExtract: true,
 				includeName: includeName,
 				includeProperties: includeProperties,
-				includeLink: includeLink
+				includeLink: includeLink,
 			};
 
 			const noteContent = await this.getNote(reference, isMock);
 
 			// If the processed content ends with "- ", remove it
 			if (processedContent.endsWith("- ")) {
-				processedContent = processedContent.substring(0, processedContent.length - 2);
+				processedContent = processedContent.substring(
+					0,
+					processedContent.length - 2,
+				);
 			}
 
 			processedContent += noteContent;
@@ -467,13 +513,18 @@ export class VaultInterface implements FileManager {
 		return processedContent;
 	}
 
-	async replaceSmartConnections(content: string, isMock: boolean, node?: CannoliNode): Promise<string> {
+	async replaceSmartConnections(
+		content: string,
+		isMock: boolean,
+		node?: CannoliNode,
+	): Promise<string> {
 		if (node && node.type === ContentNodeType.Http) {
 			return content;
 		}
 
 		const nonEmbedRegex = /```smart-connections\n([\s\S]*?)\n```/g;
-		const embedRegex = /{{([^\n]*)\n```smart-connections\n([\s\S]*?)\n```\n([^\n]*)}}/g;
+		const embedRegex =
+			/{{([^\n]*)\n```smart-connections\n([\s\S]*?)\n```\n([^\n]*)}}/g;
 		const anySCRegex = /```smart-connections\n([\s\S]*?)\n```/;
 
 		if (!anySCRegex.test(content)) {
@@ -503,7 +554,7 @@ export class VaultInterface implements FileManager {
 				limit: embedMatch[1],
 				query: embedMatch[2],
 				modifiers: embedMatch[3],
-				index: embedMatch.index
+				index: embedMatch.index,
 			});
 		}
 
@@ -516,32 +567,35 @@ export class VaultInterface implements FileManager {
 			let includeProperties = false;
 			let includeLink = false;
 
-			if (match.modifiers.includes('!#')) {
+			if (match.modifiers.includes("!#")) {
 				includeName = false;
-			} else if (match.modifiers.includes('#')) {
+			} else if (match.modifiers.includes("#")) {
 				includeName = true;
 			} else {
 				includeName = this.cannoli.settings.includeFilenameAsHeader;
 			}
 
-			if (match.modifiers.includes('!^')) {
+			if (match.modifiers.includes("!^")) {
 				includeProperties = false;
-			} else if (match.modifiers.includes('^')) {
+			} else if (match.modifiers.includes("^")) {
 				includeProperties = true;
 			} else {
-				includeProperties = this.cannoli.settings.includePropertiesInExtractedNotes;
+				includeProperties =
+					this.cannoli.settings.includePropertiesInExtractedNotes;
 			}
 
-			if (match.modifiers.includes('!@')) {
+			if (match.modifiers.includes("!@")) {
 				includeLink = false;
-			} else if (match.modifiers.includes('@')) {
+			} else if (match.modifiers.includes("@")) {
 				includeLink = true;
 			} else {
 				includeLink = this.cannoli.settings.includeLinkInExtractedNotes;
 			}
 
 			// @ts-ignore - This is a private API
-			let result = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(match.query);
+			let result = await this.cannoli.app.plugins.plugins[
+				"smart-connections"
+			].api.search(match.query);
 
 			// If there's no limit defined, use the default limit of 5. If the limit is defined, parse it as an integer and truncate the results array
 			const limit = match.limit ? parseInt(match.limit) : 5;
@@ -570,7 +624,7 @@ export class VaultInterface implements FileManager {
 					includeName: includeName,
 					includeProperties: includeProperties,
 					includeLink: includeLink,
-					subpath: subpath ?? undefined
+					subpath: subpath ?? undefined,
 				};
 
 				const noteContent = await this.getNote(reference, isMock);
@@ -579,7 +633,10 @@ export class VaultInterface implements FileManager {
 			}
 
 			// Replace the original text with the result
-			content = content.substring(0, match.index) + resultLinksReplaced + content.substring(match.index + match.fullMatch.length);
+			content =
+				content.substring(0, match.index) +
+				resultLinksReplaced +
+				content.substring(match.index + match.fullMatch.length);
 		}
 
 		// Handle normal dataview queries
@@ -590,7 +647,7 @@ export class VaultInterface implements FileManager {
 			nonEmbedMatches.push({
 				fullMatch: nonEmbedMatch[0],
 				query: nonEmbedMatch[1],
-				index: nonEmbedMatch.index
+				index: nonEmbedMatch.index,
 			});
 		}
 
@@ -600,7 +657,9 @@ export class VaultInterface implements FileManager {
 		// Process each match asynchronously
 		for (const match of nonEmbedMatches) {
 			// @ts-ignore - This is a private API
-			const results = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(match.query);
+			const results = await this.cannoli.app.plugins.plugins[
+				"smart-connections"
+			].api.search(match.query);
 
 			// Build a markdown table of with the columns "Similarity" (results[0].sim) and "Link" (results[i].path)
 			let result = "| Similarity | Link |\n| --- | --- |\n";
@@ -615,16 +674,24 @@ export class VaultInterface implements FileManager {
 			// const result = queryResult.successful ? queryResult.value : "Invalid Dataview query";
 
 			// Replace the original text with the result
-			content = content.substring(0, match.index) + result + content.substring(match.index + match.fullMatch.length);
+			content =
+				content.substring(0, match.index) +
+				result +
+				content.substring(match.index + match.fullMatch.length);
 		}
 
 		return content;
-
 	}
 
-	async querySmartConnections(query: string, limit: number): Promise<string[]> {
-		// @ts-ignore - This is a private API
-		const results = await this.cannoli.app.plugins.plugins["smart-connections"].api.search(query);
+	async querySmartConnections(
+		query: string,
+		limit: number,
+	): Promise<string[]> {
+		const results =
+			// @ts-expect-error - This is a private API
+			await this.cannoli.app.plugins.plugins[
+				"smart-connections"
+			].api.search(query);
 
 		return results.slice(0, limit).map((r: { path: string }) => {
 			let path = r.path;
@@ -647,7 +714,7 @@ export class VaultInterface implements FileManager {
 		includeProperties: boolean,
 		includeLink: boolean,
 		isMock: boolean,
-		allowSubpaths: boolean = true
+		allowSubpaths: boolean = true,
 	): Promise<string[]> {
 		const resultContents = [];
 		for (const noteLink of noteLinks) {
@@ -662,7 +729,7 @@ export class VaultInterface implements FileManager {
 				includeName,
 				includeProperties,
 				includeLink,
-				subpath: allowSubpaths ? subpath ?? undefined : undefined
+				subpath: allowSubpaths ? (subpath ?? undefined) : undefined,
 			};
 
 			const noteContent = await this.getNote(reference, isMock);
@@ -712,20 +779,20 @@ export class VaultInterface implements FileManager {
 		}
 
 		this.cannoli.app.workspace.activeEditor?.editor?.replaceSelection(
-			newContent
+			newContent,
 		);
 	}
 
 	async getPropertyOfNote(
 		noteName: string,
 		propertyName: string,
-		yamlFormat = false
+		yamlFormat = false,
 	): Promise<string | null> {
 		const path = this.getPathFromName(noteName);
 
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			path,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -740,7 +807,7 @@ export class VaultInterface implements FileManager {
 				(content) => {
 					frontmatter = content;
 					return content;
-				}
+				},
 			);
 
 			// If frontmatter is null or undefined, return null
@@ -762,7 +829,7 @@ export class VaultInterface implements FileManager {
 		} catch (error) {
 			console.error(
 				"An error occurred while fetching frontmatter:",
-				error
+				error,
 			);
 			return null;
 		}
@@ -770,13 +837,13 @@ export class VaultInterface implements FileManager {
 
 	async getAllPropertiesOfNote(
 		noteName: string,
-		yamlFormat = false
+		yamlFormat = false,
 	): Promise<string | null> {
 		const path = this.getPathFromName(noteName);
 
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			path,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -791,7 +858,7 @@ export class VaultInterface implements FileManager {
 				(content) => {
 					frontmatter = content;
 					return content;
-				}
+				},
 			);
 
 			// If frontmatter is null or undefined, return null
@@ -807,7 +874,7 @@ export class VaultInterface implements FileManager {
 		} catch (error) {
 			console.error(
 				"An error occurred while fetching frontmatter:",
-				error
+				error,
 			);
 			return null;
 		}
@@ -816,13 +883,13 @@ export class VaultInterface implements FileManager {
 	async editPropertyOfNote(
 		noteName: string,
 		propertyName: string,
-		newValue: string
+		newValue: string,
 	): Promise<void> {
 		const path = this.getPathFromName(noteName);
 
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			path,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -856,13 +923,13 @@ export class VaultInterface implements FileManager {
 
 					// Write the frontmatter
 					return frontmatter;
-				}
+				},
 			);
 			return;
 		} catch (error) {
 			console.error(
 				"An error occurred while editing frontmatter:",
-				error
+				error,
 			);
 			return;
 		}
@@ -872,7 +939,7 @@ export class VaultInterface implements FileManager {
 		noteName: string,
 		path?: string,
 		content?: string,
-		verbose = false
+		verbose = false,
 	): Promise<string | null> {
 		// If there are double brackets, remove them
 		noteName = this.getPathFromName(noteName);
@@ -905,7 +972,7 @@ export class VaultInterface implements FileManager {
 		noteName: string,
 		path: string,
 		content?: string,
-		verbose = false
+		verbose = false,
 	): Promise<string> {
 		// Create the path by appending the note name to the path with .md
 		const fullPath = `${path}/${noteName}.md`;
@@ -921,7 +988,7 @@ export class VaultInterface implements FileManager {
 
 		const file = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			path,
-			""
+			"",
 		);
 
 		if (!file) {
@@ -948,7 +1015,7 @@ export class VaultInterface implements FileManager {
 	async moveNote(
 		noteName: string,
 		newPath: string,
-		verbose = false
+		verbose = false,
 	): Promise<boolean> {
 		// Create the path by appending the note name to the paths with .md
 		const newFullPath = `${newPath}/${noteName}.md`;
@@ -956,7 +1023,7 @@ export class VaultInterface implements FileManager {
 		const path = this.getPathFromName(noteName);
 		const note = this.cannoli.app.metadataCache.getFirstLinkpathDest(
 			path,
-			""
+			"",
 		);
 
 		if (!note) {
@@ -969,30 +1036,35 @@ export class VaultInterface implements FileManager {
 		return true;
 	}
 
-
 	openCustomModal(layout: string): Promise<string | Error> {
 		return new Promise((resolve) => {
 			try {
-				const lines = layout.split('\n');
+				const lines = layout.split("\n");
 				let title = "Cannoli modal";
 				let fixedLayout = layout;
 
-				if (lines.length > 0 && !lines[0].includes('==')) {
-					title = lines[0].trim().replace(/^#+\s*/, '');
-					fixedLayout = lines.slice(1).join('\n');
+				if (lines.length > 0 && !lines[0].includes("==")) {
+					title = lines[0].trim().replace(/^#+\s*/, "");
+					fixedLayout = lines.slice(1).join("\n");
 				}
 
-				new CustomModal(this.cannoli.app, fixedLayout, (result) => {
-					if (result instanceof Error) {
-						resolve(result);
-					} else {
-						resolve(JSON.stringify(result, null, 2));
-					}
-				}, title).open();
+				new CustomModal(
+					this.cannoli.app,
+					fixedLayout,
+					(result) => {
+						if (result instanceof Error) {
+							resolve(result);
+						} else {
+							resolve(JSON.stringify(result, null, 2));
+						}
+					},
+					title,
+				).open();
 			} catch (error) {
-				resolve(error instanceof Error ? error : new Error(String(error)));
+				resolve(
+					error instanceof Error ? error : new Error(String(error)),
+				);
 			}
 		});
 	}
 }
-

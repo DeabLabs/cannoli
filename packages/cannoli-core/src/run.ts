@@ -1,5 +1,15 @@
 import pLimit from "p-limit";
-import { AllVerifiedCannoliCanvasNodeData, CallNodeType, CannoliGraph, CannoliObjectKind, CannoliObjectStatus, ContentNodeType, EdgeType, VerifiedCannoliCanvasData, VerifiedCannoliCanvasEdgeData } from "./graph";
+import {
+	AllVerifiedCannoliCanvasNodeData,
+	CallNodeType,
+	CannoliGraph,
+	CannoliObjectKind,
+	CannoliObjectStatus,
+	ContentNodeType,
+	EdgeType,
+	VerifiedCannoliCanvasData,
+	VerifiedCannoliCanvasEdgeData,
+} from "./graph";
 import {
 	GenericCompletionParams,
 	GenericCompletionResponse,
@@ -46,13 +56,28 @@ export type ActionArgInfo = {
 	displayName?: string;
 	description?: string;
 	prompt?: string;
-}
-
-export type ActionArgs = {
-	[key: string]: string | number | boolean | FileManager | ResponseTextFetcher | Record<string, string> | undefined;
 };
 
-export type ActionResponse = string | string[] | Record<string, string | string[]> | void | Error | Promise<string | string[] | Record<string, string | string[]> | void | Error>;
+export type ActionArgs = {
+	[key: string]:
+		| string
+		| number
+		| boolean
+		| FileManager
+		| ResponseTextFetcher
+		| Record<string, string>
+		| undefined;
+};
+
+export type ActionResponse =
+	| string
+	| string[]
+	| Record<string, string | string[]>
+	| void
+	| Error
+	| Promise<
+			string | string[] | Record<string, string | string[]> | void | Error
+	  >;
 
 export type Action = {
 	name: string;
@@ -69,18 +94,25 @@ export type Action = {
 	};
 };
 
-export type ReceiveInfo = string | string[] | Record<string, string | string[]>
+export type ReceiveInfo = string | string[] | Record<string, string | string[]>;
 
-export type Replacer = (content: string, isMock: boolean, node?: CannoliNode) => Promise<string>;
+export type Replacer = (
+	content: string,
+	isMock: boolean,
+	node?: CannoliNode,
+) => Promise<string>;
 
 export type StoppageReason = "user" | "error" | "complete";
 
-export type ResponseTextFetcher = (url: string, options: RequestInit) => Promise<string | Error>;
+export type ResponseTextFetcher = (
+	url: string,
+	options: RequestInit,
+) => Promise<string | Error>;
 
 interface Limit {
-	(fn: () => Promise<GenericCompletionResponse | Error>): Promise<
-		GenericCompletionResponse | Error
-	>;
+	(
+		fn: () => Promise<GenericCompletionResponse | Error>,
+	): Promise<GenericCompletionResponse | Error>;
 }
 
 export interface Stoppage {
@@ -89,8 +121,11 @@ export interface Stoppage {
 	results: { [key: string]: string };
 	argNames: string[];
 	resultNames: string[];
-	actionsOrHttpTemplatesReferenced: { names: string[], includesDynamicReference: boolean };
-	providersReferenced: { names: string[], includesDynamicReference: boolean };
+	actionsOrHttpTemplatesReferenced: {
+		names: string[];
+		includesDynamicReference: boolean;
+	};
+	providersReferenced: { names: string[]; includesDynamicReference: boolean };
 	description?: string;
 	message?: string; // Additional information, like an error message
 }
@@ -104,12 +139,14 @@ export interface ModelUsage {
 export type ChatRole = "user" | "assistant" | "system";
 
 const tracingConfigSchema = z.object({
-	phoenix: z.object({
-		enabled: z.boolean().default(false),
-		apiKey: z.string().optional(),
-		baseUrl: z.string(),
-		projectName: z.string().default("cannoli"),
-	}).nullish(),
+	phoenix: z
+		.object({
+			enabled: z.boolean().default(false),
+			apiKey: z.string().optional(),
+			baseUrl: z.string(),
+			projectName: z.string().default("cannoli"),
+		})
+		.nullish(),
 });
 
 export type TracingConfig = z.infer<typeof tracingConfigSchema>;
@@ -122,7 +159,7 @@ enum DagCheckState {
 
 export function isValidKey(
 	key: string,
-	config: GenericModelConfig
+	config: GenericModelConfig,
 ): key is keyof GenericModelConfig {
 	return key in config;
 }
@@ -177,7 +214,11 @@ export class Run {
 	/** The filter to apply to the spans produced by this run. */
 	postTraceFilter: string | undefined;
 
-	subcannoliCallback: (cannoli: unknown, inputVariables: Record<string, string>, scIsMock: boolean) => Promise<Record<string, string>>;
+	subcannoliCallback: (
+		cannoli: unknown,
+		inputVariables: Record<string, string>,
+		scIsMock: boolean,
+	) => Promise<Record<string, string>>;
 
 	usage: Record<string, ModelUsage>;
 
@@ -198,9 +239,9 @@ export class Run {
 		secrets,
 		args,
 		runName,
-		resume
+		resume,
 	}: RunArgs) {
-		this.onFinish = onFinish ?? ((stoppage: Stoppage) => { });
+		this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
 		this.isMock = isMock ?? false;
 		this.persistor = persistor ?? null;
 		this.usage = {};
@@ -216,28 +257,34 @@ export class Run {
 
 		this.fetcher = fetcher ?? defaultFetcher;
 
-		this.llm = llmConfigs ? new LLMProvider({
-			configs: llmConfigs,
-			valtownApiKey: secrets?.["VALTOWN_API_KEY"],
-			runId: this.runId,
-			runDateEpochMs: this.runDateEpochMs,
-			runName: this.runName
-		}) : null;
+		this.llm = llmConfigs
+			? new LLMProvider({
+					configs: llmConfigs,
+					valtownApiKey: secrets?.["VALTOWN_API_KEY"],
+					runId: this.runId,
+					runDateEpochMs: this.runDateEpochMs,
+					runName: this.runName,
+				})
+			: null;
 
 		this.secrets = secrets ?? {};
-		this.config = { ...config ?? {}, ...this.secrets };
+		this.config = { ...(config ?? {}), ...this.secrets };
 
 		this.args = args ?? null;
 
-		const tracingConfig = tracingConfigSchema.safeParse(config?.tracingConfig);
+		const tracingConfig = tracingConfigSchema.safeParse(
+			config?.tracingConfig,
+		);
 
 		if (tracingConfig.success) {
 			this.tracingConfig = tracingConfig.data;
 		}
 
 		if (this.tracingConfig && !this.isMock) {
-			createPhoenixWebTracerProvider({ tracingConfig: this.tracingConfig })
-			this.postTraceFilter = `metadata['runId'] == '${this.runId}'\nmetadata['runName'] == '${this.runName}'\nmetadata['runDateEpochMs'] == '${this.runDateEpochMs}'`
+			createPhoenixWebTracerProvider({
+				tracingConfig: this.tracingConfig,
+			});
+			this.postTraceFilter = `metadata['runId'] == '${this.runId}'\nmetadata['runName'] == '${this.runName}'\nmetadata['runDateEpochMs'] == '${this.runDateEpochMs}'`;
 		}
 
 		let parsedCannoliJSON: CanvasData;
@@ -261,14 +308,14 @@ export class Run {
 
 		// Remove these properties from the args object without affecting the saved values
 		if (this.args) {
-			const { obsidianCurrentNote, obsidianSelection, ...restArgs } = this.args;
+			const { obsidianCurrentNote, obsidianSelection, ...restArgs } =
+				this.args;
 			this.args = restArgs;
 
 			// Extract currentNote and selection from args, with default values
 			this.currentNote = obsidianCurrentNote ?? "No current note";
 			this.selection = obsidianSelection ?? "No selection";
 		}
-
 
 		this.fileManager = fileManager ?? null;
 
@@ -287,7 +334,9 @@ export class Run {
 		const canvasData = factory.getCannoliData();
 
 		// Find all nodes of type "input"
-		const argNodes = canvasData.nodes.filter((node) => node.cannoliData.type === "input");
+		const argNodes = canvasData.nodes.filter(
+			(node) => node.cannoliData.type === "input",
+		);
 
 		// For each arg, check if the key matches the name of the input node
 		for (const [key, value] of Object.entries(this.args ?? {})) {
@@ -302,29 +351,35 @@ export class Run {
 					const { name } = parseNamedNode(argNode.cannoliData.text);
 					argNode.cannoliData.text = `[${name}]\n${value}`;
 				});
-			}
-			else {
-				throw new Error(`Argument key "${key}" not found in input nodes.`);
+			} else {
+				throw new Error(
+					`Argument key "${key}" not found in input nodes.`,
+				);
 			}
 		}
 
 		this.canvasData = canvasData;
 
-		this.graph = new CannoliGraph(
-			canvasData
-		).graph;
-
+		this.graph = new CannoliGraph(canvasData).graph;
 
 		// Set this as the run for every object
 		for (const object of Object.values(this.graph)) {
 			object.setRun(this);
 		}
 
-		this.subcannoliCallback = (cannoli: unknown, inputVariables: Record<string, string>, scIsMock: boolean) => {
+		this.subcannoliCallback = (
+			cannoli: unknown,
+			inputVariables: Record<string, string>,
+			scIsMock: boolean,
+		) => {
 			return resultsRun({
 				cannoli,
 				llmConfigs,
-				args: { ...inputVariables, obsidianCurrentNote: this.currentNote ?? "", obsidianSelection: this.selection ?? "" },
+				args: {
+					...inputVariables,
+					obsidianCurrentNote: this.currentNote ?? "",
+					obsidianSelection: this.selection ?? "",
+				},
 				fileManager,
 				actions,
 				httpTemplates,
@@ -332,7 +387,7 @@ export class Run {
 				config,
 				secrets,
 				fetcher,
-				replacers
+				replacers,
 			});
 		};
 	}
@@ -342,7 +397,9 @@ export class Run {
 		// this.logGraph();
 
 		if (this.persistor !== null && this.canvasData !== null) {
-			await this.persistor.start(JSON.parse(JSON.stringify(this.canvasData)));
+			await this.persistor.start(
+				JSON.parse(JSON.stringify(this.canvasData)),
+			);
 		}
 
 		// Setup listeners
@@ -372,7 +429,9 @@ export class Run {
 	getArgNames(): string[] {
 		const argNames: Set<string> = new Set();
 
-		const argNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "input");
+		const argNodes = this.canvasData?.nodes.filter(
+			(node) => node.cannoliData.type === "input",
+		);
 
 		if (!argNodes) {
 			return Array.from(argNames);
@@ -391,7 +450,9 @@ export class Run {
 	getResultNames(): string[] {
 		const resultNames: Set<string> = new Set();
 
-		const resultNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === "output");
+		const resultNodes = this.canvasData?.nodes.filter(
+			(node) => node.cannoliData.type === "output",
+		);
 
 		if (!resultNodes) {
 			return Array.from(resultNames);
@@ -407,12 +468,17 @@ export class Run {
 		return Array.from(resultNames);
 	}
 
-	getActionsOrHttpTemplatesReferenced(): { names: string[], includesDynamicReference: boolean } {
+	getActionsOrHttpTemplatesReferenced(): {
+		names: string[];
+		includesDynamicReference: boolean;
+	} {
 		const names: string[] = [];
 		let includesDynamicReference = false;
 
 		// Get all action nodes
-		const actionNodes = this.canvasData?.nodes.filter((node) => node.cannoliData.type === ContentNodeType.Http);
+		const actionNodes = this.canvasData?.nodes.filter(
+			(node) => node.cannoliData.type === ContentNodeType.Http,
+		);
 
 		if (!actionNodes) {
 			return { names, includesDynamicReference };
@@ -429,7 +495,10 @@ export class Run {
 			}
 
 			// Check for dynamic references
-			if (node.cannoliData.text.includes("{{") && node.cannoliData.text.includes("}}")) {
+			if (
+				node.cannoliData.text.includes("{{") &&
+				node.cannoliData.text.includes("}}")
+			) {
 				includesDynamicReference = true;
 			}
 		}
@@ -437,7 +506,10 @@ export class Run {
 		return { names, includesDynamicReference };
 	}
 
-	getProvidersReferenced(): { names: string[], includesDynamicReference: boolean } {
+	getProvidersReferenced(): {
+		names: string[];
+		includesDynamicReference: boolean;
+	} {
 		const providersReferenced: string[] = [];
 		let includesDynamicReference = false;
 
@@ -446,9 +518,18 @@ export class Run {
 			.filter((edge) => edge.cannoliData.text === "provider");
 
 		for (const edge of incomingConfigProviderEdges || []) {
-			const sourceNode = this.canvasData?.nodes.find((node) => node.id === edge.fromNode);
-			if (sourceNode && (sourceNode.cannoliData.type === ContentNodeType.StandardContent || sourceNode.cannoliData.type === ContentNodeType.Input)) {
-				const { name, content } = parseNamedNode(sourceNode.cannoliData.text);
+			const sourceNode = this.canvasData?.nodes.find(
+				(node) => node.id === edge.fromNode,
+			);
+			if (
+				sourceNode &&
+				(sourceNode.cannoliData.type ===
+					ContentNodeType.StandardContent ||
+					sourceNode.cannoliData.type === ContentNodeType.Input)
+			) {
+				const { name, content } = parseNamedNode(
+					sourceNode.cannoliData.text,
+				);
 
 				if (name !== null) {
 					providersReferenced.push(name);
@@ -466,9 +547,16 @@ export class Run {
 
 	getDescription(): string | undefined {
 		// Find a node of type "variable" whose name is "DESCRIPTION"
-		const descriptionNode = this.canvasData?.nodes.find((node) => node.cannoliData.type === "variable" && node.cannoliData.text.split("\n")[0] === "[DESCRIPTION]");
+		const descriptionNode = this.canvasData?.nodes.find(
+			(node) =>
+				node.cannoliData.type === "variable" &&
+				node.cannoliData.text.split("\n")[0] === "[DESCRIPTION]",
+		);
 		if (descriptionNode) {
-			return descriptionNode.cannoliData.text.split("\n").slice(1).join("\n");
+			return descriptionNode.cannoliData.text
+				.split("\n")
+				.slice(1)
+				.join("\n");
 		}
 		return undefined;
 	}
@@ -477,7 +565,9 @@ export class Run {
 		this.stopTime = Date.now();
 
 		if (this.tracingConfig && !this.isMock && this.postTraceFilter) {
-			console.log(`To view spans for this run in Arize Phoenix, filter your spans with:\n\n${this.postTraceFilter}`)
+			console.log(
+				`To view spans for this run in Arize Phoenix, filter your spans with:\n\n${this.postTraceFilter}`,
+			);
 		}
 
 		this.onFinish({
@@ -486,7 +576,8 @@ export class Run {
 			results: this.getResults(),
 			argNames: this.getArgNames(),
 			resultNames: this.getResultNames(),
-			actionsOrHttpTemplatesReferenced: this.getActionsOrHttpTemplatesReferenced(),
+			actionsOrHttpTemplatesReferenced:
+				this.getActionsOrHttpTemplatesReferenced(),
 			providersReferenced: this.getProvidersReferenced(),
 			description: this.getDescription(),
 			usage: this.usage,
@@ -526,7 +617,7 @@ export class Run {
 			for (const object of Object.values(this.graph)) {
 				if (object instanceof CannoliVertex)
 					object.error(
-						"Cycle detected in graph. Please make sure the graph is a DAG.\n(exception: edges between groups and their members)"
+						"Cycle detected in graph. Please make sure the graph is a DAG.\n(exception: edges between groups and their members)",
 					);
 				return;
 			}
@@ -539,7 +630,7 @@ export class Run {
 				this.objectUpdated(
 					event.detail.obj,
 					event.detail.status,
-					event.detail.message
+					event.detail.message,
 				);
 			});
 		}
@@ -552,7 +643,7 @@ export class Run {
 	objectUpdated(
 		object: CannoliObject,
 		status: CannoliObjectStatus,
-		message?: string
+		message?: string,
 	) {
 		const currentTime = Date.now();
 		if (this.stopTime) {
@@ -592,7 +683,6 @@ export class Run {
 				break;
 			}
 
-
 			default: {
 				throw new Error(`Unknown status: ${status}`);
 			}
@@ -601,12 +691,27 @@ export class Run {
 
 	updateObject(object: CannoliObject) {
 		if (!this.isMock && this.persistor) {
-			if (object.kind === CannoliObjectKind.Node || object.kind === CannoliObjectKind.Group) {
-				const data = this.canvasData?.nodes.find((node) => node.id === object.id);
-				this.persistor.editNode(JSON.parse(JSON.stringify(data)) as AllVerifiedCannoliCanvasNodeData);
+			if (
+				object.kind === CannoliObjectKind.Node ||
+				object.kind === CannoliObjectKind.Group
+			) {
+				const data = this.canvasData?.nodes.find(
+					(node) => node.id === object.id,
+				);
+				this.persistor.editNode(
+					JSON.parse(
+						JSON.stringify(data),
+					) as AllVerifiedCannoliCanvasNodeData,
+				);
 			} else if (object.kind === CannoliObjectKind.Edge) {
-				const data = this.canvasData?.edges.find((edge) => edge.id === object.id);
-				this.persistor.editEdge(JSON.parse(JSON.stringify(data)) as VerifiedCannoliCanvasEdgeData);
+				const data = this.canvasData?.edges.find(
+					(edge) => edge.id === object.id,
+				);
+				this.persistor.editEdge(
+					JSON.parse(
+						JSON.stringify(data),
+					) as VerifiedCannoliCanvasEdgeData,
+				);
 			}
 		}
 	}
@@ -637,8 +742,19 @@ export class Run {
 
 		this.updateOriginalParallelGroupLabel(object, "reset");
 
-		if (this.persistor && (object.type === CallNodeType.Choose || object.type === CallNodeType.Form || object.type === CallNodeType.StandardCall)) {
-			const editedNode = JSON.parse(JSON.stringify(this.canvasData?.nodes.find((node) => node.id === object.id)));
+		if (
+			this.persistor &&
+			(object.type === CallNodeType.Choose ||
+				object.type === CallNodeType.Form ||
+				object.type === CallNodeType.StandardCall)
+		) {
+			const editedNode = JSON.parse(
+				JSON.stringify(
+					this.canvasData?.nodes.find(
+						(node) => node.id === object.id,
+					),
+				),
+			);
 
 			if (!editedNode) {
 				return;
@@ -672,10 +788,7 @@ export class Run {
 
 	objectError(object: CannoliObject, message?: string) {
 		if (this.persistor && object instanceof CannoliVertex) {
-			this.persistor.addError(
-				object.id,
-				message ?? "Unknown error"
-			);
+			this.persistor.addError(object.id, message ?? "Unknown error");
 		}
 
 		this.error(message ?? "Unknown error");
@@ -683,24 +796,34 @@ export class Run {
 
 	objectWarning(object: CannoliObject, message?: string) {
 		if (this.persistor && object instanceof CannoliVertex) {
-			this.persistor.addWarning(
-				object.id,
-				message ?? "Unknown warning"
-			);
+			this.persistor.addWarning(object.id, message ?? "Unknown warning");
 		}
 	}
 
-	updateOriginalParallelGroupLabel(object: CannoliObject, flag?: "reset" | "executing") {
+	updateOriginalParallelGroupLabel(
+		object: CannoliObject,
+		flag?: "reset" | "executing",
+	) {
 		if (this.persistor && !this.isMock) {
-			if (object instanceof CannoliGroup && object.fromForEach && object.originalObject) {
+			if (
+				object instanceof CannoliGroup &&
+				object.fromForEach &&
+				object.originalObject
+			) {
 				const originalGroupId = object.originalObject;
 
 				if (flag === "reset") {
 					this.forEachTracker.delete(originalGroupId);
-					this.persistor.editOriginalParallelGroupLabel(originalGroupId, `${object.maxLoops}`);
+					this.persistor.editOriginalParallelGroupLabel(
+						originalGroupId,
+						`${object.maxLoops}`,
+					);
 					return;
 				} else if (flag === "executing") {
-					this.persistor.editOriginalParallelGroupLabel(originalGroupId, `0/${object.maxLoops}`);
+					this.persistor.editOriginalParallelGroupLabel(
+						originalGroupId,
+						`0/${object.maxLoops}`,
+					);
 					return;
 				}
 
@@ -713,7 +836,10 @@ export class Run {
 					}
 				}
 
-				this.persistor.editOriginalParallelGroupLabel(originalGroupId, `${this.forEachTracker.get(originalGroupId)}/${object.maxLoops}`);
+				this.persistor.editOriginalParallelGroupLabel(
+					originalGroupId,
+					`${this.forEachTracker.get(originalGroupId)}/${object.maxLoops}`,
+				);
 			}
 		}
 	}
@@ -733,7 +859,9 @@ export class Run {
 	}
 
 	getResults(): { [key: string]: string } {
-		const variableNodes = Object.values(this.graph).filter((object) => object.type === "output" && object.kind === "node");
+		const variableNodes = Object.values(this.graph).filter(
+			(object) => object.type === "output" && object.kind === "node",
+		);
 		const results: { [key: string]: string } = {};
 
 		for (const node of variableNodes) {
@@ -784,7 +912,7 @@ export class Run {
 
 	async callLLM(
 		request: GenericCompletionParams,
-		verbose?: boolean
+		verbose?: boolean,
 	): Promise<GenericCompletionResponse | Error> {
 		return this.llmLimit(
 			async (): Promise<GenericCompletionResponse | Error> => {
@@ -801,9 +929,9 @@ export class Run {
 					if (verbose) {
 						console.log(
 							"Input Messages:\n" +
-							JSON.stringify(request.messages, null, 2) +
-							"\n\nResponse Message:\n" +
-							JSON.stringify(completion, null, 2)
+								JSON.stringify(request.messages, null, 2) +
+								"\n\nResponse Message:\n" +
+								JSON.stringify(completion, null, 2),
 						);
 					}
 
@@ -811,7 +939,8 @@ export class Run {
 					// 	Llm.getCompletionResponseUsage(response);
 
 					if (request.model) {
-						const numberOfCalls = this.usage[request.model]?.numberOfCalls ?? 0;
+						const numberOfCalls =
+							this.usage[request.model]?.numberOfCalls ?? 0;
 						// const promptTokens = this.usage[request.model]?.promptTokens ?? 0;
 						// const completionTokens = this.usage[request.model]?.completionTokens ?? 0;
 
@@ -828,7 +957,7 @@ export class Run {
 				} catch (e) {
 					return e as Error;
 				}
-			}
+			},
 		);
 	}
 
@@ -850,7 +979,7 @@ export class Run {
 	}
 
 	createMockFunctionResponse(
-		request: GenericCompletionParams
+		request: GenericCompletionParams,
 	): GenericCompletionResponse {
 		let textMessages = "";
 
@@ -890,7 +1019,7 @@ export class Run {
 			if (calledFunction === "choice") {
 				// Find the choice function
 				const choiceFunction = request.functions?.find(
-					(fn) => fn.name === "choice"
+					(fn) => fn.name === "choice",
 				);
 
 				if (!choiceFunction) {
@@ -898,12 +1027,12 @@ export class Run {
 				}
 
 				return this.createMockChoiceFunctionResponse(
-					choiceFunction
+					choiceFunction,
 				) as GenericCompletionResponse;
 			} else if (calledFunction === "form") {
 				// Find the answers function
 				const formFunction = request.functions?.find(
-					(fn) => fn.name === "form"
+					(fn) => fn.name === "form",
 				);
 
 				if (!formFunction) {
@@ -911,12 +1040,12 @@ export class Run {
 				}
 
 				return this.createMockFormFunctionResponse(
-					formFunction
+					formFunction,
 				) as GenericCompletionResponse;
 			} else if (calledFunction === "note_select") {
 				// Find the note name function
 				const noteNameFunction = request.functions?.find(
-					(fn) => fn.name === "note_select"
+					(fn) => fn.name === "note_select",
 				);
 
 				if (!noteNameFunction) {
@@ -924,7 +1053,7 @@ export class Run {
 				}
 
 				return this.createMockNoteNameFunctionResponse(
-					noteNameFunction
+					noteNameFunction,
 				) as GenericCompletionResponse;
 			}
 		}
@@ -937,16 +1066,16 @@ export class Run {
 
 	createMockChoiceFunctionResponse(choiceFunction: GenericFunctionCall) {
 		const parsedProperties = JSON.parse(
-			JSON.stringify(choiceFunction?.parameters?.["properties"] ?? {})
+			JSON.stringify(choiceFunction?.parameters?.["properties"] ?? {}),
 		);
 
 		// Pick one of the choices randomly
 		const randomChoice =
 			parsedProperties?.choice?.enum[
-			Math.floor(
-				Math.random() *
-				(parsedProperties?.choice?.enum?.length ?? 0)
-			)
+				Math.floor(
+					Math.random() *
+						(parsedProperties?.choice?.enum?.length ?? 0),
+				)
 			] ?? "N/A";
 
 		return {
@@ -968,7 +1097,7 @@ export class Run {
 			(listFunction?.parameters?.["properties"] ?? {}) as Record<
 				string,
 				string
-			>
+			>,
 		)) {
 			args[property] = "Mock answer";
 		}
@@ -986,13 +1115,13 @@ export class Run {
 		const args: { [key: string]: string }[] = [];
 
 		const parsedProperties = JSON.parse(
-			JSON.stringify(noteFunction?.parameters?.["properties"] ?? {})
+			JSON.stringify(noteFunction?.parameters?.["properties"] ?? {}),
 		);
 
 		// Pick one of the options in note.enum randomly
 		const randomNote =
 			parsedProperties?.note?.enum[
-			Math.random() * (parsedProperties?.note?.enum?.length ?? 0)
+				Math.random() * (parsedProperties?.note?.enum?.length ?? 0)
 			] ?? "N/A";
 
 		args.push({
@@ -1026,7 +1155,7 @@ export class Run {
 	}
 
 	createFormFunction(
-		tags: { name: string; noteNames?: string[] }[]
+		tags: { name: string; noteNames?: string[] }[],
 	): GenericFunctionCall {
 		const properties: Record<string, { type: string; enum?: string[] }> =
 			{};
@@ -1079,7 +1208,10 @@ export class Run {
 		}
 	}
 
-	async executeHttpRequest(request: HttpRequest, timeout: number = 30000): Promise<string | Error> {
+	async executeHttpRequest(
+		request: HttpRequest,
+		timeout: number = 30000,
+	): Promise<string | Error> {
 		if (this.isMock) {
 			return "mock response";
 		}
@@ -1117,7 +1249,7 @@ export class Run {
 
 		// Prepare fetch options
 		const options: RequestInit = {
-			method: request.method ?? 'GET', // Default to GET if no body is provided
+			method: request.method ?? "GET", // Default to GET if no body is provided
 			headers: headers,
 			body: body,
 		};
@@ -1126,8 +1258,11 @@ export class Run {
 			const responseText = await Promise.race([
 				this.fetcher(request.url, options),
 				new Promise<Error>((_, reject) =>
-					setTimeout(() => reject(new Error('Request timed out.')), timeout)
-				)
+					setTimeout(
+						() => reject(new Error("Request timed out.")),
+						timeout,
+					),
+				),
 			]);
 
 			if (responseText instanceof Error) {
@@ -1146,14 +1281,14 @@ export class Run {
 				return new Error(errorMessage);
 			}
 
-			if (typeof response === 'string') {
+			if (typeof response === "string") {
 				return response;
 			} else {
 				// Ensure the response is formatted nicely for markdown
 				return JSON.stringify(response, null, 2)
-					.replace(/\\n/g, '\n') // Ensure newlines are properly formatted
-					.replace(/\\t/g, '\t') // Ensure tabs are properly formatted
-					.replace(/\\/g, '\\') // Ensure backslashes are properly formatted
+					.replace(/\\n/g, "\n") // Ensure newlines are properly formatted
+					.replace(/\\t/g, "\t") // Ensure tabs are properly formatted
+					.replace(/\\/g, "\\") // Ensure backslashes are properly formatted
 					.replace(/\\"/g, '"'); // Ensure double quotes are properly formatted
 			}
 		} catch (error) {
@@ -1172,16 +1307,20 @@ export class Run {
 				}
 			} else if (headers instanceof Headers) {
 				// Headers instance is valid
-			} else if (typeof headers === 'object' && headers !== null) {
+			} else if (typeof headers === "object" && headers !== null) {
 				// Plain object is valid
 			} else {
-				throw new Error("Invalid headers format. Expected an array, Headers instance, or plain object.");
+				throw new Error(
+					"Invalid headers format. Expected an array, Headers instance, or plain object.",
+				);
 			}
 		}
 		// Validate body
 		if (body !== null && body !== undefined) {
-			if (typeof body !== 'string' && !(body instanceof ArrayBuffer)) {
-				throw new Error("Invalid body format. Expected a string or ArrayBuffer.");
+			if (typeof body !== "string" && !(body instanceof ArrayBuffer)) {
+				throw new Error(
+					"Invalid body format. Expected a string or ArrayBuffer.",
+				);
 			}
 		}
 	}
