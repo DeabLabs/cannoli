@@ -43,7 +43,6 @@ export const SettingsSchema = z
 	.object({
 		mcpServers: z.array(McpServerSchema).default([]),
 		proxyEnabled: z.boolean().default(false),
-		defaultMcpServerId: z.string().optional(),
 		createdAt: z.string().datetime(),
 		updatedAt: z.string().datetime(),
 	})
@@ -59,6 +58,6 @@ export const StdioServerCreateSchema = StdioServerSchema.omit({
 
 // Create union for server creation requests
 export const ServerCreateSchema = z.union([
-	HttpServerCreateSchema.extend({ setAsDefault: z.boolean().optional() }),
-	StdioServerCreateSchema.extend({ setAsDefault: z.boolean().optional() }),
+	HttpServerCreateSchema,
+	StdioServerCreateSchema,
 ]);

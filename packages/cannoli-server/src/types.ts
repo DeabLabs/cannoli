@@ -5,6 +5,14 @@ import {
 	HttpServerSchema,
 	StdioServerSchema,
 } from "./schemas";
+import { Context } from "hono";
+
+// Define the application context variables
+export type AppVariables = {
+	configDir: string;
+};
+
+export type AppContext = Context<{ Variables: AppVariables }>;
 
 // Infer types from schemas
 export type McpServer = z.infer<typeof McpServerSchema>;

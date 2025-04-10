@@ -1,9 +1,12 @@
 import { Context, Hono } from "hono";
-import { ErrorResponseSchema, SettingsSchema, SuccessResponseSchema } from "../schemas";
+import {
+	ErrorResponseSchema,
+	SettingsSchema,
+	SuccessResponseSchema,
+} from "../schemas";
 import { loadSettings, saveSettings } from "../settings";
-import { AppVariables } from "../types/context";
 import { describeRoute } from "hono-openapi";
-import { resolver } from "hono-openapi/zod"
+import { resolver } from "hono-openapi/zod";
 import { zValidator } from "@hono/zod-validator";
 
 const SettingsSuccessResponseSchema = SuccessResponseSchema.extend({
@@ -11,7 +14,7 @@ const SettingsSuccessResponseSchema = SuccessResponseSchema.extend({
 });
 
 // Create a router for settings endpoints
-const router = new Hono<{ Variables: AppVariables }>();
+const router = new Hono();
 
 // General settings update
 router.patch(
@@ -50,7 +53,7 @@ router.patch(
 	async (c) => {
 		const configDir = c.get("configDir");
 		return updateSettings(c, configDir);
-	}
+	},
 );
 
 // Get raw settings JSON file
@@ -73,7 +76,6 @@ router.get(
 				content: {
 					"application/json": {
 						schema: resolver(ErrorResponseSchema),
-
 					},
 				},
 			},
@@ -82,14 +84,11 @@ router.get(
 	async (c) => {
 		const configDir = c.get("configDir");
 		return getRawSettings(c, configDir);
-	}
+	},
 );
 
 // General settings update
-export async function updateSettings(
-	c: Context,
-	configDir: string,
-) {
+export async function updateSettings(c: Context, configDir: string) {
 	try {
 		const currentSettings = await loadSettings(configDir);
 		const updates = await c.req.json();
@@ -131,10 +130,7 @@ export async function updateSettings(
 }
 
 // Get raw settings JSON file
-export async function getRawSettings(
-	c: Context,
-	configDir: string,
-) {
+export async function getRawSettings(c: Context, configDir: string) {
 	try {
 		const settings = await loadSettings(configDir);
 		return c.json(settings);

@@ -6,55 +6,241 @@ import {
 	McpServerSchema,
 	HttpServerSchema,
 	StdioServerSchema,
+	SuccessResponseSchema,
+	ErrorResponseSchema,
 } from "../schemas";
 import { loadSettings, saveSettings } from "../settings";
-import { AppVariables } from "../types/context";
+import { describeRoute } from "hono-openapi";
+import { resolver } from "hono-openapi/zod";
+import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
+
+// Define input schemas
+const ServerIdParamSchema = z.string();
+
+// Define response schemas
+const ServersListResponseSchema = SuccessResponseSchema.extend({
+	servers: z.array(McpServerSchema),
+});
+
+const ServerDetailResponseSchema = SuccessResponseSchema.extend({
+	server: McpServerSchema,
+});
+
+const ServerDeleteResponseSchema = SuccessResponseSchema.extend({
+	message: z.string(),
+});
 
 // Create a router for MCP server endpoints
-const router = new Hono<{ Variables: AppVariables }>();
+const router = new Hono();
 
 // Get all MCP servers
-router.get("/", async (c) => {
-	const configDir = c.get("configDir");
-	return getAllServers(c, configDir);
-});
+router.get(
+	"/",
+	describeRoute({
+		description: "Get all MCP servers",
+		tags: ["Servers"],
+		responses: {
+			200: {
+				description: "List of all MCP servers",
+				content: {
+					"application/json": {
+						schema: resolver(ServersListResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	async (c) => {
+		return getAllServers(c);
+	},
+);
 
 // Get a single MCP server by ID
-router.get("/:id", async (c) => {
-	const configDir = c.get("configDir");
-	return getServerById(c, configDir);
-});
+router.get(
+	"/:id",
+	describeRoute({
+		description: "Get a single MCP server by ID",
+		tags: ["Servers"],
+		responses: {
+			200: {
+				description: "Server details",
+				content: {
+					"application/json": {
+						schema: resolver(ServerDetailResponseSchema),
+					},
+				},
+			},
+			404: {
+				description: "Server not found",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("param", ServerIdParamSchema),
+	async (c) => {
+		return getServerById(c);
+	},
+);
 
 // Add a new MCP server
-router.post("/", async (c) => {
-	const configDir = c.get("configDir");
-	return createServer(c, configDir);
-});
+router.post(
+	"/",
+	describeRoute({
+		description: "Add a new MCP server",
+		tags: ["Servers"],
+		responses: {
+			201: {
+				description: "Server created successfully",
+				content: {
+					"application/json": {
+						schema: resolver(ServerDetailResponseSchema),
+					},
+				},
+			},
+			400: {
+				description: "Invalid server configuration",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+			409: {
+				description: "Server ID already exists",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("json", ServerCreateSchema),
+	async (c) => {
+		return createServer(c);
+	},
+);
 
 // Update an existing MCP server
-router.put("/:id", async (c) => {
-	const configDir = c.get("configDir");
-	return updateServer(c, configDir);
-});
+router.put(
+	"/:id",
+	describeRoute({
+		description: "Update an existing MCP server",
+		tags: ["Servers"],
+		responses: {
+			200: {
+				description: "Server updated successfully",
+				content: {
+					"application/json": {
+						schema: resolver(ServerDetailResponseSchema),
+					},
+				},
+			},
+			400: {
+				description: "Invalid server configuration",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+			404: {
+				description: "Server not found",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("param", ServerIdParamSchema),
+	zValidator("json", ServerCreateSchema),
+	async (c) => {
+		return updateServer(c);
+	},
+);
 
 // Delete an MCP server
-router.delete("/:id", async (c) => {
-	const configDir = c.get("configDir");
-	return deleteServer(c, configDir);
-});
-
-// Set default MCP server
-router.post("/:id/set-default", async (c) => {
-	const configDir = c.get("configDir");
-	return setDefaultServer(c, configDir);
-});
+router.delete(
+	"/:id",
+	describeRoute({
+		description: "Delete an MCP server",
+		tags: ["Servers"],
+		responses: {
+			200: {
+				description: "Server deleted successfully",
+				content: {
+					"application/json": {
+						schema: resolver(ServerDeleteResponseSchema),
+					},
+				},
+			},
+			404: {
+				description: "Server not found",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Server error",
+				content: {
+					"application/json": {
+						schema: resolver(ErrorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("param", ServerIdParamSchema),
+	async (c) => {
+		return deleteServer(c);
+	},
+);
 
 // Get all MCP servers
-export async function getAllServers(
-	c: Context,
-	configDir: string,
-): Promise<Response> {
+export async function getAllServers(c: Context): Promise<Response> {
 	try {
+		const configDir = c.get("configDir");
 		const settings = await loadSettings(configDir);
 		return c.json({
 			status: "ok",
@@ -73,11 +259,9 @@ export async function getAllServers(
 }
 
 // Get a single MCP server by ID
-export async function getServerById(
-	c: Context,
-	configDir: string,
-): Promise<Response> {
+export async function getServerById(c: Context): Promise<Response> {
 	try {
+		const configDir = c.get("configDir");
 		const serverId = c.req.param("id");
 		const settings = await loadSettings(configDir);
 
@@ -109,11 +293,9 @@ export async function getServerById(
 }
 
 // Add a new MCP server
-export async function createServer(
-	c: Context,
-	configDir: string,
-): Promise<Response> {
+export async function createServer(c: Context): Promise<Response> {
 	try {
+		const configDir = c.get("configDir");
 		const settings = await loadSettings(configDir);
 		const rawData = await c.req.json();
 
@@ -168,11 +350,6 @@ export async function createServer(
 		// Add to settings
 		settings.mcpServers.push(newServer);
 
-		// Set as default if requested or if it's the first server
-		if (data.setAsDefault || settings.mcpServers.length === 1) {
-			settings.defaultMcpServerId = newServer.id;
-		}
-
 		await saveSettings(settings, configDir);
 
 		return c.json(
@@ -195,11 +372,9 @@ export async function createServer(
 }
 
 // Update an existing MCP server
-export async function updateServer(
-	c: Context,
-	configDir: string,
-): Promise<Response> {
+export async function updateServer(c: Context): Promise<Response> {
 	try {
+		const configDir = c.get("configDir");
 		const serverId = c.req.param("id");
 		const settings = await loadSettings(configDir);
 		const rawData = await c.req.json();
@@ -414,11 +589,9 @@ export async function updateServer(
 }
 
 // Delete an MCP server
-export async function deleteServer(
-	c: Context,
-	configDir: string,
-): Promise<Response> {
+export async function deleteServer(c: Context): Promise<Response> {
 	try {
+		const configDir = c.get("configDir");
 		const serverId = c.req.param("id");
 		const settings = await loadSettings(configDir);
 
@@ -466,11 +639,9 @@ export async function deleteServer(
 }
 
 // Set default MCP server
-export async function setDefaultServer(
-	c: Context,
-	configDir: string,
-): Promise<Response> {
+export async function setDefaultServer(c: Context): Promise<Response> {
 	try {
+		const configDir = c.get("configDir");
 		const serverId = c.req.param("id");
 		const settings = await loadSettings(configDir);
 

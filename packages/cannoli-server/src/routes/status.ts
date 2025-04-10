@@ -1,11 +1,14 @@
 import { Context, Hono } from "hono";
 import * as path from "node:path";
 import { loadSettings } from "../settings";
-import { AppVariables } from "../types/context";
 import { describeRoute } from "hono-openapi";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { ErrorResponseSchema, SettingsSchema, SuccessResponseSchema } from "src/schemas";
+import {
+	ErrorResponseSchema,
+	SettingsSchema,
+	SuccessResponseSchema,
+} from "src/schemas";
 import { resolver } from "hono-openapi/zod";
 
 // Define schemas for the status endpoint
@@ -16,7 +19,7 @@ const StatusResponseSuccessSchema = SuccessResponseSchema.extend({
 });
 
 // Create a router for status endpoints
-const router = new Hono<{ Variables: AppVariables }>();
+const router = new Hono();
 
 // Get status endpoint
 router.get(
@@ -45,13 +48,11 @@ router.get(
 	}),
 	async (c) => {
 		return getStatus(c);
-	}
+	},
 );
 
 // For backward compatibility
-export async function getStatus(
-	c: Context,
-) {
+export async function getStatus(c: Context) {
 	try {
 		const configDir = c.get("configDir");
 		const settings = await loadSettings(configDir);

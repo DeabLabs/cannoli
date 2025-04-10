@@ -20,38 +20,38 @@ Returns the current server status and settings.
 
 ```json
 {
- "status": "ok",
- "version": "1.0.0",
- "settings": {
-  "mcpServers": [
-   {
-    "id": "http-server",
-    "name": "Main HTTP MCP Server",
-    "type": "http",
-    "url": "https://example.com/mcp",
-    "headers": {
-     "Authorization": "Bearer token"
-    },
-    "enabled": true
-   },
-   {
-    "id": "stdio-server",
-    "name": "Local STDIO MCP Server",
-    "type": "stdio",
-    "command": "npx",
-    "args": ["@anthropic/anthropic-mcp", "serve"],
-    "env": {
-     "ANTHROPIC_API_KEY": "sk-xxx"
-    },
-    "enabled": true
-   }
-  ],
-  "defaultMcpServerId": "http-server",
-  "proxyEnabled": false,
-  "createdAt": "2023-09-01T00:00:00.000Z",
-  "updatedAt": "2023-09-01T00:00:00.000Z"
- },
- "configPath": "/home/user/.config/@deablabs/cannoli-server/settings.json"
+	"status": "ok",
+	"version": "1.0.0",
+	"settings": {
+		"mcpServers": [
+			{
+				"id": "http-server",
+				"name": "Main HTTP MCP Server",
+				"type": "http",
+				"url": "https://example.com/mcp",
+				"headers": {
+					"Authorization": "Bearer token"
+				},
+				"enabled": true
+			},
+			{
+				"id": "stdio-server",
+				"name": "Local STDIO MCP Server",
+				"type": "stdio",
+				"command": "npx",
+				"args": ["@anthropic/anthropic-mcp", "serve"],
+				"env": {
+					"ANTHROPIC_API_KEY": "sk-xxx"
+				},
+				"enabled": true
+			}
+		],
+		"defaultMcpServerId": "http-server",
+		"proxyEnabled": false,
+		"createdAt": "2023-09-01T00:00:00.000Z",
+		"updatedAt": "2023-09-01T00:00:00.000Z"
+	},
+	"configPath": "/home/user/.config/@deablabs/cannoli-server/settings.json"
 }
 ```
 
@@ -65,31 +65,31 @@ Returns a list of all configured MCP servers.
 
 ```json
 {
- "status": "ok",
- "servers": [
-  {
-   "id": "http-server",
-   "name": "Main HTTP MCP Server",
-   "type": "http",
-   "url": "https://example.com/mcp",
-   "headers": {
-    "Authorization": "Bearer token"
-   },
-   "enabled": true
-  },
-  {
-   "id": "stdio-server",
-   "name": "Local STDIO MCP Server",
-   "type": "stdio",
-   "command": "npx",
-   "args": ["@anthropic/anthropic-mcp", "serve"],
-   "env": {
-    "ANTHROPIC_API_KEY": "sk-xxx"
-   },
-   "enabled": true
-  }
- ],
- "defaultServerId": "http-server"
+	"status": "ok",
+	"servers": [
+		{
+			"id": "http-server",
+			"name": "Main HTTP MCP Server",
+			"type": "http",
+			"url": "https://example.com/mcp",
+			"headers": {
+				"Authorization": "Bearer token"
+			},
+			"enabled": true
+		},
+		{
+			"id": "stdio-server",
+			"name": "Local STDIO MCP Server",
+			"type": "stdio",
+			"command": "npx",
+			"args": ["@anthropic/anthropic-mcp", "serve"],
+			"env": {
+				"ANTHROPIC_API_KEY": "sk-xxx"
+			},
+			"enabled": true
+		}
+	],
+	"defaultServerId": "http-server"
 }
 ```
 
@@ -101,18 +101,18 @@ Returns information about a specific MCP server.
 
 ```json
 {
- "status": "ok",
- "server": {
-  "id": "http-server",
-  "name": "Main HTTP MCP Server",
-  "type": "http",
-  "url": "https://example.com/mcp",
-  "headers": {
-   "Authorization": "Bearer token"
-  },
-  "enabled": true
- },
- "isDefault": true
+	"status": "ok",
+	"server": {
+		"id": "http-server",
+		"name": "Main HTTP MCP Server",
+		"type": "http",
+		"url": "https://example.com/mcp",
+		"headers": {
+			"Authorization": "Bearer token"
+		},
+		"enabled": true
+	},
+	"isDefault": true
 }
 ```
 
@@ -124,15 +124,15 @@ Creates a new MCP server.
 
 ```json
 {
- "name": "New HTTP Server",
- "type": "http",
- "url": "https://test.example.com/mcp",
- "headers": {
-  "Authorization": "Bearer api-key"
- },
- "apiKey": "optional-api-key",
- "enabled": true,
- "setAsDefault": true
+	"name": "New HTTP Server",
+	"type": "http",
+	"url": "https://test.example.com/mcp",
+	"headers": {
+		"Authorization": "Bearer api-key"
+	},
+	"apiKey": "optional-api-key",
+	"enabled": true,
+	"setAsDefault": true
 }
 ```
 
@@ -140,18 +140,18 @@ Creates a new MCP server.
 
 ```json
 {
- "name": "Local STDIO Server",
- "type": "stdio",
- "command": "npx",
- "args": ["@anthropic/anthropic-mcp", "serve"],
- "cwd": "/optional/working/directory",
- "env": {
-  "ANTHROPIC_API_KEY": "sk-xxx",
-  "DEBUG": "true"
- },
- "installCommand": "npm install -g @anthropic/anthropic-mcp",
- "enabled": true,
- "setAsDefault": false
+	"name": "Local STDIO Server",
+	"type": "stdio",
+	"command": "npx",
+	"args": ["@anthropic/anthropic-mcp", "serve"],
+	"cwd": "/optional/working/directory",
+	"env": {
+		"ANTHROPIC_API_KEY": "sk-xxx",
+		"DEBUG": "true"
+	},
+	"installCommand": "npm install -g @anthropic/anthropic-mcp",
+	"enabled": true,
+	"setAsDefault": false
 }
 ```
 
@@ -159,19 +159,19 @@ Creates a new MCP server.
 
 ```json
 {
- "status": "ok",
- "server": {
-  "id": "generated-id",
-  "name": "New HTTP Server",
-  "type": "http",
-  "url": "https://test.example.com/mcp",
-  "headers": {
-   "Authorization": "Bearer api-key"
-  },
-  "apiKey": "optional-api-key",
-  "enabled": true
- },
- "isDefault": true
+	"status": "ok",
+	"server": {
+		"id": "generated-id",
+		"name": "New HTTP Server",
+		"type": "http",
+		"url": "https://test.example.com/mcp",
+		"headers": {
+			"Authorization": "Bearer api-key"
+		},
+		"apiKey": "optional-api-key",
+		"enabled": true
+	},
+	"isDefault": true
 }
 ```
 
@@ -183,13 +183,13 @@ Updates an existing MCP server.
 
 ```json
 {
- "name": "Updated HTTP Server",
- "url": "https://updated.example.com/mcp",
- "headers": {
-  "Authorization": "Bearer new-token"
- },
- "enabled": false,
- "setAsDefault": false
+	"name": "Updated HTTP Server",
+	"url": "https://updated.example.com/mcp",
+	"headers": {
+		"Authorization": "Bearer new-token"
+	},
+	"enabled": false,
+	"setAsDefault": false
 }
 ```
 
@@ -197,14 +197,14 @@ Updates an existing MCP server.
 
 ```json
 {
- "name": "Updated STDIO Server",
- "command": "python",
- "args": ["-m", "mcp_provider.serve"],
- "env": {
-  "OPENAI_API_KEY": "sk-xxx"
- },
- "enabled": true,
- "setAsDefault": true
+	"name": "Updated STDIO Server",
+	"command": "python",
+	"args": ["-m", "mcp_provider.serve"],
+	"env": {
+		"OPENAI_API_KEY": "sk-xxx"
+	},
+	"enabled": true,
+	"setAsDefault": true
 }
 ```
 
@@ -212,19 +212,19 @@ Updates an existing MCP server.
 
 ```json
 {
- "status": "ok",
- "server": {
-  "id": "server1",
-  "name": "Updated HTTP Server",
-  "type": "http",
-  "url": "https://updated.example.com/mcp",
-  "headers": {
-   "Authorization": "Bearer new-token"
-  },
-  "apiKey": "existing-api-key",
-  "enabled": false
- },
- "isDefault": true
+	"status": "ok",
+	"server": {
+		"id": "server1",
+		"name": "Updated HTTP Server",
+		"type": "http",
+		"url": "https://updated.example.com/mcp",
+		"headers": {
+			"Authorization": "Bearer new-token"
+		},
+		"apiKey": "existing-api-key",
+		"enabled": false
+	},
+	"isDefault": true
 }
 ```
 
@@ -236,9 +236,9 @@ Deletes an MCP server.
 
 ```json
 {
- "status": "ok",
- "message": "Server server1 deleted successfully",
- "newDefaultId": "server2"
+	"status": "ok",
+	"message": "Server server1 deleted successfully",
+	"newDefaultId": "server2"
 }
 ```
 
@@ -250,8 +250,8 @@ Sets a server as the default MCP server.
 
 ```json
 {
- "status": "ok",
- "message": "Server server2 set as default"
+	"status": "ok",
+	"message": "Server server2 set as default"
 }
 ```
 
@@ -263,7 +263,7 @@ Updates the server settings (general purpose endpoint).
 
 ```json
 {
- "proxyEnabled": true
+	"proxyEnabled": true
 }
 ```
 
@@ -271,36 +271,36 @@ Updates the server settings (general purpose endpoint).
 
 ```json
 {
- "status": "ok",
- "settings": {
-  "mcpServers": [
-   {
-    "id": "http-server",
-    "name": "Main HTTP MCP Server",
-    "type": "http",
-    "url": "https://example.com/mcp",
-    "headers": {
-     "Authorization": "Bearer token"
-    },
-    "enabled": true
-   },
-   {
-    "id": "stdio-server",
-    "name": "Local STDIO MCP Server",
-    "type": "stdio",
-    "command": "npx",
-    "args": ["@anthropic/anthropic-mcp", "serve"],
-    "env": {
-     "ANTHROPIC_API_KEY": "sk-xxx"
-    },
-    "enabled": true
-   }
-  ],
-  "defaultMcpServerId": "http-server",
-  "proxyEnabled": true,
-  "createdAt": "2023-09-01T00:00:00.000Z",
-  "updatedAt": "2023-09-01T12:34:56.789Z"
- }
+	"status": "ok",
+	"settings": {
+		"mcpServers": [
+			{
+				"id": "http-server",
+				"name": "Main HTTP MCP Server",
+				"type": "http",
+				"url": "https://example.com/mcp",
+				"headers": {
+					"Authorization": "Bearer token"
+				},
+				"enabled": true
+			},
+			{
+				"id": "stdio-server",
+				"name": "Local STDIO MCP Server",
+				"type": "stdio",
+				"command": "npx",
+				"args": ["@anthropic/anthropic-mcp", "serve"],
+				"env": {
+					"ANTHROPIC_API_KEY": "sk-xxx"
+				},
+				"enabled": true
+			}
+		],
+		"defaultMcpServerId": "http-server",
+		"proxyEnabled": true,
+		"createdAt": "2023-09-01T00:00:00.000Z",
+		"updatedAt": "2023-09-01T12:34:56.789Z"
+	}
 }
 ```
 
@@ -312,33 +312,33 @@ Returns the raw settings JSON file. This endpoint is useful for debugging or for
 
 ```json
 {
- "mcpServers": [
-  {
-   "id": "http-server",
-   "name": "Main HTTP MCP Server",
-   "type": "http",
-   "url": "https://example.com/mcp",
-   "headers": {
-    "Authorization": "Bearer token"
-   },
-   "enabled": true
-  },
-  {
-   "id": "stdio-server",
-   "name": "Local STDIO MCP Server",
-   "type": "stdio",
-   "command": "npx",
-   "args": ["@anthropic/anthropic-mcp", "serve"],
-   "env": {
-    "ANTHROPIC_API_KEY": "sk-xxx"
-   },
-   "enabled": true
-  }
- ],
- "defaultMcpServerId": "http-server",
- "proxyEnabled": false,
- "createdAt": "2023-09-01T00:00:00.000Z",
- "updatedAt": "2023-09-01T00:00:00.000Z"
+	"mcpServers": [
+		{
+			"id": "http-server",
+			"name": "Main HTTP MCP Server",
+			"type": "http",
+			"url": "https://example.com/mcp",
+			"headers": {
+				"Authorization": "Bearer token"
+			},
+			"enabled": true
+		},
+		{
+			"id": "stdio-server",
+			"name": "Local STDIO MCP Server",
+			"type": "stdio",
+			"command": "npx",
+			"args": ["@anthropic/anthropic-mcp", "serve"],
+			"env": {
+				"ANTHROPIC_API_KEY": "sk-xxx"
+			},
+			"enabled": true
+		}
+	],
+	"defaultMcpServerId": "http-server",
+	"proxyEnabled": false,
+	"createdAt": "2023-09-01T00:00:00.000Z",
+	"updatedAt": "2023-09-01T00:00:00.000Z"
 }
 ```
 
