@@ -15,6 +15,7 @@ import { ContentNode } from "../ContentNode";
 import { FloatingNode } from "../../../FloatingNode";
 
 export class ReferenceNode extends ContentNode {
+  // @ts-expect-error - reference is not always set, fix this
   reference: Reference;
 
   constructor(
@@ -300,7 +301,11 @@ export class ReferenceNode extends ContentNode {
           content ?? "",
         );
       } catch (e) {
-        this.error(`Could not create note: ${e.message}`);
+        if (e instanceof Error) {
+          this.error(`Could not create note: ${e.message}`);
+        } else {
+          this.error(`Could not create note: ${e}`);
+        }
         return;
       }
 
