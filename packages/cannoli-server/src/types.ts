@@ -1,10 +1,10 @@
-import { z } from 'zod';
+import { z } from "zod";
 import {
-  McpServerSchema,
-  SettingsSchema,
-  HttpServerSchema,
-  StdioServerSchema
-} from './schemas';
+	McpServerSchema,
+	SettingsSchema,
+	HttpServerSchema,
+	StdioServerSchema,
+} from "./schemas";
 
 // Infer types from schemas
 export type McpServer = z.infer<typeof McpServerSchema>;
@@ -14,5 +14,5 @@ export type Settings = z.infer<typeof SettingsSchema>;
 
 // Server info for the HTTP server
 export interface ServerInfo {
-  port: number | string;
-} 
+	port: number | string;
+}
