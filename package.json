@@ -1,34 +1,35 @@
 {
-  "name": "cannoli",
-  "version": "2.0.0",
-  "description": "",
-  "scripts": {
-    "typecheck": "turbo run typecheck",
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "release-plugin": "turbo run release --filter cannoli-plugin",
-    "build-college": "turbo run build-college --filter cannoli-plugin",
-    "clean": "rimraf main.js packages/**/node_modules packages/**/dist packages/**/.turbo .turbo node_modules",
-    "release-core": "pnpm run build && pnpm --filter cannoli-core publish --no-git-check --access public",
-    "format": "prettier --write '**/*.{js,ts}'",
-    "check": "prettier --check '**/*.{js,ts}'"
-  },
-  "engines": {
-    "node": ">=18",
-    "pnpm": ">=9"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
-  "private": true,
-  "dependencies": {
-    "rimraf": "^5.0.7",
-    "turbo": "1.13.3"
-  },
-  "packageManager": "pnpm@9.1.4+sha512.9df9cf27c91715646c7d675d1c9c8e41f6fce88246f1318c1aa6a1ed1aeb3c4f032fcdf4ba63cc69c4fe6d634279176b5358727d8f2cc1e65b65f43ce2f8bfb0",
-  "devDependencies": {
-    "eslint-config-prettier": "10.1.1",
-    "eslint-plugin-prettier": "5.2.6",
-    "prettier": "3.5.3"
-  }
+	"name": "cannoli",
+	"version": "2.0.0",
+	"description": "",
+	"scripts": {
+		"typecheck": "turbo run typecheck",
+		"build": "turbo run build",
+		"dev": "turbo run dev",
+		"release-plugin": "turbo run release --filter cannoli-plugin",
+		"build-college": "turbo run build-college --filter cannoli-plugin",
+		"clean": "rimraf main.js packages/**/node_modules packages/**/dist packages/**/.turbo .turbo node_modules",
+		"release-core": "pnpm run build && pnpm --filter cannoli-core publish --no-git-check --access public",
+		"format": "eslint --fix '**/*.{js,ts}' && prettier --write '**/*.{js,ts}'",
+		"check": "eslint '**/*.{js,ts}' && prettier --check '**/*.{js,ts}'"
+	},
+	"engines": {
+		"node": ">=18",
+		"pnpm": ">=9"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "MIT",
+	"private": true,
+	"dependencies": {
+		"rimraf": "^5.0.7",
+		"turbo": "1.13.3"
+	},
+	"packageManager": "pnpm@9.1.4+sha512.9df9cf27c91715646c7d675d1c9c8e41f6fce88246f1318c1aa6a1ed1aeb3c4f032fcdf4ba63cc69c4fe6d634279176b5358727d8f2cc1e65b65f43ce2f8bfb0",
+	"devDependencies": {
+		"eslint-config-prettier": "10.1.1",
+		"eslint-plugin-prettier": "5.2.6",
+		"prettier": "3.5.3",
+		"typescript": "^5.8.3"
+	}
 }

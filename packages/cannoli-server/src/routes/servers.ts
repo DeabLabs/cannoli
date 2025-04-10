@@ -2,12 +2,12 @@ import { Context, Hono } from "hono";
 import { nanoid } from "nanoid";
 import { McpServer } from "../types";
 import {
-	ServerCreateSchema,
-	McpServerSchema,
-	HttpServerSchema,
-	StdioServerSchema,
-	SuccessResponseSchema,
-	ErrorResponseSchema,
+  ServerCreateSchema,
+  McpServerSchema,
+  HttpServerSchema,
+  StdioServerSchema,
+  SuccessResponseSchema,
+  ErrorResponseSchema,
 } from "../schemas";
 import { loadSettings, saveSettings } from "../settings";
 import { describeRoute } from "hono-openapi";
@@ -20,659 +20,637 @@ const ServerIdParamSchema = z.string();
 
 // Define response schemas
 const ServersListResponseSchema = SuccessResponseSchema.extend({
-	servers: z.array(McpServerSchema),
+  servers: z.array(McpServerSchema),
 });
 
 const ServerDetailResponseSchema = SuccessResponseSchema.extend({
-	server: McpServerSchema,
+  server: McpServerSchema,
 });
 
 const ServerDeleteResponseSchema = SuccessResponseSchema.extend({
-	message: z.string(),
+  message: z.string(),
 });
 
 // Create a router for MCP server endpoints
-const router = new Hono();
-
-// Get all MCP servers
-router.get(
-	"/",
-	describeRoute({
-		description: "Get all MCP servers",
-		tags: ["Servers"],
-		responses: {
-			200: {
-				description: "List of all MCP servers",
-				content: {
-					"application/json": {
-						schema: resolver(ServersListResponseSchema),
-					},
-				},
-			},
-			500: {
-				description: "Server error",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-		},
-	}),
-	async (c) => {
-		return getAllServers(c);
-	},
-);
-
-// Get a single MCP server by ID
-router.get(
-	"/:id",
-	describeRoute({
-		description: "Get a single MCP server by ID",
-		tags: ["Servers"],
-		responses: {
-			200: {
-				description: "Server details",
-				content: {
-					"application/json": {
-						schema: resolver(ServerDetailResponseSchema),
-					},
-				},
-			},
-			404: {
-				description: "Server not found",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-			500: {
-				description: "Server error",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-		},
-	}),
-	zValidator("param", ServerIdParamSchema),
-	async (c) => {
-		return getServerById(c);
-	},
-);
-
-// Add a new MCP server
-router.post(
-	"/",
-	describeRoute({
-		description: "Add a new MCP server",
-		tags: ["Servers"],
-		responses: {
-			201: {
-				description: "Server created successfully",
-				content: {
-					"application/json": {
-						schema: resolver(ServerDetailResponseSchema),
-					},
-				},
-			},
-			400: {
-				description: "Invalid server configuration",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-			409: {
-				description: "Server ID already exists",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-			500: {
-				description: "Server error",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-		},
-	}),
-	zValidator("json", ServerCreateSchema),
-	async (c) => {
-		return createServer(c);
-	},
-);
-
-// Update an existing MCP server
-router.put(
-	"/:id",
-	describeRoute({
-		description: "Update an existing MCP server",
-		tags: ["Servers"],
-		responses: {
-			200: {
-				description: "Server updated successfully",
-				content: {
-					"application/json": {
-						schema: resolver(ServerDetailResponseSchema),
-					},
-				},
-			},
-			400: {
-				description: "Invalid server configuration",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-			404: {
-				description: "Server not found",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-			500: {
-				description: "Server error",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-		},
-	}),
-	zValidator("param", ServerIdParamSchema),
-	zValidator("json", ServerCreateSchema),
-	async (c) => {
-		return updateServer(c);
-	},
-);
-
-// Delete an MCP server
-router.delete(
-	"/:id",
-	describeRoute({
-		description: "Delete an MCP server",
-		tags: ["Servers"],
-		responses: {
-			200: {
-				description: "Server deleted successfully",
-				content: {
-					"application/json": {
-						schema: resolver(ServerDeleteResponseSchema),
-					},
-				},
-			},
-			404: {
-				description: "Server not found",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-			500: {
-				description: "Server error",
-				content: {
-					"application/json": {
-						schema: resolver(ErrorResponseSchema),
-					},
-				},
-			},
-		},
-	}),
-	zValidator("param", ServerIdParamSchema),
-	async (c) => {
-		return deleteServer(c);
-	},
-);
+const router = new Hono()
+  // Get all MCP servers
+  .get(
+    "/",
+    describeRoute({
+      description: "Get all MCP servers",
+      tags: ["Servers"],
+      responses: {
+        200: {
+          description: "List of all MCP servers",
+          content: {
+            "application/json": {
+              schema: resolver(ServersListResponseSchema),
+            },
+          },
+        },
+        500: {
+          description: "Server error",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      return getAllServers(c);
+    },
+  )
+  // Get a single MCP server by ID
+  .get(
+    "/:id",
+    describeRoute({
+      description: "Get a single MCP server by ID",
+      tags: ["Servers"],
+      responses: {
+        200: {
+          description: "Server details",
+          content: {
+            "application/json": {
+              schema: resolver(ServerDetailResponseSchema),
+            },
+          },
+        },
+        404: {
+          description: "Server not found",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        500: {
+          description: "Server error",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    zValidator("param", ServerIdParamSchema),
+    async (c) => {
+      return getServerById(c);
+    },
+  )
+  // Add a new MCP server
+  .post(
+    "/",
+    describeRoute({
+      description: "Add a new MCP server",
+      tags: ["Servers"],
+      responses: {
+        201: {
+          description: "Server created successfully",
+          content: {
+            "application/json": {
+              schema: resolver(ServerDetailResponseSchema),
+            },
+          },
+        },
+        400: {
+          description: "Invalid server configuration",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        409: {
+          description: "Server ID already exists",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        500: {
+          description: "Server error",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    zValidator("json", ServerCreateSchema),
+    async (c) => {
+      return createServer(c);
+    },
+  )
+  // Update an existing MCP server
+  .put(
+    "/:id",
+    describeRoute({
+      description: "Update an existing MCP server",
+      tags: ["Servers"],
+      responses: {
+        200: {
+          description: "Server updated successfully",
+          content: {
+            "application/json": {
+              schema: resolver(ServerDetailResponseSchema),
+            },
+          },
+        },
+        400: {
+          description: "Invalid server configuration",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        404: {
+          description: "Server not found",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        500: {
+          description: "Server error",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    zValidator("param", ServerIdParamSchema),
+    zValidator("json", ServerCreateSchema),
+    async (c) => {
+      return updateServer(c);
+    },
+  )
+  // Delete an MCP server
+  .delete(
+    "/:id",
+    describeRoute({
+      description: "Delete an MCP server",
+      tags: ["Servers"],
+      responses: {
+        200: {
+          description: "Server deleted successfully",
+          content: {
+            "application/json": {
+              schema: resolver(ServerDeleteResponseSchema),
+            },
+          },
+        },
+        404: {
+          description: "Server not found",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+        500: {
+          description: "Server error",
+          content: {
+            "application/json": {
+              schema: resolver(ErrorResponseSchema),
+            },
+          },
+        },
+      },
+    }),
+    zValidator("param", ServerIdParamSchema),
+    async (c) => {
+      return deleteServer(c);
+    },
+  );
 
 // Get all MCP servers
 export async function getAllServers(c: Context): Promise<Response> {
-	try {
-		const configDir = c.get("configDir");
-		const settings = await loadSettings(configDir);
-		return c.json({
-			status: "ok",
-			servers: settings.mcpServers,
-			defaultServerId: settings.defaultMcpServerId,
-		});
-	} catch (error: unknown) {
-		return c.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : String(error),
-			},
-			500,
-		);
-	}
+  try {
+    const configDir = c.get("configDir");
+    const settings = await loadSettings(configDir);
+    return c.json({
+      status: "ok",
+      servers: settings.mcpServers,
+      defaultServerId: settings.defaultMcpServerId,
+    });
+  } catch (error: unknown) {
+    return c.json(
+      {
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
+  }
 }
 
 // Get a single MCP server by ID
 export async function getServerById(c: Context): Promise<Response> {
-	try {
-		const configDir = c.get("configDir");
-		const serverId = c.req.param("id");
-		const settings = await loadSettings(configDir);
+  try {
+    const configDir = c.get("configDir");
+    const serverId = c.req.param("id");
+    const settings = await loadSettings(configDir);
 
-		const server = settings.mcpServers.find((s) => s.id === serverId);
-		if (!server) {
-			return c.json(
-				{
-					status: "error",
-					message: `MCP server with ID ${serverId} not found`,
-				},
-				404,
-			);
-		}
+    const server = settings.mcpServers.find((s) => s.id === serverId);
+    if (!server) {
+      return c.json(
+        {
+          status: "error",
+          message: `MCP server with ID ${serverId} not found`,
+        },
+        404,
+      );
+    }
 
-		return c.json({
-			status: "ok",
-			server,
-			isDefault: settings.defaultMcpServerId === serverId,
-		});
-	} catch (error: unknown) {
-		return c.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : String(error),
-			},
-			500,
-		);
-	}
+    return c.json({
+      status: "ok",
+      server,
+      isDefault: settings.defaultMcpServerId === serverId,
+    });
+  } catch (error: unknown) {
+    return c.json(
+      {
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
+  }
 }
 
 // Add a new MCP server
 export async function createServer(c: Context): Promise<Response> {
-	try {
-		const configDir = c.get("configDir");
-		const settings = await loadSettings(configDir);
-		const rawData = await c.req.json();
+  try {
+    const configDir = c.get("configDir");
+    const settings = await loadSettings(configDir);
+    const rawData = await c.req.json();
 
-		// Validate server data with Zod
-		const result = ServerCreateSchema.safeParse(rawData);
+    // Validate server data with Zod
+    const result = ServerCreateSchema.safeParse(rawData);
 
-		if (!result.success) {
-			return c.json(
-				{
-					status: "error",
-					message: "Invalid server configuration",
-					errors: result.error.format(),
-				},
-				400,
-			);
-		}
+    if (!result.success) {
+      return c.json(
+        {
+          status: "error",
+          message: "Invalid server configuration",
+          errors: result.error.format(),
+        },
+        400,
+      );
+    }
 
-		const data = result.data;
+    const data = result.data;
 
-		// Generate ID if not provided
-		const id = nanoid(10);
+    // Generate ID if not provided
+    const id = nanoid(10);
 
-		// Check if ID already exists
-		if (settings.mcpServers.some((s) => s.id === id)) {
-			return c.json(
-				{
-					status: "error",
-					message: `Server with ID ${id} already exists`,
-				},
-				409,
-			);
-		}
+    // Check if ID already exists
+    if (settings.mcpServers.some((s) => s.id === id)) {
+      return c.json(
+        {
+          status: "error",
+          message: `Server with ID ${id} already exists`,
+        },
+        409,
+      );
+    }
 
-		// Create new server based on type
-		let newServer: McpServer;
+    // Create new server based on type
+    let newServer: McpServer;
 
-		if (data.type === "http") {
-			newServer = {
-				...data,
-				id,
-				enabled: data.enabled ?? true,
-			};
-		} else {
-			// stdio
-			newServer = {
-				...data,
-				id,
-				enabled: data.enabled ?? true,
-			};
-		}
+    if (data.type === "http") {
+      newServer = {
+        ...data,
+        id,
+        enabled: data.enabled ?? true,
+      };
+    } else {
+      // stdio
+      newServer = {
+        ...data,
+        id,
+        enabled: data.enabled ?? true,
+      };
+    }
 
-		// Add to settings
-		settings.mcpServers.push(newServer);
+    // Add to settings
+    settings.mcpServers.push(newServer);
 
-		await saveSettings(settings, configDir);
+    await saveSettings(settings, configDir);
 
-		return c.json(
-			{
-				status: "ok",
-				server: newServer,
-				isDefault: settings.defaultMcpServerId === newServer.id,
-			},
-			201,
-		);
-	} catch (error: unknown) {
-		return c.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : String(error),
-			},
-			500,
-		);
-	}
+    return c.json(
+      {
+        status: "ok",
+        server: newServer,
+        isDefault: settings.defaultMcpServerId === newServer.id,
+      },
+      201,
+    );
+  } catch (error: unknown) {
+    return c.json(
+      {
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
+  }
 }
 
 // Update an existing MCP server
 export async function updateServer(c: Context): Promise<Response> {
-	try {
-		const configDir = c.get("configDir");
-		const serverId = c.req.param("id");
-		const settings = await loadSettings(configDir);
-		const rawData = await c.req.json();
+  try {
+    const configDir = c.get("configDir");
+    const serverId = c.req.param("id");
+    const settings = await loadSettings(configDir);
+    const rawData = await c.req.json();
 
-		// Find server index
-		const serverIndex = settings.mcpServers.findIndex(
-			(s) => s.id === serverId,
-		);
-		if (serverIndex === -1) {
-			return c.json(
-				{
-					status: "error",
-					message: `MCP server with ID ${serverId} not found`,
-				},
-				404,
-			);
-		}
+    // Find server index
+    const serverIndex = settings.mcpServers.findIndex((s) => s.id === serverId);
+    if (serverIndex === -1) {
+      return c.json(
+        {
+          status: "error",
+          message: `MCP server with ID ${serverId} not found`,
+        },
+        404,
+      );
+    }
 
-		const currentServer = settings.mcpServers[serverIndex];
-		const setAsDefault = !!rawData.setAsDefault;
+    const currentServer = settings.mcpServers[serverIndex];
+    const setAsDefault = !!rawData.setAsDefault;
 
-		let updatedServer: McpServer;
+    let updatedServer: McpServer;
 
-		if (currentServer.type === "http") {
-			// For HTTP servers, validate the update
-			const partialHttpServerSchema = HttpServerSchema.partial().omit({
-				id: true,
-			});
-			const result = partialHttpServerSchema.safeParse(rawData);
+    if (currentServer.type === "http") {
+      // For HTTP servers, validate the update
+      const partialHttpServerSchema = HttpServerSchema.partial().omit({
+        id: true,
+      });
+      const result = partialHttpServerSchema.safeParse(rawData);
 
-			if (!result.success) {
-				return c.json(
-					{
-						status: "error",
-						message: "Invalid HTTP server configuration",
-						errors: result.error.format(),
-					},
-					400,
-				);
-			}
+      if (!result.success) {
+        return c.json(
+          {
+            status: "error",
+            message: "Invalid HTTP server configuration",
+            errors: result.error.format(),
+          },
+          400,
+        );
+      }
 
-			// If type is changing, ensure new type has all required fields
-			if (rawData.type && rawData.type !== "http") {
-				if (!rawData.command) {
-					return c.json(
-						{
-							status: "error",
-							message:
-								"Command is required when changing to stdio server type",
-						},
-						400,
-					);
-				}
+      // If type is changing, ensure new type has all required fields
+      if (rawData.type && rawData.type !== "http") {
+        if (!rawData.command) {
+          return c.json(
+            {
+              status: "error",
+              message: "Command is required when changing to stdio server type",
+            },
+            400,
+          );
+        }
 
-				// Create a new stdio server
-				updatedServer = {
-					id: currentServer.id,
-					name: rawData.name || currentServer.name,
-					type: "stdio" as const,
-					command: rawData.command,
-					args: rawData.args || [],
-					cwd: rawData.cwd,
-					env: rawData.env || {},
-					installCommand: rawData.installCommand,
-					apiKey:
-						rawData.apiKey !== undefined
-							? rawData.apiKey
-							: currentServer.apiKey,
-					enabled:
-						rawData.enabled !== undefined
-							? rawData.enabled
-							: currentServer.enabled,
-				};
-			} else {
-				// Update existing HTTP server
-				updatedServer = {
-					...currentServer,
-					name: rawData.name || currentServer.name,
-					url: rawData.url || currentServer.url,
-					headers:
-						rawData.headers !== undefined
-							? rawData.headers
-							: currentServer.headers,
-					apiKey:
-						rawData.apiKey !== undefined
-							? rawData.apiKey
-							: currentServer.apiKey,
-					enabled:
-						rawData.enabled !== undefined
-							? rawData.enabled
-							: currentServer.enabled,
-				};
-			}
-		} else {
-			// stdio
-			// For stdio servers, validate the update
-			const partialStdioServerSchema = StdioServerSchema.partial().omit({
-				id: true,
-			});
-			const result = partialStdioServerSchema.safeParse(rawData);
+        // Create a new stdio server
+        updatedServer = {
+          id: currentServer.id,
+          name: rawData.name || currentServer.name,
+          type: "stdio" as const,
+          command: rawData.command,
+          args: rawData.args || [],
+          cwd: rawData.cwd,
+          env: rawData.env || {},
+          installCommand: rawData.installCommand,
+          apiKey:
+            rawData.apiKey !== undefined
+              ? rawData.apiKey
+              : currentServer.apiKey,
+          enabled:
+            rawData.enabled !== undefined
+              ? rawData.enabled
+              : currentServer.enabled,
+        };
+      } else {
+        // Update existing HTTP server
+        updatedServer = {
+          ...currentServer,
+          name: rawData.name || currentServer.name,
+          url: rawData.url || currentServer.url,
+          headers:
+            rawData.headers !== undefined
+              ? rawData.headers
+              : currentServer.headers,
+          apiKey:
+            rawData.apiKey !== undefined
+              ? rawData.apiKey
+              : currentServer.apiKey,
+          enabled:
+            rawData.enabled !== undefined
+              ? rawData.enabled
+              : currentServer.enabled,
+        };
+      }
+    } else {
+      // stdio
+      // For stdio servers, validate the update
+      const partialStdioServerSchema = StdioServerSchema.partial().omit({
+        id: true,
+      });
+      const result = partialStdioServerSchema.safeParse(rawData);
 
-			if (!result.success) {
-				return c.json(
-					{
-						status: "error",
-						message: "Invalid stdio server configuration",
-						errors: result.error.format(),
-					},
-					400,
-				);
-			}
+      if (!result.success) {
+        return c.json(
+          {
+            status: "error",
+            message: "Invalid stdio server configuration",
+            errors: result.error.format(),
+          },
+          400,
+        );
+      }
 
-			// If type is changing, ensure new type has all required fields
-			if (rawData.type && rawData.type !== "stdio") {
-				if (!rawData.url) {
-					return c.json(
-						{
-							status: "error",
-							message:
-								"URL is required when changing to HTTP server type",
-						},
-						400,
-					);
-				}
+      // If type is changing, ensure new type has all required fields
+      if (rawData.type && rawData.type !== "stdio") {
+        if (!rawData.url) {
+          return c.json(
+            {
+              status: "error",
+              message: "URL is required when changing to HTTP server type",
+            },
+            400,
+          );
+        }
 
-				// Create a new HTTP server
-				updatedServer = {
-					id: currentServer.id,
-					name: rawData.name || currentServer.name,
-					type: "http" as const,
-					url: rawData.url,
-					headers: rawData.headers || {},
-					apiKey:
-						rawData.apiKey !== undefined
-							? rawData.apiKey
-							: currentServer.apiKey,
-					enabled:
-						rawData.enabled !== undefined
-							? rawData.enabled
-							: currentServer.enabled,
-				};
-			} else {
-				// Update existing stdio server
-				updatedServer = {
-					...currentServer,
-					name: rawData.name || currentServer.name,
-					command: rawData.command || currentServer.command,
-					args:
-						rawData.args !== undefined
-							? rawData.args
-							: currentServer.args,
-					cwd:
-						rawData.cwd !== undefined
-							? rawData.cwd
-							: currentServer.cwd,
-					env:
-						rawData.env !== undefined
-							? rawData.env
-							: currentServer.env,
-					installCommand:
-						rawData.installCommand !== undefined
-							? rawData.installCommand
-							: currentServer.installCommand,
-					apiKey:
-						rawData.apiKey !== undefined
-							? rawData.apiKey
-							: currentServer.apiKey,
-					enabled:
-						rawData.enabled !== undefined
-							? rawData.enabled
-							: currentServer.enabled,
-				};
-			}
-		}
+        // Create a new HTTP server
+        updatedServer = {
+          id: currentServer.id,
+          name: rawData.name || currentServer.name,
+          type: "http" as const,
+          url: rawData.url,
+          headers: rawData.headers || {},
+          apiKey:
+            rawData.apiKey !== undefined
+              ? rawData.apiKey
+              : currentServer.apiKey,
+          enabled:
+            rawData.enabled !== undefined
+              ? rawData.enabled
+              : currentServer.enabled,
+        };
+      } else {
+        // Update existing stdio server
+        updatedServer = {
+          ...currentServer,
+          name: rawData.name || currentServer.name,
+          command: rawData.command || currentServer.command,
+          args: rawData.args !== undefined ? rawData.args : currentServer.args,
+          cwd: rawData.cwd !== undefined ? rawData.cwd : currentServer.cwd,
+          env: rawData.env !== undefined ? rawData.env : currentServer.env,
+          installCommand:
+            rawData.installCommand !== undefined
+              ? rawData.installCommand
+              : currentServer.installCommand,
+          apiKey:
+            rawData.apiKey !== undefined
+              ? rawData.apiKey
+              : currentServer.apiKey,
+          enabled:
+            rawData.enabled !== undefined
+              ? rawData.enabled
+              : currentServer.enabled,
+        };
+      }
+    }
 
-		// Validate the final server object with the full schema
-		const validationResult = McpServerSchema.safeParse(updatedServer);
-		if (!validationResult.success) {
-			return c.json(
-				{
-					status: "error",
-					message: "Invalid server configuration after update",
-					errors: validationResult.error.format(),
-				},
-				400,
-			);
-		}
+    // Validate the final server object with the full schema
+    const validationResult = McpServerSchema.safeParse(updatedServer);
+    if (!validationResult.success) {
+      return c.json(
+        {
+          status: "error",
+          message: "Invalid server configuration after update",
+          errors: validationResult.error.format(),
+        },
+        400,
+      );
+    }
 
-		settings.mcpServers[serverIndex] = updatedServer;
+    settings.mcpServers[serverIndex] = updatedServer;
 
-		// Set as default if requested
-		if (setAsDefault) {
-			settings.defaultMcpServerId = serverId;
-		}
+    // Set as default if requested
+    if (setAsDefault) {
+      settings.defaultMcpServerId = serverId;
+    }
 
-		await saveSettings(settings, configDir);
+    await saveSettings(settings, configDir);
 
-		return c.json({
-			status: "ok",
-			server: updatedServer,
-			isDefault: settings.defaultMcpServerId === serverId,
-		});
-	} catch (error: unknown) {
-		return c.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : String(error),
-			},
-			500,
-		);
-	}
+    return c.json({
+      status: "ok",
+      server: updatedServer,
+      isDefault: settings.defaultMcpServerId === serverId,
+    });
+  } catch (error: unknown) {
+    return c.json(
+      {
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
+  }
 }
 
 // Delete an MCP server
 export async function deleteServer(c: Context): Promise<Response> {
-	try {
-		const configDir = c.get("configDir");
-		const serverId = c.req.param("id");
-		const settings = await loadSettings(configDir);
+  try {
+    const configDir = c.get("configDir");
+    const serverId = c.req.param("id");
+    const settings = await loadSettings(configDir);
 
-		// Find server index
-		const serverIndex = settings.mcpServers.findIndex(
-			(s) => s.id === serverId,
-		);
-		if (serverIndex === -1) {
-			return c.json(
-				{
-					status: "error",
-					message: `MCP server with ID ${serverId} not found`,
-				},
-				404,
-			);
-		}
+    // Find server index
+    const serverIndex = settings.mcpServers.findIndex((s) => s.id === serverId);
+    if (serverIndex === -1) {
+      return c.json(
+        {
+          status: "error",
+          message: `MCP server with ID ${serverId} not found`,
+        },
+        404,
+      );
+    }
 
-		// Remove server
-		settings.mcpServers.splice(serverIndex, 1);
+    // Remove server
+    settings.mcpServers.splice(serverIndex, 1);
 
-		// Update default server if this was the default
-		if (settings.defaultMcpServerId === serverId) {
-			settings.defaultMcpServerId =
-				settings.mcpServers.length > 0
-					? settings.mcpServers[0].id
-					: undefined;
-		}
+    // Update default server if this was the default
+    if (settings.defaultMcpServerId === serverId) {
+      settings.defaultMcpServerId =
+        settings.mcpServers.length > 0 ? settings.mcpServers[0].id : undefined;
+    }
 
-		await saveSettings(settings, configDir);
+    await saveSettings(settings, configDir);
 
-		return c.json({
-			status: "ok",
-			message: `Server ${serverId} deleted successfully`,
-			newDefaultId: settings.defaultMcpServerId,
-		});
-	} catch (error: unknown) {
-		return c.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : String(error),
-			},
-			500,
-		);
-	}
+    return c.json({
+      status: "ok",
+      message: `Server ${serverId} deleted successfully`,
+      newDefaultId: settings.defaultMcpServerId,
+    });
+  } catch (error: unknown) {
+    return c.json(
+      {
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
+  }
 }
 
 // Set default MCP server
 export async function setDefaultServer(c: Context): Promise<Response> {
-	try {
-		const configDir = c.get("configDir");
-		const serverId = c.req.param("id");
-		const settings = await loadSettings(configDir);
+  try {
+    const configDir = c.get("configDir");
+    const serverId = c.req.param("id");
+    const settings = await loadSettings(configDir);
 
-		// Check if server exists
-		if (!settings.mcpServers.some((s) => s.id === serverId)) {
-			return c.json(
-				{
-					status: "error",
-					message: `MCP server with ID ${serverId} not found`,
-				},
-				404,
-			);
-		}
+    // Check if server exists
+    if (!settings.mcpServers.some((s) => s.id === serverId)) {
+      return c.json(
+        {
+          status: "error",
+          message: `MCP server with ID ${serverId} not found`,
+        },
+        404,
+      );
+    }
 
-		// Update default server
-		settings.defaultMcpServerId = serverId;
-		await saveSettings(settings, configDir);
+    // Update default server
+    settings.defaultMcpServerId = serverId;
+    await saveSettings(settings, configDir);
 
-		return c.json({
-			status: "ok",
-			message: `Server ${serverId} set as default`,
-		});
-	} catch (error: unknown) {
-		return c.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : String(error),
-			},
-			500,
-		);
-	}
+    return c.json({
+      status: "ok",
+      message: `Server ${serverId} set as default`,
+    });
+  } catch (error: unknown) {
+    return c.json(
+      {
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
+  }
 }
 
 export default router;

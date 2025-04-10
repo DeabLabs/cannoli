@@ -1,15 +1,15 @@
 import { z } from "zod";
 import {
-	McpServerSchema,
-	SettingsSchema,
-	HttpServerSchema,
-	StdioServerSchema,
+  McpServerSchema,
+  SettingsSchema,
+  HttpServerSchema,
+  StdioServerSchema,
 } from "./schemas";
 import { Context } from "hono";
 
 // Define the application context variables
 export type AppVariables = {
-	configDir: string;
+  configDir: string;
 };
 
 export type AppContext = Context<{ Variables: AppVariables }>;
@@ -22,5 +22,5 @@ export type Settings = z.infer<typeof SettingsSchema>;
 
 // Server info for the HTTP server
 export interface ServerInfo {
-	port: number | string;
+  port: number | string;
 }

@@ -2,22 +2,22 @@ import { Action } from "@deablabs/cannoli-core";
 import { VaultInterface } from "src/vault_interface";
 
 export const modalMaker: Action = {
-	name: "modal",
-	function: async ({
-		layout,
-		vault,
-	}: {
-		layout: string;
-		vault: VaultInterface;
-	}): Promise<string | Error> => {
-		return vault.openCustomModal(layout);
-	},
-	argInfo: {
-		layout: {
-			category: "arg",
-			type: "string",
-			description: "The layout of the modal",
-			prompt: `# Modal Layout Syntax
+  name: "modal",
+  function: async ({
+    layout,
+    vault,
+  }: {
+    layout: string;
+    vault: VaultInterface;
+  }): Promise<string | Error> => {
+    return vault.openCustomModal(layout);
+  },
+  argInfo: {
+    layout: {
+      category: "arg",
+      type: "string",
+      description: "The layout of the modal",
+      prompt: `# Modal Layout Syntax
 
 ## Title
 - First line: modal title (if not an input field)
@@ -62,9 +62,9 @@ Date: ==Select Date(date) YYYY-MM-DD==
 - Date/time formats customizable (e.g., YYYY-MM-DD, HH:mm)
 - Dropdown options: Comma-separated list or JSON array
 - Markdown formatting not supported in modal`,
-		},
-		vault: {
-			category: "fileManager",
-		},
-	},
+    },
+    vault: {
+      category: "fileManager",
+    },
+  },
 };

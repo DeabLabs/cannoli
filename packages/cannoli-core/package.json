@@ -33,11 +33,12 @@
 		"@typescript-eslint/parser": "^7.7.1",
 		"builtin-modules": "3.3.0",
 		"eslint": "^8.57.0",
-		"typescript": "^5.3.3"
+		"typescript": "^5.8.3"
 	},
 	"dependencies": {
 		"@arizeai/openinference-instrumentation-langchain": "0.2.0",
 		"@arizeai/openinference-semantic-conventions": "0.10.0",
+		"@deablabs/cannoli-server": "workspace:*",
 		"@langchain/anthropic": "0.2.1",
 		"@langchain/community": "0.2.12",
 		"@langchain/core": "0.2.7",
@@ -48,6 +49,7 @@
 		"@opentelemetry/instrumentation": "0.53.0",
 		"@opentelemetry/resources": "1.26.0",
 		"@opentelemetry/sdk-trace-web": "1.26.0",
+		"hono": "4.7.6",
 		"js-yaml": "^4.1.0",
 		"langchain": "0.2.5",
 		"nanoid": "5.0.7",
