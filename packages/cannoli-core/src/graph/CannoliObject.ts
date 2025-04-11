@@ -12,7 +12,6 @@ import {
   VerifiedCannoliCanvasEdgeData,
   VerifiedCannoliCanvasGroupData,
 } from "../graph";
-import invariant from "tiny-invariant";
 
 export class CannoliObject extends EventTarget {
   // @ts-ignore this is bad, but I don't want to refactor this right now
@@ -69,7 +68,6 @@ export class CannoliObject extends EventTarget {
 
   setStatus(status: CannoliObjectStatus) {
     this.status = status;
-    invariant(this.run, "Run is not set");
     if (
       this.kind === CannoliObjectKind.Node ||
       this.kind === CannoliObjectKind.Group
