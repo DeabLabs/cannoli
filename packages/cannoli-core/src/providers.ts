@@ -213,6 +213,7 @@ export class LLMProvider {
       : undefined;
 
     let client: BaseChatModel;
+    invariant(config.model, "Model is required");
     switch (provider) {
       case "openai":
         client = new ChatOpenAI({
