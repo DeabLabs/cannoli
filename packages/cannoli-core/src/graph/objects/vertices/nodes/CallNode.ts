@@ -11,10 +11,12 @@ import {
 import { ChatRole } from "src/run";
 import invariant from "tiny-invariant";
 import { CannoliNode } from "../CannoliNode";
+import { z } from "zod";
 
 export class CallNode extends CannoliNode {
   async getNewMessage(
     role?: string,
+    args?: Partial<GenericCompletionResponse>,
   ): Promise<GenericCompletionResponse | null> {
     const content = await this.processReferences();
 
@@ -26,6 +28,7 @@ export class CallNode extends CannoliNode {
     return {
       role: (role as ChatRole) || "user",
       content: content,
+      ...args,
     };
   }
 
@@ -148,14 +151,20 @@ export class CallNode extends CannoliNode {
 
       request.messages.push(message);
 
-      if (message.function_call?.arguments) {
+      if (message.function_call?.args) {
         if (message.function_call.name === "note_select") {
-          const args = JSON.parse(message.function_call.arguments);
+          const args = message.function_call.args;
+
+          const parsedArgs = z
+            .object({
+              note: z.string(),
+            })
+            .parse(args);
 
           // Put double brackets around the note name
-          args.note = `[[${args.note}]]`;
+          parsedArgs.note = `[[${parsedArgs.note}]]`;
 
-          this.loadOutgoingEdges(args.note, request);
+          this.loadOutgoingEdges(parsedArgs.note, request);
         } else {
           this.loadOutgoingEdges(message.content ?? "", request);
         }
@@ -252,7 +261,17 @@ export class CallNode extends CannoliNode {
 
     const messages = this.getPrependedMessages();
 
-    const newMessage = await this.getNewMessage(config.role);
+    const lastMessage = messages[messages.length - 1];
+    let role = config.role;
+    let args: Partial<GenericCompletionResponse> | undefined = undefined;
+    if (lastMessage?.function_call?.name) {
+      role = "tool";
+      args = {
+        function_call_id: lastMessage.function_call_id,
+      };
+    }
+
+    const newMessage = await this.getNewMessage(role, args);
 
     // Remove the role from the config
     delete config.role;

@@ -137,7 +137,11 @@ export class LoggingEdge extends CannoliEdge {
       const role = message.role || "user";
       let content = message.content;
       if ("function_call" in message && message.function_call) {
-        content = `Function Call: **${message.function_call.name}**\nArguments:\n\`\`\`json\n${message.function_call.arguments}\n\`\`\``;
+        content = `Function Call: **${message.function_call.name}**\nArguments:\n\`\`\`json\n${JSON.stringify(
+          message.function_call.args,
+          null,
+          2,
+        )}\n\`\`\``;
       }
       formattedString += `#### <u>${
         role.charAt(0).toUpperCase() + role.slice(1)

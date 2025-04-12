@@ -6,6 +6,8 @@ import {
   GenericCompletionParams,
 } from "src/providers";
 import { CallNode } from "../CallNode";
+import { z } from "zod";
+import { safeKeyName } from "src/utility";
 
 export class FormNode extends CallNode {
   getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
@@ -69,7 +71,7 @@ export class FormNode extends CallNode {
     // Get the fields from the last message
     const lastMessage = messages[messages.length - 1];
     const formFunctionArgs =
-      "function_call" in lastMessage && lastMessage.function_call?.arguments;
+      "function_call" in lastMessage && lastMessage.function_call?.args;
 
     if (!formFunctionArgs) {
       this.error(`Form function call has no arguments.`);
@@ -77,7 +79,8 @@ export class FormNode extends CallNode {
     }
 
     // Parse the fields from the arguments
-    const fields = JSON.parse(formFunctionArgs);
+    const rawFields = formFunctionArgs;
+    const fields = z.record(z.string()).parse(rawFields);
 
     for (const edge of this.outgoingEdges) {
       const edgeObject = this.graph[edge];
@@ -87,7 +90,9 @@ export class FormNode extends CallNode {
           edgeObject instanceof CannoliEdge &&
           edgeObject.type === EdgeType.Field
         ) {
-          const name = edgeObject.text;
+          // the form function response translates the field names to safe key names when coming back from the LLM
+          // so we need to use the safe key name here as well when looking them back up
+          const name = safeKeyName(edgeObject.text);
 
           if (name) {
             const fieldContent = fields[name];
@@ -109,7 +114,7 @@ export class FormNode extends CallNode {
           }
         } else {
           edgeObject.load({
-            content: formFunctionArgs,
+            content: fields,
             request: request,
           });
         }

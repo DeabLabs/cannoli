@@ -43,6 +43,7 @@
     "@langchain/core": "0.3.44",
     "@langchain/google-genai": "0.2.3",
     "@langchain/groq": "0.2.2",
+    "@langchain/ollama": "0.2.0",
     "@langchain/openai": "0.5.5",
     "@opentelemetry/exporter-trace-otlp-proto": "0.53.0",
     "@opentelemetry/instrumentation": "0.53.0",

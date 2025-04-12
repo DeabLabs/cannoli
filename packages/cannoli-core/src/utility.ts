@@ -27,3 +27,7 @@ export function parseNamedNode(content: string): {
   // If not a single-bracketed name, return null for name and the entire content
   return { name: null, content };
 }
+
+export function safeKeyName(key: string) {
+  return key.replace(/[^a-zA-Z0-9]/g, "_");
+}

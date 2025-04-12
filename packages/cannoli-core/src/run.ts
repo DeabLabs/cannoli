@@ -1011,9 +1011,7 @@ export class Run {
           throw Error("No choice function found");
         }
 
-        return this.createMockChoiceFunctionResponse(
-          choiceFunction,
-        ) as GenericCompletionResponse;
+        return this.createMockChoiceFunctionResponse(choiceFunction);
       } else if (calledFunction === "form") {
         // Find the answers function
         const formFunction = request.functions?.find(
@@ -1024,9 +1022,7 @@ export class Run {
           throw Error("No form function found");
         }
 
-        return this.createMockFormFunctionResponse(
-          formFunction,
-        ) as GenericCompletionResponse;
+        return this.createMockFormFunctionResponse(formFunction);
       } else if (calledFunction === "note_select") {
         // Find the note name function
         const noteNameFunction = request.functions?.find(
@@ -1037,9 +1033,7 @@ export class Run {
           throw Error("No note select function found");
         }
 
-        return this.createMockNoteNameFunctionResponse(
-          noteNameFunction,
-        ) as GenericCompletionResponse;
+        return this.createMockNoteNameFunctionResponse(noteNameFunction);
       }
     }
 
@@ -1064,11 +1058,12 @@ export class Run {
 
     return {
       role: "assistant",
+      content: "",
       function_call: {
         name: "choice",
-        arguments: `{
-					"choice" : "${randomChoice}"
-					}`,
+        args: {
+          choice: `${randomChoice}`,
+        },
       },
     };
   }
@@ -1088,9 +1083,10 @@ export class Run {
 
     return {
       role: "assistant",
+      content: "",
       function_call: {
         name: "form",
-        arguments: JSON.stringify(args),
+        args: args,
       },
     };
   }
@@ -1114,9 +1110,10 @@ export class Run {
 
     return {
       role: "assistant",
+      content: "",
       function_call: {
         name: "note_select",
-        arguments: JSON.stringify(args),
+        args: args,
       },
     };
   }

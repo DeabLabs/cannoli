@@ -6,6 +6,7 @@ import {
   GenericCompletionParams,
 } from "src/providers";
 import { CallNode } from "../CallNode";
+import { z } from "zod";
 
 export class ChooseNode extends CallNode {
   getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
@@ -23,19 +24,26 @@ export class ChooseNode extends CallNode {
     // Get the chosen variable from the last message
     const lastMessage = messages[messages.length - 1];
     const choiceFunctionArgs =
-      "function_call" in lastMessage && lastMessage.function_call?.arguments;
+      "function_call" in lastMessage && lastMessage.function_call?.args;
 
     if (!choiceFunctionArgs) {
       this.error(`Choice function call has no arguments.`);
       return;
     }
 
-    const parsedVariable = JSON.parse(choiceFunctionArgs);
+    const parsedVariable = z
+      .object({ choice: z.string() })
+      .safeParse(choiceFunctionArgs);
+
+    if (!parsedVariable.success) {
+      this.error(`Choice function call has invalid arguments.`);
+      return;
+    }
 
     // Reject all unselected options
-    this.rejectUnselectedOptions(parsedVariable.choice);
+    this.rejectUnselectedOptions(parsedVariable.data.choice);
 
-    super.loadOutgoingEdges(choiceFunctionArgs, request);
+    super.loadOutgoingEdges(parsedVariable.data.choice, request);
   }
 
   rejectUnselectedOptions(choice: string) {

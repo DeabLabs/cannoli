@@ -1,24 +1,24 @@
 import { AzureChatOpenAI, ChatOpenAI } from "@langchain/openai";
-import { OllamaFunctions } from "@langchain/community/experimental/chat_models/ollama_functions";
-import { ChatOllama } from "@langchain/community/chat_models/ollama";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import {
+  BaseChatModel,
+  BindToolsInput,
+} from "@langchain/core/language_models/chat_models";
 import { ChatGroq } from "@langchain/groq";
 import { ChatAnthropic } from "@langchain/anthropic";
-import {
-  ChatCompletionAssistantMessageParam,
-  ChatCompletionMessageParam,
-} from "openai/resources/index";
+import { ChatOllama } from "@langchain/ollama";
+import { ChatCompletionMessageParam } from "openai/resources/index";
 import {
   AIMessage,
   ChatMessage,
   HumanMessage,
   MessageContentImageUrl,
   SystemMessage,
+  ToolMessage,
 } from "@langchain/core/messages";
 
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { messagesWithFnCallPrompts } from "./fn_calling";
+import { choiceTool, formTool, noteSelectTool } from "./fn_calling";
 
 const stringParser = new StringOutputParser();
 
@@ -33,6 +33,7 @@ export type SupportedProviders =
 import { z } from "zod";
 import invariant from "tiny-invariant";
 import { TracingConfig } from "src/run";
+import { Runnable } from "@langchain/core/runnables";
 
 export const GenericFunctionCallSchema = z.object({
   name: z.string(),
@@ -102,7 +103,11 @@ export type GenericCompletionParams = {
 export type GenericCompletionResponse = {
   role?: string;
   content: string;
-  function_call?: ChatCompletionAssistantMessageParam.FunctionCall;
+  function_call?: {
+    name: string;
+    args: Record<string, unknown> | Array<unknown> | string;
+  };
+  function_call_id?: string;
 };
 
 export type GetDefaultsByProvider = (
@@ -115,8 +120,6 @@ export type ImageReference = {
   url: string;
   messageIndex: number;
 };
-
-const SUPPORTED_FN_PROVIDERS = ["openai", "ollama", "azure_openai"];
 
 const removeUndefinedKeys = <T extends Record<string, unknown>>(obj: T): T => {
   Object.keys(obj).forEach(
@@ -135,6 +138,11 @@ export class LLMProvider {
   runId?: string;
   runName?: string;
   runDateEpochMs?: number;
+  metadata?: {
+    runId?: string;
+    runName?: string;
+    runDateEpochMs?: number;
+  };
 
   constructor(initArgs: ConstructorArgs) {
     this.init(initArgs);
@@ -151,6 +159,11 @@ export class LLMProvider {
     this.runName = initArgs.runName;
     this.getDefaultConfigByProvider = (provider: SupportedProviders) => {
       return initArgs.configs.find((config) => config.provider === provider);
+    };
+    this.metadata = {
+      runId: this.runId,
+      runName: this.runName,
+      runDateEpochMs: this.runDateEpochMs,
     };
   };
 
@@ -215,7 +228,7 @@ export class LLMProvider {
     let client: BaseChatModel;
     invariant(config.model, "Model is required");
     switch (provider) {
-      case "openai":
+      case "openai": {
         client = new ChatOpenAI({
           apiKey: config.apiKey,
           model: config.model,
@@ -236,7 +249,8 @@ export class LLMProvider {
           },
         });
         break;
-      case "azure_openai":
+      }
+      case "azure_openai": {
         client = new AzureChatOpenAI({
           temperature: config.temperature,
           model: config.model,
@@ -262,20 +276,8 @@ export class LLMProvider {
           },
         });
         break;
-      case "ollama":
-        if (args?.hasFunctionCall) {
-          client = new OllamaFunctions({
-            baseUrl: url,
-            model: config.model,
-            temperature: config.temperature,
-            topP: config.top_p,
-            frequencyPenalty: config.frequency_penalty,
-            presencePenalty: config.presence_penalty,
-            stop: config.stop?.split(","),
-          });
-          break;
-        }
-
+      }
+      case "ollama": {
         client = new ChatOllama({
           baseUrl: url,
           model: config.model,
@@ -286,7 +288,8 @@ export class LLMProvider {
           stop: config.stop?.split(","),
         });
         break;
-      case "gemini":
+      }
+      case "gemini": {
         client = new ChatGoogleGenerativeAI({
           maxRetries: 3,
           model: config.model,
@@ -297,7 +300,8 @@ export class LLMProvider {
           stopSequences: config.stop?.split(","),
         });
         break;
-      case "anthropic":
+      }
+      case "anthropic": {
         client = new ChatAnthropic({
           apiKey: config.apiKey,
           model: config.model,
@@ -315,7 +319,8 @@ export class LLMProvider {
           },
         });
         break;
-      case "groq":
+      }
+      case "groq": {
         client = new ChatGroq({
           apiKey: config.apiKey,
           model: config.model,
@@ -324,17 +329,12 @@ export class LLMProvider {
           maxRetries: 3,
         });
         break;
+      }
       default:
         throw new Error("Unsupported provider");
     }
 
-    return client.withConfig({
-      metadata: {
-        runId: this.runId,
-        runName: this.runName,
-        runDateEpochMs: this.runDateEpochMs,
-      },
-    }) as unknown as BaseChatModel;
+    return client;
   };
 
   static convertMessages = (
@@ -345,7 +345,15 @@ export class LLMProvider {
       if ("function_call" in m) {
         return new AIMessage({
           // name: m.function_call?.name ?? "",
-          content: m.function_call?.arguments ?? "",
+          content: !m.function_call
+            ? ""
+            : "arguments" in m.function_call
+              ? m.function_call.arguments
+              : "args" in m.function_call
+                ? JSON.stringify(m.function_call.args)
+                : "",
+          // @ts-expect-error
+          tool_calls: m.function_call ? [m.function_call] : [],
         });
       }
 
@@ -366,20 +374,28 @@ export class LLMProvider {
           })
         : m.role === "assistant"
           ? new AIMessage({ content: m.content ?? "" })
-          : m.role === "system"
-            ? new SystemMessage({
+          : m.role === "tool"
+            ? new ToolMessage({
+                // @ts-expect-error
+                name: messages[i - 1]?.function_call?.name ?? "unknown",
                 content: m.content ?? "",
+                // @ts-expect-error
+                tool_call_id: m?.function_call_id ?? "unknown",
               })
-            : new ChatMessage(
-                !m.content
-                  ? ""
-                  : Array.isArray(m.content)
+            : m.role === "system"
+              ? new SystemMessage({
+                  content: m.content ?? "",
+                })
+              : new ChatMessage(
+                  !m.content
                     ? ""
-                    : typeof m.content === "string"
-                      ? m.content
-                      : "",
-                "user",
-              );
+                    : Array.isArray(m.content)
+                      ? ""
+                      : typeof m.content === "string"
+                        ? m.content
+                        : "",
+                  "user",
+                );
     });
   };
 
@@ -403,6 +419,7 @@ export class LLMProvider {
     );
 
     if (configOverrides.functions && configOverrides.function_call) {
+      // @ts-expect-error
       return await this.fn_call({
         provider:
           (configOverrides.provider as SupportedProviders) || this.provider,
@@ -412,7 +429,9 @@ export class LLMProvider {
         function_call: configOverrides.function_call,
       });
     } else {
-      const content = await client.pipe(stringParser).invoke(convertedMessages);
+      const content = await this.clientWithMetadata(client)
+        .pipe(stringParser)
+        .invoke(convertedMessages);
 
       return {
         role: "assistant", // optional when functions included
@@ -424,7 +443,7 @@ export class LLMProvider {
   private fn_call = async ({
     provider,
     convertedMessages,
-    client,
+    client: _client,
     functions,
     function_call,
   }: {
@@ -434,43 +453,46 @@ export class LLMProvider {
     functions: GenericFunctionCall[];
     function_call: { name: string };
   }) => {
-    if (SUPPORTED_FN_PROVIDERS.includes(provider)) {
-      const response = await client.invoke(convertedMessages, {
-        // @ts-expect-error
-        function_call,
-        functions: functions,
-      });
+    const client =
+      _client.bindTools?.(
+        (functions
+          ?.map((f) => {
+            if (f.name === "choice") {
+              return choiceTool(
+                // @ts-expect-error
+                f.parameters?.properties?.choice?.enum as [string, ...string[]],
+              );
+            }
+            if (f.name === "note_select") {
+              return noteSelectTool(
+                // @ts-expect-error
+                f.parameters?.properties?.note?.enum as [string, ...string[]],
+              );
+            }
+            if (f.name === "form") {
+              return formTool(Object.keys(f.parameters?.properties ?? []));
+            }
+            return null;
+          })
+          ?.filter(Boolean) ?? []) as BindToolsInput[],
+        // ollama does not support tool choice, but it does support tools
+        provider !== "ollama"
+          ? {
+              tool_choice: function_call.name,
+            }
+          : undefined,
+      ) ?? _client;
+    const response =
+      await this.clientWithMetadata(client).invoke(convertedMessages);
 
-      return {
-        role: "assistant",
-        content: "",
-        function_call: response.additional_kwargs.tool_calls
-          ? response.additional_kwargs.tool_calls[0]?.function
-          : response.additional_kwargs.function_call,
-      };
-    } else {
-      const fn = functions[0];
-      const fnMessages = messagesWithFnCallPrompts({
-        convertedMessages,
-        fn,
-        function_call,
-      });
-      const response = await client.pipe(stringParser).invoke(fnMessages);
-
-      // parse response string and extract the first json object wrapped in {}
-      const json = response;
-
-      // TODO add a while loop to keep calling this until json parses as valid json
-
-      return {
-        role: "assistant",
-        content: "",
-        function_call: {
-          arguments: json,
-          name: function_call.name,
-        },
-      };
-    }
+    return {
+      role: "assistant",
+      content: "",
+      function_call_id: response.tool_calls?.[0]?.id,
+      function_call: response.tool_calls
+        ? response.tool_calls[0]
+        : functions.find((f) => f.name === function_call.name),
+    };
   };
 
   getCompletionStream = async ({
@@ -487,5 +509,11 @@ export class LLMProvider {
     const stream = await client.pipe(stringParser).stream(convertedMessages);
 
     return stream;
+  };
+
+  clientWithMetadata = (client: Runnable) => {
+    return client.withConfig({
+      metadata: this.metadata,
+    }) as unknown as BaseChatModel;
   };
 }
