@@ -55,6 +55,7 @@ export interface CannoliSettings {
   secrets: { name: string; value: string; visibility: string }[];
   onlyRunCannoliGroups: boolean;
   tracingConfig: NonNullable<TracingConfig>;
+  cannoliServerUrl: string;
 }
 
 export const DEFAULT_SETTINGS: CannoliSettings = {
@@ -112,4 +113,5 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
       apiKey: "",
     },
   },
+  cannoliServerUrl: "http://localhost:3333",
 };
