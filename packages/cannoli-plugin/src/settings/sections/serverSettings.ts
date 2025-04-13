@@ -53,8 +53,7 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
     .setDesc("Check the status of your Cannoli server.")
     .addButton((button) => {
       button.setButtonText("Check status").onClick(async () => {
-        const status = await serverClient.status.$get();
-        console.log(status);
+        display();
       });
     });
 

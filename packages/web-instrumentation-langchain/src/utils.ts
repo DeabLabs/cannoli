@@ -176,6 +176,9 @@ function getRoleFromMessageData(
   if (normalizedLangchainMessageClass.includes("function")) {
     return "function";
   }
+  if (normalizedLangchainMessageClass.includes("tool")) {
+    return "tool";
+  }
   if (
     normalizedLangchainMessageClass.includes("chat") &&
     isObject(messageData.kwargs) &&
