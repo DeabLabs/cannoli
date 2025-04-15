@@ -522,7 +522,6 @@ export class LLMProvider {
     messages,
     ...configOverrides
   }: GenericCompletionParams) => {
-    console.log("getGoalCompletion", messages);
     const client = this.getChatClient({
       configOverrides,
       // @ts-expect-error
@@ -537,22 +536,31 @@ export class LLMProvider {
 
     // For each server call loadMcpTools
 
+    const disconnectCallbacks: (() => Promise<void>)[] = [];
     const mcpServers = await Promise.all(
       Object.entries(servers.servers).map(async ([name, server]) => {
-        // @ts-expect-error
-        const transport = new SSEClientTransport(server.url);
+        const transport = new SSEClientTransport(
+          new URL(
+            // @ts-expect-error
+            server.url,
+          ),
+        );
 
         // @ts-expect-error
-        console.log("Server url", server.url);
+        console.log("connecting to server", name, server.url);
 
         const mcpClient = new Client({
           name: `cannoli`,
           version: "1.0.0",
         });
 
-        console.log("Connecting to server", name);
         await mcpClient.connect(transport);
-        console.log("Connected to server", name);
+
+        disconnectCallbacks.push(async () => {
+          console.log("disconnecting from server", name);
+          await mcpClient.close();
+          await transport.close();
+        });
 
         return (await loadMcpTools(
           name,
@@ -589,6 +597,8 @@ export class LLMProvider {
       // if (error.name === "ToolException") {
       //   console.error("Tool execution failed:", error.message);
       // }
+    } finally {
+      await Promise.all(disconnectCallbacks.map((cb) => cb()));
     }
   };
 

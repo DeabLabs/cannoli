@@ -950,7 +950,6 @@ export class Run {
     request: GenericCompletionParams,
     verbose?: boolean,
   ): Promise<GenericCompletionResponse | Error> {
-    console.log("callGoalAgent", request);
     return this.llmLimit(
       async (): Promise<GenericCompletionResponse | Error> => {
         // Only call LLM if we're not mocking
