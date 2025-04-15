@@ -180,6 +180,9 @@ export interface RunArgs {
   replacers?: Replacer[];
   resume?: boolean;
   runName?: string;
+  cannoliServer?: {
+    url: string;
+  };
 }
 
 export class Run {
@@ -240,6 +243,7 @@ export class Run {
     args,
     runName,
     resume,
+    cannoliServer,
   }: RunArgs) {
     this.onFinish = onFinish ?? ((stoppage: Stoppage) => {});
     this.isMock = isMock ?? false;
@@ -264,6 +268,7 @@ export class Run {
           runId: this.runId,
           runDateEpochMs: this.runDateEpochMs,
           runName: this.runName,
+          cannoliServerUrl: cannoliServer?.url,
         })
       : null;
 

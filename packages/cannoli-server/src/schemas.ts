@@ -41,10 +41,9 @@ export const McpServerSchema = z.discriminatedUnion("type", [
 
 export const McpProxyServerSchema = z.record(
   z.string(),
-  HttpServerSchema.pick({
-    url: true,
-    headers: true,
-  }).extend({
+  z.object({
+    url: z.string().url(),
+    headers: z.record(z.string()).optional().default({}),
     transport: z.literal("sse"),
   }),
 );

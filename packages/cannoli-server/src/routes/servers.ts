@@ -76,7 +76,12 @@ const router = new Hono()
           description: "List of all MCP servers as SSE proxy definitions",
           content: {
             "application/json": {
-              schema: resolver(McpProxyServerSchema),
+              schema: resolver(
+                z.object({
+                  status: z.string(),
+                  servers: McpProxyServerSchema,
+                }),
+              ),
             },
           },
         },
@@ -105,7 +110,7 @@ const router = new Hono()
             },
           };
           return { ...acc, ...proxyServer };
-        }, {}),
+        }, {} as McpProxyServer),
       });
     },
   )

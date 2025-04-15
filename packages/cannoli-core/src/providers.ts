@@ -100,6 +100,7 @@ type ConstructorArgs = {
   runId?: string;
   runName?: string;
   runDateEpochMs?: number;
+  cannoliServerUrl?: string;
 };
 
 export type GenericCompletionParams = {
@@ -137,6 +138,7 @@ const removeUndefinedKeys = <T extends Record<string, unknown>>(obj: T): T => {
 
 export class LLMProvider {
   baseConfig: GenericModelConfig = {};
+  cannoliServerUrl?: string;
   provider: SupportedProviders = "openai";
   getDefaultConfigByProvider?: GetDefaultsByProvider;
   initialized = false;
@@ -159,6 +161,7 @@ export class LLMProvider {
   init = (initArgs: ConstructorArgs) => {
     this.provider = initArgs.configs[0].provider as SupportedProviders;
     this.baseConfig = initArgs.configs[0];
+    this.cannoliServerUrl = initArgs.cannoliServerUrl;
     this.valtownApiKey = initArgs.valtownApiKey;
     this.tracingConfig = initArgs.tracingConfig;
     this.runId = initArgs.runId;
@@ -173,13 +176,6 @@ export class LLMProvider {
       runDateEpochMs: this.runDateEpochMs,
     };
   };
-
-  // static getCompletionResponseUsage = (...args: unknown[]) => ({
-  // 	prompt_tokens: 0,
-  // 	completion_tokens: 0,
-  // 	api_calls: 0,
-  // 	total_cost: 0,
-  // });
 
   getConfig = () => ({ ...this.baseConfig });
 
@@ -528,7 +524,13 @@ export class LLMProvider {
       provider: configOverrides?.provider ?? undefined,
     });
 
-    const cannoliClient = makeCannoliServerClient("http://localhost:3333");
+    const cannoliServerUrl = this.cannoliServerUrl;
+    invariant(
+      cannoliServerUrl,
+      "Cannoli server URL is not set. Cannoli-server is required to use goal completion nodes.",
+    );
+
+    const cannoliClient = makeCannoliServerClient(cannoliServerUrl);
 
     const serversResponse = await cannoliClient["mcp-servers"].sse.$get();
 
@@ -539,14 +541,8 @@ export class LLMProvider {
     const disconnectCallbacks: (() => Promise<void>)[] = [];
     const mcpServers = await Promise.all(
       Object.entries(servers.servers).map(async ([name, server]) => {
-        const transport = new SSEClientTransport(
-          new URL(
-            // @ts-expect-error
-            server.url,
-          ),
-        );
+        const transport = new SSEClientTransport(new URL(server.url));
 
-        // @ts-expect-error
         console.log("connecting to server", name, server.url);
 
         const mcpClient = new Client({
@@ -577,6 +573,12 @@ export class LLMProvider {
 
     // Run the agent
     try {
+      if (mcpServers.length === 0) {
+        throw new Error(
+          "No MCP servers found in cannoli-server. Cannoli-server is required to use goal completion nodes.",
+        );
+      }
+
       const mathResponse = await agent.invoke({
         messages: LLMProvider.convertMessages(messages),
       });

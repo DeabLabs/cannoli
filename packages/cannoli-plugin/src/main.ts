@@ -1244,6 +1244,12 @@ export default class Cannoli extends Plugin {
       return;
     }
 
+    const cannoliServerSettings = this.settings.cannoliServerEnabled
+      ? {
+          url: this.settings.cannoliServerUrl,
+        }
+      : undefined;
+
     // Do the live run
     const [liveStoppagePromise, stopLiveCannoli] = run({
       cannoli: canvasData,
@@ -1259,6 +1265,9 @@ export default class Cannoli extends Plugin {
       fileManager: vaultInterface,
       isMock: false,
       runName: name,
+      ...(cannoliServerSettings
+        ? { cannoliServer: cannoliServerSettings }
+        : {}),
     });
 
     // add to running cannolis
