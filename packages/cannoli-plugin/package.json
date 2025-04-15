@@ -1,43 +1,43 @@
 {
-	"name": "cannoli-plugin",
-	"version": "2.1.2",
-	"description": "Create LLM Chat flows using the Obsidian Canvas.",
-	"private": true,
-	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "pnpm run typecheck && node esbuild.config.mjs production",
-		"version": "node version-bump.mjs && git add manifest.json versions.json",
-		"build-college": "node scripts/fileGen.js",
-		"release": "node scripts/release.mjs",
-		"typecheck": "tsc --noEmit"
-	},
-	"keywords": [],
-	"author": "",
-	"license": "MIT",
-	"devDependencies": {
-		"@types/js-yaml": "^4.0.6",
-		"@types/node": "^16.11.6",
-		"@types/uuid": "^9.0.2",
-		"@typescript-eslint/eslint-plugin": "^7.7.1",
-		"@typescript-eslint/parser": "^7.7.1",
-		"builtin-modules": "3.3.0",
-		"esbuild": "0.17.3",
-		"eslint": "^8.57.0",
-		"obsidian": "latest",
-		"tslib": "2.4.0",
-		"typescript": "^5.3.3"
-	},
-	"dependencies": {
-		"@deablabs/cannoli-core": "workspace:*",
-		"@types/node-rsa": "1.1.4",
-		"@valtown/sdk": "0.1.0-alpha.2",
-		"esbuild-plugin-wat": "^0.2.7",
-		"js-yaml": "^4.1.0",
-		"moment": "2.30.1",
-		"node-rsa": "1.1.1",
-		"obsidian-dataview": "^0.5.66",
-		"openai": "^4.52.0",
-		"tiny-invariant": "^1.3.1",
-		"uuid": "^9.0.0"
-	}
+  "name": "cannoli-plugin",
+  "version": "2.1.2",
+  "description": "Create LLM Chat flows using the Obsidian Canvas.",
+  "private": true,
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "pnpm run typecheck && node esbuild.config.mjs production",
+    "version": "node version-bump.mjs && git add manifest.json versions.json",
+    "build-college": "node scripts/fileGen.js",
+    "release": "node scripts/release.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.6",
+    "@types/node": "^22.14.0",
+    "@types/uuid": "^9.0.2",
+    "@typescript-eslint/eslint-plugin": "^7.7.1",
+    "@typescript-eslint/parser": "^7.7.1",
+    "builtin-modules": "3.3.0",
+    "esbuild": "0.17.3",
+    "eslint": "^8.57.0",
+    "obsidian": "latest",
+    "tslib": "2.4.0",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@deablabs/cannoli-core": "workspace:*",
+    "@types/node-rsa": "1.1.4",
+    "@valtown/sdk": "0.1.0-alpha.2",
+    "esbuild-plugin-wat": "^0.2.7",
+    "js-yaml": "^4.1.0",
+    "moment": "2.30.1",
+    "node-rsa": "1.1.1",
+    "obsidian-dataview": "^0.5.66",
+    "openai": "^4.52.0",
+    "tiny-invariant": "^1.3.1",
+    "uuid": "^9.0.0"
+  }
 }

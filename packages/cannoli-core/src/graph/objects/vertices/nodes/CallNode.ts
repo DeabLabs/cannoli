@@ -1,313 +1,329 @@
 import { EdgeType, EdgeModifier } from "src/graph";
 import {
-	GenericCompletionResponse,
-	GenericCompletionParams,
-	ImageReference,
-	GenericModelConfigSchema,
-	GenericModelConfig,
-	SupportedProviders,
-	GenericFunctionCall,
+  GenericCompletionResponse,
+  GenericCompletionParams,
+  ImageReference,
+  GenericModelConfigSchema,
+  GenericModelConfig,
+  SupportedProviders,
+  GenericFunctionCall,
 } from "src/providers";
 import { ChatRole } from "src/run";
 import invariant from "tiny-invariant";
 import { CannoliNode } from "../CannoliNode";
+import { z } from "zod";
 
 export class CallNode extends CannoliNode {
-	async getNewMessage(
-		role?: string,
-	): Promise<GenericCompletionResponse | null> {
-		const content = await this.processReferences();
+  async getNewMessage(
+    role?: string,
+    args?: Partial<GenericCompletionResponse>,
+  ): Promise<GenericCompletionResponse | null> {
+    const content = await this.processReferences();
 
-		// If there is no content, return null
-		if (!content) {
-			return null;
-		}
+    // If there is no content, return null
+    if (!content) {
+      return null;
+    }
 
-		return {
-			role: (role as ChatRole) || "user",
-			content: content,
-		};
-	}
+    return {
+      role: (role as ChatRole) || "user",
+      content: content,
+      ...args,
+    };
+  }
 
-	findNoteReferencesInMessages(
-		messages: GenericCompletionResponse[],
-	): string[] {
-		const references: string[] = [];
-		const noteRegex = /\[\[(.+?)\]\]/g;
+  findNoteReferencesInMessages(
+    messages: GenericCompletionResponse[],
+  ): string[] {
+    const references: string[] = [];
+    const noteRegex = /\[\[(.+?)\]\]/g;
 
-		// Get the contents of each double bracket
-		for (const message of messages) {
-			const matches =
-				typeof message.content === "string" &&
-				message.content?.matchAll(noteRegex);
+    // Get the contents of each double bracket
+    for (const message of messages) {
+      const matches =
+        typeof message.content === "string" &&
+        message.content?.matchAll(noteRegex);
 
-			if (!matches) {
-				continue;
-			}
+      if (!matches) {
+        continue;
+      }
 
-			for (const match of matches) {
-				references.push(match[1]);
-			}
-		}
+      for (const match of matches) {
+        references.push(match[1]);
+      }
+    }
 
-		return references;
-	}
+    return references;
+  }
 
-	async execute() {
-		this.executing();
+  async execute() {
+    this.executing();
 
-		let request: GenericCompletionParams;
-		try {
-			request = await this.createLLMRequest();
-		} catch (error) {
-			this.error(`Error creating LLM request: ${error}`);
-			return;
-		}
+    let request: GenericCompletionParams;
+    try {
+      request = await this.createLLMRequest();
+    } catch (error) {
+      this.error(`Error creating LLM request: ${error}`);
+      return;
+    }
 
-		// If the message array is empty, error
-		if (request.messages.length === 0) {
-			this.error(
-				`No messages to send to LLM. Empty call nodes only send the message history they've been passed.`,
-			);
-			return;
-		}
+    // If the message array is empty, error
+    if (request.messages.length === 0) {
+      this.error(
+        `No messages to send to LLM. Empty call nodes only send the message history they've been passed.`,
+      );
+      return;
+    }
 
-		// If the node has an outgoing chatResponse edge, call with streaming
-		const chatResponseEdges = this.getOutgoingEdges().filter(
-			(edge) => edge.type === EdgeType.ChatResponse,
-		);
+    // If the node has an outgoing chatResponse edge, call with streaming
+    const chatResponseEdges = this.getOutgoingEdges().filter(
+      (edge) => edge.type === EdgeType.ChatResponse,
+    );
 
-		if (chatResponseEdges.length > 0) {
-			const stream = await this.run.callLLMStream(request);
+    if (chatResponseEdges.length > 0) {
+      const stream = await this.run.callLLMStream(request);
 
-			if (stream instanceof Error) {
-				this.error(`Error calling LLM:\n${stream.message}`);
-				return;
-			}
+      if (stream instanceof Error) {
+        this.error(`Error calling LLM:\n${stream.message}`);
+        return;
+      }
 
-			if (!stream) {
-				this.error(`Error calling LLM: no stream returned.`);
-				return;
-			}
+      if (!stream) {
+        this.error(`Error calling LLM: no stream returned.`);
+        return;
+      }
 
-			if (typeof stream === "string") {
-				this.loadOutgoingEdges(stream, request);
-				this.completed();
-				return;
-			}
+      if (typeof stream === "string") {
+        this.loadOutgoingEdges(stream, request);
+        this.completed();
+        return;
+      }
 
-			// Create message content string
-			let messageContent = "";
-			// Process the stream. For each part, add the message to the request, and load the outgoing edges
-			for await (const part of stream) {
-				if (!part || typeof part !== "string") {
-					// deltas might be empty, that's okay, just get the next one
-					continue;
-				}
+      // Create message content string
+      let messageContent = "";
+      // Process the stream. For each part, add the message to the request, and load the outgoing edges
+      for await (const part of stream) {
+        if (!part || typeof part !== "string") {
+          // deltas might be empty, that's okay, just get the next one
+          continue;
+        }
 
-				// Add the part to the message content
-				messageContent += part;
+        // Add the part to the message content
+        messageContent += part;
 
-				// Load outgoing chatResponse edges with the part
-				for (const edge of chatResponseEdges) {
-					edge.load({
-						content: part ?? "",
-						request: request,
-					});
-				}
-			}
+        // Load outgoing chatResponse edges with the part
+        for (const edge of chatResponseEdges) {
+          edge.load({
+            content: part ?? "",
+            request: request,
+          });
+        }
+      }
 
-			// Load outgoing chatResponse edges with the message "END OF STREAM"
-			for (const edge of chatResponseEdges) {
-				edge.load({
-					content: "END OF STREAM",
-					request: request,
-				});
-			}
+      // Load outgoing chatResponse edges with the message "END OF STREAM"
+      for (const edge of chatResponseEdges) {
+        edge.load({
+          content: "END OF STREAM",
+          request: request,
+        });
+      }
 
-			// Add an assistant message to the messages array of the request
-			request.messages.push({
-				role: "assistant",
-				content: messageContent,
-			});
+      // Add an assistant message to the messages array of the request
+      request.messages.push({
+        role: "assistant",
+        content: messageContent,
+      });
 
-			// After the stream is done, load the outgoing edges
-			this.loadOutgoingEdges(messageContent, request);
-		} else {
-			const message = await this.run.callLLM(request);
+      // After the stream is done, load the outgoing edges
+      this.loadOutgoingEdges(messageContent, request);
+    } else {
+      const message = await this.run.callLLM(request);
 
-			if (message instanceof Error) {
-				this.error(`Error calling LLM:\n${message.message}`);
-				return;
-			}
+      if (message instanceof Error) {
+        this.error(`Error calling LLM:\n${message.message}`);
+        return;
+      }
 
-			if (!message) {
-				this.error(`Error calling LLM: no message returned.`);
-				return;
-			}
+      if (!message) {
+        this.error(`Error calling LLM: no message returned.`);
+        return;
+      }
 
-			request.messages.push(message);
+      request.messages.push(message);
 
-			if (message.function_call?.arguments) {
-				if (message.function_call.name === "note_select") {
-					const args = JSON.parse(message.function_call.arguments);
+      if (message.function_call?.args) {
+        if (message.function_call.name === "note_select") {
+          const args = message.function_call.args;
 
-					// Put double brackets around the note name
-					args.note = `[[${args.note}]]`;
+          const parsedArgs = z
+            .object({
+              note: z.string(),
+            })
+            .parse(args);
 
-					this.loadOutgoingEdges(args.note, request);
-				} else {
-					this.loadOutgoingEdges(message.content ?? "", request);
-				}
-			} else {
-				this.loadOutgoingEdges(message.content ?? "", request);
-			}
-		}
+          // Put double brackets around the note name
+          parsedArgs.note = `[[${parsedArgs.note}]]`;
 
-		this.completed();
-	}
+          this.loadOutgoingEdges(parsedArgs.note, request);
+        } else {
+          this.loadOutgoingEdges(message.content ?? "", request);
+        }
+      } else {
+        this.loadOutgoingEdges(message.content ?? "", request);
+      }
+    }
 
-	async extractImages(
-		message: GenericCompletionResponse,
-		index: number,
-	): Promise<ImageReference[]> {
-		const imageReferences: ImageReference[] = [];
-		const markdownImageRegex = /!\[.*?\]\((.*?)\)/g;
-		let match;
+    this.completed();
+  }
 
-		while ((match = markdownImageRegex.exec(message.content)) !== null) {
-			let url = match[1];
+  async extractImages(
+    message: GenericCompletionResponse,
+    index: number,
+  ): Promise<ImageReference[]> {
+    const imageReferences: ImageReference[] = [];
+    const markdownImageRegex = /!\[.*?\]\((.*?)\)/g;
+    let match;
 
-			// Fetch the image at the url if it's http
-			if (url.startsWith("http")) {
-				const response = await fetch(url);
-				const blob = await response.blob();
-				const base64 = Buffer.from(await blob.arrayBuffer()).toString(
-					"base64",
-				);
-				url = `data:image/jpeg;base64,${base64}`;
-			}
+    while ((match = markdownImageRegex.exec(message.content)) !== null) {
+      let url = match[1];
 
-			imageReferences.push({
-				url: url,
-				messageIndex: index,
-			});
-		}
+      // Fetch the image at the url if it's http
+      if (url.startsWith("http")) {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const base64 = Buffer.from(await blob.arrayBuffer()).toString("base64");
+        url = `data:image/jpeg;base64,${base64}`;
+      }
 
-		if (this.run.fileManager) {
-			const imageExtensions = [
-				".jpg",
-				".png",
-				".jpeg",
-				".gif",
-				".bmp",
-				".tiff",
-				".webp",
-				".svg",
-				".ico",
-				".jfif",
-				".avif",
-			];
-			// should match instances like ![[image.jpg]]
-			const fileImageRegex = new RegExp(
-				`!\\[\\[([^\\]]+(${imageExtensions.join("|")}))\\]\\]`,
-				"g",
-			);
-			while ((match = fileImageRegex.exec(message.content)) !== null) {
-				// "image.jpg"
-				const fileName = match[1];
+      imageReferences.push({
+        url: url,
+        messageIndex: index,
+      });
+    }
 
-				// get file somehow from the filename
-				const file = await this.run.fileManager.getFile(
-					fileName,
-					this.run.isMock,
-				);
+    if (this.run.fileManager) {
+      const imageExtensions = [
+        ".jpg",
+        ".png",
+        ".jpeg",
+        ".gif",
+        ".bmp",
+        ".tiff",
+        ".webp",
+        ".svg",
+        ".ico",
+        ".jfif",
+        ".avif",
+      ];
+      // should match instances like ![[image.jpg]]
+      const fileImageRegex = new RegExp(
+        `!\\[\\[([^\\]]+(${imageExtensions.join("|")}))\\]\\]`,
+        "g",
+      );
+      while ((match = fileImageRegex.exec(message.content)) !== null) {
+        // "image.jpg"
+        const fileName = match[1];
 
-				if (!file) {
-					continue;
-				}
+        // get file somehow from the filename
+        const file = await this.run.fileManager.getFile(
+          fileName,
+          this.run.isMock,
+        );
 
-				// turn file into base64
-				let base64 = Buffer.from(file).toString("base64");
-				base64 = `data:image/${fileName.split(".").pop()};base64,${base64}`;
+        if (!file) {
+          continue;
+        }
 
-				imageReferences.push({
-					url: base64,
-					messageIndex: index,
-				});
-			}
-		}
+        // turn file into base64
+        let base64 = Buffer.from(file).toString("base64");
+        base64 = `data:image/${fileName.split(".").pop()};base64,${base64}`;
 
-		return imageReferences;
-	}
+        imageReferences.push({
+          url: base64,
+          messageIndex: index,
+        });
+      }
+    }
 
-	async createLLMRequest(): Promise<GenericCompletionParams> {
-		const overrides = this.getConfig(
-			GenericModelConfigSchema,
-		) as GenericModelConfig;
+    return imageReferences;
+  }
 
-		const config = this.run.llm?.getMergedConfig({
-			configOverrides: overrides,
-			provider: (overrides.provider as SupportedProviders) ?? undefined,
-		});
-		invariant(config, "Config is undefined");
+  async createLLMRequest(): Promise<GenericCompletionParams> {
+    const overrides = this.getConfig(
+      GenericModelConfigSchema,
+    ) as GenericModelConfig;
 
-		const messages = this.getPrependedMessages();
+    const config = this.run.llm?.getMergedConfig({
+      configOverrides: overrides,
+      provider: (overrides.provider as SupportedProviders) ?? undefined,
+    });
+    invariant(config, "Config is undefined");
 
-		const newMessage = await this.getNewMessage(config.role);
+    const messages = this.getPrependedMessages();
 
-		// Remove the role from the config
-		delete config.role;
+    const lastMessage = messages[messages.length - 1];
+    let role = config.role;
+    let args: Partial<GenericCompletionResponse> | undefined = undefined;
+    if (lastMessage?.function_call?.name) {
+      role = "tool";
+      args = {
+        function_call_id: lastMessage.function_call_id,
+      };
+    }
 
-		if (newMessage) {
-			messages.push(newMessage);
-		}
+    const newMessage = await this.getNewMessage(role, args);
 
-		let imageReferences: ImageReference[] | undefined;
+    // Remove the role from the config
+    delete config.role;
 
-		if (config.enableVision) {
-			imageReferences = await Promise.all(
-				messages.map(async (message, index) => {
-					return await this.extractImages(message, index);
-				}),
-			).then((ir) => ir.flat());
-		}
+    if (newMessage) {
+      messages.push(newMessage);
+    }
 
-		const functions = this.getFunctions(messages);
+    let imageReferences: ImageReference[] | undefined;
 
-		const function_call =
-			functions && functions.length > 0
-				? { name: functions[0].name }
-				: undefined;
+    if (config.enableVision) {
+      imageReferences = await Promise.all(
+        messages.map(async (message, index) => {
+          return await this.extractImages(message, index);
+        }),
+      ).then((ir) => ir.flat());
+    }
 
-		return {
-			messages: messages,
-			imageReferences: imageReferences,
-			...config,
-			functions:
-				functions && functions.length > 0 ? functions : undefined,
-			function_call: function_call ? function_call : undefined,
-		};
-	}
+    const functions = this.getFunctions(messages);
 
-	getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
-		if (
-			this.getOutgoingEdges().some(
-				(edge) => edge.edgeModifier === EdgeModifier.Note,
-			)
-		) {
-			const noteNames = this.findNoteReferencesInMessages(messages);
-			return [this.run.createNoteNameFunction(noteNames)];
-		} else {
-			return [];
-		}
-	}
+    const function_call =
+      functions && functions.length > 0
+        ? { name: functions[0].name }
+        : undefined;
 
-	logDetails(): string {
-		return super.logDetails() + `Type: Call\n`;
-	}
+    return {
+      messages: messages,
+      imageReferences: imageReferences,
+      ...config,
+      functions: functions && functions.length > 0 ? functions : undefined,
+      function_call: function_call ? function_call : undefined,
+    };
+  }
 
-	validate() {
-		super.validate();
-	}
+  getFunctions(messages: GenericCompletionResponse[]): GenericFunctionCall[] {
+    if (
+      this.getOutgoingEdges().some(
+        (edge) => edge.edgeModifier === EdgeModifier.Note,
+      )
+    ) {
+      const noteNames = this.findNoteReferencesInMessages(messages);
+      return [this.run.createNoteNameFunction(noteNames)];
+    } else {
+      return [];
+    }
+  }
+
+  logDetails(): string {
+    return super.logDetails() + `Type: Call\n`;
+  }
+
+  validate() {
+    super.validate();
+  }
 }

@@ -15,35 +15,35 @@ import { LangChainTracer } from "./tracer";
  * We support both versions and our tracer is compatible with either as it will extend the BaseTracer from the installed version which will be the same as the version of handlers passed in here
  */
 export function addTracerToHandlers(
-	tracer: Tracer,
-	handlers?: CallbackManagerModuleV02.Callbacks,
+  tracer: Tracer,
+  handlers?: CallbackManagerModuleV02.Callbacks,
 ): CallbackManagerModuleV02.Callbacks;
 export function addTracerToHandlers(
-	tracer: Tracer,
-	handlers?: CallbackManagerModuleV02.Callbacks,
+  tracer: Tracer,
+  handlers?: CallbackManagerModuleV02.Callbacks,
 ): CallbackManagerModuleV02.Callbacks {
-	if (handlers == null) {
-		return [new LangChainTracer(tracer)];
-	}
-	if (Array.isArray(handlers)) {
-		const tracerAlreadyRegistered = handlers.some(
-			(handler) => handler instanceof LangChainTracer,
-		);
-		if (!tracerAlreadyRegistered) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			handlers.push(new LangChainTracer(tracer) as any);
-		}
-		return handlers;
-	}
-	const tracerAlreadyRegistered =
-		handlers.inheritableHandlers.some(
-			(handler) => handler instanceof LangChainTracer,
-		) ||
-		handlers.handlers.some((handler) => handler instanceof LangChainTracer);
-	if (tracerAlreadyRegistered) {
-		return handlers;
-	}
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	handlers.addHandler(new LangChainTracer(tracer) as any, true);
-	return handlers;
+  if (handlers == null) {
+    return [new LangChainTracer(tracer)];
+  }
+  if (Array.isArray(handlers)) {
+    const tracerAlreadyRegistered = handlers.some(
+      (handler) => handler instanceof LangChainTracer,
+    );
+    if (!tracerAlreadyRegistered) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      handlers.push(new LangChainTracer(tracer) as any);
+    }
+    return handlers;
+  }
+  const tracerAlreadyRegistered =
+    handlers.inheritableHandlers.some(
+      (handler) => handler instanceof LangChainTracer,
+    ) ||
+    handlers.handlers.some((handler) => handler instanceof LangChainTracer);
+  if (tracerAlreadyRegistered) {
+    return handlers;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handlers.addHandler(new LangChainTracer(tracer) as any, true);
+  return handlers;
 }
