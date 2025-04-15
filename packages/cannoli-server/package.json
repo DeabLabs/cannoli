@@ -14,12 +14,17 @@
       "import": "./dist/rpc.js",
       "types": "./dist/rpc.d.ts"
     },
+    "./schemas": {
+      "import": "./dist/schemas.js",
+      "types": "./dist/schemas.d.ts"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --treeshake --clean && tsup src/rpc.ts --format esm --treeshake --experimental-dts",
+    "build": "tsup src/index.ts --format esm --treeshake --clean && tsup src/rpc.ts --format esm --treeshake --experimental-dts && tsup src/schemas.ts --format esm --treeshake --experimental-dts",
     "dev": "tsup src/index.ts --format esm --watch --onSuccess \"node dist/index.js\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "inspect": "npx -y @modelcontextprotocol/inspector"
   },
   "keywords": [],
   "author": "",
@@ -35,10 +40,13 @@
   "dependencies": {
     "@hono/node-server": "^1.14.0",
     "@hono/zod-validator": "0.4.3",
+    "@modelcontextprotocol/sdk": "1.9.0",
     "@scalar/hono-api-reference": "0.8.0",
     "hono": "4.7.6",
     "hono-openapi": "0.4.6",
+    "mcp-proxy": "2.12.0",
     "nanoid": "5.0.7",
+    "raw-body": "3.0.0",
     "remeda": "1.61.0",
     "tiny-invariant": "^1.3.1",
     "tsup": "^8.4.0",

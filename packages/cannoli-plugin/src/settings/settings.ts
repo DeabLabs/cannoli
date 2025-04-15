@@ -56,7 +56,6 @@ export interface CannoliSettings {
   onlyRunCannoliGroups: boolean;
   tracingConfig: NonNullable<TracingConfig>;
   cannoliServerUrl: string;
-  enableMCP: boolean;
 }
 
 export const DEFAULT_SETTINGS: CannoliSettings = {
@@ -106,7 +105,6 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
   secrets: [],
   enableVision: true,
   onlyRunCannoliGroups: false,
-  enableMCP: false,
   tracingConfig: {
     phoenix: {
       enabled: false,

@@ -4,6 +4,7 @@ import {
   SettingsSchema,
   HttpServerSchema,
   StdioServerSchema,
+  McpProxyServerSchema,
 } from "./schemas";
 import { Context } from "hono";
 
@@ -19,7 +20,7 @@ export type McpServer = z.infer<typeof McpServerSchema>;
 export type HttpServer = z.infer<typeof HttpServerSchema>;
 export type StdioServer = z.infer<typeof StdioServerSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
-
+export type McpProxyServer = z.infer<typeof McpProxyServerSchema>;
 // Server info for the HTTP server
 export interface ServerInfo {
   port: number | string;

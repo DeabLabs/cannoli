@@ -7,15 +7,20 @@ import { getConfigDir } from "./utils";
 import { ServerInfo } from "./types";
 import { openAPISpecs } from "hono-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
+import { requestId } from "hono/request-id";
 
 // Import routers
 import statusRouter from "./routes/status";
 import mcpServersRouter from "./routes/servers";
 import settingsRouter from "./routes/settings";
+import sseRouter from "./routes/sse";
 
 declare module "hono" {
   interface ContextVariableMap {
     configDir: string;
+    requestId: string;
+    host: string;
+    port: number;
   }
 }
 
@@ -31,16 +36,23 @@ const CONFIG_DIR = getConfigDir();
 const SETTINGS_FILE = path.join(CONFIG_DIR, "settings.json");
 
 // Middleware to add configDir to context
-app.use("*", (c, next) => {
-  c.set("configDir", CONFIG_DIR);
-  return next();
-});
+app.use(
+  "*",
+  (c, next) => {
+    c.set("configDir", CONFIG_DIR);
+    c.set("host", HOST);
+    c.set("port", Number(PORT));
+    return next();
+  },
+  requestId(),
+);
 
 // Mount the routers
 const routerApp = app
   .route("/status", statusRouter)
   .route("/mcp-servers", mcpServersRouter)
-  .route("/settings", settingsRouter);
+  .route("/settings", settingsRouter)
+  .route("/sse", sseRouter);
 
 export type AppType = typeof routerApp;
 

@@ -1,6 +1,6 @@
-import { Setting } from "obsidian";
+import { Notice, Setting } from "obsidian";
 import Cannoli from "src/main";
-import { makeCannoliServerClient } from "@deablabs/cannoli-core";
+import { makeCannoliServerClient, serverSchemas } from "@deablabs/cannoli-core";
 export async function createServerSettings(
   containerEl: HTMLElement,
   plugin: Cannoli,
@@ -85,6 +85,46 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
         text.inputEl.style.width = "100%";
         text.inputEl.rows = 10;
       });
+    // textarea with button to "add mcp server". when added, it will post to the server and clear the input
+    const addMCPSetting = new Setting(containerEl)
+      .setName("Add MCP Server")
+      .setDesc("Add a new MCP server to your Cannoli server.")
+      .addTextArea((text) => {
+        text.setPlaceholder(
+          `
+          {
+            "name": "mcp-server",
+            "type": "stdio",
+            "command": "node",
+            "args": ["/Users/username/servers/mcp-ts-quickstart/src/index.ts"]
+          }
+          `.trim(),
+        );
+        text.setValue("");
+        text.inputEl.style.width = "100%";
+        text.inputEl.rows = 10;
+      });
+    addMCPSetting.addButton((button) => {
+      button.setButtonText("Add").onClick(async () => {
+        const textInput = addMCPSetting.controlEl.querySelector(
+          "textarea",
+        )! as HTMLTextAreaElement;
+        try {
+          const json = serverSchemas.ServerCreateSchema.parse(
+            JSON.parse(textInput.value),
+          );
+          const response = await serverClient["mcp-servers"].$post({ json });
+          if (response.ok) {
+            display();
+          } else {
+            throw response;
+          }
+        } catch (e) {
+          console.error(e);
+          new Notice(`Failed to add MCP server:\n${e}`);
+        }
+      });
+    });
   } else {
     containerEl.createEl("p", {
       text: `Cannot connect to server.`,

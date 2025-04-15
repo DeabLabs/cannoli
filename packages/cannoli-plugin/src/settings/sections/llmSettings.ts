@@ -78,20 +78,6 @@ export function createLLMSettings(
 
   containerEl.createEl("h1", { text: "LLM" });
 
-  new Setting(containerEl)
-    .setName("Enable MCP")
-    .setDesc(
-      "Enable MCP for LLM calls. This will allow the LLM to call MCP servers.",
-    )
-    .addToggle((toggle) => {
-      toggle.setValue(plugin.settings.enableMCP);
-      toggle.onChange(async (value) => {
-        plugin.settings.enableMCP = value;
-        await plugin.saveSettings();
-        display();
-      });
-    });
-
   if (plugin.settings.llmProvider === "openai") {
     createOpenAISettings(containerEl, plugin);
   } else if (plugin.settings.llmProvider === "azure_openai") {
