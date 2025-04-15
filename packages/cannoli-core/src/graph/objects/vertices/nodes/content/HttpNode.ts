@@ -351,7 +351,40 @@ export class HttpNode extends ContentNode {
 
     this.executing();
 
-    const content = await this.processReferences([], true);
+    let content = await this.processReferences([], true);
+
+    // Check if the content is wrapped in triple backticks with the "mcp" language identifier
+    if (content.startsWith("```mcp\n") && content.endsWith("\n```")) {
+      // If its mock run, return a mock response
+      if (this.run.isMock) {
+        this.loadOutgoingEdges("This is a mock response");
+        this.completed();
+        return;
+      }
+      console.log(content);
+
+      // Extract the content within the mcp block
+      const mcpBlock = content.match(/```mcp\n([\s\S]*?)\n```/);
+      if (mcpBlock) {
+        content = mcpBlock[1];
+
+        const response = await this.run.callGoalAgent({
+          messages: [{ role: "user", content }],
+        });
+
+        console.log(response);
+
+        if (response instanceof Error) {
+          console.log("Error", response);
+          this.error(response.message);
+          return;
+        }
+
+        this.loadOutgoingEdges(response.content);
+        this.completed();
+        return;
+      }
+    }
 
     let maybeActionName = this.getName(content);
     let namedActionContent = null;

@@ -946,6 +946,57 @@ export class Run {
     );
   }
 
+  async callGoalAgent(
+    request: GenericCompletionParams,
+    verbose?: boolean,
+  ): Promise<GenericCompletionResponse | Error> {
+    console.log("callGoalAgent", request);
+    return this.llmLimit(
+      async (): Promise<GenericCompletionResponse | Error> => {
+        // Only call LLM if we're not mocking
+        if (this.isMock || !this.llm || !this.llm.initialized) {
+          return this.createMockFunctionResponse(request);
+        }
+
+        // Catch any errors
+        try {
+          const response = await this.llm.getGoalCompletion(request);
+          const completion = response;
+
+          if (verbose) {
+            console.log(
+              "Input Messages:\n" +
+                JSON.stringify(request.messages, null, 2) +
+                "\n\nResponse Message:\n" +
+                JSON.stringify(completion, null, 2),
+            );
+          }
+
+          // const responseUsage =
+          // 	Llm.getCompletionResponseUsage(response);
+
+          if (request.model) {
+            const numberOfCalls = this.usage[request.model]?.numberOfCalls ?? 0;
+            // const promptTokens = this.usage[request.model]?.promptTokens ?? 0;
+            // const completionTokens = this.usage[request.model]?.completionTokens ?? 0;
+
+            this.usage[request.model] = {
+              numberOfCalls: numberOfCalls + 1,
+              // promptTokens: promptTokens + responseUsage.prompt_tokens,
+              // completionTokens: completionTokens + responseUsage.completion_tokens,
+            };
+          }
+
+          invariant(completion, "No message returned");
+
+          return completion;
+        } catch (e) {
+          return e as Error;
+        }
+      },
+    );
+  }
+
   async callLLMStream(request: GenericCompletionParams) {
     if (this.isMock || !this.llm || !this.llm.initialized) {
       // Return mock stream

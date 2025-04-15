@@ -35,6 +35,13 @@ import invariant from "tiny-invariant";
 import { TracingConfig } from "src/run";
 import { Runnable } from "@langchain/core/runnables";
 
+import { loadMcpTools } from "./langchain/mcpTools";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { makeCannoliServerClient } from "./serverClient";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StructuredToolInterface } from "@langchain/core/tools";
+
 export const GenericFunctionCallSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
@@ -509,6 +516,80 @@ export class LLMProvider {
     const stream = await client.pipe(stringParser).stream(convertedMessages);
 
     return stream;
+  };
+
+  getGoalCompletion = async ({
+    messages,
+    ...configOverrides
+  }: GenericCompletionParams) => {
+    console.log("getGoalCompletion", messages);
+    const client = this.getChatClient({
+      configOverrides,
+      // @ts-expect-error
+      provider: configOverrides?.provider ?? undefined,
+    });
+
+    const cannoliClient = makeCannoliServerClient("http://localhost:3333");
+
+    const serversResponse = await cannoliClient["mcp-servers"].sse.$get();
+
+    const servers = await serversResponse.json();
+
+    // For each server call loadMcpTools
+
+    const mcpServers = await Promise.all(
+      Object.entries(servers.servers).map(async ([name, server]) => {
+        // @ts-expect-error
+        const transport = new SSEClientTransport(server.url);
+
+        // @ts-expect-error
+        console.log("Server url", server.url);
+
+        const mcpClient = new Client({
+          name: `cannoli`,
+          version: "1.0.0",
+        });
+
+        console.log("Connecting to server", name);
+        await mcpClient.connect(transport);
+        console.log("Connected to server", name);
+
+        return (await loadMcpTools(
+          name,
+          mcpClient,
+        )) as StructuredToolInterface[];
+      }),
+    );
+
+    // Create the React agent
+    const agent = createReactAgent({
+      llm: client,
+      tools: mcpServers.flat(),
+    });
+
+    // Run the agent
+    try {
+      const mathResponse = await agent.invoke({
+        messages: LLMProvider.convertMessages(messages),
+      });
+
+      const content = JSON.stringify(
+        mathResponse.messages.at(-1)?.content,
+        null,
+        2,
+      );
+
+      return {
+        role: "assistant",
+        content,
+      };
+    } catch (error) {
+      console.error("Error during agent execution:", error);
+      // // Tools throw ToolException for tool-specific errors
+      // if (error.name === "ToolException") {
+      //   console.error("Tool execution failed:", error.message);
+      // }
+    }
   };
 
   clientWithMetadata = (client: Runnable) => {
