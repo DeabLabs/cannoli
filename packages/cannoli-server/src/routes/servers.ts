@@ -20,7 +20,7 @@ import {
 import { McpProxyServer } from "src/types";
 
 // Define input schemas
-const ServerIdParamSchema = z.string();
+const ServerIdParamSchema = z.object({ id: z.string() });
 
 // Define response schemas
 const ServersListResponseSchema = SuccessResponseSchema.extend({
