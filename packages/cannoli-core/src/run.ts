@@ -182,6 +182,7 @@ export interface RunArgs {
   runName?: string;
   cannoliServer?: {
     url: string;
+    secret: string;
   };
 }
 
@@ -269,6 +270,7 @@ export class Run {
           runDateEpochMs: this.runDateEpochMs,
           runName: this.runName,
           cannoliServerUrl: cannoliServer?.url,
+          cannoliServerSecret: cannoliServer?.secret,
         })
       : null;
 

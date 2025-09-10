@@ -1,6 +1,7 @@
 import { Context, Hono } from "hono";
 import {
   ErrorResponseSchema,
+  PublicSettingsSchema,
   SettingsSchema,
   SuccessResponseSchema,
 } from "../schemas";
@@ -65,7 +66,7 @@ const router = new Hono()
           description: "Raw settings JSON",
           content: {
             "application/json": {
-              schema: resolver(SettingsSchema),
+              schema: resolver(PublicSettingsSchema),
             },
           },
         },
@@ -130,7 +131,8 @@ export async function updateSettings(c: Context, configDir: string) {
 // Get raw settings JSON file
 export async function getRawSettings(c: Context, configDir: string) {
   try {
-    const settings = await loadSettings(configDir);
+    const UNSAFE_settings = await loadSettings(configDir);
+    const settings = PublicSettingsSchema.parse(UNSAFE_settings);
     return c.json(settings);
   } catch (error: unknown) {
     return c.json(

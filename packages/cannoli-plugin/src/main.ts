@@ -1247,6 +1247,7 @@ export default class Cannoli extends Plugin {
     const cannoliServerSettings = this.settings.cannoliServerEnabled
       ? {
           url: this.settings.cannoliServerUrl,
+          secret: this.settings.cannoliServerSecret,
         }
       : undefined;
 

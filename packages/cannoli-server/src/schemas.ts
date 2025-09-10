@@ -54,8 +54,15 @@ export const SettingsSchema = z
     proxyEnabled: z.boolean().default(false),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
+    serverSecret: z.string(),
+    oldSettings: z.any().optional(),
   })
   .catchall(z.unknown());
+
+export const PublicSettingsSchema = SettingsSchema.omit({
+  serverSecret: true,
+  oldSettings: true,
+});
 
 // Server creation request schemas
 export const HttpServerCreateSchema = HttpServerSchema.omit({

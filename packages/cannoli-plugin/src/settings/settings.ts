@@ -57,6 +57,7 @@ export interface CannoliSettings {
   tracingConfig: NonNullable<TracingConfig>;
   cannoliServerEnabled: boolean;
   cannoliServerUrl: string;
+  cannoliServerSecret: string;
 }
 
 export const DEFAULT_SETTINGS: CannoliSettings = {
@@ -116,4 +117,5 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
   },
   cannoliServerEnabled: false,
   cannoliServerUrl: "http://localhost:3333",
+  cannoliServerSecret: "",
 };

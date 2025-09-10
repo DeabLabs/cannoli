@@ -101,6 +101,7 @@ type ConstructorArgs = {
   runName?: string;
   runDateEpochMs?: number;
   cannoliServerUrl?: string;
+  cannoliServerSecret?: string;
 };
 
 export type GenericCompletionParams = {
@@ -139,6 +140,7 @@ const removeUndefinedKeys = <T extends Record<string, unknown>>(obj: T): T => {
 export class LLMProvider {
   baseConfig: GenericModelConfig = {};
   cannoliServerUrl?: string;
+  cannoliServerSecret?: string;
   provider: SupportedProviders = "openai";
   getDefaultConfigByProvider?: GetDefaultsByProvider;
   initialized = false;
@@ -162,6 +164,7 @@ export class LLMProvider {
     this.provider = initArgs.configs[0].provider as SupportedProviders;
     this.baseConfig = initArgs.configs[0];
     this.cannoliServerUrl = initArgs.cannoliServerUrl;
+    this.cannoliServerSecret = initArgs.cannoliServerSecret;
     this.valtownApiKey = initArgs.valtownApiKey;
     this.tracingConfig = initArgs.tracingConfig;
     this.runId = initArgs.runId;
@@ -525,12 +528,20 @@ export class LLMProvider {
     });
 
     const cannoliServerUrl = this.cannoliServerUrl;
+    const cannoliServerSecret = this.cannoliServerSecret;
     invariant(
       cannoliServerUrl,
       "Cannoli server URL is not set. Cannoli-server is required to use goal completion nodes.",
     );
+    invariant(
+      cannoliServerSecret,
+      "Cannoli server secret is not set. Cannoli-server is required to use goal completion nodes.",
+    );
 
-    const cannoliClient = makeCannoliServerClient(cannoliServerUrl);
+    const cannoliClient = makeCannoliServerClient(
+      cannoliServerSecret,
+      cannoliServerUrl,
+    );
 
     const serversResponse = await cannoliClient["mcp-servers"].sse.$get();
 

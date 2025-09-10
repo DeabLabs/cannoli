@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { Settings } from "./types";
+import { nanoid } from "nanoid";
 
 // Get platform-specific config directory
 export function getConfigDir(): string {
@@ -36,11 +37,13 @@ export async function ensureConfigDir(configDir: string): Promise<void> {
 }
 
 // Create default settings
-export function createDefaultSettings(): Settings {
+export function createDefaultSettings(oldSettings?: unknown): Settings {
   return {
     mcpServers: [],
     proxyEnabled: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    serverSecret: nanoid(10),
+    ...(oldSettings ? { oldSettings } : {}),
   };
 }

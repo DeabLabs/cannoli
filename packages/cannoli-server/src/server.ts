@@ -8,12 +8,14 @@ import { ServerInfo } from "./types";
 import { openAPISpecs } from "hono-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { requestId } from "hono/request-id";
+import { bearerAuth } from "hono/bearer-auth";
 
 // Import routers
 import statusRouter from "./routes/status";
 import mcpServersRouter from "./routes/servers";
 import settingsRouter from "./routes/settings";
 import sseRouter from "./routes/sse";
+import { loadSettings } from "src/settings";
 
 declare module "hono" {
   interface ContextVariableMap {
@@ -34,6 +36,11 @@ const HOST = process.env.HOST || "0.0.0.0";
 const PORT = process.env.PORT || 3333;
 const CONFIG_DIR = getConfigDir();
 const SETTINGS_FILE = path.join(CONFIG_DIR, "settings.json");
+const SERVER_SECRET = await loadSettings(CONFIG_DIR).then(
+  (settings) => settings.serverSecret,
+);
+
+app.use("*", bearerAuth({ token: SERVER_SECRET }));
 
 // Middleware to add configDir to context
 app.use(

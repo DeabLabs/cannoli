@@ -19,10 +19,6 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
     },
   });
 
-  const serverClient = makeCannoliServerClient(
-    plugin.settings.cannoliServerUrl,
-  );
-
   new Setting(containerEl)
     .setName("Server Enabled")
     .setDesc("Whether connection to a Cannoli server is enabled.")
@@ -30,6 +26,18 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
       toggle.setValue(plugin.settings.cannoliServerEnabled);
       toggle.onChange(async (value) => {
         plugin.settings.cannoliServerEnabled = value;
+        await plugin.saveSettings();
+        display();
+      });
+    });
+
+  new Setting(containerEl)
+    .setName("Server Secret")
+    .setDesc("The secret of your Cannoli server.")
+    .addText((text) => {
+      text.setValue(plugin.settings.cannoliServerSecret);
+      text.onChange(async (value) => {
+        plugin.settings.cannoliServerSecret = value;
         await plugin.saveSettings();
         display();
       });
@@ -52,6 +60,10 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
   });
 
   if (plugin.settings.cannoliServerEnabled) {
+    const serverClient = makeCannoliServerClient(
+      plugin.settings.cannoliServerSecret,
+      plugin.settings.cannoliServerUrl,
+    );
     const status = await serverClient.status
       .$get()
       .then(async (res) => res.json())

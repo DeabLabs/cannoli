@@ -17,9 +17,16 @@ export async function loadSettings(configDir: string): Promise<Settings> {
       // Parse with Zod schema
       return SettingsSchema.parse(rawSettings);
     } catch (parseError) {
-      console.error("Settings validation error:", parseError);
+      console.log(
+        "Creating default settings. Any previous invalid settings will be saved to the `oldSettings` key in the settings file.",
+      );
       // If invalid, return a fresh default settings
       const defaultSettings: Settings = createDefaultSettings();
+      console.log(
+        "Your secret is: ",
+        defaultSettings.serverSecret,
+        "Enter it within Cannoli settings to access your server!",
+      );
       await saveSettings(defaultSettings, configDir);
       return defaultSettings;
     }
