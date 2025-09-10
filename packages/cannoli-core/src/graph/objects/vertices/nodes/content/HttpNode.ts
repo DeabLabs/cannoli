@@ -361,7 +361,6 @@ export class HttpNode extends ContentNode {
         this.completed();
         return;
       }
-      console.log(content);
 
       // Extract the content within the mcp block
       const mcpBlock = content.match(/```mcp\n([\s\S]*?)\n```/);
@@ -372,10 +371,7 @@ export class HttpNode extends ContentNode {
           messages: [{ role: "user", content }],
         });
 
-        console.log(response);
-
         if (response instanceof Error) {
-          console.log("Error", response);
           this.error(response.message);
           return;
         }
