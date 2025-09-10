@@ -99,23 +99,23 @@ export async function updateSettings(c: Context, configDir: string) {
     };
 
     // Validate merged settings
-    const validationResult = SettingsSchema.safeParse(updatedSettings);
-    if (!validationResult.success) {
+    const UNSAFE_validationResult = SettingsSchema.safeParse(updatedSettings);
+    if (!UNSAFE_validationResult.success) {
       return c.json(
         {
           status: "error",
           message: "Invalid settings",
-          errors: validationResult.error.format(),
+          errors: UNSAFE_validationResult.error.format(),
         },
         400,
       );
     }
 
-    await saveSettings(validationResult.data, configDir);
+    await saveSettings(UNSAFE_validationResult.data, configDir);
 
     return c.json({
       status: "ok",
-      settings: validationResult.data,
+      settings: PublicSettingsSchema.parse(UNSAFE_validationResult.data),
     });
   } catch (error: unknown) {
     return c.json(

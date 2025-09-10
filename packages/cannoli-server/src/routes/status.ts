@@ -5,7 +5,7 @@ import { describeRoute } from "hono-openapi";
 import { z } from "zod";
 import {
   ErrorResponseSchema,
-  SettingsSchema,
+  PublicSettingsSchema,
   SuccessResponseSchema,
 } from "src/schemas";
 import { resolver } from "hono-openapi/zod";
@@ -13,7 +13,7 @@ import { resolver } from "hono-openapi/zod";
 // Define schemas for the status endpoint
 const StatusResponseSuccessSchema = SuccessResponseSchema.extend({
   version: z.string(),
-  settings: SettingsSchema,
+  settings: PublicSettingsSchema,
   configPath: z.string().optional(),
 });
 
@@ -53,12 +53,12 @@ const router = new Hono()
 export async function getStatus(c: Context) {
   try {
     const configDir = c.get("configDir");
-    const settings = await loadSettings(configDir);
+    const UNSAFE_settings = await loadSettings(configDir);
     const settingsFile = path.join(configDir, "settings.json");
     const response = StatusResponseSuccessSchema.parse({
       status: "ok",
       version: "1.0.0",
-      settings,
+      settings: PublicSettingsSchema.parse(UNSAFE_settings),
       configPath: settingsFile,
     });
 
