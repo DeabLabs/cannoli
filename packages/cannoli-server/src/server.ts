@@ -16,6 +16,7 @@ import mcpServersRouter from "./routes/servers";
 import settingsRouter from "./routes/settings";
 import sseRouter from "./routes/sse";
 import { loadSettings } from "src/settings";
+import { argumentsConfig, optionsDefinition } from "src/arguments";
 
 declare module "hono" {
   interface ContextVariableMap {
@@ -26,15 +27,31 @@ declare module "hono" {
   }
 }
 
+if (argumentsConfig.help) {
+  // generate help message from options config
+  const helpMessage = Object.entries(optionsDefinition)
+    .map(([key, value]) => `${key}: ${value.type}`)
+    .join("\n");
+  console.log(`
+Usage: cannoli-server [options]
+
+Options:
+${helpMessage}
+`);
+  process.exit(0);
+}
+
 // Create the app
 const app = new Hono();
-app.use("*", logger());
+if (argumentsConfig.verbose) {
+  app.use("*", logger());
+}
 app.use("*", cors());
 
 // Configuration
-const HOST = process.env.HOST || "localhost";
-const PORT = process.env.PORT || 3333;
-const CONFIG_DIR = getConfigDir();
+const HOST = argumentsConfig.host || process.env.HOST || "localhost";
+const PORT = argumentsConfig.port || process.env.PORT || 3333;
+const CONFIG_DIR = argumentsConfig["config-dir"] || getConfigDir();
 const SETTINGS_FILE = path.join(CONFIG_DIR, "settings.json");
 const SERVER_SECRET = await loadSettings(CONFIG_DIR).then(
   (settings) => settings.serverSecret,

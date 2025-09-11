@@ -71,3 +71,17 @@ pnpm changeset
 # describe the changes
 # when merged into main, a PR will be opened that will trigger a new release of cannoli-server when merged
 ```
+
+To manually publish:
+
+- Update the version in the package.json like so:
+
+```json
+"version": "0.0.0-alpha.3",
+```
+
+- Run the following command:
+
+```bash
+pnpm publish --no-git-checks --access=public
+```

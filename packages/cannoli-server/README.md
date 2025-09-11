@@ -11,6 +11,12 @@ contents to the Cannoli plugin in Obsidian.
 npx -y @deablabs/cannoli-server
 ```
 
+View the help message by running:
+
+```bash
+npx -y @deablabs/cannoli-server --help
+```
+
 When launched for the first time, a secret key will be generated and displayed in the console. This key is used to authenticate with the Cannoli plugin. You can find / update the server secret in the [server's config file](#configuration).
 
 ## Features
