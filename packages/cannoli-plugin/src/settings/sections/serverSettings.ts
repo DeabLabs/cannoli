@@ -1,6 +1,10 @@
 import { Notice, Setting } from "obsidian";
 import Cannoli from "src/main";
-import { makeCannoliServerClient, serverSchemas } from "@deablabs/cannoli-core";
+import {
+  CannoliServerClient,
+  makeCannoliServerClient,
+  serverSchemas,
+} from "@deablabs/cannoli-core";
 export async function createServerSettings(
   containerEl: HTMLElement,
   plugin: Cannoli,
@@ -110,46 +114,9 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
           text.inputEl.style.width = "100%";
           text.inputEl.rows = 10;
         });
-      // textarea with button to "add mcp server". when added, it will post to the server and clear the input
-      const addMCPSetting = new Setting(containerEl)
-        .setName("Add MCP Server")
-        .setDesc("Add a new MCP server to your Cannoli server.")
-        .addTextArea((text) => {
-          text.setPlaceholder(
-            `
-          {
-            "name": "mcp-server",
-            "type": "stdio",
-            "command": "node",
-            "args": ["/Users/username/servers/mcp-ts-quickstart/src/index.ts"]
-          }
-          `.trim(),
-          );
-          text.setValue("");
-          text.inputEl.style.width = "100%";
-          text.inputEl.rows = 10;
-        });
-      addMCPSetting.addButton((button) => {
-        button.setButtonText("Add").onClick(async () => {
-          const textInput = addMCPSetting.controlEl.querySelector(
-            "textarea",
-          )! as HTMLTextAreaElement;
-          try {
-            const json = serverSchemas.ServerCreateSchema.parse(
-              JSON.parse(textInput.value),
-            );
-            const response = await serverClient["mcp-servers"].$post({ json });
-            if (response.ok) {
-              display();
-            } else {
-              throw response;
-            }
-          } catch (e) {
-            console.error(e);
-            new Notice(`Failed to add MCP server:\n${e}`);
-          }
-        });
-      });
+
+      // Add the MCP Editor component
+      createMCPEditor(containerEl, serverClient);
     } else {
       containerEl.createEl("p", {
         text: `Cannot connect to server.`,
@@ -157,6 +124,268 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
           style: "color: var(--color-red)",
         },
       });
+    }
+  }
+}
+
+function createMCPEditor(
+  containerEl: HTMLElement,
+  serverClient: CannoliServerClient,
+) {
+  // Create a container for the MCP editor
+  const mcpEditorContainer = containerEl.createDiv({
+    attr: {
+      style:
+        "margin-top: 20px; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 16px;",
+    },
+  });
+
+  mcpEditorContainer.createEl("h3", { text: "MCP Server Editor" });
+  mcpEditorContainer.createEl("p", {
+    text: "Edit your MCP server configurations. Each row represents one server configuration.",
+    attr: {
+      style: "color: var(--text-muted); margin-bottom: 16px;",
+    },
+  });
+
+  // Container for server rows
+  const serversContainer = mcpEditorContainer.createDiv({
+    attr: {
+      style: "margin-bottom: 16px;",
+    },
+  });
+
+  // Store server configurations
+  let serverConfigs: Record<string, unknown> = {};
+
+  // Function to create a server row
+  const createServerRow = (serverName: string, serverConfig: unknown) => {
+    const rowContainer = serversContainer.createDiv({
+      attr: {
+        style:
+          "border: 1px solid var(--background-modifier-border); border-radius: 4px; padding: 12px; margin-bottom: 8px; background: var(--background-secondary);",
+      },
+    });
+
+    // Server name input
+    const nameContainer = rowContainer.createDiv({
+      attr: {
+        style:
+          "display: flex; align-items: center; margin-bottom: 8px; gap: 8px;",
+      },
+    });
+
+    nameContainer.createEl("label", {
+      text: "Server Name:",
+      attr: {
+        style: "font-weight: 500; min-width: 100px;",
+      },
+    });
+
+    const nameInput = nameContainer.createEl("input", {
+      value: serverName,
+      attr: {
+        style:
+          "flex: 1; padding: 4px 8px; border: 1px solid var(--background-modifier-border); border-radius: 4px; background: var(--background-primary); color: var(--text-normal);",
+        placeholder: "Enter server name",
+      },
+    }) as HTMLInputElement;
+
+    // Delete button
+    const deleteButton = nameContainer.createEl("button", {
+      text: "Delete",
+      attr: {
+        style:
+          "padding: 4px 8px; border: 1px solid var(--text-error); border-radius: 4px; background: var(--background-primary); color: var(--text-error); cursor: pointer; font-size: 12px;",
+      },
+    });
+
+    // Store the current server name for updates
+    let currentServerName = serverName;
+
+    deleteButton.addEventListener("click", () => {
+      rowContainer.remove();
+      delete serverConfigs[currentServerName];
+    });
+
+    // Server configuration textarea
+    const placeholder =
+      '{\n  "id": "server-id",\n  "name": "Server Name",\n  "type": "stdio",\n  "enabled": true,\n  "command": "node",\n  "args": ["/path/to/server.js"]\n}';
+    const configTextarea = rowContainer.createEl("textarea", {
+      text: JSON.stringify(serverConfig, null, 2) || placeholder,
+      placeholder,
+      attr: {
+        style:
+          "width: 100%; min-height: 120px; font-family: var(--font-monospace); font-size: 12px; padding: 8px; border: 1px solid var(--background-modifier-border); border-radius: 4px; background: var(--background-primary); color: var(--text-normal);",
+      },
+    }) as HTMLTextAreaElement;
+
+    // Update server configs when inputs change
+    const updateConfig = () => {
+      const newName = nameInput.value.trim();
+
+      // Handle name changes
+      if (newName && newName !== currentServerName) {
+        // Update the server configs object
+        if (serverConfigs[currentServerName]) {
+          serverConfigs[newName] = serverConfigs[currentServerName];
+          delete serverConfigs[currentServerName];
+        }
+        currentServerName = newName;
+      }
+
+      // Update the configuration
+      try {
+        const parsedConfig = JSON.parse(configTextarea.value);
+        serverConfigs[currentServerName] = parsedConfig;
+      } catch (e) {
+        // Invalid JSON, keep the text but don't update the config
+      }
+    };
+
+    nameInput.addEventListener("input", updateConfig);
+    configTextarea.addEventListener("input", updateConfig);
+  };
+
+  // Function to add a new server row
+  const addNewServer = () => {
+    const newServerName = `server-${Date.now()}`;
+    const defaultConfig = {
+      id: newServerName,
+      name: newServerName,
+      type: "stdio",
+      enabled: true,
+      command: "node",
+      args: ["/path/to/server.js"],
+    };
+    serverConfigs[newServerName] = defaultConfig;
+    createServerRow(newServerName, defaultConfig);
+  };
+
+  // Load current settings and create rows
+  const loadCurrentSettings = async () => {
+    try {
+      const response = await serverClient.settings.raw.$get();
+      if (response.ok) {
+        const settings = await response.json();
+        const mcpServers = settings.mcpServers || [];
+
+        // Clear existing rows
+        serversContainer.empty();
+        serverConfigs = {};
+
+        // Convert array to object format and create rows
+        mcpServers.forEach((server: unknown) => {
+          if (
+            typeof server === "object" &&
+            server !== null &&
+            "name" in server
+          ) {
+            const serverName = server.name as string;
+            serverConfigs[serverName] = server;
+            createServerRow(serverName, server);
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load current settings:", error);
+    }
+  };
+
+  // Create button container
+  const buttonContainer = mcpEditorContainer.createDiv({
+    attr: {
+      style: "display: flex; gap: 8px; justify-content: space-between;",
+    },
+  });
+
+  // Add MCP Server button
+  const addButton = buttonContainer.createEl("button", {
+    text: "Add MCP Server",
+    attr: {
+      style:
+        "padding: 6px 12px; border: 1px solid var(--interactive-accent); border-radius: 4px; background: var(--interactive-accent); color: var(--text-on-accent); cursor: pointer;",
+    },
+  });
+
+  addButton.addEventListener("click", addNewServer);
+
+  // Right side buttons
+  const rightButtons = buttonContainer.createDiv({
+    attr: {
+      style: "display: flex; gap: 8px;",
+    },
+  });
+
+  // Refresh button
+  const resetButton = rightButtons.createEl("button", {
+    text: "Refresh",
+    attr: {
+      style:
+        "padding: 6px 12px; border: 1px solid var(--background-modifier-border); border-radius: 4px; background: var(--background-primary); color: var(--text-normal); cursor: pointer;",
+    },
+  });
+
+  resetButton.addEventListener("click", loadCurrentSettings);
+
+  // Save button
+  const saveButton = rightButtons.createEl("button", {
+    text: "Save",
+    attr: {
+      style:
+        "padding: 6px 12px; border: 1px solid var(--interactive-accent); border-radius: 4px; background: var(--interactive-accent); color: var(--text-on-accent); cursor: pointer;",
+    },
+  });
+
+  saveButton.addEventListener("click", async () => {
+    await saveMCPSettings(serverClient, serverConfigs);
+  });
+
+  // Load initial settings
+  loadCurrentSettings();
+}
+
+async function saveMCPSettings(
+  serverClient: CannoliServerClient,
+  serverConfigs: Record<string, unknown>,
+) {
+  try {
+    // Convert object to array format
+    const mcpServers = Object.values(serverConfigs);
+
+    // Validate each server configuration
+    for (const server of mcpServers) {
+      try {
+        serverSchemas.McpServerSchema.parse(server);
+      } catch (validationError) {
+        new Notice(`Invalid server configuration: ${validationError}`);
+        return;
+      }
+    }
+
+    // Update settings via API
+    const response = await serverClient.settings.$patch({
+      json: {
+        mcpServers: mcpServers as Parameters<
+          typeof serverClient.settings.$patch
+        >[0]["json"]["mcpServers"],
+      },
+    });
+
+    if (response.ok) {
+      new Notice("MCP server settings saved successfully!");
+    } else {
+      const errorData = (await response.json()) as { message?: string };
+      new Notice(
+        `Failed to save settings: ${errorData.message || "Unknown error"}`,
+      );
+    }
+  } catch (error) {
+    console.error("Failed to save MCP settings:", error);
+    if (error instanceof SyntaxError) {
+      new Notice("Invalid JSON format. Please check your syntax.");
+    } else {
+      new Notice(`Failed to save settings: ${error}`);
     }
   }
 }
