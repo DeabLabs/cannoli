@@ -39,6 +39,7 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
     .setName("Server Secret")
     .setDesc("The secret of your Cannoli server.")
     .addText((text) => {
+      text.inputEl.setAttribute("type", "password");
       text.setValue(plugin.settings.cannoliServerSecret);
       text.onChange(async (value) => {
         plugin.settings.cannoliServerSecret = value;
@@ -105,15 +106,97 @@ You can run the latest version of Cannoli Server by running \`npx -y @deablabs/c
           style: "color: var(--color-purple)",
         },
       });
-      new Setting(containerEl)
-        .setName("Server Settings")
-        .setDesc("The settings of your Cannoli server.")
-        .addTextArea((text) => {
-          text.setValue(JSON.stringify(status.settings, null, 2));
-          text.setDisabled(true);
-          text.inputEl.style.width = "100%";
-          text.inputEl.rows = 10;
-        });
+      // Create a nicer settings display
+      const settingsContainer = containerEl.createDiv({
+        attr: {
+          style:
+            "margin-top: 20px; border: 1px solid var(--background-modifier-border); border-radius: 6px; padding: 16px; background: var(--background-secondary);",
+        },
+      });
+
+      settingsContainer.createEl("h3", { text: "Server Settings" });
+      settingsContainer.createEl("p", {
+        text: "Current configuration of your Cannoli server.",
+        attr: {
+          style: "color: var(--text-muted); margin-bottom: 16px;",
+        },
+      });
+
+      // Server info section
+      const serverInfoContainer = settingsContainer.createDiv({
+        attr: {
+          style: "margin-bottom: 16px;",
+        },
+      });
+
+      // MCP Servers count
+      const mcpServersRow = serverInfoContainer.createDiv({
+        attr: {
+          style:
+            "display: flex; justify-content: space-between; align-items: center; padding: 8px 0;",
+        },
+      });
+      mcpServersRow.createEl("span", {
+        text: "MCP Servers:",
+        attr: {
+          style: "font-weight: 500; color: var(--text-normal);",
+        },
+      });
+      const mcpCount = status.settings.mcpServers?.length || 0;
+      mcpServersRow.createEl("span", {
+        text: `${mcpCount} configured`,
+        attr: {
+          style: "color: var(--text-muted);",
+        },
+      });
+
+      // Created/Updated timestamps
+      const timestampsContainer = settingsContainer.createDiv({
+        attr: {
+          style:
+            "margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--background-modifier-border);",
+        },
+      });
+
+      const createdRow = timestampsContainer.createDiv({
+        attr: {
+          style:
+            "display: flex; justify-content: space-between; align-items: center; padding: 4px 0;",
+        },
+      });
+      createdRow.createEl("span", {
+        text: "Created:",
+        attr: {
+          style: "font-size: 12px; color: var(--text-muted);",
+        },
+      });
+      createdRow.createEl("span", {
+        text: new Date(status.settings.createdAt).toLocaleString(),
+        attr: {
+          style:
+            "font-size: 12px; color: var(--text-muted); font-family: var(--font-monospace);",
+        },
+      });
+
+      const updatedRow = timestampsContainer.createDiv({
+        attr: {
+          style:
+            "display: flex; justify-content: space-between; align-items: center; padding: 4px 0;",
+        },
+      });
+      updatedRow.createEl("span", {
+        text: "Updated:",
+        attr: {
+          style: "font-size: 12px; color: var(--text-muted);",
+        },
+      });
+      updatedRow.createEl("span", {
+        text: new Date(status.settings.updatedAt).toLocaleString(),
+        attr: {
+          style:
+            "font-size: 12px; color: var(--text-muted); font-family: var(--font-monospace);",
+        },
+      });
 
       // Add the MCP Editor component
       createMCPEditor(containerEl, serverClient);
@@ -140,7 +223,7 @@ function createMCPEditor(
     },
   });
 
-  mcpEditorContainer.createEl("h3", { text: "MCP Server Editor" });
+  mcpEditorContainer.createEl("h3", { text: "Edit MCP Servers" });
   mcpEditorContainer.createEl("p", {
     text: "Edit your MCP server configurations. Each row represents one server configuration.",
     attr: {
