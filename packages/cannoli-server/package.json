@@ -28,8 +28,14 @@
     "typecheck": "tsc --noEmit",
     "inspect": "npx -y @modelcontextprotocol/inspector"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "cannoli",
+    "obsidian",
+    "plugin",
+    "mcp",
+    "ai"
+  ],
+  "author": "Anthony Powell <powell.anthonyd@proton.me>",
   "license": "MIT",
   "devDependencies": {
     "@microsoft/api-extractor": "7.52.3",
