@@ -16,11 +16,101 @@ export async function createServerSettings(
 
 It allows extended Cannoli functionality by offloading long-running tasks, like MCP servers, to a separate process.
 
-You can run the latest version of Cannoli Server by running \`npx -y @deablabs/cannoli-server\`.
-    `,
+You can run the latest version of Cannoli Server by running the command below:`,
     attr: {
       style: "white-space: pre-wrap;",
     },
+  });
+
+  // Create a copy-on-click command box
+  const commandBox = containerEl.createDiv({
+    attr: {
+      style: `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 12px 0;
+        padding: 12px;
+        background: var(--background-secondary);
+        border: 1px solid var(--background-modifier-border);
+        border-radius: 6px;
+        font-family: var(--font-monospace);
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      `,
+    },
+  });
+
+  commandBox.createEl("span", {
+    text: "npx -y @deablabs/cannoli-server@latest",
+    attr: {
+      style: `
+        flex: 1;
+        color: var(--text-normal);
+        user-select: all;
+      `,
+    },
+  });
+
+  const copyButton = commandBox.createEl("button", {
+    text: "Copy",
+    attr: {
+      style: `
+        padding: 4px 8px;
+        border: 1px solid var(--interactive-accent);
+        border-radius: 4px;
+        background: var(--interactive-accent);
+        color: var(--text-on-accent);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      `,
+    },
+  });
+
+  // Add hover effects
+  commandBox.addEventListener("mouseenter", () => {
+    commandBox.style.background = "var(--background-modifier-hover)";
+    commandBox.style.borderColor = "var(--interactive-accent)";
+  });
+
+  commandBox.addEventListener("mouseleave", () => {
+    commandBox.style.background = "var(--background-secondary)";
+    commandBox.style.borderColor = "var(--background-modifier-border)";
+  });
+
+  // Copy functionality
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        "npx -y @deablabs/cannoli-server@latest",
+      );
+      new Notice("Command copied to clipboard!");
+
+      // Visual feedback
+      const originalText = copyButton.textContent;
+      copyButton.textContent = "Copied!";
+      copyButton.style.background = "var(--color-green)";
+      copyButton.style.borderColor = "var(--color-green)";
+
+      setTimeout(() => {
+        copyButton.textContent = originalText;
+        copyButton.style.background = "var(--interactive-accent)";
+        copyButton.style.borderColor = "var(--interactive-accent)";
+      }, 2000);
+    } catch (err) {
+      new Notice("Failed to copy command to clipboard");
+      console.error("Failed to copy to clipboard:", err);
+    }
+  };
+
+  // Add click handlers
+  commandBox.addEventListener("click", copyToClipboard);
+  copyButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    copyToClipboard();
   });
 
   new Setting(containerEl)
