@@ -1,16 +1,18 @@
 import { App, Modal } from "obsidian";
 
-export class Version2Modal extends Modal {
+export class ChangelogModal extends Modal {
   paragraph: HTMLParagraphElement;
+  title: string;
 
-  constructor(app: App, paragraph: HTMLParagraphElement) {
+  constructor(app: App, paragraph: HTMLParagraphElement, title: string) {
     super(app);
     this.paragraph = paragraph;
+    this.title = title;
   }
 
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h1", { text: "Cannoli 2.0" });
+    contentEl.createEl("h1", { text: this.title });
     contentEl.appendChild(this.paragraph);
   }
 }

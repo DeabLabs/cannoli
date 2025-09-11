@@ -58,6 +58,7 @@ export interface CannoliSettings {
   cannoliServerEnabled: boolean;
   cannoliServerUrl: string;
   cannoliServerSecret: string;
+  seenVersion3Modal: boolean;
 }
 
 export const DEFAULT_SETTINGS: CannoliSettings = {
@@ -103,7 +104,6 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
   bakeLanguage: "typescript",
   bakeRuntime: "node",
   bakeIndent: "2",
-  seenVersion2Modal: false,
   secrets: [],
   enableVision: true,
   onlyRunCannoliGroups: false,
@@ -118,4 +118,6 @@ export const DEFAULT_SETTINGS: CannoliSettings = {
   cannoliServerEnabled: false,
   cannoliServerUrl: "http://localhost:3333",
   cannoliServerSecret: "",
+  seenVersion2Modal: true,
+  seenVersion3Modal: false,
 };

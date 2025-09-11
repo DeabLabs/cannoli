@@ -31,7 +31,7 @@ import { cannoliIcon } from "../assets/cannoliIcon";
 import { VaultInterface } from "./vault_interface";
 import { CanvasPersistor } from "./canvas";
 import { dataviewQuery, smartConnectionsQuery, modalMaker } from "./actions";
-import { Version2Modal } from "./modals/versionTwoModal";
+import { ChangelogModal } from "./modals/ChangelogModal";
 import { ValTownModal } from "./modals/viewVals";
 import { EditValModal } from "./modals/editVal";
 import { RunPriceAlertModal } from "./modals/runPriceAlert";
@@ -45,9 +45,9 @@ export default class Cannoli extends Plugin {
   async onload() {
     await this.loadSettings();
 
-    if (!this.settings.seenVersion2Modal) {
-      this.openVersion2Modal();
-      this.settings.seenVersion2Modal = true;
+    if (!this.settings.seenVersion3Modal) {
+      this.openVersion3Modal();
+      this.settings.seenVersion3Modal = true;
       await this.saveSettings();
     }
 
@@ -220,13 +220,83 @@ export default class Cannoli extends Plugin {
     });
   };
 
-  openVersion2Modal = async () => {
-    const modal = new Version2Modal(
+  openVersion3Modal = async () => {
+    const modal = new ChangelogModal(
       this.app,
-      this.createVersion2UpdateParagraph(),
+      this.createVersion3UpdateParagraph(),
+      "Cannoli 3.0",
     );
     modal.open();
   };
+
+  openVersion2Modal = async () => {
+    const modal = new ChangelogModal(
+      this.app,
+      this.createVersion2UpdateParagraph(),
+      "Cannoli 2.0",
+    );
+    modal.open();
+  };
+
+  createVersion3UpdateParagraph(): HTMLParagraphElement {
+    const paragraph = createEl("p");
+    paragraph.style.paddingLeft = "12px";
+    paragraph.style.borderLeft = "2px solid var(--interactive-accent)";
+    paragraph.style.whiteSpace = "pre-wrap";
+
+    const dateSpan = createEl("span", { text: "12-2024" });
+    dateSpan.style.opacity = "0.5";
+    paragraph.appendChild(dateSpan);
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendChild(createEl("br"));
+
+    paragraph.appendText("🎉 Cannoli 3.0 is here! 🎉");
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText("This major update brings powerful new capabilities:");
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText(
+      "🔌 MCP (Model Context Protocol) server integration using Goal nodes",
+    );
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText(
+      "     🖥️ Available via `npx -y @deablabs/cannoli-server` for advanced workflows",
+    );
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText("     ⚙️ Server settings UI with easy configuration");
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText(
+      "📊 LLM tracing and telemetry via Arize AI Phoenix integration",
+    );
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText("🛠️ Native LangChain tool calling for all models");
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText(
+      "The MCP integration opens up new possibilities for connecting",
+    );
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText(
+      "Cannoli with external tools and services. The built-in server",
+    );
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText(
+      "provides a robust foundation for complex AI workflows.",
+    );
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendChild(createEl("br"));
+    paragraph.appendText("Check out the ");
+    paragraph.appendChild(
+      createEl("a", {
+        text: "documentation",
+        href: "https://docs.cannoli.website",
+      }),
+    );
+    paragraph.appendText(" for more details! 🍝✨");
+
+    return paragraph;
+  }
 
   createVersion2UpdateParagraph(): HTMLParagraphElement {
     const paragraph = createEl("p");
