@@ -552,7 +552,26 @@ export class LLMProvider {
     const disconnectCallbacks: (() => Promise<void>)[] = [];
     const mcpServers = await Promise.all(
       Object.entries(servers.servers).map(async ([name, server]) => {
-        const transport = new SSEClientTransport(new URL(server.url));
+        const transport = new SSEClientTransport(new URL(server.url), {
+          // ensure POST requests are sent with the correct authorization header
+          requestInit: {
+            headers: {
+              Authorization: `Bearer ${cannoliServerSecret}`,
+            },
+          },
+          // ensure SSE GET requests are sent with the correct authorization header
+          eventSourceInit: {
+            fetch: (url, options) => {
+              return fetch(url, {
+                ...options,
+                headers: {
+                  ...options?.headers,
+                  Authorization: `Bearer ${cannoliServerSecret}`,
+                },
+              });
+            },
+          },
+        });
 
         console.log("connecting to server", name, server.url);
 

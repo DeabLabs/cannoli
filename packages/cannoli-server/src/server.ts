@@ -57,12 +57,13 @@ const SERVER_SECRET = await loadSettings(CONFIG_DIR).then(
   (settings) => settings.serverSecret,
 );
 
-app.use(async (c, next) => {
+app.use(async (...args) => {
+  const [c, next] = args;
   const path = c.req.path;
   if (path.startsWith("/docs") || path.startsWith("/openapi")) {
-    return next();
+    return await next();
   }
-  return bearerAuth({ token: SERVER_SECRET })(c, next);
+  return bearerAuth({ token: SERVER_SECRET })(...args);
 });
 
 // Middleware to add configDir to context
