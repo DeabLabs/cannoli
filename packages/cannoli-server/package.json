@@ -1,6 +1,6 @@
 {
   "name": "@deablabs/cannoli-server",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A companion server for the Cannoli Obsidian plugin that enables MCP and other AI features.\nJoin our Discord server to get involved in the development process: https://discord.gg/wzayNxpxvR",
   "main": "dist/index.js",
   "type": "module",
