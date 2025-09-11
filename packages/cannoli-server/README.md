@@ -2,6 +2,17 @@
 
 A companion HTTP server for the Cannoli Obsidian plugin that enables MCP (Machine Capability Provider) and other AI features.
 
+You provide standard MCP server configuration, and the server will manage launching them and proxying their
+contents to the Cannoli plugin in Obsidian.
+
+## Installation / Usage
+
+```bash
+npx -y @deablabs/cannoli-server
+```
+
+When launched for the first time, a secret key will be generated and displayed in the console. This key is used to authenticate with the Cannoli plugin. You can find / update the server secret in the [server's config file](#configuration).
+
 ## Features
 
 - Settings management API (read/update)

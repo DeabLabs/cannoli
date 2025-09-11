@@ -3,23 +3,23 @@
 ## Pre-requisites
 
 - nvm
-    - Manage node versions
-    - <https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating>
+  - Manage node versions
+  - <https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating>
 - obsidian
 
-    - Choose a vault you'd like to do development in
-        - It is recommended to create a new vault for development, that does not already have cannoli installed
-    - Install hot-reload plugin
+  - Choose a vault you'd like to do development in
+    - It is recommended to create a new vault for development, that does not already have cannoli installed
+  - Install hot-reload plugin
 
-        - <https://github.com/pjeby/hot-reload?tab=readme-ov-file#installation>
+    - <https://github.com/pjeby/hot-reload?tab=readme-ov-file#installation>
 
-        - `cd <my_obsidian_vault>/.obsidian/plugins && git clone git@github.com:pjeby/hot-reload.git`
+    - `cd <my_obsidian_vault>/.obsidian/plugins && git clone git@github.com:pjeby/hot-reload.git`
 
-        - Make sure to enable it in obsidian once installed
+    - Make sure to enable it in obsidian once installed
 
 - VSCode (optional)
-    - Any VSCode (or descendant) editor will pick up common configuration from the cannoli repo
-    - Code formatting settings and recommended extensions for cannoli development will appear when opening cannoli inside of one of these editors
+  - Any VSCode (or descendant) editor will pick up common configuration from the cannoli repo
+  - Code formatting settings and recommended extensions for cannoli development will appear when opening cannoli inside of one of these editors
 
 ## Building your dev environment
 
@@ -60,4 +60,14 @@ pnpm run dev
 # once the files appear/update, the hot-reload plugin will immediately refresh the cannoli plugin within obsidian
 # finally, any changes that occur to any file in the repo will trigger an automatic rebuild as long as the dev command continues to run
 # so you can make a change to a file, save it, and see it appear in obsidian in typically less than one second
+```
+
+## Deploying a new version of cannoli-server
+
+```bash
+pnpm changeset
+# select cannoli-server with spacebar and enter
+# chose major, minor, or patch
+# describe the changes
+# when merged into main, a PR will be opened that will trigger a new release of cannoli-server when merged
 ```
