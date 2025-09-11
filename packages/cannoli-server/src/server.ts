@@ -32,7 +32,7 @@ app.use("*", logger());
 app.use("*", cors());
 
 // Configuration
-const HOST = process.env.HOST || "0.0.0.0";
+const HOST = process.env.HOST || "localhost";
 const PORT = process.env.PORT || 3333;
 const CONFIG_DIR = getConfigDir();
 const SETTINGS_FILE = path.join(CONFIG_DIR, "settings.json");
