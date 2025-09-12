@@ -46,7 +46,6 @@ const app = new Hono();
 if (argumentsConfig.verbose) {
   app.use("*", logger());
 }
-app.use("*", cors());
 
 // Configuration
 const HOST = argumentsConfig.host || process.env.HOST || "localhost";
@@ -56,6 +55,8 @@ const SETTINGS_FILE = path.join(CONFIG_DIR, "settings.json");
 const SERVER_SECRET = await loadSettings(CONFIG_DIR).then(
   (settings) => settings.serverSecret,
 );
+
+app.use("*", cors({ origin: HOST, allowHeaders: ["Authorization"] }));
 
 app.use(async (...args) => {
   const [c, next] = args;
