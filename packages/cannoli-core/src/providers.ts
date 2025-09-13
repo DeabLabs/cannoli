@@ -643,17 +643,19 @@ export class LLMProvider {
                 runName,
               ) {
                 onReasoningMessagesUpdated?.(
-                  messages[0].map((m) => ({
-                    role:
-                      m instanceof HumanMessage
-                        ? "user"
-                        : m instanceof AIMessage
-                          ? "assistant"
-                          : m instanceof ToolMessage
-                            ? "tool"
-                            : "system",
-                    content: JSON.stringify(m.content, null, 2),
-                  })),
+                  messages[0].map((m) => {
+                    return {
+                      role:
+                        m instanceof HumanMessage
+                          ? "user"
+                          : m instanceof AIMessage
+                            ? "assistant"
+                            : m instanceof ToolMessage
+                              ? "tool"
+                              : "system",
+                      content: m.text,
+                    };
+                  }),
                 );
               },
             },

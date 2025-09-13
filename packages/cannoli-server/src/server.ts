@@ -56,7 +56,10 @@ const SERVER_SECRET = await loadSettings(CONFIG_DIR).then(
   (settings) => settings.serverSecret,
 );
 
-app.use("*", cors({ origin: HOST, allowHeaders: ["Authorization"] }));
+app.use(
+  "*",
+  cors({ origin: "*", allowHeaders: ["Authorization", "Content-Type"] }),
+);
 
 app.use(async (...args) => {
   const [c, next] = args;

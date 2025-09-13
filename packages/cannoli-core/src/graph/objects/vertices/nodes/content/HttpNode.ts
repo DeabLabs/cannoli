@@ -386,11 +386,20 @@ export class HttpNode extends ContentNode {
           this.setText(
             baseContent +
               "\n\n" +
-              "> [!question]- Reasoning Steps\n> " +
+              "> [!question]- Reasoning Steps" +
               //   TODO: This formatting is horrible, fix
               messages
-                .map((m) => m.content.trim().replace(/\n/g, "\n> "))
-                .join("\n> "),
+                .flatMap((m) =>
+                  m.content.trim().length
+                    ? [
+                        `\n> - Assistant`,
+                        "\n> ",
+                        m.content.trim().replace(/\n/g, "\n> "),
+                        "\n> ---",
+                      ]
+                    : [],
+                )
+                .join(""),
           );
         },
       });
