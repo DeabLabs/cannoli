@@ -953,10 +953,20 @@ export class Run {
     );
   }
 
-  async callGoalAgent(
-    request: GenericCompletionParams,
-    verbose?: boolean,
-  ): Promise<GenericCompletionResponse | Error> {
+  async callGoalAgent({
+    request,
+    verbose,
+    onReasoningMessagesUpdated,
+  }: {
+    request: GenericCompletionParams;
+    verbose?: boolean;
+    /**
+     * Called for each message that is created during the reasoning process
+     */
+    onReasoningMessagesUpdated?: (
+      messages: GenericCompletionResponse[],
+    ) => void;
+  }): Promise<GenericCompletionResponse | Error> {
     return this.llmLimit(
       async (): Promise<GenericCompletionResponse | Error> => {
         // Only call LLM if we're not mocking
@@ -966,7 +976,10 @@ export class Run {
 
         // Catch any errors
         try {
-          const response = await this.llm.getGoalCompletion(request);
+          const response = await this.llm.getGoalCompletion({
+            ...request,
+            onReasoningMessagesUpdated,
+          });
           const completion = response;
 
           if (verbose) {

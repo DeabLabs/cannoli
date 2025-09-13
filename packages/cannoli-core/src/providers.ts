@@ -41,6 +41,7 @@ import { makeCannoliServerClient } from "./serverClient";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StructuredToolInterface } from "@langchain/core/tools";
+import { BaseCallbackHandler } from "node_modules/@langchain/core/dist/callbacks/base";
 
 export const GenericFunctionCallSchema = z.object({
   name: z.string(),
@@ -219,6 +220,7 @@ export class LLMProvider {
       provider: SupportedProviders;
       hasFunctionCall: boolean;
     }>,
+    callbacks?: BaseCallbackHandler[],
   ): BaseChatModel => {
     const config = this.getMergedConfig(args);
     const provider = config.provider;
@@ -253,6 +255,7 @@ export class LLMProvider {
             baseURL: url,
             defaultQuery: query,
           },
+          callbacks,
         });
         break;
       }
@@ -280,6 +283,7 @@ export class LLMProvider {
             baseURL: url,
             defaultQuery: query,
           },
+          callbacks,
         });
         break;
       }
@@ -292,6 +296,7 @@ export class LLMProvider {
           frequencyPenalty: config.frequency_penalty,
           presencePenalty: config.presence_penalty,
           stop: config.stop?.split(","),
+          callbacks,
         });
         break;
       }
@@ -304,6 +309,7 @@ export class LLMProvider {
           maxOutputTokens: config.max_tokens,
           topP: config.top_p,
           stopSequences: config.stop?.split(","),
+          callbacks,
         });
         break;
       }
@@ -323,6 +329,7 @@ export class LLMProvider {
               "anthropic-dangerous-direct-browser-access": "true",
             },
           },
+          callbacks,
         });
         break;
       }
@@ -333,6 +340,7 @@ export class LLMProvider {
           temperature: config.temperature,
           stopSequences: config.stop?.split(","),
           maxRetries: 3,
+          callbacks,
         });
         break;
       }
@@ -519,8 +527,16 @@ export class LLMProvider {
 
   getGoalCompletion = async ({
     messages,
+    onReasoningMessagesUpdated,
     ...configOverrides
-  }: GenericCompletionParams) => {
+  }: GenericCompletionParams & {
+    /**
+     * Called for each set of messages that is created during the reasoning process
+     */
+    onReasoningMessagesUpdated?: (
+      messages: GenericCompletionResponse[],
+    ) => void;
+  }) => {
     const client = this.getChatClient({
       configOverrides,
       // @ts-expect-error
@@ -609,12 +625,44 @@ export class LLMProvider {
         );
       }
 
-      const mathResponse = await agent.invoke({
-        messages: LLMProvider.convertMessages(messages),
-      });
+      const agentResponse = await agent.invoke(
+        {
+          messages: LLMProvider.convertMessages(messages),
+        },
+        {
+          callbacks: [
+            {
+              handleChatModelStart(
+                llm,
+                messages,
+                runId,
+                parentRunId,
+                extraParams,
+                tags,
+                metadata,
+                runName,
+              ) {
+                onReasoningMessagesUpdated?.(
+                  messages[0].map((m) => ({
+                    role:
+                      m instanceof HumanMessage
+                        ? "user"
+                        : m instanceof AIMessage
+                          ? "assistant"
+                          : m instanceof ToolMessage
+                            ? "tool"
+                            : "system",
+                    content: JSON.stringify(m.content, null, 2),
+                  })),
+                );
+              },
+            },
+          ],
+        },
+      );
 
       const content = JSON.stringify(
-        mathResponse.messages.at(-1)?.content,
+        agentResponse.messages.at(-1)?.content,
         null,
         2,
       );

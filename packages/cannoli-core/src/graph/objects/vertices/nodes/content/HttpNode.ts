@@ -352,9 +352,15 @@ export class HttpNode extends ContentNode {
     this.executing();
 
     let content = await this.processReferences([], true);
+    const mcpContent = content.slice(
+      content.indexOf("```mcp\n") + 6,
+      content.indexOf("\n```"),
+    );
+    const hasMcpContent = mcpContent !== null && mcpContent.length > 0;
+    console.log("mcpContent", mcpContent);
 
     // Check if the content is wrapped in triple backticks with the "mcp" language identifier
-    if (content.startsWith("```mcp\n") && content.endsWith("\n```")) {
+    if (hasMcpContent) {
       // If its mock run, return a mock response
       if (this.run.isMock) {
         this.loadOutgoingEdges("This is a mock response");
@@ -362,24 +368,41 @@ export class HttpNode extends ContentNode {
         return;
       }
 
-      // Extract the content within the mcp block
-      const mcpBlock = content.match(/```mcp\n([\s\S]*?)\n```/);
-      if (mcpBlock) {
-        content = mcpBlock[1];
+      const baseContent = "```mcp\n" + mcpContent.trim() + "\n```";
+      // TODO: Why can't I reset the state of the node text? Only when the node finishes
+      await new Promise((resolve) =>
+        setTimeout(() => {
+          this.setText(baseContent);
+          resolve(true);
+        }, 3000),
+      );
 
-        const response = await this.run.callGoalAgent({
-          messages: [{ role: "user", content }],
-        });
+      content = mcpContent;
 
-        if (response instanceof Error) {
-          this.error(response.message);
-          return;
-        }
+      const response = await this.run.callGoalAgent({
+        request: { messages: [{ role: "user", content }] },
+        onReasoningMessagesUpdated: (messages) => {
+          console.log("reasoning message", messages);
+          this.setText(
+            baseContent +
+              "\n\n" +
+              "> [!question]- Reasoning Steps\n> " +
+              //   TODO: This formatting is horrible, fix
+              messages
+                .map((m) => m.content.trim().replace(/\n/g, "\n> "))
+                .join("\n> "),
+          );
+        },
+      });
 
-        this.loadOutgoingEdges(response.content);
-        this.completed();
+      if (response instanceof Error) {
+        this.error(response.message);
         return;
       }
+
+      this.loadOutgoingEdges(response.content);
+      this.completed();
+      return;
     }
 
     let maybeActionName = this.getName(content);
