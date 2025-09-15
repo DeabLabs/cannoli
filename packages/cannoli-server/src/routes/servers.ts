@@ -285,7 +285,7 @@ const router = new Hono()
   );
 
 // Get all MCP servers
-export async function getAllServersResponse(c: Context): Promise<Response> {
+export async function getAllServersResponse(c: Context) {
   try {
     const configDir = c.get("configDir");
     const servers = await getAllServers(configDir);
@@ -305,7 +305,7 @@ export async function getAllServersResponse(c: Context): Promise<Response> {
 }
 
 // Get a single MCP server by ID
-export async function getServerByIdResponse(c: Context): Promise<Response> {
+export async function getServerByIdResponse(c: Context) {
   try {
     const configDir = c.get("configDir");
     const serverId = c.req.param("id");
@@ -336,7 +336,7 @@ export async function getServerByIdResponse(c: Context): Promise<Response> {
 }
 
 // Add a new MCP server
-export async function createServerResponse(c: Context): Promise<Response> {
+export async function createServerResponse(c: Context) {
   try {
     const configDir = c.get("configDir");
     const rawData = await c.req.json();
@@ -362,7 +362,7 @@ export async function createServerResponse(c: Context): Promise<Response> {
 }
 
 // Update an existing MCP server
-export async function updateServerResponse(c: Context): Promise<Response> {
+export async function updateServerResponse(c: Context) {
   try {
     const configDir = c.get("configDir");
     const serverId = c.req.param("id");
@@ -386,7 +386,7 @@ export async function updateServerResponse(c: Context): Promise<Response> {
 }
 
 // Delete an MCP server
-export async function deleteServerResponse(c: Context): Promise<Response> {
+export async function deleteServerResponse(c: Context) {
   try {
     const configDir = c.get("configDir");
     const serverId = c.req.param("id");
