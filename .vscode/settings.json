@@ -1,17 +1,20 @@
 {
-	"typescript.tsdk": "node_modules/typescript/lib",
-	"editor.defaultFormatter": "vscode.typescript-language-features",
-	"editor.formatOnSave": true,
-	"prettier.enable": false,
-	"[typescript]": {
-		"editor.defaultFormatter": "vscode.typescript-language-features"
-	},
-	"search.exclude": {
-		// Avoid polluting search results with lockfile content
-		"pnpm-lock.yaml": true,
-		"dist": true,
-		"node_modules": true
-	},
-	// Ensure VSCode uses pnpm instead of npm
-	"npm.packageManager": "pnpm",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "prettier.enable": true,
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "search.exclude": {
+    // Avoid polluting search results with lockfile content
+    "pnpm-lock.yaml": true,
+    "dist": true,
+    "node_modules": true
+  },
+  // Ensure VSCode uses pnpm instead of npm
+  "npm.packageManager": "pnpm",
+  "[markdown]": {
+    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
+  }
 }
