@@ -30,7 +30,7 @@ export class CannoliSettingTab extends PluginSettingTab {
     // Add a header
     containerEl.createEl("h1", { text: "Cannoli Settings" });
 
-    containerEl.appendChild(this.plugin.createVersion3UpdateParagraph());
+    containerEl.appendChild(this.plugin.createVersion2_3UpdateParagraph());
 
     // Add button to add sample folder
     new Setting(containerEl)

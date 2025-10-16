@@ -46,7 +46,7 @@ export default class Cannoli extends Plugin {
     await this.loadSettings();
 
     if (!this.settings.seenVersion3Modal) {
-      this.openVersion3Modal();
+      this.openVersion2_3Modal();
       this.settings.seenVersion3Modal = true;
       await this.saveSettings();
     }
@@ -220,11 +220,11 @@ export default class Cannoli extends Plugin {
     });
   };
 
-  openVersion3Modal = async () => {
+  openVersion2_3Modal = async () => {
     const modal = new ChangelogModal(
       this.app,
-      this.createVersion3UpdateParagraph(),
-      "Cannoli 3.0",
+      this.createVersion2_3UpdateParagraph(),
+      "Cannoli 2.3.0",
     );
     modal.open();
   };
@@ -238,7 +238,7 @@ export default class Cannoli extends Plugin {
     modal.open();
   };
 
-  createVersion3UpdateParagraph(): HTMLParagraphElement {
+  createVersion2_3UpdateParagraph(): HTMLParagraphElement {
     const paragraph = createEl("p");
     paragraph.style.paddingLeft = "12px";
     paragraph.style.borderLeft = "2px solid var(--interactive-accent)";
@@ -250,7 +250,7 @@ export default class Cannoli extends Plugin {
     paragraph.appendChild(createEl("br"));
     paragraph.appendChild(createEl("br"));
 
-    paragraph.appendText("Cannoli 3.0");
+    paragraph.appendText("Cannoli 2.3.0");
     paragraph.appendChild(createEl("br"));
     paragraph.appendChild(createEl("br"));
     paragraph.appendText(
