@@ -250,50 +250,27 @@ export default class Cannoli extends Plugin {
     paragraph.appendChild(createEl("br"));
     paragraph.appendChild(createEl("br"));
 
-    paragraph.appendText("🎉 Cannoli 3.0 is here! 🎉");
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendText("This major update brings powerful new capabilities:");
+    paragraph.appendText("Cannoli 3.0");
     paragraph.appendChild(createEl("br"));
     paragraph.appendChild(createEl("br"));
     paragraph.appendText(
-      "🔌 MCP (Model Context Protocol) server integration using Goal nodes",
+      "Added MCP server integration for external tool connections.",
     );
     paragraph.appendChild(createEl("br"));
-    paragraph.appendText(
-      "     🖥️ Available via `npx -y @deablabs/cannoli-server` for advanced workflows",
-    );
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendText("     ⚙️ Server settings UI with easy configuration");
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendText(
-      "📊 LLM tracing and telemetry via Arize AI Phoenix integration",
-    );
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendText("🛠️ Native LangChain tool calling for all models");
+    paragraph.appendText("Added Arize AI Phoenix telemetry.");
     paragraph.appendChild(createEl("br"));
     paragraph.appendChild(createEl("br"));
     paragraph.appendText(
-      "The MCP integration opens up new possibilities for connecting",
+      "More documentation and information on these features is forthcoming. ",
     );
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendText(
-      "Cannoli with external tools and services. The built-in server",
-    );
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendText(
-      "provides a robust foundation for complex AI workflows.",
-    );
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendChild(createEl("br"));
-    paragraph.appendText("Check out the ");
+    paragraph.appendText("Check settings for configuration and join our ");
     paragraph.appendChild(
       createEl("a", {
-        text: "documentation",
-        href: "https://docs.cannoli.website",
+        text: "Discord",
+        href: "https://discord.gg/wzayNxpxvR",
       }),
     );
-    paragraph.appendText(" for more details! 🍝✨");
+    paragraph.appendText(" for more info.");
 
     return paragraph;
   }

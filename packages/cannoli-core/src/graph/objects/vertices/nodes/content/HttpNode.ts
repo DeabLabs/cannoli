@@ -357,7 +357,6 @@ export class HttpNode extends ContentNode {
       content.indexOf("\n```"),
     );
     const hasMcpContent = mcpContent !== null && mcpContent.length > 0;
-    console.log("mcpContent", mcpContent);
 
     // Check if the content is wrapped in triple backticks with the "mcp" language identifier
     if (hasMcpContent) {
@@ -382,7 +381,6 @@ export class HttpNode extends ContentNode {
       const response = await this.run.callGoalAgent({
         request: { messages: [{ role: "user", content }] },
         onReasoningMessagesUpdated: (messages) => {
-          console.log("reasoning message", messages);
           this.setText(
             baseContent +
               "\n\n" +
