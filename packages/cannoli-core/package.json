@@ -1,6 +1,6 @@
 {
   "name": "@deablabs/cannoli-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "This package is in heavy development and is not ready for production use.\nJoin our Discord server to get involved in the development process: https://discord.gg/wzayNxpxvR",
   "main": "dist/index.js",
   "type": "module",
