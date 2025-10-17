@@ -15,8 +15,8 @@ import { ContentNode } from "../ContentNode";
 import { FloatingNode } from "../../../FloatingNode";
 
 export class ReferenceNode extends ContentNode {
-  // @ts-expect-error - reference is not always set, fix this
-  reference: Reference;
+  reference!: Reference;
+  originalReference!: Reference;
 
   constructor(
     nodeData:
@@ -31,7 +31,13 @@ export class ReferenceNode extends ContentNode {
       this.error(`Could not find reference.`);
     } else {
       this.reference = this.references[0];
+      this.originalReference = { ...this.references[0] };
     }
+  }
+
+  reset(): void {
+    this.reference = { ...this.originalReference };
+    super.reset();
   }
 
   async execute(): Promise<void> {
@@ -92,6 +98,7 @@ export class ReferenceNode extends ContentNode {
 
       if (
         this.reference.type === ReferenceType.CreateNote ||
+        this.reference.type === ReferenceType.CreateNoteAtNewPath ||
         (this.reference.type === ReferenceType.Variable &&
           this.reference.shouldExtract)
       ) {
@@ -257,7 +264,10 @@ export class ReferenceNode extends ContentNode {
     );
 
     // If this reference is a create note type, create the note
-    if (this.reference.type === ReferenceType.CreateNote) {
+    if (
+      this.reference.type === ReferenceType.CreateNote ||
+      this.reference.type === ReferenceType.CreateNoteAtNewPath
+    ) {
       let noteName;
 
       // If there are properties edges, create a yaml frontmatter section, and fill it with the properties, where the key is the edge.text and the value is the edge.content
@@ -295,11 +305,19 @@ export class ReferenceNode extends ContentNode {
           throw new Error("No fileManager found");
         }
 
-        noteName = await this.run.fileManager.createNoteAtExistingPath(
-          referenceNameEdge.content,
-          path,
-          content ?? "",
-        );
+        if (this.reference.type === ReferenceType.CreateNote) {
+          noteName = await this.run.fileManager.createNoteAtExistingPath(
+            referenceNameEdge.content,
+            path,
+            content ?? "",
+          );
+        } else if (this.reference.type === ReferenceType.CreateNoteAtNewPath) {
+          noteName = await this.run.fileManager.createNoteAtNewPath(
+            referenceNameEdge.content,
+            path,
+            content ?? "",
+          );
+        }
       } catch (e) {
         if (e instanceof Error) {
           this.error(`Could not create note: ${e.message}`);

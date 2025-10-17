@@ -96,6 +96,7 @@ export enum ReferenceType {
   Floating = "floating",
   Note = "note",
   CreateNote = "create-note",
+  CreateNoteAtNewPath = "create-note-at-new-path",
   Selection = "selection",
 }
 
