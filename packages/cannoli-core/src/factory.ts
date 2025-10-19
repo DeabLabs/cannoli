@@ -1361,12 +1361,12 @@ export class CannoliFactory {
         reference.name = innerMatch[1];
         this.handleModifiers(reference, innerMatch[2]);
       } else if ((innerMatch = /^\+\+@(.*?)([\W]*)$/.exec(content))) {
-				// Create note reference
-				reference.type = ReferenceType.CreateNoteAtNewPath;
-				reference.shouldExtract = true;
-				reference.name = innerMatch[1];
-				this.handleModifiers(reference, innerMatch[2]);
-			} else {
+        // Create note reference
+        reference.type = ReferenceType.CreateNoteAtNewPath;
+        reference.shouldExtract = true;
+        reference.name = innerMatch[1];
+        this.handleModifiers(reference, innerMatch[2]);
+      } else {
         // Standard variable
         reference.name = content;
       }
