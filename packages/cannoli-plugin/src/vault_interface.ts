@@ -929,6 +929,7 @@ export class VaultInterface implements FileManager {
     const fullPath = `${path}/${noteName}.md`;
 
     // Create the note
+    await this.createFolder(path);
     await this.cannoli.app.vault.create(fullPath, content ?? "");
 
     return `[[${fullPath}|${noteName}]]`;
