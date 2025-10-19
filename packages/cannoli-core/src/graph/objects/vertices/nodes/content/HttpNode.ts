@@ -352,11 +352,13 @@ export class HttpNode extends ContentNode {
     this.executing();
 
     let content = await this.processReferences([], true);
+    const mcpTerminalIndex = content.indexOf("```mcp\n");
     const mcpContent = content.slice(
-      content.indexOf("```mcp\n") + 6,
+      mcpTerminalIndex + 6,
       content.indexOf("\n```"),
     );
-    const hasMcpContent = mcpContent !== null && mcpContent.length > 0;
+    const hasMcpContent =
+      mcpTerminalIndex !== -1 && mcpContent !== null && mcpContent.length > 0;
 
     // Check if the content is wrapped in triple backticks with the "mcp" language identifier
     if (hasMcpContent) {
