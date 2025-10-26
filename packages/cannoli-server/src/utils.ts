@@ -3,6 +3,9 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { Settings } from "./types";
 import { nanoid } from "nanoid";
+import { getLogger } from "src/logger";
+
+const logger = getLogger();
 
 // Get platform-specific config directory
 export function getConfigDir(): string {
@@ -32,7 +35,7 @@ export async function ensureConfigDir(configDir: string): Promise<void> {
   try {
     await fs.mkdir(configDir, { recursive: true });
   } catch (error) {
-    console.error("Failed to create config directory:", error);
+    logger.error("Failed to create config directory:", String(error));
   }
 }
 

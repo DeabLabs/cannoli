@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { serve } from "@hono/node-server";
-import { logger } from "hono/logger";
+import { serve, type HttpBindings } from "@hono/node-server";
 import { cors } from "hono/cors";
+import { logger as honoLogger } from "hono/logger";
 import * as path from "node:path";
 import { getConfigDir } from "./utils";
 import { ServerInfo } from "./types";
@@ -17,6 +17,9 @@ import settingsRouter from "./routes/settings";
 import sseRouter from "./routes/sse";
 import { loadSettings } from "src/settings";
 import { argumentsConfig, optionsDefinition } from "src/arguments";
+import { getLogger, Logger } from "src/logger";
+import { intro, outro } from "@clack/prompts";
+import colors from "picocolors";
 
 declare module "hono" {
   interface ContextVariableMap {
@@ -24,15 +27,20 @@ declare module "hono" {
     requestId: string;
     host: string;
     port: number;
+    logger: Logger;
   }
 }
+
+intro(`${colors.bgBlueBright(colors.black(` Cannoli Server `))}`);
+
+const logger = getLogger();
 
 if (argumentsConfig.help) {
   // generate help message from options config
   const helpMessage = Object.entries(optionsDefinition)
     .map(([key, value]) => `${key}: ${value.type}`)
     .join("\n");
-  console.log(`
+  logger.log(`
 Usage: cannoli-server [options]
 
 Options:
@@ -41,11 +49,12 @@ ${helpMessage}
   process.exit(0);
 }
 
+type Bindings = HttpBindings;
+
 // Create the app
-const app = new Hono();
-if (argumentsConfig.verbose) {
-  app.use("*", logger());
-}
+const app = new Hono<{ Bindings: Bindings }>();
+app.use(requestId());
+app.use(honoLogger(logger.debug));
 
 // Configuration
 const HOST = argumentsConfig.host || process.env.HOST || "localhost";
@@ -71,16 +80,12 @@ app.use(async (...args) => {
 });
 
 // Middleware to add configDir to context
-app.use(
-  "*",
-  (c, next) => {
-    c.set("configDir", CONFIG_DIR);
-    c.set("host", HOST);
-    c.set("port", Number(PORT));
-    return next();
-  },
-  requestId(),
-);
+app.use("*", (c, next) => {
+  c.set("configDir", CONFIG_DIR);
+  c.set("host", HOST);
+  c.set("port", Number(PORT));
+  return next();
+});
 
 // Mount the routers
 const routerApp = app
@@ -121,6 +126,14 @@ app.get(
   }),
 );
 
+// catch ctrl-c and exit gracefully
+process.on("SIGINT", () => {
+  outro(
+    `${colors.bgRedBright(colors.white(` Shutting down Cannoli server... Bye! `))}`,
+  );
+  process.exit(0);
+});
+
 // Start server
 serve(
   {
@@ -129,11 +142,10 @@ serve(
     hostname: HOST,
   },
   (info: ServerInfo) => {
-    console.log(`Cannoli server listening on http://${HOST}:${info.port}`);
-    console.log(`Using config file: ${SETTINGS_FILE}`);
-    console.log(
-      `API documentation available at http://${HOST}:${info.port}/docs`,
-    );
+    logger.log("Logger level      :", logger.getLevel());
+    logger.log(`Using config file : ${SETTINGS_FILE}`);
+    logger.log(`API documentation : http://${HOST}:${info.port}/docs`);
+    logger.success(`Listening on      : http://${HOST}:${info.port}`);
   },
 );
 
