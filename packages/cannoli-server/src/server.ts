@@ -34,7 +34,6 @@ declare module "hono" {
 intro(`${colors.bgBlueBright(colors.black(` Cannoli Server `))}`);
 
 const logger = getLogger();
-logger.log("Logger level:", logger.getLevel());
 
 if (argumentsConfig.help) {
   // generate help message from options config
@@ -143,11 +142,10 @@ serve(
     hostname: HOST,
   },
   (info: ServerInfo) => {
-    logger.success(`Cannoli server listening on http://${HOST}:${info.port}`);
-    logger.log(`Using config file: ${SETTINGS_FILE}`);
-    logger.log(
-      `API documentation available at http://${HOST}:${info.port}/docs`,
-    );
+    logger.log("Logger level      :", logger.getLevel());
+    logger.log(`Using config file : ${SETTINGS_FILE}`);
+    logger.log(`API documentation : http://${HOST}:${info.port}/docs`);
+    logger.success(`Listening on      : http://${HOST}:${info.port}`);
   },
 );
 
