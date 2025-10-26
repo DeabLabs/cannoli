@@ -10,12 +10,15 @@ import { SSEServerTransport } from "src/impl/SSEServerTransport";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { EventEmitter } from "events";
+import { getLogger } from "src/logger";
 
 // 4mb in kb
 const MAXIMUM_MESSAGE_SIZE = 4 * 1024 * 1024;
 
 // Map of sessionId to SSEServerTransport
 const ActiveSSEConnections = new Map<string, SSEServerTransport>();
+
+const logger = getLogger();
 
 const router = new Hono()
   .get("/ping", async (c: Context) => {
@@ -49,7 +52,7 @@ const router = new Hono()
         env: process.env as Record<string, string>,
         stderr: "pipe",
         onEvent: (event) => {
-          console.log("transport event", event);
+          logger.debug(`transport event\n${event}`);
         },
       });
 
@@ -105,7 +108,7 @@ const router = new Hono()
           stream,
         );
         sseServerTransport.onerror = (error) => {
-          console.error("SSE server transport error", error);
+          logger.error(`SSE server transport error\n${error}`);
         };
         ActiveSSEConnections.set(
           sseServerTransport.sessionId,
@@ -114,14 +117,14 @@ const router = new Hono()
 
         try {
           await mcpServer.connect(sseServerTransport);
-
           await sseServerTransport.send({
             jsonrpc: "2.0",
             method: "sse/connection",
             params: { message: "SSE Connection established" },
           });
+          logger.log("Serving connection to MCP server:", server.name);
         } catch (error) {
-          console.error("Error sending SSE connection message", error);
+          logger.error(`Error sending SSE connection message\n${error}`);
           if (!closed) {
             stream.writeSSE({
               event: "error",
@@ -132,21 +135,22 @@ const router = new Hono()
 
         // handle abort event from client side
         c.req.raw.signal.addEventListener("abort", () => {
-          console.log("stream disconnected from client side");
+          logger.debug("stream disconnected from client side");
           emitter.emit("close");
         });
 
         // keep the connection alive
         return new Promise((resolve) => {
-          console.log("waiting for close");
+          logger.debug("waiting for close");
           const abort = async () => {
-            console.log("stream aborted");
+            logger.debug("stream aborted");
             try {
               await mcpServer.close();
               await client.close();
               await serverTransport.close();
+              logger.log("Closed connection to MCP server:", server.name);
             } catch (error) {
-              console.error("Error closing mcp server", error);
+              logger.error(`Error closing mcp server\n${error}`);
             }
             ActiveSSEConnections.delete(requestId);
             resolve(undefined);
@@ -167,19 +171,19 @@ const router = new Hono()
       const server = await getServerById(configDir, serverId);
 
       if (!server) {
-        console.error("Server not found", serverId);
+        logger.error(`Server not found\n${serverId}`);
         return c.json({ error: "Server not found" }, 404);
       }
 
       if (server.type !== "stdio") {
-        console.error("Server is not a stdio server", serverId);
+        logger.error(`Server is not a stdio server\n${serverId}`);
         return c.text("Server is not a stdio server", 400);
       }
 
       const sseServerTransport = ActiveSSEConnections.get(sessionId);
 
       if (!sseServerTransport) {
-        console.error("SSE connection not found", sessionId);
+        logger.error(`SSE connection not found\n${sessionId}`);
         return c.text("SSE connection not found", 404);
       }
 
