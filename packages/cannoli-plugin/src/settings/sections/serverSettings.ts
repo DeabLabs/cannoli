@@ -15,7 +15,20 @@ export async function createServerSettings(
     text: `Cannoli Server is a standalone program that you can run alongside Cannoli in Obsidian.
 
 It allows extended Cannoli functionality by offloading long-running tasks, like MCP servers, to a separate process.
-
+`,
+    attr: {
+      style: "white-space: pre-wrap;",
+    },
+  });
+  containerEl.createEl("a", {
+    text: "See the docs here for more information.",
+    attr: {
+      href: "https://docs.cannoli.website/Reference/Node+types/Goal+nodes",
+      target: "_blank",
+    },
+  });
+  containerEl.createEl("p", {
+    text: `
 You can run the latest version of Cannoli Server by running the command below:`,
     attr: {
       style: "white-space: pre-wrap;",
