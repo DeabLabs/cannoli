@@ -1,26 +1,18 @@
-import { AzureChatOpenAI, ChatOpenAI } from "@langchain/openai";
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import {
-  BaseChatModel,
-  BindToolsInput,
-} from "@langchain/core/language_models/chat_models";
-import { ChatGroq } from "@langchain/groq";
-import { ChatAnthropic } from "@langchain/anthropic";
-import { ChatOllama } from "@langchain/ollama";
-import { ChatCompletionMessageParam } from "openai/resources/index";
-import {
-  AIMessage,
-  ChatMessage,
-  HumanMessage,
-  MessageContentImageUrl,
-  SystemMessage,
-  ToolMessage,
-} from "@langchain/core/messages";
-
-import { StringOutputParser } from "@langchain/core/output_parsers";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateText, streamText } from "ai";
+import type { LanguageModel, ModelMessage } from "ai";
+import { z } from "zod";
+import invariant from "tiny-invariant";
+import { TracingConfig } from "src/run";
 import { choiceTool, formTool, noteSelectTool } from "./fn_calling";
-
-const stringParser = new StringOutputParser();
+import { loadMcpTools } from "./langchain/mcpTools";
+import { makeCannoliServerClient } from "./serverClient";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { ChatCompletionMessageParam } from "openai/resources/index";
 
 export type SupportedProviders =
   | "openai"
@@ -29,19 +21,6 @@ export type SupportedProviders =
   | "anthropic"
   | "groq"
   | "azure_openai";
-
-import { z } from "zod";
-import invariant from "tiny-invariant";
-import { TracingConfig } from "src/run";
-import { Runnable } from "@langchain/core/runnables";
-
-import { loadMcpTools } from "./langchain/mcpTools";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { makeCannoliServerClient } from "./serverClient";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
-import { StructuredToolInterface } from "@langchain/core/tools";
-import { BaseCallbackHandler } from "node_modules/@langchain/core/dist/callbacks/base";
 
 export const GenericFunctionCallSchema = z.object({
   name: z.string(),
@@ -115,7 +94,7 @@ export type GenericCompletionResponse = {
   content: string;
   function_call?: {
     name: string;
-    args: Record<string, unknown> | Array<unknown> | string;
+    args: unknown;
   };
   function_call_id?: string;
 };
@@ -123,8 +102,6 @@ export type GenericCompletionResponse = {
 export type GetDefaultsByProvider = (
   provider: SupportedProviders,
 ) => GenericModelConfig | undefined;
-
-export type LangchainMessages = ReturnType<typeof LLMProvider.convertMessages>;
 
 export type ImageReference = {
   url: string;
@@ -214,203 +191,151 @@ export class LLMProvider {
     return { ...this.baseConfig, ...configOverrides, provider };
   };
 
-  getChatClient = (
-    args?: Partial<{
-      configOverrides: GenericModelConfig;
-      provider: SupportedProviders;
-      hasFunctionCall: boolean;
-    }>,
-    callbacks?: BaseCallbackHandler[],
-  ): BaseChatModel => {
-    const config = this.getMergedConfig(args);
-    const provider = config.provider;
-    const [urlString, queryString] = config.baseURL?.split("?") || [
-      undefined,
-      undefined,
-    ];
-    const url = urlString || undefined;
-    const query = queryString
-      ? Object.fromEntries(new URLSearchParams(queryString).entries())
-      : undefined;
+  // Convert messages to AI SDK format
+  static convertToAIMessages = (
+    messages: GenericCompletionResponse[],
+    imageReferences: ImageReference[] = [],
+  ): ModelMessage[] => {
+    return messages
+      .map((m, i) => {
+        // Skip messages with function_call - these are handled externally by the cannoli system
+        // If we converted them to tool call messages, AI SDK would expect tool response messages
+        if (m.function_call) {
+          // Just return an empty assistant message to maintain sequence
+          return {
+            role: "assistant" as const,
+            content: "",
+          };
+        }
 
-    let client: BaseChatModel;
-    invariant(config.model, "Model is required");
-    switch (provider) {
-      case "openai": {
-        client = new ChatOpenAI({
-          apiKey: config.apiKey,
-          model: config.model,
-          temperature: config.temperature,
-          topP: config.top_p,
-          frequencyPenalty: config.frequency_penalty,
-          presencePenalty: config.presence_penalty,
-          stop: config.stop?.split(","),
-          maxTokens: config.max_tokens,
-          user: config.user,
-          // beta openai feature
-          // @ts-expect-error
-          seed: config.seed,
-          maxRetries: 3,
-          configuration: {
-            baseURL: url,
-            defaultQuery: query,
-          },
-          callbacks,
-        });
-        break;
-      }
-      case "azure_openai": {
-        client = new AzureChatOpenAI({
-          temperature: config.temperature,
-          model: config.model,
-          apiKey: config.apiKey,
-          azureOpenAIApiKey: config.apiKey,
-          azureOpenAIApiDeploymentName: config.azureOpenAIApiDeploymentName,
-          azureOpenAIApiInstanceName: config.azureOpenAIApiInstanceName,
-          azureOpenAIApiVersion: config.azureOpenAIApiVersion,
-          azureOpenAIBasePath: url,
-          user: config.user,
-          maxTokens: config.max_tokens,
-          // beta openai feature
-          // @ts-expect-error
-          seed: config.seed,
-          topP: config.top_p,
-          frequencyPenalty: config.frequency_penalty,
-          presencePenalty: config.presence_penalty,
-          stop: config.stop?.split(","),
-          maxRetries: 3,
-          configuration: {
-            baseURL: url,
-            defaultQuery: query,
-          },
-          callbacks,
-        });
-        break;
-      }
-      case "ollama": {
-        client = new ChatOllama({
-          baseUrl: url,
-          model: config.model,
-          temperature: config.temperature,
-          topP: config.top_p,
-          frequencyPenalty: config.frequency_penalty,
-          presencePenalty: config.presence_penalty,
-          stop: config.stop?.split(","),
-          callbacks,
-        });
-        break;
-      }
-      case "gemini": {
-        client = new ChatGoogleGenerativeAI({
-          maxRetries: 3,
-          model: config.model,
-          apiKey: config.apiKey,
-          temperature: config.temperature,
-          maxOutputTokens: config.max_tokens,
-          topP: config.top_p,
-          stopSequences: config.stop?.split(","),
-          callbacks,
-        });
-        break;
-      }
-      case "anthropic": {
-        client = new ChatAnthropic({
-          apiKey: config.apiKey,
-          model: config.model,
-          temperature: config.temperature,
-          maxRetries: 0,
-          anthropicApiUrl: url,
-          maxTokens: config.max_tokens,
-          topP: config.top_p,
-          stopSequences: config.stop?.split(","),
-          topK: config.top_k,
-          clientOptions: {
-            defaultHeaders: {
-              "anthropic-dangerous-direct-browser-access": "true",
-            },
-          },
-          callbacks,
-        });
-        break;
-      }
-      case "groq": {
-        client = new ChatGroq({
-          apiKey: config.apiKey,
-          model: config.model,
-          temperature: config.temperature,
-          stopSequences: config.stop?.split(","),
-          maxRetries: 3,
-          callbacks,
-        });
-        break;
-      }
-      default:
-        throw new Error("Unsupported provider");
-    }
+        // Handle image references for user messages
+        const relevantImages = imageReferences.filter(
+          (img) => img.messageIndex === i,
+        );
+        const imageContent = relevantImages.map((img) => ({
+          type: "image" as const,
+          image: img.url,
+        }));
 
-    return client;
+        if (m.role === "user") {
+          return {
+            role: "user" as const,
+            content: imageContent.length
+              ? [{ type: "text" as const, text: m.content }, ...imageContent]
+              : m.content,
+          };
+        } else if (m.role === "assistant") {
+          return {
+            role: "assistant" as const,
+            content: m.content,
+          };
+        } else if (m.role === "tool") {
+          // Skip tool messages - they reference tool calls that we're not tracking in AI SDK
+          // Just return an empty assistant message to maintain sequence
+          return {
+            role: "assistant" as const,
+            content: "",
+          };
+        } else {
+          return {
+            role: "system" as const,
+            content: m.content,
+          };
+        }
+      })
+      .filter((m) => m.content !== "");
   };
 
+  // Legacy method for backwards compatibility
   static convertMessages = (
     messages: ChatCompletionMessageParam[] | GenericCompletionResponse[],
     imageReferences: ImageReference[] = [],
   ) => {
-    return messages.map((m, i) => {
-      if ("function_call" in m) {
-        return new AIMessage({
-          // name: m.function_call?.name ?? "",
-          content: !m.function_call
-            ? ""
-            : "arguments" in m.function_call
-              ? m.function_call.arguments
-              : "args" in m.function_call
-                ? JSON.stringify(m.function_call.args)
-                : "",
-          // @ts-expect-error
-          tool_calls: m.function_call ? [m.function_call] : [],
-        });
+    return LLMProvider.convertToAIMessages(
+      messages as GenericCompletionResponse[],
+      imageReferences,
+    );
+  };
+
+  // Get AI SDK model instance based on provider
+  getModel = (
+    args?: Partial<{
+      configOverrides: GenericModelConfig;
+      provider: SupportedProviders;
+    }>,
+  ): LanguageModel => {
+    const config = this.getMergedConfig(args);
+    const provider = config.provider;
+    invariant(config.model, "Model is required");
+
+    switch (provider) {
+      case "openai": {
+        return createOpenAI({
+          apiKey: config.apiKey,
+          baseURL: config.baseURL || undefined,
+        })(config.model);
       }
-
-      const relevantImages: MessageContentImageUrl[] = imageReferences
-        .filter((img) => img.messageIndex === i)
-        .map((img) => {
-          return {
-            type: "image_url",
-            image_url: { url: img.url },
-          };
+      case "azure_openai": {
+        // if (
+        //   config.azureOpenAIApiInstanceName &&
+        //   config.azureOpenAIApiDeploymentName &&
+        //   config.azureOpenAIApiVersion
+        // ) {
+        //   const azureClient = createAzure({
+        //     baseURL: config.azureOpenAIApiInstanceName,
+        //     deploymentId: config.azureOpenAIApiDeploymentName,
+        //     apiVersion: config.azureOpenAIApiVersion,
+        //     apiKey: config.apiKey,
+        //     useDeploymentBasedUrls: true,
+        //   });
+        //   return azureClient(config.model);
+        // }
+        throw new Error(
+          "Azure OpenAI API is broken right now. Contact us in the discord.",
+        );
+      }
+      case "ollama": {
+        // Use OpenAI-compatible endpoint with Ollama's base URL
+        const ollamaClient = createOpenAI({
+          apiKey: "ollama", // Ollama doesn't require a real API key
+          baseURL: config.baseURL || "http://localhost:11434/v1",
         });
+        return ollamaClient(config.model);
+      }
+      case "anthropic": {
+        return createAnthropic({
+          apiKey: config.apiKey,
+          baseURL: config.baseURL || undefined,
+          headers: {
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+        })(config.model);
+      }
+      case "groq": {
+        return createGroq({
+          apiKey: config.apiKey,
+          baseURL: config.baseURL || undefined,
+        })(config.model);
+      }
+      case "gemini": {
+        return createGoogleGenerativeAI({
+          apiKey: config.apiKey,
+          baseURL: config.baseURL || undefined,
+        })(config.model);
+      }
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
+  };
 
-      return m.role === "user"
-        ? new HumanMessage({
-            content: relevantImages.length
-              ? [{ type: "text", text: m.content }, ...relevantImages]
-              : m.content,
-          })
-        : m.role === "assistant"
-          ? new AIMessage({ content: m.content ?? "" })
-          : m.role === "tool"
-            ? new ToolMessage({
-                // @ts-expect-error
-                name: messages[i - 1]?.function_call?.name ?? "unknown",
-                content: m.content ?? "",
-                // @ts-expect-error
-                tool_call_id: m?.function_call_id ?? "unknown",
-              })
-            : m.role === "system"
-              ? new SystemMessage({
-                  content: m.content ?? "",
-                })
-              : new ChatMessage(
-                  !m.content
-                    ? ""
-                    : Array.isArray(m.content)
-                      ? ""
-                      : typeof m.content === "string"
-                        ? m.content
-                        : "",
-                  "user",
-                );
-    });
+  // Legacy method - returns the model instance
+  getChatClient = (
+    args?: Partial<{
+      configOverrides: GenericModelConfig;
+      provider: SupportedProviders;
+    }>,
+  ) => {
+    return this.getModel(args);
   };
 
   getCompletion = async ({
@@ -418,131 +343,146 @@ export class LLMProvider {
     imageReferences,
     ...configOverrides
   }: GenericCompletionParams): Promise<GenericCompletionResponse> => {
-    const hasFunctionCall =
-      !!configOverrides.functions && !!configOverrides.function_call;
-    const client = this.getChatClient({
-      configOverrides,
-      // @ts-expect-error
-      provider: configOverrides?.provider ?? undefined,
-      hasFunctionCall,
-    });
-
-    const convertedMessages = LLMProvider.convertMessages(
+    const model = this.getModel({ configOverrides });
+    const aiMessages = LLMProvider.convertToAIMessages(
       messages,
       imageReferences,
     );
 
+    // Handle function calling
     if (configOverrides.functions && configOverrides.function_call) {
-      // @ts-expect-error
-      return await this.fn_call({
-        provider:
-          (configOverrides.provider as SupportedProviders) || this.provider,
-        convertedMessages,
-        client,
+      return await this.handleFunctionCall({
+        model,
+        aiMessages,
         functions: configOverrides.functions,
         function_call: configOverrides.function_call,
+        configOverrides: configOverrides,
       });
-    } else {
-      const content = await this.clientWithMetadata(client)
-        .pipe(stringParser)
-        .invoke(convertedMessages);
-
-      return {
-        role: "assistant", // optional when functions included
-        content,
-      };
     }
-  };
 
-  private fn_call = async ({
-    provider,
-    convertedMessages,
-    client: _client,
-    functions,
-    function_call,
-  }: {
-    provider: SupportedProviders;
-    convertedMessages: LangchainMessages;
-    client: BaseChatModel;
-    functions: GenericFunctionCall[];
-    function_call: { name: string };
-  }) => {
-    const client =
-      _client.bindTools?.(
-        (functions
-          ?.map((f) => {
-            if (f.name === "choice") {
-              return choiceTool(
-                // @ts-expect-error
-                f.parameters?.properties?.choice?.enum as [string, ...string[]],
-              );
-            }
-            if (f.name === "note_select") {
-              return noteSelectTool(
-                // @ts-expect-error
-                f.parameters?.properties?.note?.enum as [string, ...string[]],
-              );
-            }
-            if (f.name === "form") {
-              return formTool(Object.keys(f.parameters?.properties ?? []));
-            }
-            return null;
-          })
-          ?.filter(Boolean) ?? []) as BindToolsInput[],
-        // ollama does not support tool choice, but it does support tools
-        provider !== "ollama"
-          ? {
-              tool_choice: function_call.name,
-            }
-          : undefined,
-      ) ?? _client;
-    const response =
-      await this.clientWithMetadata(client).invoke(convertedMessages);
+    // Regular completion
+    const result = await generateText({
+      ...configOverrides,
+      model,
+      messages: aiMessages,
+    });
 
     return {
       role: "assistant",
+      content: result.text,
+    };
+  };
+
+  private handleFunctionCall = async ({
+    model,
+    aiMessages,
+    functions,
+    function_call,
+    configOverrides,
+  }: {
+    model: LanguageModel;
+    aiMessages: ModelMessage[];
+    functions: GenericFunctionCall[];
+    function_call: { name: string };
+    configOverrides: GenericModelConfig;
+  }) => {
+    // Convert GenericFunctionCall to AI SDK tool format
+    const tools: Record<
+      string,
+      | ReturnType<typeof choiceTool>
+      | ReturnType<typeof noteSelectTool>
+      | ReturnType<typeof formTool>
+    > = {};
+
+    for (const func of functions) {
+      if (func.name === "choice") {
+        tools.choice = choiceTool(
+          // @ts-expect-error - TODO: fix this
+          func.parameters?.properties?.choice?.enum as [string, ...string[]],
+        );
+      } else if (func.name === "note_select") {
+        tools.note_select = noteSelectTool(
+          // @ts-expect-error - TODO: fix this
+          func.parameters?.properties?.note?.enum as [string, ...string[]],
+        );
+      } else if (func.name === "form") {
+        tools.form = formTool(Object.keys(func.parameters?.properties ?? {}));
+      }
+    }
+
+    // Generate text with tools
+    // Force tool choice when function_call is specified
+    const result = await generateText({
+      ...configOverrides,
+      model,
+      messages: aiMessages,
+      tools: Object.keys(tools).length > 0 ? tools : undefined,
+      toolChoice: { type: "tool", toolName: function_call.name }, // Force specific tool
+    });
+
+    // Handle tool calls in response
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      const toolCall = result.toolCalls[0];
+
+      // AI SDK uses 'input' not 'args' for tool call arguments
+      const args = "input" in toolCall ? toolCall.input : {};
+
+      return {
+        role: "assistant",
+        content: "",
+        function_call_id: toolCall.toolCallId,
+        function_call: {
+          name: toolCall.toolName,
+          args,
+        },
+      };
+    }
+
+    // Fallback if no tool calls
+    // Return undefined to signal that the tool call was not made
+    // The cannoli system should handle this case
+    return {
+      role: "assistant",
       content: "",
-      function_call_id: response.tool_calls?.[0]?.id,
-      function_call: response.tool_calls
-        ? response.tool_calls[0]
-        : functions.find((f) => f.name === function_call.name),
+      function_call: undefined,
     };
   };
 
   getCompletionStream = async ({
     messages,
+    imageReferences,
     ...configOverrides
   }: GenericCompletionParams) => {
-    const client = this.getChatClient({
-      configOverrides,
-      // @ts-expect-error
-      provider: configOverrides?.provider ?? undefined,
+    const model = this.getModel({ configOverrides });
+    const aiMessages = LLMProvider.convertToAIMessages(
+      messages,
+      imageReferences,
+    );
+
+    const stream = streamText({
+      ...configOverrides,
+      model,
+      messages: aiMessages,
     });
 
-    const convertedMessages = LLMProvider.convertMessages(messages);
-    const stream = await client.pipe(stringParser).stream(convertedMessages);
-
-    return stream;
+    // Convert AI SDK stream to async iterable of strings
+    return (async function* () {
+      for await (const chunk of stream.textStream) {
+        yield chunk;
+      }
+    })();
   };
 
   getGoalCompletion = async ({
     messages,
+    imageReferences,
     onReasoningMessagesUpdated,
     ...configOverrides
   }: GenericCompletionParams & {
-    /**
-     * Called for each set of messages that is created during the reasoning process
-     */
     onReasoningMessagesUpdated?: (
       messages: GenericCompletionResponse[],
     ) => void;
   }) => {
-    const client = this.getChatClient({
-      configOverrides,
-      // @ts-expect-error
-      provider: configOverrides?.provider ?? undefined,
-    });
-
     const cannoliServerUrl = this.cannoliServerUrl;
     const cannoliServerSecret = this.cannoliServerSecret;
     invariant(
@@ -560,22 +500,17 @@ export class LLMProvider {
     );
 
     const serversResponse = await cannoliClient["mcp-servers"].sse.$get();
-
     const servers = await serversResponse.json();
-
-    // For each server call loadMcpTools
 
     const disconnectCallbacks: (() => Promise<void>)[] = [];
     const mcpServers = await Promise.all(
       Object.entries(servers.servers).map(async ([name, server]) => {
         const transport = new SSEClientTransport(new URL(server.url), {
-          // ensure POST requests are sent with the correct authorization header
           requestInit: {
             headers: {
               Authorization: `Bearer ${cannoliServerSecret}`,
             },
           },
-          // ensure SSE GET requests are sent with the correct authorization header
           eventSourceInit: {
             fetch: (url, options) => {
               return fetch(url, {
@@ -604,89 +539,84 @@ export class LLMProvider {
           await transport.close();
         });
 
-        return (await loadMcpTools(
-          name,
-          mcpClient,
-        )) as StructuredToolInterface[];
+        return await loadMcpTools(name, mcpClient);
       }),
     );
 
-    // Create the React agent
-    const agent = createReactAgent({
-      llm: client,
-      tools: mcpServers.flat(),
-    });
+    if (mcpServers.length === 0) {
+      throw new Error(
+        "No MCP servers found in cannoli-server. Cannoli-server is required to use goal completion nodes.",
+      );
+    }
 
-    // Run the agent
+    // Convert LangChain tools to AI SDK tools (simplified for now)
+    // TODO: Implement proper conversion of MCP tools to AI SDK format
+
+    // For now, we'll use a custom agent loop with AI SDK
+    // This is a simplified implementation - you may need to enhance it
     try {
-      if (mcpServers.length === 0) {
-        throw new Error(
-          "No MCP servers found in cannoli-server. Cannoli-server is required to use goal completion nodes.",
+      const model = this.getModel({ configOverrides });
+      const aiMessages = LLMProvider.convertToAIMessages(
+        messages,
+        imageReferences,
+      );
+
+      // Custom agent loop
+      const currentMessages = [...aiMessages];
+      let iterations = 0;
+      const maxIterations = 10;
+
+      while (iterations < maxIterations) {
+        onReasoningMessagesUpdated?.(
+          currentMessages.map((m) => {
+            return {
+              role:
+                m.role === "user"
+                  ? "user"
+                  : m.role === "assistant"
+                    ? "assistant"
+                    : m.role === "tool"
+                      ? "tool"
+                      : "system",
+              content:
+                typeof m.content === "string"
+                  ? m.content
+                  : JSON.stringify(m.content),
+            };
+          }),
         );
+
+        const result = await generateText({
+          model,
+          messages: currentMessages,
+        });
+
+        // Add assistant message
+        currentMessages.push({
+          role: "assistant",
+          content: result.text,
+        });
+
+        // If no tool calls, we're done
+        if (!result.toolCalls || result.toolCalls.length === 0) {
+          return {
+            role: "assistant",
+            content: result.text,
+          };
+        }
+
+        iterations++;
       }
-
-      const agentResponse = await agent.invoke(
-        {
-          messages: LLMProvider.convertMessages(messages),
-        },
-        {
-          callbacks: [
-            {
-              handleChatModelStart(
-                llm,
-                messages,
-                runId,
-                parentRunId,
-                extraParams,
-                tags,
-                metadata,
-                runName,
-              ) {
-                onReasoningMessagesUpdated?.(
-                  messages[0].map((m) => {
-                    return {
-                      role:
-                        m instanceof HumanMessage
-                          ? "user"
-                          : m instanceof AIMessage
-                            ? "assistant"
-                            : m instanceof ToolMessage
-                              ? "tool"
-                              : "system",
-                      content: m.text,
-                    };
-                  }),
-                );
-              },
-            },
-          ],
-        },
-      );
-
-      const content = JSON.stringify(
-        agentResponse.messages.at(-1)?.content,
-        null,
-        2,
-      );
 
       return {
         role: "assistant",
-        content,
+        content: JSON.stringify(currentMessages.at(-1)?.content, null, 2),
       };
     } catch (error) {
       console.error("Error during agent execution:", error);
-      // // Tools throw ToolException for tool-specific errors
-      // if (error.name === "ToolException") {
-      //   console.error("Tool execution failed:", error.message);
-      // }
+      throw error;
     } finally {
       await Promise.all(disconnectCallbacks.map((cb) => cb()));
     }
-  };
-
-  clientWithMetadata = (client: Runnable) => {
-    return client.withConfig({
-      metadata: this.metadata,
-    }) as unknown as BaseChatModel;
   };
 }

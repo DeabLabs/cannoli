@@ -36,7 +36,16 @@ export class ChooseNode extends CallNode {
       .safeParse(choiceFunctionArgs);
 
     if (!parsedVariable.success) {
-      this.error(`Choice function call has invalid arguments.`);
+      console.error("Choice validation failed:", {
+        args: choiceFunctionArgs,
+        errors: parsedVariable.error.errors,
+        argsType: typeof choiceFunctionArgs,
+        isObject: typeof choiceFunctionArgs === "object",
+        hasChoice: choiceFunctionArgs && "choice" in choiceFunctionArgs,
+      });
+      this.error(
+        `Choice function call has invalid arguments: ${JSON.stringify(choiceFunctionArgs)}. Errors: ${JSON.stringify(parsedVariable.error.errors)}`,
+      );
       return;
     }
 
