@@ -36,25 +36,24 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.38",
+    "@ai-sdk/azure": "^2.0.57",
+    "@ai-sdk/google": "^2.0.24",
+    "@ai-sdk/groq": "^2.0.25",
+    "@ai-sdk/openai": "^2.0.56",
     "@arizeai/openinference-semantic-conventions": "1.1.0",
     "@deablabs/cannoli-server": "workspace:*",
-    "@langchain/anthropic": "0.3.17",
-    "@langchain/community": "0.3.40",
     "@langchain/core": "0.3.44",
-    "@langchain/google-genai": "0.2.3",
-    "@langchain/groq": "0.2.2",
     "@langchain/langgraph": "0.2.64",
     "@langchain/mcp-adapters": "0.4.2",
-    "@langchain/ollama": "0.2.0",
-    "@langchain/openai": "0.5.5",
     "@modelcontextprotocol/sdk": "1.9.0",
     "@opentelemetry/exporter-trace-otlp-proto": "0.53.0",
     "@opentelemetry/instrumentation": "0.53.0",
     "@opentelemetry/resources": "1.26.0",
     "@opentelemetry/sdk-trace-web": "1.26.0",
+    "ai": "^5.0.81",
     "hono": "4.7.6",
     "js-yaml": "^4.1.0",
-    "langchain": "0.3.21",
     "nanoid": "5.0.7",
     "openai": "^4.52.0",
     "p-limit": "^4.0.0",
@@ -64,6 +63,6 @@
     "tslib": "2.4.0",
     "tsup": "^8.4.0",
     "web-instrumentation-langchain": "workspace:*",
-    "zod": "3.23.8"
+    "zod": "^3.25.76"
   }
 }
