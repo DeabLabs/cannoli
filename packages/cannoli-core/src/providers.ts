@@ -2,17 +2,16 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, streamText } from "ai";
-import type { LanguageModel, ModelMessage } from "ai";
+import { Experimental_Agent, generateText, stepCountIs, streamText } from "ai";
+import type { LanguageModel, ModelMessage, ToolSet } from "ai";
 import { z } from "zod";
 import invariant from "tiny-invariant";
 import { TracingConfig } from "src/run";
 import { choiceTool, formTool, noteSelectTool } from "./fn_calling";
-import { loadMcpTools } from "./langchain/mcpTools";
 import { makeCannoliServerClient } from "./serverClient";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { ChatCompletionMessageParam } from "openai/resources/index";
+import { experimental_createMCPClient } from "@ai-sdk/mcp";
 
 export type SupportedProviders =
   | "openai"
@@ -273,7 +272,7 @@ export class LLMProvider {
         return createOpenAI({
           apiKey: config.apiKey,
           baseURL: config.baseURL || undefined,
-        })(config.model);
+        }).chat(config.model);
       }
       case "azure_openai": {
         // if (
@@ -526,59 +525,31 @@ export class LLMProvider {
           },
         });
 
-        const mcpClient = new Client({
-          name: `cannoli`,
-          version: "1.0.0",
-        });
-
-        console.log(
-          `[Goal Completion] Attempting to connect to server: ${name}...`,
-        );
-        const connectionTimeout = new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Connection timeout for server: ${name}`)),
-            30000,
-          ),
-        );
-        try {
-          await Promise.race([mcpClient.connect(transport), connectionTimeout]);
-          console.log(
-            `[Goal Completion] Successfully connected to server: ${name}`,
-          );
-        } catch (error) {
-          console.error(
-            `[Goal Completion] Failed to connect to server: ${name}`,
-            error,
-          );
-          // Don't throw - just skip this server and continue
-          console.log(`[Goal Completion] Skipping server: ${name}`);
-          return [];
-        }
-
         disconnectCallbacks.push(async () => {
           console.log(`[Goal Completion] Disconnecting from server: ${name}`);
-          await mcpClient.close();
           await transport.close();
         });
 
         console.log(`[Goal Completion] Loading tools from server: ${name}...`);
-        const tools = await loadMcpTools(name, mcpClient);
+        const aiClient = await experimental_createMCPClient({
+          transport,
+        });
+        const tools = await aiClient.tools();
+        const toolNames = Object.keys(tools);
         console.log(
-          `[Goal Completion] Successfully loaded ${tools.length} tools from server: ${name}`,
+          `[Goal Completion] Successfully loaded ${toolNames.length} tools from server: ${name}`,
         );
-        if (tools.length > 0) {
-          console.log(
-            `[Goal Completion] Tool names:`,
-            tools.map((t) => t.name),
-          );
+
+        if (toolNames.length > 0) {
+          console.log(`[Goal Completion] Tool names:`, toolNames);
         }
-        return tools;
+        return tools as ToolSet;
       }),
     );
 
     console.log(
       `[Goal Completion] Loaded ${mcpServers.length} servers with total tools:`,
-      mcpServers.reduce((sum, tools) => sum + tools.length, 0),
+      mcpServers.reduce((sum, tools) => sum + Object.keys(tools).length, 0),
     );
 
     if (mcpServers.length === 0) {
@@ -587,11 +558,6 @@ export class LLMProvider {
       );
     }
 
-    // Convert LangChain tools to AI SDK tools (simplified for now)
-    // TODO: Implement proper conversion of MCP tools to AI SDK format
-
-    // For now, we'll use a custom agent loop with AI SDK
-    // This is a simplified implementation - you may need to enhance it
     try {
       const model = this.getModel({ configOverrides });
       const aiMessages = LLMProvider.convertToAIMessages(
@@ -599,76 +565,32 @@ export class LLMProvider {
         imageReferences,
       );
 
-      // Custom agent loop
-      console.log("[Goal Completion] Starting agent loop");
-      console.log("[Goal Completion] Initial messages:", aiMessages.length);
-      const currentMessages = [...aiMessages];
-      let iterations = 0;
-      const maxIterations = 10;
+      const agent = new Experimental_Agent({
+        model,
+        tools: mcpServers.reduce((acc, tools) => ({ ...acc, ...tools }), {}),
+        stopWhen: stepCountIs(40),
+        onStepFinish: (step) => {
+          if (step.content) {
+            console.log(`[Goal Completion] Step content:`, step.content);
+            onReasoningMessagesUpdated?.([
+              {
+                role: "tool",
+                content: JSON.stringify(step.content, null, 2),
+              },
+            ]);
+          }
+        },
+      });
 
-      while (iterations < maxIterations) {
-        console.log(
-          `[Goal Completion] Starting iteration ${iterations + 1}/${maxIterations}`,
-        );
-        console.log(
-          `[Goal Completion] Current messages count: ${currentMessages.length}`,
-        );
-        onReasoningMessagesUpdated?.(
-          currentMessages.map((m) => {
-            return {
-              role:
-                m.role === "user"
-                  ? "user"
-                  : m.role === "assistant"
-                    ? "assistant"
-                    : m.role === "tool"
-                      ? "tool"
-                      : "system",
-              content:
-                typeof m.content === "string"
-                  ? m.content
-                  : JSON.stringify(m.content),
-            };
-          }),
-        );
-
-        console.log(`[Goal Completion] Calling generateText...`);
-        const result = await generateText({
-          model,
-          messages: currentMessages,
-        });
-        console.log(
-          `[Goal Completion] GenerateText completed. Text length: ${result.text.length}, Tool calls: ${result.toolCalls?.length || 0}`,
-        );
-
-        // Add assistant message
-        currentMessages.push({
-          role: "assistant",
-          content: result.text,
-        });
-
-        // If no tool calls, we're done
-        if (!result.toolCalls || result.toolCalls.length === 0) {
-          console.log(
-            "[Goal Completion] No tool calls, returning final answer",
-          );
-          return {
-            role: "assistant",
-            content: result.text,
-          };
-        }
-
-        console.log(
-          `[Goal Completion] Tool calls detected but not executed (simplified implementation)`,
-        );
-        iterations++;
-      }
-
-      console.log(`[Goal Completion] Reached max iterations`);
+      const result = await agent.generate({
+        messages: aiMessages,
+        system:
+          "You are an agent inside of an obsidian vault, executing one part of a script. You help the user complete a goal using relevant tools.",
+      });
 
       return {
         role: "assistant",
-        content: JSON.stringify(currentMessages.at(-1)?.content, null, 2),
+        content: result.text,
       };
     } catch (error) {
       console.error("Error during agent execution:", error);
