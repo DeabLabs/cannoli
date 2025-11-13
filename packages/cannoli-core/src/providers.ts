@@ -364,6 +364,9 @@ export class LLMProvider {
       ...configOverrides,
       model,
       messages: aiMessages,
+      experimental_telemetry: {
+        isEnabled: true,
+      },
     });
 
     return {
@@ -417,6 +420,9 @@ export class LLMProvider {
       messages: aiMessages,
       tools: Object.keys(tools).length > 0 ? tools : undefined,
       toolChoice: { type: "tool", toolName: function_call.name }, // Force specific tool
+      experimental_telemetry: {
+        isEnabled: true,
+      },
     });
 
     // Handle tool calls in response
@@ -462,6 +468,9 @@ export class LLMProvider {
       ...configOverrides,
       model,
       messages: aiMessages,
+      experimental_telemetry: {
+        isEnabled: true,
+      },
     });
 
     // Convert AI SDK stream to async iterable of strings
@@ -569,6 +578,9 @@ export class LLMProvider {
         model,
         tools: mcpServers.reduce((acc, tools) => ({ ...acc, ...tools }), {}),
         stopWhen: stepCountIs(40),
+        experimental_telemetry: {
+          isEnabled: true,
+        },
         onStepFinish: (step) => {
           if (step.content) {
             console.log(`[Goal Completion] Step content:`, step.content);

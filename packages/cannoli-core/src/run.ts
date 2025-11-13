@@ -32,6 +32,8 @@ import { resultsRun } from "./cannoli";
 import { z } from "zod";
 import { createPhoenixWebTracerProvider } from "src/instrumentation";
 import { nanoid } from "nanoid";
+import { traceAgent } from "@arizeai/openinference-core";
+import { METADATA } from "@arizeai/openinference-semantic-conventions";
 
 export interface HttpTemplate {
   id: string;
@@ -415,18 +417,33 @@ export class Run {
     // Validate the graph
     this.validate();
 
-    let executedObjectsCount = 0;
-
     // Call execute on all root objects
-    for (const object of Object.values(this.graph)) {
-      if (object.dependencies.length === 0) {
-        object.execute();
-        executedObjectsCount++;
+    const execute = async () => {
+      const promises: Promise<void>[] = [];
+      for (const object of Object.values(this.graph)) {
+        if (object.dependencies.length === 0) {
+          promises.push(object.execute());
+        }
       }
-    }
+      if (promises.length === 0) {
+        this.error("No objects to execute");
+      }
+      await Promise.all(promises);
+    };
 
-    if (executedObjectsCount === 0) {
-      this.error("No objects to execute");
+    if (this.tracingConfig?.phoenix?.enabled && !this.isMock) {
+      traceAgent(execute, {
+        name: this.runName,
+        attributes: {
+          [METADATA]: JSON.stringify({
+            runId: this.runId,
+            runName: this.runName,
+            runDateEpochMs: this.runDateEpochMs,
+          }),
+        },
+      })();
+    } else {
+      execute();
     }
   }
 
@@ -562,7 +579,11 @@ export class Run {
   private handleFinish(reason: StoppageReason, message?: string) {
     this.stopTime = Date.now();
 
-    if (this.tracingConfig && !this.isMock && this.postTraceFilter) {
+    if (
+      this.tracingConfig?.phoenix?.enabled &&
+      !this.isMock &&
+      this.postTraceFilter
+    ) {
       console.log(
         `To view spans for this run in Arize Phoenix, filter your spans with:\n\n${this.postTraceFilter}`,
       );
