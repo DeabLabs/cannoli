@@ -201,10 +201,10 @@ export class LLMProvider {
         // Skip messages with function_call - these are handled externally by the cannoli system
         // If we converted them to tool call messages, AI SDK would expect tool response messages
         if (m.function_call) {
-          // Just return an empty assistant message to maintain sequence
+          // Just return the function call arguments as a string to maintain sequence
           return {
             role: "assistant" as const,
-            content: "",
+            content: JSON.stringify(m.function_call.args),
           };
         }
 
@@ -231,10 +231,10 @@ export class LLMProvider {
           };
         } else if (m.role === "tool") {
           // Skip tool messages - they reference tool calls that we're not tracking in AI SDK
-          // Just return an empty assistant message to maintain sequence
+          // Just pass through the content as a string
           return {
             role: "assistant" as const,
-            content: "",
+            content: m.content,
           };
         } else {
           return {
@@ -503,8 +503,10 @@ export class LLMProvider {
     const servers = await serversResponse.json();
 
     const disconnectCallbacks: (() => Promise<void>)[] = [];
+    console.log("[Goal Completion] Starting to load MCP servers...");
     const mcpServers = await Promise.all(
       Object.entries(servers.servers).map(async ([name, server]) => {
+        console.log(`[Goal Completion] Connecting to server: ${name}`);
         const transport = new SSEClientTransport(new URL(server.url), {
           requestInit: {
             headers: {
@@ -524,23 +526,59 @@ export class LLMProvider {
           },
         });
 
-        console.log("connecting to server", name, server.url);
-
         const mcpClient = new Client({
           name: `cannoli`,
           version: "1.0.0",
         });
 
-        await mcpClient.connect(transport);
+        console.log(
+          `[Goal Completion] Attempting to connect to server: ${name}...`,
+        );
+        const connectionTimeout = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Connection timeout for server: ${name}`)),
+            30000,
+          ),
+        );
+        try {
+          await Promise.race([mcpClient.connect(transport), connectionTimeout]);
+          console.log(
+            `[Goal Completion] Successfully connected to server: ${name}`,
+          );
+        } catch (error) {
+          console.error(
+            `[Goal Completion] Failed to connect to server: ${name}`,
+            error,
+          );
+          // Don't throw - just skip this server and continue
+          console.log(`[Goal Completion] Skipping server: ${name}`);
+          return [];
+        }
 
         disconnectCallbacks.push(async () => {
-          console.log("disconnecting from server", name);
+          console.log(`[Goal Completion] Disconnecting from server: ${name}`);
           await mcpClient.close();
           await transport.close();
         });
 
-        return await loadMcpTools(name, mcpClient);
+        console.log(`[Goal Completion] Loading tools from server: ${name}...`);
+        const tools = await loadMcpTools(name, mcpClient);
+        console.log(
+          `[Goal Completion] Successfully loaded ${tools.length} tools from server: ${name}`,
+        );
+        if (tools.length > 0) {
+          console.log(
+            `[Goal Completion] Tool names:`,
+            tools.map((t) => t.name),
+          );
+        }
+        return tools;
       }),
+    );
+
+    console.log(
+      `[Goal Completion] Loaded ${mcpServers.length} servers with total tools:`,
+      mcpServers.reduce((sum, tools) => sum + tools.length, 0),
     );
 
     if (mcpServers.length === 0) {
@@ -562,11 +600,19 @@ export class LLMProvider {
       );
 
       // Custom agent loop
+      console.log("[Goal Completion] Starting agent loop");
+      console.log("[Goal Completion] Initial messages:", aiMessages.length);
       const currentMessages = [...aiMessages];
       let iterations = 0;
       const maxIterations = 10;
 
       while (iterations < maxIterations) {
+        console.log(
+          `[Goal Completion] Starting iteration ${iterations + 1}/${maxIterations}`,
+        );
+        console.log(
+          `[Goal Completion] Current messages count: ${currentMessages.length}`,
+        );
         onReasoningMessagesUpdated?.(
           currentMessages.map((m) => {
             return {
@@ -586,10 +632,14 @@ export class LLMProvider {
           }),
         );
 
+        console.log(`[Goal Completion] Calling generateText...`);
         const result = await generateText({
           model,
           messages: currentMessages,
         });
+        console.log(
+          `[Goal Completion] GenerateText completed. Text length: ${result.text.length}, Tool calls: ${result.toolCalls?.length || 0}`,
+        );
 
         // Add assistant message
         currentMessages.push({
@@ -599,14 +649,22 @@ export class LLMProvider {
 
         // If no tool calls, we're done
         if (!result.toolCalls || result.toolCalls.length === 0) {
+          console.log(
+            "[Goal Completion] No tool calls, returning final answer",
+          );
           return {
             role: "assistant",
             content: result.text,
           };
         }
 
+        console.log(
+          `[Goal Completion] Tool calls detected but not executed (simplified implementation)`,
+        );
         iterations++;
       }
+
+      console.log(`[Goal Completion] Reached max iterations`);
 
       return {
         role: "assistant",
