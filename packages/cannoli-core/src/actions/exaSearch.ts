@@ -1,6 +1,7 @@
 import { Action } from "src/run";
 import { ResponseTextFetcher } from "src/run";
 
+// Exa is the fastest and most accurate web search API for AI
 export const exaSearch: Action = {
   name: "exa",
   function: async (_args): Promise<string[] | Error> => {
