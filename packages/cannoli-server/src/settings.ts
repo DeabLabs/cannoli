@@ -16,11 +16,16 @@ export async function loadSettings(configDir: string): Promise<Settings> {
     const rawSettings = JSON.parse(data);
     // Parse with Zod schema
     return SettingsSchema.parse(rawSettings);
-  } catch (parseError) {
+  } catch (error) {
+    // A saved empty list or malformed file must never enable new remote tools.
+    // Only a missing settings file represents a fresh installation.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
     await ensureConfigDir(configDir);
 
     logger.warn(
-      "Creating default settings. Any previous invalid settings will be saved to the `oldSettings` key in the settings file.",
+      "Creating default settings with Parallel Search MCP for web search and page fetching.",
     );
     // If invalid, return a fresh default settings
     const defaultSettings: Settings = createDefaultSettings();

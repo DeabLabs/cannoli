@@ -29,7 +29,8 @@
     "build": "tsup src/index.ts --format esm --treeshake --clean && tsup src/rpc.ts --format esm --treeshake --experimental-dts && tsup src/schemas.ts --format esm --treeshake --experimental-dts",
     "dev": "tsup src/index.ts --format esm --watch --onSuccess \"node dist/index.js\"",
     "typecheck": "tsc --noEmit",
-    "inspect": "npx -y @modelcontextprotocol/inspector"
+    "inspect": "npx -y @modelcontextprotocol/inspector",
+    "test": "tsx --test test/*.test.ts"
   },
   "keywords": [
     "cannoli",
@@ -46,25 +47,25 @@
     "@typescript-eslint/eslint-plugin": "^7.7.1",
     "@typescript-eslint/parser": "^7.7.1",
     "eslint": "^8.57.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "tsx": "4.20.6"
   },
   "dependencies": {
     "@clack/core": "0.5.0",
     "@clack/prompts": "0.11.0",
     "@hono/node-server": "^1.14.0",
     "@hono/zod-validator": "0.4.3",
-    "@modelcontextprotocol/sdk": "1.9.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "@scalar/hono-api-reference": "0.8.0",
     "hono": "4.7.6",
     "hono-openapi": "0.4.6",
-    "mcp-proxy": "2.12.0",
     "nanoid": "5.0.7",
     "picocolors": "1.1.1",
     "raw-body": "3.0.0",
     "remeda": "1.61.0",
     "tiny-invariant": "^1.3.1",
     "tsup": "^8.4.0",
-    "zod": "3.23.8",
+    "zod": "3.25.76",
     "zod-openapi": "4.2.4"
   }
 }

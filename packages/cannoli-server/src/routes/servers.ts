@@ -101,16 +101,18 @@ const router = new Hono()
       const port = c.get("port");
       return c.json({
         status: "ok",
-        servers: servers.reduce((acc, server) => {
-          const proxyServer: McpProxyServer = {
-            [server.name]: {
-              url: `http://${host}:${port}/sse/${server.id}`,
-              transport: "sse",
-              headers: {},
-            },
-          };
-          return { ...acc, ...proxyServer };
-        }, {} as McpProxyServer),
+        servers: servers
+          .filter((server) => server.enabled)
+          .reduce((acc, server) => {
+            const proxyServer: McpProxyServer = {
+              [server.name]: {
+                url: `http://${host}:${port}/sse/${server.id}`,
+                transport: "sse",
+                headers: {},
+              },
+            };
+            return { ...acc, ...proxyServer };
+          }, {} as McpProxyServer),
       });
     },
   )

@@ -87,3 +87,39 @@ Environment variables:
 
 - `PORT`: The port to run the server on (default: 3333)
 - `CONFIG_DIR`: Override the default configuration directory
+
+### Web search in goal nodes
+
+New Cannoli Server settings include [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp)
+for free web search and page fetching, with no account or API key. Anonymous search
+uses Fast mode and is subject to the service's free-tier limits.
+
+Start Cannoli Server, enter its URL and generated secret in the Cannoli plugin's
+server settings, then run a goal node asking it to find current information and
+include source URLs. The agent can discover and call the search and fetch tools
+through Cannoli's existing SSE connection. Queries and requested URLs go to
+Parallel when the agent uses these tools; starting the server alone does not
+connect to Parallel.
+
+Saved settings are preserved, including empty server lists. Existing installations
+can add this entry in the plugin's MCP server configuration editor:
+
+```json
+{
+  "id": "parallel-search",
+  "name": "Parallel Search",
+  "type": "http",
+  "url": "https://search.parallel.ai/mcp",
+  "headers": {},
+  "enabled": true
+}
+```
+
+Set `enabled` to `false` or remove the entry to disable it. Explicit server URLs,
+headers and credentials stay in effect; a failing configured server does not fall
+back to another provider. HTTP servers use Streamable HTTP. An optional `apiKey`
+is sent as a Bearer token, unless an explicit `Authorization` header is supplied.
+Cannoli's local server secret is never forwarded as the remote server credential.
+
+Malformed or unreadable saved settings now stop startup instead of replacing the
+file with enabled defaults. Correct the file before restarting.
