@@ -1,16 +1,18 @@
 import { Context, Hono } from "hono";
-import { proxyServer } from "mcp-proxy";
+import { proxyServer } from "src/impl/proxyServer";
 import { streamSSE } from "hono/streaming";
 import { getServerById } from "src/data/servers";
 import { StdioClientTransport } from "src/impl/StdioClientTransport";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
 import { bodyLimit } from "hono/body-limit";
 import { SSEServerTransport } from "src/impl/SSEServerTransport";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { EventEmitter } from "events";
 import { getLogger } from "src/logger";
+import { createRemoteTransport } from "src/impl/remoteTransport";
 
 // 4mb in kb
 const MAXIMUM_MESSAGE_SIZE = 4 * 1024 * 1024;
@@ -37,24 +39,27 @@ const router = new Hono()
         return c.json({ error: "Server not found" }, 404);
       }
 
-      if (server.type !== "stdio") {
-        return c.json({ error: "Server is not a stdio server" }, 400);
+      if (!server.enabled) {
+        return c.json({ error: "Server is disabled" }, 403);
       }
 
       c.header("Content-Type", "text/event-stream");
       c.header("Cache-Control", "no-cache");
       c.header("Connection", "keep-alive");
 
-      const serverTransport = new StdioClientTransport({
-        command: server.command,
-        args: server.args,
-        cwd: server.cwd,
-        env: process.env as Record<string, string>,
-        stderr: "pipe",
-        onEvent: (event) => {
-          logger.debug(`transport event\n${event}`);
-        },
-      });
+      const serverTransport =
+        server.type === "http"
+          ? createRemoteTransport(server)
+          : new StdioClientTransport({
+              command: server.command,
+              args: server.args,
+              cwd: server.cwd,
+              env: { ...process.env, ...server.env } as Record<string, string>,
+              stderr: "pipe",
+              onEvent: (event) => {
+                logger.debug(`transport event\n${event}`);
+              },
+            });
 
       const client = new Client(
         {
@@ -66,23 +71,26 @@ const router = new Hono()
         },
       );
 
-      await client.connect(serverTransport);
+      try {
+        await client.connect(serverTransport, { signal: c.req.raw.signal });
+      } catch (error) {
+        await client.close();
+        throw error;
+      }
 
       const serverVersion = client.getServerVersion() as {
         name: string;
         version: string;
       };
 
-      const serverCapabilities = client.getServerCapabilities() as Record<
-        string,
-        unknown
-      >;
+      const serverCapabilities =
+        client.getServerCapabilities() as ServerCapabilities;
 
       const mcpServer = new Server(serverVersion, {
         capabilities: serverCapabilities,
       });
 
-      await proxyServer({
+      proxyServer({
         server: mcpServer,
         client,
         serverCapabilities,
@@ -101,8 +109,7 @@ const router = new Hono()
       return streamSSE(c, async (stream) => {
         // const emitter = new EventEmitter();
 
-        const closed = false;
-        const requestId = c.get("requestId");
+        let closed = false;
         const sseServerTransport = new SSEServerTransport(
           `/sse/${serverId}/messages`,
           stream,
@@ -143,6 +150,8 @@ const router = new Hono()
         return new Promise((resolve) => {
           logger.debug("waiting for close");
           const abort = async () => {
+            if (closed) return;
+            closed = true;
             logger.debug("stream aborted");
             try {
               await mcpServer.close();
@@ -152,7 +161,7 @@ const router = new Hono()
             } catch (error) {
               logger.error(`Error closing mcp server\n${error}`);
             }
-            ActiveSSEConnections.delete(requestId);
+            ActiveSSEConnections.delete(sseServerTransport.sessionId);
             resolve(undefined);
           };
           emitter.on("close", abort);
@@ -175,9 +184,8 @@ const router = new Hono()
         return c.json({ error: "Server not found" }, 404);
       }
 
-      if (server.type !== "stdio") {
-        logger.error(`Server is not a stdio server\n${serverId}`);
-        return c.text("Server is not a stdio server", 400);
+      if (!server.enabled) {
+        return c.json({ error: "Server is disabled" }, 403);
       }
 
       const sseServerTransport = ActiveSSEConnections.get(sessionId);

@@ -42,7 +42,18 @@ export async function ensureConfigDir(configDir: string): Promise<void> {
 // Create default settings
 export function createDefaultSettings(oldSettings?: unknown): Settings {
   return {
-    mcpServers: [],
+    mcpServers: [
+      {
+        id: "parallel-search",
+        name: "Parallel Search",
+        type: "http",
+        url: "https://search.parallel.ai/mcp",
+        headers: {
+          "User-Agent": "Cannoli/1.1.0 (+https://github.com/DeabLabs/cannoli)",
+        },
+        enabled: true,
+      },
+    ],
     proxyEnabled: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
